@@ -1,7 +1,10 @@
 #include "control.h"
 #include "hw_pwm.h"
 #include "sw_pwm.h"
+#include "hardware/clocks.h"
 #include "pico/util/queue.h"
+
+#include <math.h>
 
 #define SW_CHANNEL_BASE HW_PWM_COUNT
 #define CMD_QUEUE_LEN   32
@@ -15,6 +18,29 @@ static float duties[CONTROL_CHANNEL_COUNT];
 
 static queue_t cmd_queue;
 
+static bool freq_supported_for_channel(uint channel, float freq_hz) {
+    if (!isfinite(freq_hz)) {
+        return false;
+    }
+
+    if (freq_hz < 0.0f) {
+        return false;
+    }
+
+    if (freq_hz == 0.0f) {
+        return true;
+    }
+
+    if (channel < HW_PWM_COUNT) {
+        const float sys_clk = (float)clock_get_hz(clk_sys);
+        const float min_hw = sys_clk / ((255.0f + 15.0f / 16.0f) * 65536.0f);
+        const float max_hw = sys_clk / 2.0f;
+        return freq_hz >= min_hw && freq_hz <= max_hw;
+    }
+
+    return freq_hz <= 100000.0f;
+}
+
 void control_init(void) {
     for (int i = 0; i < CONTROL_CHANNEL_COUNT; i++) {
         freqs[i] = 0.0f;
@@ -27,6 +53,8 @@ void control_init(void) {
 
 bool control_set_freq(uint channel, float freq_hz) {
     if (channel >= CONTROL_CHANNEL_COUNT) return false;
+    if (!freq_supported_for_channel(channel, freq_hz)) return false;
+
     if (freq_hz < 0.0f) freq_hz = 0.0f;
 
     freqs[channel] = freq_hz;
@@ -42,6 +70,7 @@ bool control_set_freq(uint channel, float freq_hz) {
 
 bool control_set_duty(uint channel, float duty) {
     if (channel >= CONTROL_CHANNEL_COUNT) return false;
+    if (!isfinite(duty)) return false;
     if (duty < 0.0f) duty = 0.0f;
     if (duty > 1.0f) duty = 1.0f;
 

@@ -22,6 +22,7 @@ static const uint hw_pwm_gpios[HW_PWM_COUNT] = {
 static float actual_freqs[HW_PWM_COUNT] = {0};
 static float duties[HW_PWM_COUNT] = {0};
 static bool enabled[HW_PWM_COUNT] = {false};
+static uint16_t wraps[HW_PWM_COUNT] = {0};
 static volatile uint32_t pulse_counts[HW_PWM_COUNT] = {0};
 
 static float fabsf_local(float x) {
@@ -59,6 +60,7 @@ void hw_pwm_init(void) {
         actual_freqs[i] = 0.0f;
         duties[i] = 0.5f;
         enabled[i] = false;
+        wraps[i] = 255;
         pulse_counts[i] = 0;
     }
 
@@ -136,6 +138,7 @@ bool hw_pwm_set_freq(uint channel, float freq_hz, float duty) {
 
     enabled[channel] = true;
     actual_freqs[channel] = (float)sys_clk / (best_div * (best_top + 1));
+    wraps[channel] = (uint16_t)best_top;
 
     return true;
 }
@@ -149,7 +152,7 @@ void hw_pwm_set_duty(uint channel, float duty) {
     uint slice = pwm_gpio_to_slice_num(gpio);
     uint ch = pwm_gpio_to_channel(gpio);
 
-    uint16_t wrap = pwm_get_wrap(slice);
+    uint16_t wrap = wraps[channel];
     pwm_set_chan_level(slice, ch, (uint32_t)(wrap * duty));
     duties[channel] = duty;
 }

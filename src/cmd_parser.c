@@ -161,8 +161,11 @@ static void execute_command(char *cmd) {
             float duty = atof(duty_str) / 100.0f;
             int logical = ch + HW_PWM_COUNT;
             if (ch >= 0 && ch < SW_PWM_COUNT) {
-                control_set_duty(logical, duty);
-                printf("OK SW%d duty: %.1f%%\r\n", ch, duty * 100.0f);
+                if (control_set_duty(logical, duty)) {
+                    printf("OK SW%d duty: %.1f%%\r\n", ch, duty * 100.0f);
+                } else {
+                    printf("ERR SW%d duty invalid\r\n", ch);
+                }
             } else {
                 printf("ERR SW%d invalid (ch=0..15)\r\n", ch);
             }

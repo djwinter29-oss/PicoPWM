@@ -1,8 +1,7 @@
 #ifndef SW_PWM_H
 #define SW_PWM_H
 
-#include <stdint.h>
-#include <stdbool.h>
+#include "pico/stdlib.h"
 
 #define SW_PWM_COUNT 16
 

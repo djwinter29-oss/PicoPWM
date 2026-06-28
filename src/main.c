@@ -1,6 +1,7 @@
 #include "pico/stdlib.h"
 #include "hardware/clocks.h"
 #include "pico/multicore.h"
+#include <stdio.h>
 #include "control.h"
 #include "cmd_parser.h"
 #include "cdc_cmd.h"

@@ -43,15 +43,17 @@ Initialize cached values and the command queue. Called on Core 0 before launchin
 
 #### `bool control_set_freq(uint channel, float freq_hz)`
 
-Set the frequency of a logical channel (Core 0). Pushes a `SET_FREQ` command to the queue. Returns `true` if queued, `false` if channel invalid or queue full.
+Set the frequency of a logical channel (Core 0). Pushes a `SET_FREQ` command to the queue. Returns `true` if queued, `false` if channel invalid, queue full, or the requested frequency is not representable on the target PWM backend.
 
 - `freq_hz = 0` disables the channel.
+- Hardware PWM accepts a finite range roughly bounded by the system clock and slice divider limits.
+- Software PWM accepts `0` to `100000 Hz`.
 
 ---
 
 #### `bool control_set_duty(uint channel, float duty)`
 
-Set the duty cycle (Core 0). Pushes a `SET_DUTY` command. `duty` is 0.0..1.0.
+Set the duty cycle (Core 0). Pushes a `SET_DUTY` command. `duty` is 0.0..1.0. Returns `false` if the channel is invalid, the queue is full, or the duty is not finite.
 
 ---
 

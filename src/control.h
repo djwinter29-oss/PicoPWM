@@ -1,8 +1,7 @@
 #ifndef CONTROL_H
 #define CONTROL_H
 
-#include <stdint.h>
-#include <stdbool.h>
+#include "pico/stdlib.h"
 #include "hw_pwm.h"
 #include "sw_pwm.h"
 

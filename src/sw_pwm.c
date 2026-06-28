@@ -1,9 +1,11 @@
 #include "sw_pwm.h"
 #include "hardware/gpio.h"
 #include "hardware/timer.h"
+#include "hardware/sync.h"
 
 // GPIO pins for 16 software PWM channels.
-// These are the pins left after allocating 8 HW PWM (slices A) and UART1 (GPIO16/17).
+// These are the pins left after allocating 8 HW PWM (slices A) and
+// I2C0 slave (GPIO 16/17).
 static const uint sw_pwm_gpios[SW_PWM_COUNT] = {
     1, 3, 5, 7, 9, 11, 13, 15,
     18, 19, 20, 21, 22, 25, 26, 27
@@ -19,7 +21,7 @@ typedef struct {
     uint32_t period_ticks;
     uint32_t duty_ticks;
     uint32_t counter;
-    uint32_t pulse_count;
+    volatile uint32_t pulse_count;  // read by Core 0, written by Core 1 ISR
     bool active;
 } sw_pwm_channel_t;
 
@@ -30,7 +32,7 @@ static float requested_freqs[SW_PWM_COUNT] = {0};
 static float duties[SW_PWM_COUNT] = {0};
 static bool enabled[SW_PWM_COUNT] = {false};
 
-// Called from timer interrupt context at 100 kHz.
+// Called from timer interrupt context at 100 kHz on Core 1.
 static bool sw_pwm_tick_callback(repeating_timer_t *rt) {
     (void)rt;
 
@@ -70,6 +72,7 @@ void sw_pwm_init(void) {
     }
 
     // Start periodic 10 us timer (negative value = repeat relative).
+    // The timer interrupt fires on Core 1 (the calling core).
     add_repeating_timer_us(-SW_PWM_TICK_US, sw_pwm_tick_callback, NULL, &sw_pwm_timer);
 }
 
@@ -83,13 +86,16 @@ bool sw_pwm_set_freq(uint channel, float freq_hz, float duty) {
 
     if (freq_hz <= 0.0f) {
         // freq = 0 means disable.
+        // Disable interrupts briefly to avoid ISR reading partial state.
+        uint32_t save = save_and_disable_interrupts();
         ch->active = false;
         ch->period_ticks = 1000;
         ch->duty_ticks = 500;
         ch->counter = 0;
+        restore_interrupts(save);
+        gpio_put(ch->gpio, 0);
         requested_freqs[channel] = 0.0f;
         enabled[channel] = false;
-        gpio_put(ch->gpio, 0);
         return true;
     }
 
@@ -102,10 +108,13 @@ bool sw_pwm_set_freq(uint channel, float freq_hz, float duty) {
     uint32_t duty_ticks = (uint32_t)(period * duty + 0.5f);
     if (duty_ticks > period) duty_ticks = period;
 
+    // Update shared state atomically with respect to the timer ISR.
+    uint32_t save = save_and_disable_interrupts();
     ch->period_ticks = period;
     ch->duty_ticks = duty_ticks;
     ch->counter = 0;
     ch->active = true;
+    restore_interrupts(save);
 
     requested_freqs[channel] = freq_hz;
     enabled[channel] = true;
@@ -119,8 +128,12 @@ void sw_pwm_set_duty(uint channel, float duty) {
     if (duty > 1.0f) duty = 1.0f;
 
     sw_pwm_channel_t *ch = &sw_pwm_channels[channel];
+
+    uint32_t save = save_and_disable_interrupts();
     ch->duty_ticks = (uint32_t)(ch->period_ticks * duty + 0.5f);
     if (ch->duty_ticks > ch->period_ticks) ch->duty_ticks = ch->period_ticks;
+    restore_interrupts(save);
+
     duties[channel] = duty;
 }
 
@@ -128,7 +141,11 @@ void sw_pwm_enable(uint channel, bool enable) {
     if (channel >= SW_PWM_COUNT) return;
 
     enabled[channel] = enable;
+
+    uint32_t save = save_and_disable_interrupts();
     sw_pwm_channels[channel].active = enable;
+    restore_interrupts(save);
+
     if (!enable) {
         gpio_put(sw_pwm_channels[channel].gpio, 0);
     }
@@ -156,7 +173,9 @@ uint32_t sw_pwm_get_pulse_count(uint channel) {
 
 void sw_pwm_set_pulse_count(uint channel, uint32_t count) {
     if (channel >= SW_PWM_COUNT) return;
+    uint32_t save = save_and_disable_interrupts();
     sw_pwm_channels[channel].pulse_count = count;
+    restore_interrupts(save);
 }
 
 void sw_pwm_reset_pulse_count(uint channel) {

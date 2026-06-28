@@ -4,7 +4,7 @@ A Raspberry Pi Pico (RP2040) firmware that turns the board into a multi-channel 
 
 - **24 logical PWM channels** — 8 hardware PWM channels (high frequency) + 16 software PWM channels (< 1 kHz)
 - **Per-channel properties**: frequency, duty cycle, and **read-only** 32-bit pulse counter
-- **Control interfaces**: USB CDC serial and I2C slave
+- **Dual-core**: Core 0 handles USB CDC + I2C, Core 1 manages all PWM hardware
 - **System clock**: 150 MHz for extra headroom
 
 ---
@@ -78,20 +78,19 @@ Use the `stop` command to reset all channels to the power-up state: frequency = 
 
 ---
 
-## Default Demo
+## Default State
 
-After reset, the firmware configures a few demo channels:
+After power-up or reset, **all 24 channels are off**:
 
-| Channel | Frequency | Duty |
-|---------|-----------|------|
-| HW 0 | 1 kHz | 50% |
-| HW 1 | 10 kHz | 25% |
-| HW 2 | 100 kHz | 10% |
-| SW 0 | 100 Hz | 50% |
-| SW 1 | 10 Hz | 25% |
-| SW 2 | 1 Hz | 10% |
+| Property | Value |
+|----------|-------|
+| Frequency | 0 Hz (off) |
+| Duty | 50% |
+| Pulse count | 0 |
 
-All other channels are off by default (freq = 0, duty = 50%, pulse_count = 0).
+No demo channels are configured. Use CDC or I2C commands to set frequencies and duty cycles.
+
+Use the `stop` command to reset all channels back to this state at any time.
 
 ---
 

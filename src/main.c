@@ -1,9 +1,11 @@
 #include "pico/stdlib.h"
 #include "hardware/clocks.h"
+#include "pico/multicore.h"
 #include "control.h"
 #include "cmd_parser.h"
 #include "cdc_cmd.h"
 #include "i2c_slave.h"
+#include "pwm_core.h"
 
 int main(void) {
     // Overclock to 150 MHz for more CPU headroom and higher HW PWM max frequency.
@@ -13,41 +15,36 @@ int main(void) {
         // We continue anyway because the firmware works at both speeds.
     }
 
-    // USB CDC stdio/command interface is initialized here.
+    // USB CDC stdio / command interface.
     stdio_init_all();
 
     printf("\r\n");
     printf("========================================\r\n");
     printf("  PicoPWM starting at %lu MHz\r\n", clock_get_hz(clk_sys) / 1000000);
-    printf("  24 control channels: 0..7=HW, 8..23=SW\r\n");
-    printf("  Each channel: freq, duty, pulse_count\r\n");
-    printf("  USB CDC serial command interface\r\n");
-    printf("  I2C slave on GPIO 16/17, addr 0x40\r\n");
+    printf("  Dual-core: Core0=CDC+I2C, Core1=PWM\r\n");
+    printf("  24 channels: 0..7=HW, 8..23=SW\r\n");
+    printf("  Init: freq=0, duty=50%%, pulses=0\r\n");
+    printf("  USB CDC serial + I2C slave (addr 0x40)\r\n");
     printf("========================================\r\n\n");
 
-    hw_pwm_init();
-    sw_pwm_init();
+    // Core 0: initialise cached values + command queue.
     control_init();
+
+    // Launch Core 1 to manage all PWM hardware.
+    pwm_core_launch();
+
+    // Wait for Core 1 to finish PWM init before accepting commands.
+    while (!pwm_core_is_ready()) {
+        tight_loop_contents();
+    }
+
+    // Core 0: start communication interfaces.
     cdc_cmd_init();
     i2c_slave_init();
 
-    // Optional demo pattern.
-    control_set_freq(0, 1000.0f);     // HW0 1 kHz, 50% duty
-    control_set_duty(0, 0.50f);
-    control_set_freq(1, 10000.0f);    // HW1 10 kHz, 25% duty
-    control_set_duty(1, 0.25f);
-    control_set_freq(2, 100000.0f);   // HW2 100 kHz, 10% duty
-    control_set_duty(2, 0.10f);
-
-    control_set_freq(8, 100.0f);      // SW0 100 Hz, 50% duty
-    control_set_duty(8, 0.50f);
-    control_set_freq(9, 10.0f);       // SW1 10 Hz, 25% duty
-    control_set_duty(9, 0.25f);
-    control_set_freq(10, 1.0f);       // SW2 1 Hz, 10% duty
-    control_set_duty(10, 0.10f);
-
     print_help();
 
+    // Core 0 main loop: service USB CDC and I2C.
     while (true) {
         cdc_cmd_poll();
         i2c_slave_poll();

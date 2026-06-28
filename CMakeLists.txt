@@ -14,6 +14,7 @@ add_executable(pico_pwm
     src/control.c
     src/hw_pwm.c
     src/sw_pwm.c
+    src/pwm_core.c
     src/cmd_parser.c
     src/cdc_cmd.c
     src/i2c_slave.c
@@ -21,12 +22,14 @@ add_executable(pico_pwm
 
 target_link_libraries(pico_pwm
     pico_stdlib
+    pico_multicore
     hardware_pwm
     hardware_timer
     hardware_irq
     hardware_clocks
     hardware_gpio
     hardware_i2c
+    hardware_sync
     tinyusb_device
     tinyusb_board
 )

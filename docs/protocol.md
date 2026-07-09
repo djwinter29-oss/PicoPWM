@@ -5,9 +5,9 @@ PicoPWM exposes two command interfaces with the same logical data:
 - **USB CDC serial** — text commands, easy for humans and scripts
 - **I2C slave** — binary protocol, efficient for microcontrollers and host boards
 
-Both can read device identity and per-channel properties. The only way to change state is through the USB CDC serial commands; I2C is currently read-only.
+Both can read device identity and per-channel properties. In the current firmware, the only write-command ingress path is the USB CDC serial command interface; I2C is currently read-only.
 
-**Important:** `pulse_count` is read-only from both interfaces. It cannot be set or reset directly. The only way to clear it is to issue the `stop` command, which resets every channel to the power-up default state: frequency = 0 Hz, duty = 50%, pulse_count = 0.
+**Important:** `pulse_count` is read-only from both interfaces. It cannot be set or reset directly. The `stop` command disables all channels by restoring `freq = 0 Hz` and `duty = 50%`, but `pulse_count` continues accumulating from power-on.
 
 ---
 
@@ -21,11 +21,11 @@ Connect to the Pico as a USB serial port (CDC) at **115200 baud**. Type commands
 |---------|-------------|---------|
 | `info` | Returns device type | `info` → `PicoPWM` |
 | `version` | Returns firmware version | `version` → `1.0.0` |
-| `channels` | Returns total channel count | `channels` → `24` |
 | `get <ch>` | Read all properties of channel `ch` | `get 0` |
 | `set <ch> f <freq>` | Set channel frequency (Hz) | `set 0 f 1000` |
 | `set <ch> d <duty%>` | Set channel duty (0..100) | `set 0 d 50` |
 | `h <ch> <freq> <duty%>` | Set hardware PWM channel (legacy) | `h 0 1000 50` |
+| `p <ch> <freq> <duty%>` | Set PIO PWM channel (legacy) | `p 0 1000 50` |
 | `s <ch> <freq> <duty%>` | Set software PWM channel (legacy) | `s 0 100 50` |
 | `d <ch> <duty%>` | Set software PWM duty only (legacy) | `d 0 25` |
 | `stop` | Stop all channels and reset to power-up defaults | `stop` |
@@ -85,6 +85,8 @@ All transactions are initiated by an I2C master. The protocol is **write-then-re
 
 The I2C slave is currently **read-only**. To change a channel, use the USB CDC serial commands.
 
+If write-capable I2C commands are added in a future revision, they should feed the same `control.c` to `pwm_driver_set_freq()` command path used by the CDC CLI.
+
 ### Command Bytes
 
 | Command | Value | Write Length | Read Length | Description |
@@ -92,11 +94,11 @@ The I2C slave is currently **read-only**. To change a channel, use the USB CDC s
 | `CMD_INFO` | `0x00` | 1 | variable | Device type string, e.g. `PicoPWM` |
 | `CMD_VERSION` | `0x01` | 1 | variable | Version string, e.g. `1.0.0` |
 | `CMD_CHANNELS` | `0x02` | 1 | 1 | Channel count (24) |
-| `CMD_GET_CH` | `0x10` | 2 | 12 | Read channel properties (`0x10` + channel) |
+| `CMD_GET_CH0`..`CMD_GET_CH23` | `0x10`..`0x27` | 1 | 12 | Read one channel's properties |
 
 ### Channel Property Layout
 
-For `CMD_GET_CH` (12 bytes, little-endian):
+For `0x10 .. 0x27` (12 bytes, little-endian):
 
 | Byte | Size | Field | Type |
 |------|------|-------|------|
@@ -116,7 +118,7 @@ Master read:  "PicoPWM" (7 bytes + null terminator = 8 bytes)
 **Read channel 0**
 
 ```
-Master write: [0x10, 0x00]
+Master write: [0x10]
 Master read:  [freq_le32, duty_le32, pulse_count_le32] (12 bytes)
 ```
 
@@ -126,3 +128,4 @@ Master read:  [freq_le32, duty_le32, pulse_count_le32] (12 bytes)
 - String responses include a null terminator. Allocate at least 8 bytes for `info` and 8 bytes for `version`.
 - The I2C slave handler is interrupt-driven. The master may need a small delay between transactions.
 - `pulse_count` is read-only over I2C. It cannot be set or reset via this interface.
+- `freq` and `duty` returned over I2C are the realized values published by the PWM driver layer.

@@ -1,264 +1,173 @@
 # Internal API
 
-This page documents the C API exposed by the firmware modules. All modules are in `firmware/src/`.
+This page documents the current source-level API in `firmware/src/`.
 
-This is an implementation-level reference for the current source tree. It may differ from the higher-level product target described in [../README.md](../README.md) and the public documentation pages, which describe the intended 8 hardware + 8 PIO + 8 software channel split.
+The present design centers on `pwmdriver/pwm_driver.*` as the multicore ownership boundary:
+
+- Core 0 uses `control.c` and the transport layers.
+- Core 1 owns all backend driver state and timing engines.
+- `pwm_driver_set_freq()` crosses the core boundary.
+- `pwm_driver_get()` returns the latest published state snapshot.
+
+`pwm_driver_set_freq()` is intended to be called only from top-level command ingress paths, not as a general internal API. In the current firmware that means the CDC CLI path; if write-capable I2C commands are added later, they should use the same boundary.
+
+For state machines, command sequences, backend timing design, and detailed multicore behavior, see [detail/pwm_driver_design.md](detail/pwm_driver_design.md).
 
 ---
 
-## `control.h` — Unified Channel Control
+## `control.h` — Unified Logical Control Layer
 
-Presents 24 logical channels (0..7 hardware, 8..23 software) as a single uniform interface.
-
-**Setters run on Core 0** and push commands to a queue. **`control_process_pending` runs on Core 1** and applies them to hardware. **Getters run on Core 0** and read cached/volatile values.
+`control.h` exposes the firmware's user-facing logical channel operations.
 
 ### Constants
 
 | Constant | Value | Description |
 |----------|-------|-------------|
-| `CONTROL_CHANNEL_COUNT` | 24 | Total number of logical channels. |
+| `CONTROL_CHANNEL_COUNT` | 24 | Total logical PWM channels |
 
-### Types
+### Channel Map
 
-```c
-typedef enum {
-    CTRL_CMD_SET_FREQ = 0,
-    CTRL_CMD_SET_DUTY = 1,
-    CTRL_CMD_STOP_ALL = 2,
-} ctrl_cmd_type_t;
-
-typedef struct {
-    uint8_t  type;
-    uint8_t  channel;
-    float    freq;
-    float    duty;
-} ctrl_cmd_t;
-```
+| Logical Range | Backend |
+|---------------|---------|
+| `0..7` | Hardware PWM |
+| `8..15` | PIO PWM |
+| `16..23` | Software PWM |
 
 ### Functions
 
 #### `void control_init(void)`
 
-Initialize cached values and the command queue. Called on Core 0 before launching Core 1.
-
----
+Initialize the control layer before launching Core 1. The current implementation does not maintain a second shadow state cache.
 
 #### `bool control_set_freq(uint channel, float freq_hz)`
 
-Set the frequency of a logical channel (Core 0). Pushes a `SET_FREQ` command to the queue. Returns `true` if queued, `false` if channel invalid, queue full, or the requested frequency is not representable on the target PWM backend.
-
-- `freq_hz = 0` disables the channel.
-- Hardware PWM accepts a finite range roughly bounded by the system clock and slice divider limits.
-- Software PWM accepts `0` to `100000 Hz`.
-
----
+Validate the requested frequency for the logical channel and forward the update through `pwm_driver_set_freq()`. This is the command-ingress layer above the PWM driver mailbox.
 
 #### `bool control_set_duty(uint channel, float duty)`
 
-Set the duty cycle (Core 0). Pushes a `SET_DUTY` command. `duty` is 0.0..1.0. Returns `false` if the channel is invalid, the queue is full, or the duty is not finite.
+Clamp and validate `duty` in the range `0.0 .. 1.0`, then forward the update through `pwm_driver_set_freq()` using the channel's current realized frequency.
 
----
+#### `bool control_get(uint channel, pwm_driver_state_t *state)`
 
-#### `void control_process_pending(void)`
-
-Drain the command queue and apply changes to PWM hardware. **Called on Core 1** from `pwm_core_main()`.
-
----
+Return one coherent realized-state snapshot for the logical channel. Higher transport layers should prefer this API when they need more than one field from the same channel state.
 
 #### `float control_get_freq(uint channel)`
 
-Return the requested frequency (Core 0, direct read from cache).
-
----
+Return the latest realized frequency from the `pwm_driver` snapshot. This is a convenience wrapper around `control_get()`.
 
 #### `float control_get_duty(uint channel)`
 
-Return the current duty cycle (Core 0, direct read from cache).
-
----
+Return the latest realized duty cycle from the `pwm_driver` snapshot. This is a convenience wrapper around `control_get()`.
 
 #### `uint32_t control_get_pulse_count(uint channel)`
 
-Return the 32-bit pulse counter (Core 0, volatile read from hw/sw module). Read-only.
-
----
+Return the read-only pulse counter from the `pwm_driver` snapshot. This is a convenience wrapper around `control_get()`.
 
 #### `bool control_is_enabled(uint channel)`
 
-Return `true` if `freq > 0` (Core 0, direct read from cache). No cross-core access needed.
-
----
+Return `true` when the realized frequency is greater than `0`.
 
 #### `void control_stop_all(void)`
 
-Reset cached values immediately and push a `STOP_ALL` command. Core 1 will disable all channels and clear all pulse counters.
+Request `freq = 0` and `duty = 0.5` for every logical channel. `pulse_count` is not reset.
 
 ---
 
-## `pwm_core.h` — Core 1 PWM Manager
+## `pwmdriver/pwm_driver.h` — Multicore PWM Wrapper
 
-Launches and manages the PWM core.
-
-### Functions
-
-#### `void pwm_core_launch(void)`
-
-Start Core 1 with `pwm_core_main` as entry point. Core 1 initializes PWM hardware, enables interrupts on Core 1, and enters its main loop.
-
----
-
-#### `bool pwm_core_is_ready(void)`
-
-Returns `true` once Core 1 has finished `hw_pwm_init()` and `sw_pwm_init()` and is processing commands.
-
----
-
-## `hw_pwm.h` — Hardware PWM
-
-Manages 8 hardware PWM channels using RP2040 PWM slices. **All functions are called on Core 1.**
+`pwm_driver.h` is the single wrapper visible to higher command layers.
 
 ### Constants
 
 | Constant | Value | Description |
 |----------|-------|-------------|
-| `HW_PWM_COUNT` | 8 | Number of hardware PWM channels. |
+| `HW_PWM_COUNT` | 8 | Hardware PWM logical channel count |
+| `PIO_PWM_DRIVER_COUNT` | 8 | PIO PWM logical channel count |
+| `SW_PWM_COUNT` | 8 | Software PWM logical channel count |
+| `PWM_DRIVER_CHANNEL_COUNT` | 24 | Total logical channels |
+| `HW_PWM_CHANNEL_BASE` | 0 | Hardware logical base |
+| `PIO_PWM_CHANNEL_BASE` | 8 | PIO logical base |
+| `SW_PWM_CHANNEL_BASE` | 16 | Software logical base |
 
-### GPIO Mapping
+### Types
 
-| Channel | GPIO | PWM Slice | PWM Channel |
-|---------|------|-----------|-------------|
-| 0 | 0 | 0 | A |
-| 1 | 2 | 1 | A |
-| 2 | 4 | 2 | A |
-| 3 | 6 | 3 | A |
-| 4 | 8 | 4 | A |
-| 5 | 10 | 5 | A |
-| 6 | 12 | 6 | A |
-| 7 | 14 | 7 | A |
+```c
+typedef struct {
+    float freq_hz;
+    float duty;
+    uint32_t pulse_count;
+} pwm_driver_state_t;
+```
 
-### Functions
-
-#### `void hw_pwm_init(void)`
-
-Initialize all 8 PWM slices and enable the wrap interrupt on the calling core (Core 1).
-
----
-
-#### `bool hw_pwm_set_freq(uint channel, float freq_hz, float duty)`
-
-Configure frequency and duty. Searches all `(TOP, clkdiv)` combinations for the best match. `freq_hz = 0` disables.
-
----
-
-#### `void hw_pwm_set_duty(uint channel, float duty)`
-
-Update duty cycle without changing frequency.
-
----
-
-#### `uint32_t hw_pwm_get_pulse_count(uint channel)`
-
-Return the pulse counter (volatile read, safe from Core 0).
-
----
-
-## `sw_pwm.h` — Software PWM
-
-Manages 16 software PWM channels driven by a 100 kHz timer interrupt on Core 1.
-
-### Constants
-
-| Constant | Value | Description |
-|----------|-------|-------------|
-| `SW_PWM_COUNT` | 16 | Number of software PWM channels. |
-
-### GPIO Mapping
-
-| Channel | GPIO |
-|---------|------|
-| 0 | 1 |
-| 1 | 3 |
-| 2 | 5 |
-| 3 | 7 |
-| 4 | 9 |
-| 5 | 11 |
-| 6 | 13 |
-| 7 | 15 |
-| 8 | 18 |
-| 9 | 19 |
-| 10 | 20 |
-| 11 | 21 |
-| 12 | 22 |
-| 13 | 25 |
-| 14 | 26 |
-| 15 | 27 |
+`pwm_driver_state_t` is the shared logical view of one channel's realized state.
 
 ### Functions
 
-#### `void sw_pwm_init(void)`
+#### `void pwm_driver_launch(void)`
 
-Initialize all software PWM GPIOs as outputs and start the 10 µs repeating timer on the calling core (Core 1).
+Launch Core 1, initialize all three PWM backends, and start the mailbox loop.
 
----
+#### `bool pwm_driver_is_ready(void)`
 
-#### `bool sw_pwm_set_freq(uint channel, float freq_hz, float duty)`
+Return `true` once Core 1 has completed backend initialization.
 
-Set frequency and duty. Uses `save_and_disable_interrupts()` to atomically update the channel struct. `freq_hz = 0` disables.
+#### `bool pwm_driver_set_freq(uint channel, float freq_hz, float duty)`
 
----
+Command-path mutation API.
 
-#### `void sw_pwm_set_duty(uint channel, float duty)`
+- Intended callers are top-level command ingress paths such as the CDC CLI
+- If an I2C write command path is added later, it should use this same API
+- Architectural intent: submit mailbox work to Core 1 asynchronously
+- Core 1 owns the actual backend apply step
 
-Update duty cycle. Also uses interrupt protection.
+#### `bool pwm_driver_get(uint channel, pwm_driver_state_t *state)`
 
----
-
-#### `uint32_t sw_pwm_get_pulse_count(uint channel)`
-
-Return the pulse counter (volatile read, safe from Core 0).
-
----
-
-## `cmd_parser.h` — Shared Command Parser
-
-Text command parser used by the USB CDC transport on Core 0.
-
-### Functions
-
-#### `void cmd_parser_init(void)` / `void cmd_parser_process_char(char c)` / `void cmd_parser_poll(void)`
-
-Feed characters and execute commands when a newline is received.
+Return the latest published realized state for a logical channel. Core 0 reads the shared snapshot; Core 1 may read backend state directly.
 
 ---
 
-#### `void print_help(void)` / `void print_status(void)`
+## Backend Driver Headers
 
-Print help text or all-channel status.
+The backend headers:
+
+- `pwmdriver/hw_pwm_driver.h`
+- `pwmdriver/pwm_driver_internal.h`
+- `pwmdriver/pio_pwm_driver.h`
+- `pwmdriver/sw_pwm_driver.h`
+
+are Core 1 implementation details.
+
+They each expose the same minimal shape:
+
+- `*_driver_init()`
+- `*_driver_set_freq(channel, freq_hz, duty)`
+- `*_driver_get(channel, &state)`
+- `pwm_driver_store_applied_state(...)`
+- `pwm_driver_store_pulse_count(...)`
+
+Higher layers should not depend on these headers directly. Detailed backend behavior is documented in [detail/pwm_driver_design.md](detail/pwm_driver_design.md).
 
 ---
 
-## `cdc_cmd.h` — USB CDC Transport (Core 0)
+## `cmd_parser.h` / `cdc_cmd.h` / `i2c_slave.h`
 
-#### `void cdc_cmd_init(void)` / `void cdc_cmd_poll(void)`
+These modules are thin transport or parsing layers around `control.c`.
 
-Initialize and poll the USB CDC interface. `cdc_cmd_poll` calls `tud_task()` and reads incoming characters.
+- `cmd_parser` implements the CLI syntax and formatted status output.
+- `cdc_cmd` handles TinyUSB CDC polling.
+- `i2c_slave` exposes a read-only binary status protocol on address `0x40`.
 
----
-
-## `i2c_slave.h` — I2C Slave Transport (Core 0)
-
-#### `void i2c_slave_init(void)` / `void i2c_slave_poll(void)`
-
-Initialize I2C0 slave (address `0x40`, GPIO 16/17) and poll. The ISR is registered on Core 0.
+At present, only the CDC path issues write commands. The I2C path is status-read-only.
 
 ---
 
-## Thread Safety Summary
+## Concurrency Summary
 
-| Data | Writer | Reader | Protection |
-|------|--------|--------|------------|
-| `control.c freqs[]` / `duties[]` | Core 0 | Core 0 | None needed (same core) |
-| `hw_pwm.c pulse_counts[]` | Core 1 ISR | Core 0 | `volatile uint32_t` (atomic on ARM) |
-| `sw_pwm.c pulse_count` | Core 1 ISR | Core 0 | `volatile uint32_t` (atomic on ARM) |
-| `sw_pwm.c channel struct` | Core 1 (set_freq) | Core 1 ISR | `save_and_disable_interrupts()` |
-| Command queue | Core 0 (`queue_try_add`) | Core 1 (`queue_try_remove`) | `queue_t` (spinlock-based) |
+| Data or Action | Owner | Access Pattern | Protection |
+|----------------|-------|----------------|------------|
+| Backend driver state | Core 1 | Direct backend access only on Core 1 | Core ownership |
+| Mailbox commands | Core 0 writer, Core 1 reader | `queue_t` | Pico queue synchronization |
+| Published channel snapshot | Core 1 writer, Core 0 reader | Lock-free snapshot read | versioned publish scheme |
+| SW PWM channel timing fields | Core 1 apply path + timer callback | Shared within one backend | interrupt masking |
+
+The design intent is that higher layers interact only with `control.c` and `pwm_driver.*`, while backend drivers remain Core 1 implementation details.

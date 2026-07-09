@@ -1,6 +1,7 @@
 #include "hw_pwm_driver.h"
 
 #include "pwm_driver.h"
+#include "pwm_driver_internal.h"
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
 #include "hardware/irq.h"
@@ -37,6 +38,7 @@ static void hw_pwm_irq_handler(void) {
         uint slice = pwm_gpio_to_slice_num(PWM_HW_GPIO_PINS[i]);
         if (status & (1u << slice)) {
             pulse_counts[i]++;
+            pwm_driver_store_pulse_count(HW_PWM_CHANNEL_BASE + i, pulse_counts[i]);
             pwm_clear_irq(slice);
         }
     }
@@ -76,6 +78,8 @@ void hw_pwm_driver_init(void) {
 }
 
 bool hw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
+    pwm_driver_state_t state;
+
     if (channel >= HW_PWM_COUNT) return false;
     if (duty < 0.0f) duty = 0.0f;
     if (duty > 1.0f) duty = 1.0f;
@@ -91,6 +95,10 @@ bool hw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
         pwm_set_chan_level(slice, ch, 0);
         enabled[channel] = false;
         actual_freqs[channel] = 0.0f;
+        state.freq_hz = actual_freqs[channel];
+        state.duty = duties[channel];
+        state.pulse_count = pulse_counts[channel];
+        pwm_driver_store_applied_state(HW_PWM_CHANNEL_BASE + channel, &state);
         return true;
     }
 
@@ -137,6 +145,11 @@ bool hw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
     enabled[channel] = true;
     actual_freqs[channel] = (float)sys_clk / (best_div * (best_top + 1));
     wraps[channel] = (uint16_t)best_top;
+
+    state.freq_hz = actual_freqs[channel];
+    state.duty = duties[channel];
+    state.pulse_count = pulse_counts[channel];
+    pwm_driver_store_applied_state(HW_PWM_CHANNEL_BASE + channel, &state);
 
     return true;
 }

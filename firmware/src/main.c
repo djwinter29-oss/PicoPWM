@@ -6,7 +6,7 @@
 #include "cmd_parser.h"
 #include "cdc_cmd.h"
 #include "i2c_slave.h"
-#include "pwm_core.h"
+#include "pwmdriver/pwm_driver.h"
 
 int main(void) {
     // Overclock to 150 MHz for more CPU headroom and higher HW PWM max frequency.
@@ -23,7 +23,7 @@ int main(void) {
     printf("========================================\r\n");
     printf("  PicoPWM starting at %lu MHz\r\n", clock_get_hz(clk_sys) / 1000000);
     printf("  Dual-core: Core0=CDC+I2C, Core1=PWM\r\n");
-    printf("  24 channels: 0..7=HW, 8..23=SW\r\n");
+    printf("  24 channels: 0..7=HW, 8..15=PIO, 16..23=SW\r\n");
     printf("  Init: freq=0, duty=50%%, pulses=0\r\n");
     printf("  USB CDC serial + I2C slave (addr 0x40)\r\n");
     printf("========================================\r\n\n");
@@ -32,10 +32,10 @@ int main(void) {
     control_init();
 
     // Launch Core 1 to manage all PWM hardware.
-    pwm_core_launch();
+    pwm_driver_launch();
 
     // Wait for Core 1 to finish PWM init before accepting commands.
-    while (!pwm_core_is_ready()) {
+    while (!pwm_driver_is_ready()) {
         tight_loop_contents();
     }
 

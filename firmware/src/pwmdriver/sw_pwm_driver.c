@@ -1,6 +1,7 @@
 #include "sw_pwm_driver.h"
 
 #include "pwm_driver.h"
+#include "pwm_driver_internal.h"
 #include "hardware/gpio.h"
 #include "hardware/sync.h"
 #include "hardware/timer.h"
@@ -35,6 +36,7 @@ static bool sw_pwm_tick_callback(repeating_timer_t *rt) {
         if (ch->counter >= ch->period_ticks) {
             ch->counter = 0;
             ch->pulse_count++;
+            pwm_driver_store_pulse_count(SW_PWM_CHANNEL_BASE + i, ch->pulse_count);
         }
         gpio_put(ch->gpio, ch->counter < ch->duty_ticks);
     }
@@ -66,6 +68,8 @@ void sw_pwm_driver_init(void) {
 }
 
 bool sw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
+    pwm_driver_state_t state;
+
     if (channel >= SW_PWM_COUNT) return false;
     if (duty < 0.0f) duty = 0.0f;
     if (duty > 1.0f) duty = 1.0f;
@@ -83,6 +87,10 @@ bool sw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
         gpio_put(ch->gpio, 0);
         actual_freqs[channel] = 0.0f;
         enabled[channel] = false;
+        state.freq_hz = actual_freqs[channel];
+        state.duty = duties[channel];
+        state.pulse_count = ch->pulse_count;
+        pwm_driver_store_applied_state(SW_PWM_CHANNEL_BASE + channel, &state);
         return true;
     }
 
@@ -104,6 +112,10 @@ bool sw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
 
     actual_freqs[channel] = SW_PWM_BASE_HZ / (float)period;
     enabled[channel] = true;
+    state.freq_hz = actual_freqs[channel];
+    state.duty = duties[channel];
+    state.pulse_count = ch->pulse_count;
+    pwm_driver_store_applied_state(SW_PWM_CHANNEL_BASE + channel, &state);
 
     return true;
 }

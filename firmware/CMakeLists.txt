@@ -16,7 +16,6 @@ add_executable(pico_pwm
     src/pwmdriver/hw_pwm_driver.c
     src/pwmdriver/sw_pwm_driver.c
     src/pwmdriver/pio_pwm_driver.c
-    src/pwm_core.c
     src/cmd_parser.c
     src/cdc_cmd.c
     src/i2c_slave.c

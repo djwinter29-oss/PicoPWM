@@ -1,212 +1,162 @@
 # Architecture
 
-PicoPWM targets a low-cost Raspberry Pi Pico platform with a shared external interface and two firmware roles. The intended hardware targets are:
+PicoPWM targets Raspberry Pi Pico (RP2040) and Pico 2 (RP2350) with one shared logical PWM model and two firmware roles:
 
-- **Raspberry Pi Pico (RP2040)**
-- **Raspberry Pi Pico 2 (RP2350)**
+- PWM generator
+- PWM monitoring with the same external pin order
 
-- **PWM generator** for producing 24 logical PWM channels.
-- **PWM monitoring** for measurement-oriented use while keeping the same external connector mapping.
+The current firmware implements the generator role with 24 logical channels:
 
-The control surface is the same in both roles: USB CDC CLI for interactive control and I2C for host integration.
+- 8 hardware PWM channels on PWM slice channel B pins
+- 8 PIO PWM channels on companion pins
+- 8 software PWM channels for lower-frequency outputs
 
-For the generator role, the intended backend split is:
+The hardware bank intentionally uses channel B so the output pinout stays aligned with monitoring-oriented input use cases.
 
-- **8 hardware PWM channels** on the MCU PWM slice **channel B** pins.
-- **8 PIO PWM channels** for good timing accuracy on a second bank of outputs.
-- **8 software PWM channels** for lower-frequency outputs.
-
-The hardware channels intentionally use **channel B** so the physical pins remain aligned with monitoring-oriented input use cases.
-
-## System Overview
+For state machines, API call flows, backend-internal behavior, and publication/readback details, see [detail/pwm_driver_design.md](detail/pwm_driver_design.md).
 
 ## Dual-Core Overview
 
 ```
-┌─ Core 0 — Communication ───────────────────────────┐
+┌─ Core 0 — Communication and User API ──────────────┐
 │                                                     │
 │  main.c                                             │
-│    ├── stdio_init_all()        USB CDC              │
-│    ├── control_init()          init cache + queue   │
-│    ├── pwm_core_launch()       start Core 1         │
-│    ├── cdc_cmd_init()          CDC command reader   │
-│    ├── i2c_slave_init()        I2C ISR on Core 0    │
+│    ├── stdio_init_all()                             │
+│    ├── control_init()                               │
+│    ├── pwm_driver_launch()                          │
+│    ├── wait for pwm_driver_is_ready()               │
+│    ├── cdc_cmd_init()                               │
+│    ├── i2c_slave_init()                             │
 │    └── main loop: cdc_cmd_poll() + i2c_slave_poll() │
 │                                                     │
-│  cmd_parser.c   text command parser                 │
-│  cdc_cmd.c      USB CDC transport                   │
-│  i2c_slave.c    I2C slave ISR (read-only queries)   │
+│  control.c                                          │
+│    ├── validate requested freq/duty                 │
+│    ├── submit pwm_driver_set_freq() command         │
+│    └── read pwm_driver_get() snapshot               │
 │                                                     │
-│  control.c (setters)  push commands to queue        │
-│  control.c (getters)  read cached values + pulse    │
+│  cmd_parser.c / cdc_cmd.c / i2c_slave.c             │
 └─────────────────────────────────────────────────────┘
-          │                          │
-          │   command queue           │ volatile reads
-          │   (queue_t, 32 slots)     │ (pulse_count)
-          ▼                          ▼
-┌─ Core 1 — PWM Management ───────────────────────────┐
+                 │
+                 │ mailbox command
+                 ▼
+┌─ Core 1 — PWM Backend Ownership ───────────────────┐
 │                                                     │
-│  pwm_core.c                                         │
-│    ├── hw_pwm_init()          PWM slices + wrap IRQ │
-│    ├── sw_pwm_init()          timer IRQ (100 kHz)   │
-│    └── main loop:                                  │
-│          control_process_pending()  drain queue     │
-│          __wfi()                    sleep until IRQ │
+│  pwmdriver/pwm_driver.c                             │
+│    ├── hw_pwm_driver_init()                         │
+│    ├── pio_pwm_driver_init()                        │
+│    ├── sw_pwm_driver_init()                         │
+│    └── main loop: process mailbox + __wfe()         │
 │                                                     │
-│  hw_pwm.c   8 HW PWM channels + wrap ISR            │
-│  pio_pwm.c  8 PIO PWM channels                      │
-│  sw_pwm.c   8 SW PWM channels + timer ISR           │
+│  pwmdriver/hw_pwm_driver.c                          │
+│    ├── owns PWM slices                              │
+│    └── wrap IRQ updates pulse counters              │
 │                                                     │
-│  control.c (process_pending)  apply freq/duty/stop  │
-└─────────────────────────────────────────────────────┘
-          │
-          ▼
-┌─ Hardware ──────────────────────────────────────────┐
-│  MCU PWM slices 0-7 (channel B each)                │
-│  MCU PIO state machines for 8 channels              │
-│  MCU hardware timer (10 µs repeating)               │
-│  24 logical PWM pins                                │
-│  GPIO 16/17 (I2C0 slave)                            │
-│  USB (CDC)                                          │
+│  pwmdriver/pio_pwm_driver.c                         │
+│    ├── owns PIO programs and state machines         │
+│    └── PIO IRQ updates pulse counters               │
+│                                                     │
+│  pwmdriver/sw_pwm_driver.c                          │
+│    ├── owns 10 us repeating timer                   │
+│    └── timer callback updates pulse counters        │
 └─────────────────────────────────────────────────────┘
 ```
 
-## Why Dual-Core?
+## Core Boundary
 
-| Concern | Single-Core Problem | Dual-Core Solution |
-|---------|--------------------|--------------------|
-| SW PWM ISR at 100 kHz | Steals CPU from USB/I2C | Core 1 handles it entirely |
-| Mixed backends | Different timing engines complicate control | One logical channel model hides backend differences |
-| HW PWM wrap ISR | Adds interrupt load to comm | Core 1 absorbs it |
-| USB CDC responsiveness | Can stall during ISR | Core 0 is always free |
-| I2C slave latency | Can miss bytes during PWM ISR | Core 0 ISR is never preempted by PWM |
+The `pwmdriver` layer is the Core 1 ownership boundary.
 
-## Command Queue
+- Core 0 never calls backend driver functions directly.
+- Core 0 sends command-path `set_freq(freq, duty)` requests through `pwm_driver_set_freq()`.
+- Core 1 applies the request to the selected backend.
+- Core 1 publishes the realized channel state into a shared snapshot.
+- Core 0 reads that snapshot through `pwm_driver_get()`.
 
-Core 0 and Core 1 communicate through a lock-free `queue_t` (from `pico/util/queue.h`):
+This keeps hardware state, IRQ handlers, and backend-specific timing entirely on Core 1 while still presenting a single user-facing API.
 
-```
-Core 0 (CDC/I2C command)                Core 1 (pwm_core main loop)
-  ┌───────────────┐                       ┌──────────────────────┐
-  │ control_set_  │  queue_try_add()      │ control_process_     │
-  │ freq/duty()   │ ──────────────────►   │ pending()            │
-  │ control_      │  queue_try_add()      │   hw_pwm_set_freq()  │
-  │ stop_all()    │ ──────────────────►   │   sw_pwm_set_freq()  │
-  └───────────────┘                       │   hw_pwm_set_duty()  │
-                                          │   sw_pwm_set_duty()  │
-                                          │   stop + clear pulses│
-                                          └──────────────────────┘
-```
+`pwm_driver_set_freq()` is not intended to be a general-purpose internal service call. It is reserved for top-level command ingress paths such as the CDC CLI and, if write support is added later, an I2C command handler.
 
-- Queue capacity: 32 commands
-- Non-blocking: `queue_try_add` drops if full (returns `false`)
-- Core 1 drains the queue every ~10 µs (woken by timer ISR)
+## Mailbox Model
 
-## Data Flow for Reads
+`pwm_driver_set_freq()` is the only cross-core mutation path.
 
-Reads (`get`, `status`, I2C queries) do **not** go through the queue. Core 0 reads directly:
+- Core 0 validates and submits logical channel updates.
+- Core 1 dequeues and applies them to the selected backend.
+- Core 1 publishes realized state for later reads.
+- Submission success means the command entered the mailbox; realized state is observed later through `pwm_driver_get()`.
 
-| Property | Source | Cross-core? | Safe? |
-|----------|--------|-------------|-------|
-| `freq` | `control.c` cached `freqs[]` | No (Core 0 only) | Yes |
-| `duty` | `control.c` cached `duties[]` | No (Core 0 only) | Yes |
-| `pulse_count` | `hw_pwm.c` / `sw_pwm.c` volatile | Yes | Yes (atomic 32-bit read) |
-| `enabled` | Derived from `freqs[ch] > 0` | No (Core 0 only) | Yes |
+The architectural model is asynchronous command submission with Core 1 ownership of backend apply timing. The detailed command flow is documented in [detail/pwm_driver_design.md](detail/pwm_driver_design.md).
+
+## Shared State Snapshot
+
+The read path uses a published snapshot owned by `pwmdriver/pwm_driver.c`.
+
+Each logical channel exposes:
+
+- `freq_hz`
+- `duty`
+- `pulse_count`
+
+Backends publish new realized state after successful configuration changes, and they publish `pulse_count` updates from their IRQ or timer paths. Core 0 reads through `pwm_driver_get()` rather than keeping a separate shadow cache.
+
+The important consequence is that reads reflect realized backend state, not just the last requested value.
 
 ## Channel Classes
 
 | Logical Channels | Backend | GPIOs | Notes |
 |------------------|---------|-------|-------|
-| `0..7` | Hardware PWM | 1, 3, 5, 7, 9, 11, 13, 15 | Slice 0..7, channel B |
-| `8..15` | PIO PWM | 0, 2, 4, 6, 8, 10, 12, 14 | Matched companion pins to the HW bank |
+| `0..7` | Hardware PWM | 1, 3, 5, 7, 9, 11, 13, 15 | PWM slices 0..7, channel B |
+| `8..15` | PIO PWM | 0, 2, 4, 6, 8, 10, 12, 14 | Companion pins to the hardware bank |
 | `16..23` | Software PWM | 18, 19, 20, 21, 22, 25, 26, 27 | Lower-frequency bank |
 
-## Hardware PWM (8 channels)
+## Backend Roles
 
-Both RP2040 and RP2350 provide PWM slices with A/B outputs. The firmware uses **one channel per slice**, so each of the 8 hardware channels has a **fully independent frequency**.
+- Hardware PWM: highest accuracy, independent frequency per channel, about 10 Hz to 1 MHz.
+- PIO PWM: mid-range timing option, about 10 Hz to 100 kHz.
+- Software PWM: low-frequency bank, about 1 Hz to 1 kHz.
 
-- GPIO: 1, 3, 5, 7, 9, 11, 13, 15 (channel B of slices 0-7)
-- Target operating range: about 10 Hz to 1 MHz
-- Pulse counting: every PWM wrap triggers an interrupt on Core 1 that increments the channel's 32-bit pulse counter
+Backend implementation detail is intentionally kept out of this overview page. See [detail/pwm_driver_design.md](detail/pwm_driver_design.md) for backend-specific design.
 
-The frequency is configured by selecting a clock divider (`clkdiv`) and a wrap value (`TOP`). The firmware searches all valid `(TOP, clkdiv)` combinations to find the best match.
+## Transport Model
 
-```
-f_pwm = f_sys / (clkdiv * (TOP + 1))
-```
+### USB CDC
 
-## PIO PWM (8 channels)
+- Read/write command interface
+- Text commands handled on Core 0
+- Calls into `control.c`
 
-The PIO PWM bank fills the gap between hardware PWM and timer-driven software PWM.
+### I2C Slave
 
-- GPIO: 0, 2, 4, 6, 8, 10, 12, 14
-- Target operating range: about 10 Hz to 100 kHz
-- Positioning: good accuracy, deterministic timing, and a pinout that mirrors the hardware bank
+- Read-only status interface
+- Address `0x40` on GPIO 16/17
+- Interrupt-driven handler on Core 0
+- Returns device info, version, channel count, and per-channel state
 
-This bank is intended for channels that need better timing quality than software PWM but do not need to consume the MCU hardware PWM slices.
+If a future write-capable I2C command interface is added, it should use the same `control.c` to `pwm_driver_set_freq()` command path as the CDC CLI.
 
-## Software PWM (8 channels)
+## Pulse Counter Semantics
 
-The software PWM channels are driven by a periodic hardware timer interrupt on Core 1.
+`pulse_count` is read-only and monotonic from power-on.
 
-- GPIO: 18, 19, 20, 21, 22, 25, 26, 27
-- Target operating range: about 1 Hz to 1 kHz
-- Timer tick: 10 µs (100 kHz interrupt rate)
-- Resolution at 1 kHz: 100 levels (1% duty steps)
-
-The timer ISR maintains a per-channel counter. When the counter reaches the period value, the GPIO is toggled and the counter resets; the pulse counter is incremented at the same time.
-
-State updates (`set_freq`, `set_duty`) use `save_and_disable_interrupts()` / `restore_interrupts()` to prevent the ISR from reading partially-updated struct fields.
-
-## Control Interface
-
-`control.c` presents a single, uniform view of all 24 channels, regardless of backend.
-
-Each channel has three properties:
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `freq` | `float` | Frequency in Hz. `0` means the channel is off. |
-| `duty` | `float` | Duty cycle from 0.0 to 1.0. |
-| `pulse_count` | `uint32_t` | Number of PWM periods completed. Wraps to 0 on overflow. Read-only. |
-
-Initialization values (power-up / reset):
-- `freq = 0` (off)
-- `duty = 0.5` (50%)
-- `pulse_count = 0`
-
-**Important:** `pulse_count` is read-only from all external interfaces. The `stop` command is the only way to clear it.
-
-## Command Transports
-
-### USB CDC (text)
-
-The Pico appears as a USB serial device (CDC). A text-based command parser reads lines and calls the control API. Responses are printed back to the same interface. `tud_task()` is serviced in the Core 0 main loop.
-
-### I2C Slave (binary)
-
-GPIO 16/17 are configured as I2C0 slave at 7-bit address `0x40`. An interrupt-driven handler on Core 0 responds to read-only status queries from an I2C master. The protocol is byte-oriented and binary (little-endian).
-
-Both transports expose the same data: device type, version, channel count, and per-channel properties.
+- It increments once per generated PWM period.
+- It wraps naturally on 32-bit overflow.
+- `stop` disables output by setting frequency to `0 Hz` and duty to `50%`.
+- `stop` does not clear `pulse_count`.
 
 ## Startup Flow
 
-1. **Core 0**: `set_sys_clock_khz(150000, true)` — overclock to 150 MHz
-2. **Core 0**: `stdio_init_all()` — initialize USB CDC
-3. **Core 0**: `control_init()` — init cached values + command queue
-4. **Core 0**: `pwm_core_launch()` — start Core 1
-5. **Core 1**: `hw_pwm_init()` — init PWM slices + wrap IRQ on Core 1
-6. **Core 1**: `pio_pwm_init()` — init PIO-backed PWM channels
-7. **Core 1**: `sw_pwm_init()` — init SW PWM GPIO + timer IRQ on Core 1
-8. **Core 1**: set `pwm_ready = true`, enter main loop (`control_process_pending` + `__wfi`)
-9. **Core 0**: wait for `pwm_core_is_ready()`
-10. **Core 0**: `cdc_cmd_init()` / `i2c_slave_init()` — start command interfaces
-11. **Core 0**: print help, enter main loop (`cdc_cmd_poll` + `i2c_slave_poll`)
+1. Core 0 optionally raises system clock to 150 MHz.
+2. Core 0 initializes stdio.
+3. Core 0 initializes the control layer.
+4. Core 0 launches Core 1 with `pwm_driver_launch()`.
+5. Core 1 initializes hardware PWM, PIO PWM, and software PWM backends.
+6. Core 1 sets the ready flag and enters the mailbox loop.
+7. Core 0 waits for `pwm_driver_is_ready()`.
+8. Core 0 starts CDC and I2C interfaces.
 
-## Performance Notes
+## Design Notes
 
-- Core 1's main loop sleeps with `__wfi()` between timer interrupts, consuming near-zero power when idle.
-- The 100 kHz SW PWM timer wakes Core 1 every 10 µs. Between wakeups, the queue is drained and the core sleeps again.
-- HW PWM wrap interrupts add extra wakeups proportional to PWM frequency. At 100 kHz on all 8 channels, that's 800k interrupts/sec — manageable at 150 MHz.
-- USB CDC and I2C on Core 0 are never preempted by PWM ISRs, ensuring reliable communication.
-- `pulse_count` reads use volatile 32-bit loads, which are atomic on ARM Cortex-M0+.
+- Core 1 owns all backend driver state and all PWM-related IRQ/timer activity.
+- Core 0 remains dedicated to CLI and I2C responsiveness.
+- The `pwmdriver` wrapper exists to hide backend differences and enforce the multicore ownership boundary.
+- The single source of truth for channel state is the `pwm_driver` snapshot, not a second cache in `control.c`.
+- `pwm_driver_set_freq()` is intended for external command ingress only, not arbitrary internal call sites.

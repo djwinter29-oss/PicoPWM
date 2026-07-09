@@ -11,24 +11,29 @@ static char cmd_buffer[CMD_BUF_SIZE];
 static int cmd_len = 0;
 
 void print_status(void) {
+    pwm_driver_state_t state;
+
     printf("\r\n=== All PWM channels (logical 0..23) ===\r\n");
     printf("Ch  Type  State  Freq(Hz)   Duty(%%)   Pulses\r\n");
     for (int i = 0; i < CONTROL_CHANNEL_COUNT; i++) {
-        const char *type = (i < HW_PWM_COUNT) ? "HW" : "SW";
+        const char *type = (i < PIO_PWM_CHANNEL_BASE) ? "HW" :
+                           (i < SW_PWM_CHANNEL_BASE) ? "PIO" : "SW";
+        state = (pwm_driver_state_t){0.0f, 0.5f, 0};
+        control_get(i, &state);
         printf("%-2d  %-4s  %-3s  %9.3f  %6.1f  %lu\r\n",
                i,
                type,
-               control_is_enabled(i) ? "ON" : "OFF",
-               control_get_freq(i),
-               control_get_duty(i) * 100.0f,
-               (unsigned long)control_get_pulse_count(i));
+               state.freq_hz > 0.0f ? "ON" : "OFF",
+               state.freq_hz,
+               state.duty * 100.0f,
+               (unsigned long)state.pulse_count);
     }
     printf("\r\n");
 }
 
 void print_help(void) {
     printf("\r\nUnified control interface: each channel has freq, duty, pulse_count.\r\n");
-    printf("Logical channels: 0..7 = hardware PWM, 8..23 = software PWM.\r\n\r\n");
+    printf("Logical channels: 0..7 = hardware PWM, 8..15 = PIO PWM, 16..23 = software PWM.\r\n\r\n");
     printf("Commands:\r\n");
     printf("  info                    Show device type\r\n");
     printf("  version                 Show firmware version\r\n");
@@ -36,8 +41,9 @@ void print_help(void) {
     printf("  set <ch> f <freq>       Set frequency (Hz, 0 = off)\r\n");
     printf("  set <ch> d <duty%%>      Set duty cycle (0..100)\r\n");
     printf("  h <ch> <freq> <duty%%>   Set HW PWM channel (ch=0..7)\r\n");
-    printf("  s <ch> <freq> <duty%%>   Set SW PWM channel (ch=0..15)\r\n");
-    printf("  d <ch> <duty%%>          Set SW PWM duty only (ch=0..15)\r\n");
+    printf("  p <ch> <freq> <duty%%>   Set PIO PWM channel (ch=0..7)\r\n");
+    printf("  s <ch> <freq> <duty%%>   Set SW PWM channel (ch=0..7)\r\n");
+    printf("  d <ch> <duty%%>          Set SW PWM duty only (ch=0..7)\r\n");
     printf("  stop                    Stop all channels and reset to power-up defaults\r\n");
     printf("  status                  Show all channels\r\n");
     printf("  help                    Show this help\r\n");
@@ -46,8 +52,9 @@ void print_help(void) {
     printf("\r\nExamples:\r\n");
     printf("  get 0                   -> read channel 0\r\n");
     printf("  set 0 f 1000            -> HW0 1000 Hz, keeps 50%% duty\r\n");
-    printf("  set 8 d 25              -> SW8 25%% duty\r\n");
+    printf("  set 8 d 25              -> PIO0 25%% duty\r\n");
     printf("  h 0 1000 50             -> HW0 1000 Hz, 50%% duty\r\n");
+    printf("  p 0 1000 25             -> PIO0 1000 Hz, 25%% duty\r\n");
     printf("  s 0 100 25              -> SW0 100 Hz, 25%% duty\r\n");
     printf("\r\n");
 }
@@ -69,14 +76,17 @@ static void execute_command(char *cmd) {
     } else if (strcmp(token, "get") == 0) {
         char *ch_str = strtok_r(NULL, " \t", &saveptr);
         if (ch_str) {
+            pwm_driver_state_t state;
             int ch = atoi(ch_str);
             if (ch >= 0 && ch < CONTROL_CHANNEL_COUNT) {
+                state = (pwm_driver_state_t){0.0f, 0.5f, 0};
+                control_get(ch, &state);
                 printf("CH%d: freq=%.3f Hz, duty=%.1f%%, pulses=%lu, enabled=%s\r\n",
                        ch,
-                       control_get_freq(ch),
-                       control_get_duty(ch) * 100.0f,
-                       (unsigned long)control_get_pulse_count(ch),
-                       control_is_enabled(ch) ? "yes" : "no");
+                       state.freq_hz,
+                       state.duty * 100.0f,
+                       (unsigned long)state.pulse_count,
+                       state.freq_hz > 0.0f ? "yes" : "no");
             } else {
                 printf("ERR channel %d invalid (0..23)\r\n", ch);
             }
@@ -102,8 +112,11 @@ static void execute_command(char *cmd) {
                     printf("ERR CH%d freq invalid\r\n", ch);
                 }
             } else if (strcmp(prop, "d") == 0 || strcmp(prop, "duty") == 0) {
-                control_set_duty(ch, val / 100.0f);
-                printf("OK CH%d duty=%.1f%%\r\n", ch, val);
+                if (control_set_duty(ch, val / 100.0f)) {
+                    printf("OK CH%d duty=%.1f%%\r\n", ch, val);
+                } else {
+                    printf("ERR CH%d duty invalid\r\n", ch);
+                }
             } else {
                 printf("ERR unknown property '%s' (f/d only)\r\n", prop);
             }
@@ -112,7 +125,7 @@ static void execute_command(char *cmd) {
         }
 
     } else if (strcmp(token, "reset") == 0) {
-        printf("ERR reset command is disabled; use 'stop' to reset all channels\r\n");
+        printf("ERR reset command is disabled; use 'stop' to disable all channels\r\n");
 
     } else if (strcmp(token, "h") == 0) {
         char *ch_str = strtok_r(NULL, " \t", &saveptr);
@@ -133,6 +146,26 @@ static void execute_command(char *cmd) {
             printf("ERR usage: h <ch> <freq> <duty%%>\r\n");
         }
 
+    } else if (strcmp(token, "p") == 0) {
+        char *ch_str = strtok_r(NULL, " \t", &saveptr);
+        char *freq_str = strtok_r(NULL, " \t", &saveptr);
+        char *duty_str = strtok_r(NULL, " \t", &saveptr);
+        if (ch_str && freq_str && duty_str) {
+            int ch = atoi(ch_str);
+            float freq = atof(freq_str);
+            float duty = atof(duty_str) / 100.0f;
+            int logical = ch + PIO_PWM_CHANNEL_BASE;
+            if (ch >= 0 && ch < PIO_PWM_DRIVER_COUNT &&
+                control_set_freq(logical, freq) &&
+                control_set_duty(logical, duty)) {
+                printf("OK PIO%d: %.3f Hz, %.1f%%\r\n", ch, freq, duty * 100.0f);
+            } else {
+                printf("ERR PIO%d invalid (ch=0..7, duty=0..100)\r\n", ch);
+            }
+        } else {
+            printf("ERR usage: p <ch> <freq> <duty%%>\r\n");
+        }
+
     } else if (strcmp(token, "s") == 0) {
         char *ch_str = strtok_r(NULL, " \t", &saveptr);
         char *freq_str = strtok_r(NULL, " \t", &saveptr);
@@ -141,13 +174,13 @@ static void execute_command(char *cmd) {
             int ch = atoi(ch_str);
             float freq = atof(freq_str);
             float duty = atof(duty_str) / 100.0f;
-            int logical = ch + HW_PWM_COUNT;
+            int logical = ch + SW_PWM_CHANNEL_BASE;
             if (ch >= 0 && ch < SW_PWM_COUNT &&
                 control_set_freq(logical, freq) &&
                 control_set_duty(logical, duty)) {
                 printf("OK SW%d: %.3f Hz, %.1f%%\r\n", ch, freq, duty * 100.0f);
             } else {
-                printf("ERR SW%d invalid (ch=0..15, duty=0..100)\r\n", ch);
+                printf("ERR SW%d invalid (ch=0..7, duty=0..100)\r\n", ch);
             }
         } else {
             printf("ERR usage: s <ch> <freq> <duty%%>\r\n");
@@ -159,7 +192,7 @@ static void execute_command(char *cmd) {
         if (ch_str && duty_str) {
             int ch = atoi(ch_str);
             float duty = atof(duty_str) / 100.0f;
-            int logical = ch + HW_PWM_COUNT;
+            int logical = ch + SW_PWM_CHANNEL_BASE;
             if (ch >= 0 && ch < SW_PWM_COUNT) {
                 if (control_set_duty(logical, duty)) {
                     printf("OK SW%d duty: %.1f%%\r\n", ch, duty * 100.0f);
@@ -167,7 +200,7 @@ static void execute_command(char *cmd) {
                     printf("ERR SW%d duty invalid\r\n", ch);
                 }
             } else {
-                printf("ERR SW%d invalid (ch=0..15)\r\n", ch);
+                printf("ERR SW%d invalid (ch=0..7)\r\n", ch);
             }
         } else {
             printf("ERR usage: d <ch> <duty%%>\r\n");
@@ -175,7 +208,7 @@ static void execute_command(char *cmd) {
 
     } else if (strcmp(token, "stop") == 0) {
         control_stop_all();
-        printf("OK all channels stopped and reset (freq=0, duty=50%%, pulses=0)\r\n");
+        printf("OK all channels stopped and reset (freq=0, duty=50%%)\r\n");
 
     } else if (strcmp(token, "status") == 0 || strcmp(token, "st") == 0) {
         print_status();

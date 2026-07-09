@@ -1,33 +1,29 @@
 #include "control.h"
-#include "pwmdriver/hw_pwm_driver.h"
-#include "pwmdriver/sw_pwm_driver.h"
 #include "hardware/clocks.h"
-#include "pico/util/queue.h"
 
 #include <math.h>
 
-#define SW_CHANNEL_BASE HW_PWM_COUNT
-#define CMD_QUEUE_LEN   32
+static pwm_driver_state_t control_get_state_or_default(uint channel) {
+    pwm_driver_state_t state = {
+        .freq_hz = 0.0f,
+        .duty = 0.5f,
+        .pulse_count = 0,
+    };
 
-// ---- Cached requested values (Core 0 only) ----
+    if (channel >= CONTROL_CHANNEL_COUNT) {
+        return state;
+    }
 
-static float freqs[CONTROL_CHANNEL_COUNT];
-static float duties[CONTROL_CHANNEL_COUNT];
-
-// ---- Command queue (Core 0 writes, Core 1 reads) ----
-
-static queue_t cmd_queue;
-
-static pwm_driver_state_t hw_pwm_state_or_default(uint channel) {
-    pwm_driver_state_t state = {0};
-    hw_pwm_driver_get(channel, &state);
+    pwm_driver_get(channel, &state);
     return state;
 }
 
-static pwm_driver_state_t sw_pwm_state_or_default(uint channel) {
-    pwm_driver_state_t state = {0};
-    sw_pwm_driver_get(channel, &state);
-    return state;
+bool control_get(uint channel, pwm_driver_state_t *state) {
+    if (channel >= CONTROL_CHANNEL_COUNT || state == NULL) {
+        return false;
+    }
+
+    return pwm_driver_get(channel, state);
 }
 
 static bool freq_supported_for_channel(uint channel, float freq_hz) {
@@ -43,138 +39,79 @@ static bool freq_supported_for_channel(uint channel, float freq_hz) {
         return true;
     }
 
-    if (channel < HW_PWM_COUNT) {
+    if (channel < PIO_PWM_CHANNEL_BASE) {
         const float sys_clk = (float)clock_get_hz(clk_sys);
         const float min_hw = sys_clk / ((255.0f + 15.0f / 16.0f) * 65536.0f);
         const float max_hw = sys_clk / 2.0f;
         return freq_hz >= min_hw && freq_hz <= max_hw;
     }
 
+    if (channel < SW_PWM_CHANNEL_BASE) {
+        return freq_hz <= 100000.0f;
+    }
+
     return freq_hz <= 100000.0f;
 }
 
 void control_init(void) {
-    for (int i = 0; i < CONTROL_CHANNEL_COUNT; i++) {
-        freqs[i] = 0.0f;
-        duties[i] = 0.5f;
-    }
-    queue_init(&cmd_queue, sizeof(ctrl_cmd_t), CMD_QUEUE_LEN);
+    // No local shadow state is required; pwm_driver owns the shared snapshot.
 }
 
 // ---- Setters (Core 0) ----
 
 bool control_set_freq(uint channel, float freq_hz) {
+    pwm_driver_state_t state;
+
     if (channel >= CONTROL_CHANNEL_COUNT) return false;
     if (!freq_supported_for_channel(channel, freq_hz)) return false;
 
     if (freq_hz < 0.0f) freq_hz = 0.0f;
 
-    freqs[channel] = freq_hz;
+    state = control_get_state_or_default(channel);
 
-    ctrl_cmd_t cmd = {
-        .type    = CTRL_CMD_SET_FREQ,
-        .channel = (uint8_t)channel,
-        .freq    = freq_hz,
-        .duty    = duties[channel],
-    };
-    return queue_try_add(&cmd_queue, &cmd);
+    return pwm_driver_set_freq(channel, freq_hz, state.duty);
 }
 
 bool control_set_duty(uint channel, float duty) {
+    pwm_driver_state_t state;
+
     if (channel >= CONTROL_CHANNEL_COUNT) return false;
     if (!isfinite(duty)) return false;
     if (duty < 0.0f) duty = 0.0f;
     if (duty > 1.0f) duty = 1.0f;
 
-    duties[channel] = duty;
+    state = control_get_state_or_default(channel);
 
-    ctrl_cmd_t cmd = {
-        .type    = CTRL_CMD_SET_DUTY,
-        .channel = (uint8_t)channel,
-        .freq    = 0.0f,
-        .duty    = duty,
-    };
-    return queue_try_add(&cmd_queue, &cmd);
+    return pwm_driver_set_freq(channel, state.freq_hz, duty);
 }
 
 // ---- Getters (Core 0, safe for cross-core reads) ----
 
 float control_get_freq(uint channel) {
-    if (channel >= CONTROL_CHANNEL_COUNT) return 0.0f;
-    return freqs[channel];
+    return control_get_state_or_default(channel).freq_hz;
 }
 
 float control_get_duty(uint channel) {
-    if (channel >= CONTROL_CHANNEL_COUNT) return 0.0f;
-    return duties[channel];
+    return control_get_state_or_default(channel).duty;
 }
 
 uint32_t control_get_pulse_count(uint channel) {
+    pwm_driver_state_t state = {0};
+
     if (channel >= CONTROL_CHANNEL_COUNT) return 0;
-    if (channel < HW_PWM_COUNT) {
-        return hw_pwm_state_or_default(channel).pulse_count;
-    } else {
-        return sw_pwm_state_or_default(channel - SW_CHANNEL_BASE).pulse_count;
-    }
+    if (!control_get(channel, &state)) return 0;
+
+    return state.pulse_count;
 }
 
 bool control_is_enabled(uint channel) {
-    if (channel >= CONTROL_CHANNEL_COUNT) return false;
-    // Use cached freq so we don't need a cross-core read into hw/sw modules.
-    return freqs[channel] > 0.0f;
-}
-
-// ---- Queue processor (Core 1) ----
-
-void control_process_pending(void) {
-    ctrl_cmd_t cmd;
-    while (queue_try_remove(&cmd_queue, &cmd)) {
-        switch (cmd.type) {
-        case CTRL_CMD_SET_FREQ:
-            if (cmd.channel < HW_PWM_COUNT) {
-                hw_pwm_driver_set_freq(cmd.channel, cmd.freq, cmd.duty);
-            } else {
-                sw_pwm_driver_set_freq(cmd.channel - SW_CHANNEL_BASE, cmd.freq, cmd.duty);
-            }
-            break;
-
-        case CTRL_CMD_SET_DUTY:
-            if (cmd.channel < HW_PWM_COUNT) {
-                pwm_driver_state_t state = hw_pwm_state_or_default(cmd.channel);
-                hw_pwm_driver_set_freq(cmd.channel, state.freq_hz, cmd.duty);
-            } else {
-                pwm_driver_state_t state = sw_pwm_state_or_default(cmd.channel - SW_CHANNEL_BASE);
-                sw_pwm_driver_set_freq(cmd.channel - SW_CHANNEL_BASE, state.freq_hz, cmd.duty);
-            }
-            break;
-
-        case CTRL_CMD_STOP_ALL:
-            for (int i = 0; i < CONTROL_CHANNEL_COUNT; i++) {
-                if (i < HW_PWM_COUNT) {
-                    hw_pwm_driver_set_freq(i, 0.0f, 0.5f);
-                } else {
-                    sw_pwm_driver_set_freq(i - SW_CHANNEL_BASE, 0.0f, 0.5f);
-                }
-            }
-            break;
-        }
-    }
+    return control_get_state_or_default(channel).freq_hz > 0.0f;
 }
 
 // ---- Stop / reset (Core 0) ----
 
 void control_stop_all(void) {
-    // Immediately reset cached values so getters return defaults right away.
     for (int i = 0; i < CONTROL_CHANNEL_COUNT; i++) {
-        freqs[i] = 0.0f;
-        duties[i] = 0.5f;
+        pwm_driver_set_freq(i, 0.0f, 0.5f);
     }
-    // Push the actual hardware reset to Core 1 via the queue.
-    ctrl_cmd_t cmd = {
-        .type    = CTRL_CMD_STOP_ALL,
-        .channel = 0,
-        .freq    = 0.0f,
-        .duty    = 0.0f,
-    };
-    queue_try_add(&cmd_queue, &cmd);
 }

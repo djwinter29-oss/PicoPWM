@@ -37,12 +37,11 @@ static void prepare_response(uint8_t cmd) {
         // Channel properties: freq(float), duty(float), pulse_count(uint32).
         // All values are little-endian, 12 bytes total.
         int ch = cmd - 0x10;
-        float freq = control_get_freq(ch);
-        float duty = control_get_duty(ch);
-        uint32_t pulses = control_get_pulse_count(ch);
-        memcpy(resp_buf + 0, &freq, sizeof(float));
-        memcpy(resp_buf + 4, &duty, sizeof(float));
-        memcpy(resp_buf + 8, &pulses, sizeof(uint32_t));
+        pwm_driver_state_t state = {0.0f, 0.5f, 0};
+        control_get(ch, &state);
+        memcpy(resp_buf + 0, &state.freq_hz, sizeof(float));
+        memcpy(resp_buf + 4, &state.duty, sizeof(float));
+        memcpy(resp_buf + 8, &state.pulse_count, sizeof(uint32_t));
         resp_len = 12;
     } else {
         // Unknown command: return 0.

@@ -1,6 +1,7 @@
 #include "pio_pwm_driver.h"
 
 #include "pwm_driver.h"
+#include "pwm_driver_internal.h"
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
 #include "hardware/irq.h"
@@ -48,6 +49,7 @@ static void pio_pwm_driver_irq_handler(PIO pio) {
         uint irq_index = pio_pwm_channels[channel].sm;
         if (pio_interrupt_get(pio, irq_index)) {
             pulse_counts[channel]++;
+            pwm_driver_store_pulse_count(PIO_PWM_CHANNEL_BASE + channel, pulse_counts[channel]);
             pio_interrupt_clear(pio, irq_index);
         }
     }
@@ -189,6 +191,8 @@ void pio_pwm_driver_init(void) {
 }
 
 bool pio_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
+    pwm_driver_state_t state;
+
     if (channel >= PIO_PWM_DRIVER_COUNT) return false;
     if (duty < 0.0f) duty = 0.0f;
     if (duty > 1.0f) duty = 1.0f;
@@ -201,6 +205,10 @@ bool pio_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
         requested_freqs[channel] = 0.0f;
         enabled[channel] = false;
         pio_pwm_channels[channel].period_count = 0;
+        state.freq_hz = requested_freqs[channel];
+        state.duty = duties[channel];
+        state.pulse_count = pulse_counts[channel];
+        pwm_driver_store_applied_state(PIO_PWM_CHANNEL_BASE + channel, &state);
         return true;
     }
 
@@ -217,6 +225,10 @@ bool pio_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
     enabled[channel] = true;
     pio_pwm_channels[channel].period_count = period_count;
     pio_pwm_channels[channel].clkdiv = clkdiv;
+    state.freq_hz = requested_freqs[channel];
+    state.duty = duties[channel];
+    state.pulse_count = pulse_counts[channel];
+    pwm_driver_store_applied_state(PIO_PWM_CHANNEL_BASE + channel, &state);
     return true;
 }
 

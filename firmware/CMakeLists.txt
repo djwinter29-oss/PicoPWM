@@ -11,13 +11,17 @@ pico_sdk_init()
 
 add_executable(pico_pwm
     src/main.c
+    src/control/control_iface.c
     src/pwmdriver/pwm_driver.c
     src/pwmdriver/hw_pwm_driver.c
     src/pwmdriver/sw_pwm_driver.c
     src/pwmdriver/pio_pwm_driver.c
-    src/cmd_parser.c
-    src/cdc_cmd.c
-    src/i2c_slave.c
+    src/cli/cli_shell.c
+    src/cli/device_cli.c
+    src/i2c/i2c_control_map.c
+    src/usb/usb_cdc.c
+    src/usb/usb_descriptors.c
+    src/i2c/i2c_slave.c
 )
 
 pico_generate_pio_header(pico_pwm
@@ -39,8 +43,8 @@ target_link_libraries(pico_pwm
     tinyusb_board
 )
 
-# USB CDC is the serial command interface; UART is disabled.
-pico_enable_stdio_usb(pico_pwm 1)
+# USB CDC is handled directly through TinyUSB; UART is disabled.
+pico_enable_stdio_usb(pico_pwm 0)
 pico_enable_stdio_uart(pico_pwm 0)
 
 pico_add_extra_outputs(pico_pwm)

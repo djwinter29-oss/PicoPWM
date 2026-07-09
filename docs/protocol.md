@@ -5,7 +5,7 @@ PicoPWM exposes two command interfaces with the same logical data:
 - **USB CDC serial** — text commands, easy for humans and scripts
 - **I2C slave** — binary protocol, efficient for microcontrollers and host boards
 
-Both can read device identity and per-channel properties. In the current firmware, the only write-command ingress path is the USB CDC serial command interface; I2C is currently read-only.
+Both can read device identity and per-channel properties. Both can also drive the same shared control path for channel updates and stop-all requests.
 
 **Important:** `pulse_count` is read-only from both interfaces. It cannot be set or reset directly. The `stop` command disables all channels by restoring `freq = 0 Hz` and `duty = 50%`, but `pulse_count` continues accumulating from power-on.
 
@@ -83,18 +83,20 @@ All transactions are initiated by an I2C master. The protocol is **write-then-re
 1. **Write phase**: master sends one command byte.
 2. **Read phase**: master reads the response bytes.
 
-The I2C slave is currently **read-only**. To change a channel, use the USB CDC serial commands.
-
-If write-capable I2C commands are added in a future revision, they should first defer the request out of the I2C ISR and then feed the same `pwmdriver/pwm_driver.c` command path used by the CDC CLI.
+Read commands are answered from the realized channel snapshot published by the PWM driver layer. Write commands are captured in the I2C ISR, deferred into normal Core 0 polling, and then applied through the same shared control path used by the USB CDC CLI.
 
 ### Command Bytes
 
-| Command | Value | Write Length | Read Length | Description |
-|---------|-------|--------------|-------------|-------------|
-| `CMD_INFO` | `0x00` | 1 | variable | Device type string, e.g. `PicoPWM` |
-| `CMD_VERSION` | `0x01` | 1 | variable | Version string, e.g. `1.0.0` |
-| `CMD_CHANNELS` | `0x02` | 1 | 1 | Channel count (24) |
-| `CMD_GET_CH0`..`CMD_GET_CH23` | `0x10`..`0x27` | 1 | 12 | Read one channel's properties |
+| Register / Command | Value | Write Length | Read Length | Description |
+|--------------------|-------|--------------|-------------|-------------|
+| `REG_INFO` | `0x00` | 1 | variable | Device type string, e.g. `PicoPWM` |
+| `REG_VERSION` | `0x01` | 1 | variable | Version string, e.g. `1.0.0` |
+| `REG_CHANNELS` | `0x02` | 1 | 1 | Channel count (24) |
+| `REG_GET_CH0`..`REG_GET_CH23` | `0x10`..`0x27` | 1 | 12 | Read one channel's realized properties |
+| `REG_SET_CH0`..`REG_SET_CH23` | `0x30`..`0x47` | 9 | 1 | Write one channel's frequency and duty, read back last status |
+| `REG_SET_FREQ_CH0`..`REG_SET_FREQ_CH23` | `0x50`..`0x67` | 5 | 1 | Write one channel's frequency, read back last status |
+| `REG_SET_DUTY_CH0`..`REG_SET_DUTY_CH23` | `0x70`..`0x87` | 5 | 1 | Write one channel's duty, read back last status |
+| `REG_STOP_ALL` | `0x90` | 1 | 1 | Stop all channels and read back last status |
 
 ### Channel Property Layout
 
@@ -105,6 +107,40 @@ For `0x10 .. 0x27` (12 bytes, little-endian):
 | 0-3 | 4 | `freq` | `float32` (Hz) |
 | 4-7 | 4 | `duty` | `float32` (0.0..1.0) |
 | 8-11 | 4 | `pulse_count` | `uint32_t` |
+
+### Write Payload Layouts
+
+For `0x30 .. 0x47` (8 payload bytes after the register byte, little-endian):
+
+| Byte | Size | Field | Type |
+|------|------|-------|------|
+| 0-3 | 4 | `freq` | `float32` (Hz) |
+| 4-7 | 4 | `duty` | `float32` (0.0..1.0) |
+
+For `0x50 .. 0x67` (4 payload bytes after the register byte, little-endian):
+
+| Byte | Size | Field | Type |
+|------|------|-------|------|
+| 0-3 | 4 | `freq` | `float32` (Hz) |
+
+For `0x70 .. 0x87` (4 payload bytes after the register byte, little-endian):
+
+| Byte | Size | Field | Type |
+|------|------|-------|------|
+| 0-3 | 4 | `duty` | `float32` (0.0..1.0) |
+
+### Write Status Byte
+
+Write-capable registers return one status byte when read:
+
+| Value | Meaning |
+|-------|---------|
+| `0` | `PWM_DRIVER_RESULT_OK` |
+| `1` | `PWM_DRIVER_RESULT_BUSY` |
+| `2` | `PWM_DRIVER_RESULT_INVALID` |
+| `3` | `PWM_DRIVER_RESULT_UNAVAILABLE` |
+| `4` | `PWM_DRIVER_RESULT_TIMEOUT` |
+| `5` | `PWM_DRIVER_RESULT_APPLY_FAILED` |
 
 ### Examples
 
@@ -122,10 +158,27 @@ Master write: [0x10]
 Master read:  [freq_le32, duty_le32, pulse_count_le32] (12 bytes)
 ```
 
+**Set channel 0 frequency and duty**
+
+```
+Master write: [0x30, freq_le32, duty_le32]
+Master read:  [0x01] or [0x00]
+```
+
+`0x01` means the request is still busy or queued when read immediately after the write transaction. After a short delay, the master can repeat a one-byte write of `0x30` followed by a read to fetch the latest status byte for that command register.
+
+**Stop all channels**
+
+```
+Master write: [0x90]
+Master read:  [status]
+```
+
 ### Notes
 
 - Multi-byte values are always **little-endian**, matching the native byte order of both RP2040 and RP2350.
 - String responses include a null terminator. Allocate at least 8 bytes for `info` and 8 bytes for `version`.
-- The I2C slave handler is interrupt-driven. The master may need a small delay between transactions.
+- The I2C ISR only captures request bytes and serves prepared response bytes. Write commands are executed later from normal Core 0 polling.
+- A write command can therefore report `busy` if read back immediately. The master should allow a small delay and then re-read the same command register to fetch the final result.
 - `pulse_count` is read-only over I2C. It cannot be set or reset via this interface.
 - `freq` and `duty` returned over I2C are the realized values published by the PWM driver layer.

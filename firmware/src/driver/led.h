@@ -1,6 +1,6 @@
 /**
  * @file led.h
- * @brief Board LED helpers used by the PicoTrace status path.
+ * @brief Board LED helpers used by PicoPWM status paths.
  */
 
 #ifndef LED_H

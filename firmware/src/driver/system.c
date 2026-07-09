@@ -1,6 +1,6 @@
 /**
  * @file system.c
- * @brief Board-level clock and reboot helpers for PicoTrace.
+ * @brief Board-level clock and reboot helpers for PicoPWM.
  */
 
 #include "driver/system.h"

@@ -1,6 +1,6 @@
 /**
  * @file system.h
- * @brief Board-level clock and reboot helpers used by the PicoTrace firmware.
+ * @brief Board-level clock and reboot helpers used by the PicoPWM firmware.
  */
 
 #ifndef SYSTEM_H
@@ -20,7 +20,7 @@
 #define SYSTEM_CLOCK 150000u
 #endif
 
-/** @brief Configure the board system clock for the PicoTrace firmware runtime. */
+/** @brief Configure the board system clock for the PicoPWM firmware runtime. */
 void system_init_clock(void);
 
 /** @brief Reboot the board through the watchdog reset path. */

@@ -51,6 +51,10 @@ The current implementation is split as follows:
 
 | File | Responsibility |
 |------|----------------|
+| `firmware/src/control/control_iface.h` | Shared Core 0 control/status API used by CDC and I2C |
+| `firmware/src/control/control_iface.c` | Shared device info, channel reads, and channel write helpers above `pwmdriver` |
+| `firmware/src/i2c/i2c_control_map.h` | I2C register map definitions and protocol helpers |
+| `firmware/src/i2c/i2c_control_map.c` | I2C register encode/decode and deferred write translation into `control_iface` |
 | `firmware/src/pwmdriver/pwm_driver.h` | Public wrapper API and logical channel constants |
 | `firmware/src/pwmdriver/pwm_driver.c` | Core 1 launch, mailbox loop, channel routing, shared snapshot |
 | `firmware/src/pwmdriver/hw_pwm_driver.c` | Hardware PWM backend |
@@ -59,6 +63,21 @@ The current implementation is split as follows:
 | `firmware/src/pwmdriver/sw_pwm_driver.c` | Software PWM backend |
 
 ## External Interface
+
+The transport-facing control/status layer is:
+
+```c
+const char *control_iface_device_name(void);
+const char *control_iface_firmware_version(void);
+uint8_t control_iface_channel_count(void);
+bool control_iface_get_channel(uint channel, pwm_driver_state_t *state);
+pwm_driver_result_t control_iface_set_channel(uint channel, float freq_hz, float duty);
+pwm_driver_result_t control_iface_set_channel_freq(uint channel, float freq_hz);
+pwm_driver_result_t control_iface_set_channel_duty(uint channel, float duty);
+pwm_driver_result_t control_iface_stop_all(void);
+```
+
+Below that, the `pwmdriver` wrapper still exposes the cross-core boundary:
 
 The higher layers use the following public API:
 
@@ -110,35 +129,47 @@ The hardware bank uses PWM slice channel B pins intentionally so the pinout rema
 
 The subsystem has four internal layers.
 
-### 1. Command Layer
+### 1. Transport Layer
 
-Owned by the high-level helpers in `pwm_driver.c` and the transport layers.
+Owned by the CDC CLI and I2C transport modules.
 
 Responsibilities:
 
-- validate user requests
-- convert CLI or host requests into logical channel operations
-- serialize public write entry points on Core 0
-- call `pwm_driver_set_freq()`
+- parse transport-specific requests
+- format transport-specific responses
+- avoid backend access and multicore synchronization details
 
-This layer does not know backend-specific register or timing details.
+For I2C specifically, the transport layer includes an ISR-facing slave module and a register-map helper that translates binary registers into shared control-layer operations.
 
-### 2. Wrapper Layer
+### 2. Shared Control Layer
+
+Owned by `firmware/src/control/control_iface.c`.
+
+Responsibilities:
+
+- expose one shared Core 0 control/status API to both transports
+- centralize device identity and version reporting
+- centralize logical channel reads and writes above `pwmdriver`
+- avoid maintaining a second shadow copy of realized channel state
+
+This layer reads realized state from `pwm_driver_get()` through the `control_*()` helpers and forwards writes through the same shared control path.
+
+It does not own I2C register numbers or binary payload layout. Those protocol details live in `firmware/src/i2c/i2c_control_map.c`.
+
+### 3. Wrapper Layer
 
 Owned by `pwm_driver.c`.
 
 Responsibilities:
 
-- launch Core 1
-- initialize backend drivers
-- route logical channels to backend-local channels
-- maintain the single in-flight mailbox command slot
-- maintain synchronous reply state for the active Core 0 command
-- publish coherent channel snapshots
+- serialize public write entry points on Core 0
+- call `pwm_driver_set_freq()`
 
-This layer is the architectural boundary between user-facing logic and backend-specific code.
+This layer does not know backend-specific register or timing details.
 
-### 3. Backend Layer
+This layer is the architectural boundary between the shared Core 0 control plane and backend-specific code.
+
+### 4. Backend Layer
 
 Owned by:
 
@@ -153,7 +184,7 @@ Responsibilities:
 - manage backend IRQ or timer behavior
 - publish realized state after successful changes
 
-### 4. Hardware/Runtime Layer
+### 5. Hardware/Runtime Layer
 
 Owned by the Pico SDK and the MCU peripherals.
 
@@ -172,8 +203,8 @@ Core 0 owns:
 
 - USB CDC transport
 - I2C slave transport
-- text command parser
-- command validation
+- CLI command parsing and formatting
+- shared control/status translation
 - status formatting and reporting
 
 Core 0 reads channel state through `pwm_driver_get()`.

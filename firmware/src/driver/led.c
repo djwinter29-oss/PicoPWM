@@ -1,6 +1,6 @@
 /**
  * @file led.c
- * @brief Board LED helpers for PicoTrace.
+ * @brief Board LED helpers for PicoPWM.
  */
 
 #include "pico/stdlib.h"

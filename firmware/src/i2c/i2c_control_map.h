@@ -11,22 +11,26 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/** @brief Read-only I2C register returning the fixed device name string. */
-#define I2C_CONTROL_MAP_REG_INFO          0x00u
-/** @brief Read-only I2C register returning the fixed firmware version string. */
-#define I2C_CONTROL_MAP_REG_VERSION       0x01u
-/** @brief Read-only I2C register returning the logical channel count. */
-#define I2C_CONTROL_MAP_REG_CHANNEL_COUNT 0x02u
-/** @brief Base register for 24 channel snapshot reads, one 12-byte record per channel. */
-#define I2C_CONTROL_MAP_REG_CH_BASE       0x10u
-/** @brief Base register for full channel write commands carrying freq and duty. */
-#define I2C_CONTROL_MAP_REG_SET_BASE      0x30u
-/** @brief Base register for frequency-only write commands. */
-#define I2C_CONTROL_MAP_REG_SET_FREQ_BASE 0x50u
-/** @brief Base register for duty-only write commands. */
-#define I2C_CONTROL_MAP_REG_SET_DUTY_BASE 0x70u
-/** @brief Register used to request stop-all and to read the last command result. */
-#define I2C_CONTROL_MAP_REG_STOP_ALL      0x90u
+/** @brief I2C register and command byte assignments for the shared control map. */
+typedef enum {
+	I2C_CONTROL_MAP_REG_INFO = 0x00u, /**< Read-only register returning the fixed device name string. */
+	I2C_CONTROL_MAP_REG_VERSION = 0x01u, /**< Read-only register returning the fixed firmware version string. */
+	I2C_CONTROL_MAP_REG_CHANNEL_COUNT = 0x02u, /**< Read-only register returning the logical channel count. */
+	I2C_CONTROL_MAP_REG_CH_BASE = 0x10u, /**< Base register for 24 channel snapshot reads, one 12-byte record per channel. */
+	I2C_CONTROL_MAP_REG_SET_BASE = 0x30u, /**< Base register for full channel write commands carrying freq and duty. */
+	I2C_CONTROL_MAP_REG_SET_FREQ_BASE = 0x50u, /**< Base register for frequency-only write commands. */
+	I2C_CONTROL_MAP_REG_SET_DUTY_BASE = 0x70u, /**< Base register for duty-only write commands. */
+	I2C_CONTROL_MAP_REG_STOP_ALL = 0x90u, /**< Register used to request stop-all and to read the last command result. */
+	I2C_CONTROL_MAP_REG_LED = 0x91u, /**< Register used to set the board LED state and to read the last command result. */
+	I2C_CONTROL_MAP_REG_REBOOT = 0x92u, /**< Register used to request a board reboot and to read the last command result. */
+} i2c_control_map_reg_t;
+
+/**
+ * @brief Return whether one register represents a write-capable command.
+ * @param reg I2C register or command byte.
+ * @return `true` when the register can schedule a deferred write.
+ */
+bool i2c_control_map_is_write_register(uint8_t reg);
 
 /**
  * @brief Return the total write length, including register byte, for one I2C register command.

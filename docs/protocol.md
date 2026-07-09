@@ -22,12 +22,10 @@ Connect to the Pico as a USB serial port (CDC) at **115200 baud**. Type commands
 | `info` | Returns device type | `info` → `PicoPWM` |
 | `version` | Returns firmware version | `version` → `1.0.0` |
 | `get <ch>` | Read all properties of channel `ch` | `get 0` |
-| `set <ch> f <freq>` | Set channel frequency (Hz) | `set 0 f 1000` |
-| `set <ch> d <duty%>` | Set channel duty (0..100) | `set 0 d 50` |
-| `h <ch> <freq> <duty%>` | Set hardware PWM channel (legacy) | `h 0 1000 50` |
-| `p <ch> <freq> <duty%>` | Set PIO PWM channel (legacy) | `p 0 1000 50` |
-| `s <ch> <freq> <duty%>` | Set software PWM channel (legacy) | `s 0 100 50` |
-| `d <ch> <duty%>` | Set software PWM duty only (legacy) | `d 0 25` |
+| `set <ch> <freq>` | Set channel frequency and default duty to 50% | `set 0 1000` |
+| `set <ch> <freq> <duty%>` | Set channel frequency and duty | `set 0 1000 50` |
+| `led <on\\|off>` | Set the board LED state | `led on` |
+| `reboot` | Reboot the board | `reboot` |
 | `stop` | Stop all channels and reset to power-up defaults | `stop` |
 | `status` | Print all channels | `status` |
 | `help` | Show command list | `help` |
@@ -46,8 +44,8 @@ For the hardware bank, the intended external pin mapping uses PWM slice **channe
 > get 0
 CH 0: freq=1000.00 Hz, duty=50.00%, pulses=1234
 
-> set 0 f 2000
-OK
+> set 0 2000
+OK CH0 freq=2000.000 Hz duty=50.0%
 
 > status
 CH 0: freq=2000.00 Hz, duty=50.00%, pulses=42
@@ -97,6 +95,8 @@ Read commands are answered from the realized channel snapshot published by the P
 | `REG_SET_FREQ_CH0`..`REG_SET_FREQ_CH23` | `0x50`..`0x67` | 5 | 1 | Write one channel's frequency, read back last status |
 | `REG_SET_DUTY_CH0`..`REG_SET_DUTY_CH23` | `0x70`..`0x87` | 5 | 1 | Write one channel's duty, read back last status |
 | `REG_STOP_ALL` | `0x90` | 1 | 1 | Stop all channels and read back last status |
+| `REG_LED` | `0x91` | 2 | 1 | Set board LED state (`0` = off, `1` = on) and read back last status |
+| `REG_REBOOT` | `0x92` | 1 | 1 | Request board reboot and read back last status |
 
 ### Channel Property Layout
 
@@ -128,6 +128,12 @@ For `0x70 .. 0x87` (4 payload bytes after the register byte, little-endian):
 | Byte | Size | Field | Type |
 |------|------|-------|------|
 | 0-3 | 4 | `duty` | `float32` (0.0..1.0) |
+
+For `0x91` (1 payload byte after the register byte):
+
+| Byte | Size | Field | Type |
+|------|------|-------|------|
+| 0 | 1 | `led_on` | `uint8_t` (`0` = off, `1` = on) |
 
 ### Write Status Byte
 
@@ -174,11 +180,26 @@ Master write: [0x90]
 Master read:  [status]
 ```
 
+**Set LED on**
+
+```
+Master write: [0x91, 0x01]
+Master read:  [status]
+```
+
+**Reboot the board**
+
+```
+Master write: [0x92]
+Master read:  [status]
+```
+
 ### Notes
 
 - Multi-byte values are always **little-endian**, matching the native byte order of both RP2040 and RP2350.
 - String responses include a null terminator. Allocate at least 8 bytes for `info` and 8 bytes for `version`.
 - The I2C ISR only captures request bytes and serves prepared response bytes. Write commands are executed later from normal Core 0 polling.
 - A write command can therefore report `busy` if read back immediately. The master should allow a small delay and then re-read the same command register to fetch the final result.
+- `REG_REBOOT` follows the same deferred path, but the device may reset before a later status re-read is possible.
 - `pulse_count` is read-only over I2C. It cannot be set or reset via this interface.
 - `freq` and `duty` returned over I2C are the realized values published by the PWM driver layer.

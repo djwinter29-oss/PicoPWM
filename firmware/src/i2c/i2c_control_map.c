@@ -6,6 +6,8 @@
 #include "i2c/i2c_control_map.h"
 
 #include "control/control_iface.h"
+#include "driver/led.h"
+#include "driver/system.h"
 
 #include <string.h>
 
@@ -29,13 +31,27 @@ static bool i2c_control_map_is_duty_write(uint8_t reg) {
            reg < (uint8_t)(I2C_CONTROL_MAP_REG_SET_DUTY_BASE + PWM_DRIVER_CHANNEL_COUNT);
 }
 
+bool i2c_control_map_is_write_register(uint8_t reg) {
+    return i2c_control_map_is_full_write(reg) ||
+           i2c_control_map_is_freq_write(reg) ||
+           i2c_control_map_is_duty_write(reg) ||
+           (reg == I2C_CONTROL_MAP_REG_STOP_ALL) ||
+           (reg == I2C_CONTROL_MAP_REG_LED) ||
+           (reg == I2C_CONTROL_MAP_REG_REBOOT);
+}
+
 uint8_t i2c_control_map_expected_write_length(uint8_t reg) {
     if ((reg == I2C_CONTROL_MAP_REG_INFO) ||
         (reg == I2C_CONTROL_MAP_REG_VERSION) ||
         (reg == I2C_CONTROL_MAP_REG_CHANNEL_COUNT) ||
         i2c_control_map_is_channel_read(reg) ||
-        (reg == I2C_CONTROL_MAP_REG_STOP_ALL)) {
+        (reg == I2C_CONTROL_MAP_REG_STOP_ALL) ||
+        (reg == I2C_CONTROL_MAP_REG_REBOOT)) {
         return 1u;
+    }
+
+    if (reg == I2C_CONTROL_MAP_REG_LED) {
+        return 2u;
     }
 
     if (i2c_control_map_is_full_write(reg)) {
@@ -87,10 +103,7 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
         return true;
     }
 
-    if (i2c_control_map_is_full_write(reg) ||
-        i2c_control_map_is_freq_write(reg) ||
-        i2c_control_map_is_duty_write(reg) ||
-        (reg == I2C_CONTROL_MAP_REG_STOP_ALL)) {
+    if (i2c_control_map_is_write_register(reg)) {
         response[0] = last_status;
         *response_len = 1u;
         return true;
@@ -111,6 +124,24 @@ pwm_driver_result_t i2c_control_map_execute_write(uint8_t reg, const uint8_t *pa
             return PWM_DRIVER_RESULT_INVALID;
         }
         return control_iface_stop_all();
+    }
+
+    if (reg == I2C_CONTROL_MAP_REG_LED) {
+        if ((payload == NULL) || (payload_len != 1u) || (payload[0] > 1u)) {
+            return PWM_DRIVER_RESULT_INVALID;
+        }
+
+        led_set(payload[0] != 0u);
+        return PWM_DRIVER_RESULT_OK;
+    }
+
+    if (reg == I2C_CONTROL_MAP_REG_REBOOT) {
+        if (payload_len != 0u) {
+            return PWM_DRIVER_RESULT_INVALID;
+        }
+
+        system_reboot();
+        return PWM_DRIVER_RESULT_OK;
     }
 
     if (i2c_control_map_is_full_write(reg)) {

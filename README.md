@@ -20,24 +20,73 @@ The generator-oriented channel plan is:
 
 Each logical channel exposes frequency, duty cycle, and a read-only 32-bit pulse counter through a unified control model.
 
+The current firmware exposes:
+
+- a USB CDC CLI for interactive control
+- an I2C register map for host-controller integration
+- board-level LED and reboot control through both interfaces
+
 ---
 
 ## Quick Start
 
-1. Install the [Raspberry Pi Pico SDK](https://github.com/raspberrypi/pico-sdk).
-2. Set `PICO_SDK_PATH` environment variable.
-3. Build and flash:
+### Prerequisites
+
+- Install the [Raspberry Pi Pico SDK](https://github.com/raspberrypi/pico-sdk).
+- Put `cmake`, a supported build tool, and `arm-none-eabi-gcc` on your `PATH`.
+- Set `PICO_SDK_PATH`.
+
+### Build
+
+Build the firmware from the repository `firmware/` directory:
 
 ```bash
-cd C:\Users\ji\Documents\PicoPWM\firmware
+cd firmware
 mkdir build && cd build
 cmake -DPICO_SDK_PATH=%PICO_SDK_PATH% -G "MinGW Makefiles" ..
 make -j4
 ```
 
-Copy `pico_pwm.uf2` to the Pico in BOOTSEL mode.
+On Linux or macOS, use the same flow but point CMake at `$PICO_SDK_PATH`.
 
-4. Connect via USB serial at **115200 baud** or via **I2C0** on GPIO 16/17 (address `0x40`).
+If `make` is not the right backend on your machine, use a generator that matches your toolchain. For example, on Windows with Ninja:
+
+```bash
+cd firmware
+mkdir build && cd build
+cmake -DPICO_SDK_PATH=%PICO_SDK_PATH% -G Ninja ..
+ninja
+```
+
+Build outputs of interest:
+
+- `pico_pwm.uf2` for USB flashing
+- `pico_pwm.elf` for debug tools
+
+### Flash
+
+1. Hold **BOOTSEL** while connecting the board over USB.
+2. Copy `pico_pwm.uf2` to the `RPI-RP2` drive.
+3. Let the board reboot normally.
+
+Other flash options:
+
+- `picotool load pico_pwm.uf2`
+- `picotool reboot`
+- SWD / OpenOCD with `pico_pwm.elf` if you are using a debug probe
+
+### Connect
+
+- USB CDC serial at **115200 baud**
+- I2C slave at address `0x40` on GPIO 16/17
+
+### Troubleshooting
+
+- Confirm `PICO_SDK_PATH` is visible to the shell running CMake.
+- Confirm `arm-none-eabi-gcc` is on your `PATH`.
+- If the Pico SDK checkout is incomplete, run `git submodule update --init --recursive` inside the SDK.
+- If USB CDC does not enumerate, reconnect the cable and confirm it supports data.
+- If I2C does not respond, confirm 4.7 kΩ pull-ups on GPIO 16/17 and start at 100 kHz.
 
 If you are documenting or preparing the monitoring build, keep the same physical channel order and pinout shown below so generator and monitoring firmware stay interchangeable at the harness level.
 
@@ -84,10 +133,10 @@ If you are documenting or preparing the monitoring build, keep the same physical
 
 ## Command Interfaces
 
-- **USB CDC serial**: text commands at 115200 baud (see `docs/protocol.md`)
-- **I2C slave**: 7-bit address `0x40` on GPIO 16 (SDA) / GPIO 17 (SCL)
+- **USB CDC serial**: text commands at 115200 baud
+- **I2C slave**: binary register map at 7-bit address `0x40` on GPIO 16 (SDA) / GPIO 17 (SCL)
 
-Use the `stop` command to reset all channels to the power-up state: frequency = 0 Hz, duty = 50%, pulse_count = 0.
+Use the `stop` command to reset all channels to the power-up state: frequency = 0 Hz and duty = 50%. `pulse_count` is monotonic from power-on and is not reset by `stop`.
 
 ---
 
@@ -95,9 +144,7 @@ Use the `stop` command to reset all channels to the power-up state: frequency = 
 
 - [Architecture](docs/architecture.md)
 - [Control Protocol](docs/protocol.md)
-- [Hardware Notes](docs/hardware.md)
-- [Internal API](docs/api.md)
-- [Build & Flash](docs/build.md)
+- [Firmware Interfaces](docs/firmware_interfaces.md)
 
 ## Repository Layout
 
@@ -119,7 +166,7 @@ After power-up or reset, **all 24 channels are off**:
 
 No demo channels are configured. Use CDC or I2C commands to set frequencies and duty cycles.
 
-Use the `stop` command to reset all channels back to this state at any time.
+Use the `stop` command to reset all channels back to this state at any time. `pulse_count` continues accumulating from power-on.
 
 ---
 

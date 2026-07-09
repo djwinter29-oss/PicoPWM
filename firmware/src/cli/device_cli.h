@@ -14,10 +14,10 @@
  */
 void device_cli_init(const cli_shell_transport_t *transport);
 
+/** @brief Handle one transport connection event by printing the initial CLI help. */
+void device_cli_on_connected(void);
+
 /** @brief Poll the device CLI transport and dispatch complete commands. */
 void device_cli_poll(void);
-
-/** @brief Write the PicoPWM CLI help text. */
-void device_cli_print_help(void);
 
 #endif

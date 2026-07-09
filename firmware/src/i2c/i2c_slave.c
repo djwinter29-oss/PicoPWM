@@ -65,7 +65,7 @@ static void capture_request_byte(uint8_t byte) {
     req_buf[req_len++] = byte;
 
     if (req_len == req_expected_len) {
-        if (req_expected_len > 1u) {
+        if (i2c_control_map_is_write_register(req_buf[0])) {
             if (!req_pending) {
                 req_pending_reg = req_buf[0];
                 req_pending_payload_len = (uint8_t)(req_expected_len - 1u);

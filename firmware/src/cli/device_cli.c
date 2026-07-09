@@ -6,6 +6,8 @@
 #include "cli/device_cli.h"
 
 #include "control/control_iface.h"
+#include "driver/led.h"
+#include "driver/system.h"
 #include "pwmdriver/pwm_driver.h"
 
 #include <stdio.h>
@@ -22,14 +24,10 @@ static bool device_cli_version(int argc, const char *const *argv);
 static bool device_cli_get(int argc, const char *const *argv);
 /** @brief Handle the `set` command. */
 static bool device_cli_set(int argc, const char *const *argv);
-/** @brief Handle the `h` command. */
-static bool device_cli_hw(int argc, const char *const *argv);
-/** @brief Handle the `p` command. */
-static bool device_cli_pio(int argc, const char *const *argv);
-/** @brief Handle the `s` command. */
-static bool device_cli_sw(int argc, const char *const *argv);
-/** @brief Handle the `d` command. */
-static bool device_cli_sw_duty(int argc, const char *const *argv);
+/** @brief Handle the `led` command. */
+static bool device_cli_led(int argc, const char *const *argv);
+/** @brief Handle the `reboot` command. */
+static bool device_cli_reboot(int argc, const char *const *argv);
 /** @brief Handle the `stop` command. */
 static bool device_cli_stop(int argc, const char *const *argv);
 /** @brief Handle the `status` command. */
@@ -42,15 +40,12 @@ static const cli_shell_command_t device_cli_commands[] = {
     {"help", "help                    Show this help", device_cli_help},
     {"info", "info                    Show device type", device_cli_info},
     {"version", "version              Show firmware version", device_cli_version},
-    {"get", "get <ch>                Read channel properties (ch=0..23)", device_cli_get},
-    {"set", "set <ch> <f|d> <value>  Set frequency or duty", device_cli_set},
-    {"h", "h <ch> <freq> <duty%>   Set HW PWM channel (ch=0..7)", device_cli_hw},
-    {"p", "p <ch> <freq> <duty%>   Set PIO PWM channel (ch=0..7)", device_cli_pio},
-    {"s", "s <ch> <freq> <duty%>   Set SW PWM channel (ch=0..7)", device_cli_sw},
-    {"d", "d <ch> <duty%>          Set SW PWM duty only (ch=0..7)", device_cli_sw_duty},
+    {"get", "get <ch>                 Read channel properties (ch=0..23)", device_cli_get},
+    {"set", "set <ch> <freq> [duty%]  Set freq, optional duty defaults to 50%", device_cli_set},
+    {"led", "led <on|off>             Set board LED state", device_cli_led},
+    {"reboot", "reboot                Reboot the board", device_cli_reboot},
     {"stop", "stop                    Stop all channels and reset defaults", device_cli_stop},
-    {"status", "status                  Show all channels", device_cli_status},
-    {"st", "st                      Alias for status", device_cli_status},
+    {"status", "status                Show all channels", device_cli_status},
 };
 
 /** @brief Map write results into CLI-visible text. */
@@ -137,7 +132,7 @@ static bool device_cli_write_status_row(int channel, const pwm_driver_state_t *s
 }
 
 /** @brief Emit the fixed help listing for all registered CLI commands. */
-void device_cli_print_help(void) {
+static void device_cli_write_help(void) {
     cli_shell_write_line("Unified control interface: each channel has freq, duty, pulse_count.");
     cli_shell_write_line("Logical channels: 0..7 = hardware PWM, 8..15 = PIO PWM, 16..23 = software PWM.");
     cli_shell_write_line(NULL);
@@ -154,7 +149,7 @@ static bool device_cli_help(int argc, const char *const *argv) {
     (void)argc;
     (void)argv;
 
-    device_cli_print_help();
+    device_cli_write_help();
     return true;
 }
 
@@ -207,10 +202,12 @@ static bool device_cli_get(int argc, const char *const *argv) {
 static bool device_cli_set(int argc, const char *const *argv) {
     char line[64];
     int ch;
-    float value;
+    float freq;
+    float duty = 50.0f;
+    pwm_driver_result_t result;
 
-    if ((argc != 4) || !device_cli_parse_int(argv[1], &ch) || !device_cli_parse_float(argv[3], &value)) {
-        return cli_shell_write_line("ERR usage: set <ch> <f|d> <value>");
+    if (((argc != 3) && (argc != 4)) || !device_cli_parse_int(argv[1], &ch) || !device_cli_parse_float(argv[2], &freq)) {
+        return cli_shell_write_line("ERR usage: set <ch> <freq> [duty%]");
     }
 
     if ((ch < 0) || (ch >= PWM_DRIVER_CHANNEL_COUNT)) {
@@ -218,93 +215,48 @@ static bool device_cli_set(int argc, const char *const *argv) {
         return cli_shell_write_line(line);
     }
 
-    if ((strcmp(argv[2], "f") == 0) || (strcmp(argv[2], "freq") == 0)) {
-        pwm_driver_result_t result = control_iface_set_channel_freq((uint)ch, value);
-        if (result == PWM_DRIVER_RESULT_OK) {
-            snprintf(line, sizeof(line), "OK CH%d freq=%.3f Hz", ch, value);
-        } else {
-            snprintf(line, sizeof(line), "ERR CH%d freq %s", ch, device_cli_result_text(result));
-        }
-        return cli_shell_write_line(line);
+    if ((argc == 4) && !device_cli_parse_float(argv[3], &duty)) {
+        return cli_shell_write_line("ERR usage: set <ch> <freq> [duty%]");
     }
 
-    if ((strcmp(argv[2], "d") == 0) || (strcmp(argv[2], "duty") == 0)) {
-        pwm_driver_result_t result = control_iface_set_channel_duty((uint)ch, value / 100.0f);
-        if (result == PWM_DRIVER_RESULT_OK) {
-            snprintf(line, sizeof(line), "OK CH%d duty=%.1f%%", ch, value);
-        } else {
-            snprintf(line, sizeof(line), "ERR CH%d duty %s", ch, device_cli_result_text(result));
-        }
-        return cli_shell_write_line(line);
-    }
-
-    snprintf(line, sizeof(line), "ERR unknown property '%s' (f/d only)", argv[2]);
-    return cli_shell_write_line(line);
-}
-
-/** @brief Shared implementation for backend-specific set commands. */
-static bool device_cli_set_backend(const char *tag, int base, int count, int argc, const char *const *argv) {
-    char line[64];
-    int ch;
-    float freq;
-    float duty;
-    pwm_driver_result_t result;
-
-    if ((argc != 4) || !device_cli_parse_int(argv[1], &ch) || !device_cli_parse_float(argv[2], &freq) || !device_cli_parse_float(argv[3], &duty)) {
-        snprintf(line, sizeof(line), "ERR usage: %s <ch> <freq> <duty%%>", tag);
-        return cli_shell_write_line(line);
-    }
-
-    if ((ch < 0) || (ch >= count)) {
-        snprintf(line, sizeof(line), "ERR %s%d invalid (ch=0..7, duty=0..100)", tag, ch);
-        return cli_shell_write_line(line);
-    }
-
-    result = control_iface_set_channel((uint)(ch + base), freq, duty / 100.0f);
+    result = control_iface_set_channel((uint)ch, freq, duty / 100.0f);
     if (result == PWM_DRIVER_RESULT_OK) {
-        snprintf(line, sizeof(line), "OK %s%d: %.3f Hz, %.1f%%", tag, ch, freq, duty);
+        snprintf(line, sizeof(line), "OK CH%d freq=%.3f Hz duty=%.1f%%", ch, freq, duty);
     } else {
-        snprintf(line, sizeof(line), "ERR %s%d %s", tag, ch, device_cli_result_text(result));
+        snprintf(line, sizeof(line), "ERR CH%d set %s", ch, device_cli_result_text(result));
     }
 
     return cli_shell_write_line(line);
 }
 
-static bool device_cli_hw(int argc, const char *const *argv) {
-    return device_cli_set_backend("HW", HW_PWM_CHANNEL_BASE, HW_PWM_COUNT, argc, argv);
-}
-
-static bool device_cli_pio(int argc, const char *const *argv) {
-    return device_cli_set_backend("PIO", PIO_PWM_CHANNEL_BASE, PIO_PWM_DRIVER_COUNT, argc, argv);
-}
-
-static bool device_cli_sw(int argc, const char *const *argv) {
-    return device_cli_set_backend("SW", SW_PWM_CHANNEL_BASE, SW_PWM_COUNT, argc, argv);
-}
-
-static bool device_cli_sw_duty(int argc, const char *const *argv) {
-    char line[64];
-    int ch;
-    float duty;
-    pwm_driver_result_t result;
-
-    if ((argc != 3) || !device_cli_parse_int(argv[1], &ch) || !device_cli_parse_float(argv[2], &duty)) {
-        return cli_shell_write_line("ERR usage: d <ch> <duty%>");
+static bool device_cli_led(int argc, const char *const *argv) {
+    if (argc != 2) {
+        return cli_shell_write_line("ERR usage: led <on|off>");
     }
 
-    if ((ch < 0) || (ch >= SW_PWM_COUNT)) {
-        snprintf(line, sizeof(line), "ERR SW%d invalid (ch=0..7)", ch);
-        return cli_shell_write_line(line);
+    if ((strcmp(argv[1], "on") == 0) || (strcmp(argv[1], "1") == 0)) {
+        led_set(true);
+        return cli_shell_write_line("OK led on");
     }
 
-    result = control_iface_set_channel_duty((uint)(ch + SW_PWM_CHANNEL_BASE), duty / 100.0f);
-    if (result == PWM_DRIVER_RESULT_OK) {
-        snprintf(line, sizeof(line), "OK SW%d duty: %.1f%%", ch, duty);
-    } else {
-        snprintf(line, sizeof(line), "ERR SW%d duty %s", ch, device_cli_result_text(result));
+    if ((strcmp(argv[1], "off") == 0) || (strcmp(argv[1], "0") == 0)) {
+        led_set(false);
+        return cli_shell_write_line("OK led off");
     }
 
-    return cli_shell_write_line(line);
+    return cli_shell_write_line("ERR usage: led <on|off>");
+}
+
+static bool device_cli_reboot(int argc, const char *const *argv) {
+    (void)argv;
+
+    if (argc != 1) {
+        return cli_shell_write_line("ERR usage: reboot");
+    }
+
+    cli_shell_write_line("OK rebooting");
+    system_reboot();
+    return true;
 }
 
 static bool device_cli_stop(int argc, const char *const *argv) {
@@ -361,6 +313,10 @@ void device_cli_init(const cli_shell_transport_t *transport) {
     };
 
     cli_shell_init(&config);
+}
+
+void device_cli_on_connected(void) {
+    device_cli_write_help();
 }
 
 void device_cli_poll(void) {

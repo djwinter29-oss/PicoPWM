@@ -85,7 +85,7 @@ All transactions are initiated by an I2C master. The protocol is **write-then-re
 
 The I2C slave is currently **read-only**. To change a channel, use the USB CDC serial commands.
 
-If write-capable I2C commands are added in a future revision, they should feed the same `control.c` to `pwm_driver_set_freq()` command path used by the CDC CLI.
+If write-capable I2C commands are added in a future revision, they should first defer the request out of the I2C ISR and then feed the same `pwmdriver/pwm_driver.c` command path used by the CDC CLI.
 
 ### Command Bytes
 

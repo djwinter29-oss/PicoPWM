@@ -2,7 +2,6 @@
 #include "hardware/clocks.h"
 #include "pico/multicore.h"
 #include <stdio.h>
-#include "control.h"
 #include "cmd_parser.h"
 #include "cdc_cmd.h"
 #include "i2c_slave.h"
@@ -27,9 +26,6 @@ int main(void) {
     printf("  Init: freq=0, duty=50%%, pulses=0\r\n");
     printf("  USB CDC serial + I2C slave (addr 0x40)\r\n");
     printf("========================================\r\n\n");
-
-    // Core 0: initialise cached values + command queue.
-    control_init();
 
     // Launch Core 1 to manage all PWM hardware.
     pwm_driver_launch();

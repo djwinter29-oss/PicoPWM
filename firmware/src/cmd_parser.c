@@ -1,5 +1,5 @@
 #include "cmd_parser.h"
-#include "control.h"
+#include "pwmdriver/pwm_driver.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -10,12 +10,30 @@
 static char cmd_buffer[CMD_BUF_SIZE];
 static int cmd_len = 0;
 
+static const char *write_result_text(pwm_driver_result_t result) {
+    switch (result) {
+    case PWM_DRIVER_RESULT_BUSY:
+        return "busy";
+    case PWM_DRIVER_RESULT_INVALID:
+        return "invalid";
+    case PWM_DRIVER_RESULT_UNAVAILABLE:
+        return "unavailable";
+    case PWM_DRIVER_RESULT_TIMEOUT:
+        return "timeout";
+    case PWM_DRIVER_RESULT_APPLY_FAILED:
+        return "apply failed";
+    case PWM_DRIVER_RESULT_OK:
+    default:
+        return "ok";
+    }
+}
+
 void print_status(void) {
     pwm_driver_state_t state;
 
     printf("\r\n=== All PWM channels (logical 0..23) ===\r\n");
     printf("Ch  Type  State  Freq(Hz)   Duty(%%)   Pulses\r\n");
-    for (int i = 0; i < CONTROL_CHANNEL_COUNT; i++) {
+    for (int i = 0; i < PWM_DRIVER_CHANNEL_COUNT; i++) {
         const char *type = (i < PIO_PWM_CHANNEL_BASE) ? "HW" :
                            (i < SW_PWM_CHANNEL_BASE) ? "PIO" : "SW";
         state = (pwm_driver_state_t){0.0f, 0.5f, 0};
@@ -78,7 +96,7 @@ static void execute_command(char *cmd) {
         if (ch_str) {
             pwm_driver_state_t state;
             int ch = atoi(ch_str);
-            if (ch >= 0 && ch < CONTROL_CHANNEL_COUNT) {
+            if (ch >= 0 && ch < PWM_DRIVER_CHANNEL_COUNT) {
                 state = (pwm_driver_state_t){0.0f, 0.5f, 0};
                 control_get(ch, &state);
                 printf("CH%d: freq=%.3f Hz, duty=%.1f%%, pulses=%lu, enabled=%s\r\n",
@@ -101,21 +119,23 @@ static void execute_command(char *cmd) {
         if (ch_str && prop && val_str) {
             int ch = atoi(ch_str);
             float val = atof(val_str);
-            if (ch < 0 || ch >= CONTROL_CHANNEL_COUNT) {
+            if (ch < 0 || ch >= PWM_DRIVER_CHANNEL_COUNT) {
                 printf("ERR channel %d invalid (0..23)\r\n", ch);
                 return;
             }
             if (strcmp(prop, "f") == 0 || strcmp(prop, "freq") == 0) {
-                if (control_set_freq(ch, val)) {
+                pwm_driver_result_t result = control_set_freq(ch, val);
+                if (result == PWM_DRIVER_RESULT_OK) {
                     printf("OK CH%d freq=%.3f Hz\r\n", ch, val);
                 } else {
-                    printf("ERR CH%d freq invalid\r\n", ch);
+                    printf("ERR CH%d freq %s\r\n", ch, write_result_text(result));
                 }
             } else if (strcmp(prop, "d") == 0 || strcmp(prop, "duty") == 0) {
-                if (control_set_duty(ch, val / 100.0f)) {
+                pwm_driver_result_t result = control_set_duty(ch, val / 100.0f);
+                if (result == PWM_DRIVER_RESULT_OK) {
                     printf("OK CH%d duty=%.1f%%\r\n", ch, val);
                 } else {
-                    printf("ERR CH%d duty invalid\r\n", ch);
+                    printf("ERR CH%d duty %s\r\n", ch, write_result_text(result));
                 }
             } else {
                 printf("ERR unknown property '%s' (f/d only)\r\n", prop);
@@ -135,12 +155,16 @@ static void execute_command(char *cmd) {
             int ch = atoi(ch_str);
             float freq = atof(freq_str);
             float duty = atof(duty_str) / 100.0f;
-            if (ch >= 0 && ch < HW_PWM_COUNT &&
-                control_set_freq(ch, freq) &&
-                control_set_duty(ch, duty)) {
-                printf("OK HW%d: %.3f Hz, %.1f%%\r\n", ch, freq, duty * 100.0f);
-            } else {
+            pwm_driver_result_t result;
+            if (ch < 0 || ch >= HW_PWM_COUNT) {
                 printf("ERR HW%d invalid (ch=0..7, duty=0..100)\r\n", ch);
+            } else {
+                result = control_set(ch, freq, duty);
+                if (result == PWM_DRIVER_RESULT_OK) {
+                printf("OK HW%d: %.3f Hz, %.1f%%\r\n", ch, freq, duty * 100.0f);
+                } else {
+                    printf("ERR HW%d %s\r\n", ch, write_result_text(result));
+                }
             }
         } else {
             printf("ERR usage: h <ch> <freq> <duty%%>\r\n");
@@ -154,13 +178,17 @@ static void execute_command(char *cmd) {
             int ch = atoi(ch_str);
             float freq = atof(freq_str);
             float duty = atof(duty_str) / 100.0f;
-            int logical = ch + PIO_PWM_CHANNEL_BASE;
-            if (ch >= 0 && ch < PIO_PWM_DRIVER_COUNT &&
-                control_set_freq(logical, freq) &&
-                control_set_duty(logical, duty)) {
-                printf("OK PIO%d: %.3f Hz, %.1f%%\r\n", ch, freq, duty * 100.0f);
-            } else {
+            pwm_driver_result_t result;
+            if (ch < 0 || ch >= PIO_PWM_DRIVER_COUNT) {
                 printf("ERR PIO%d invalid (ch=0..7, duty=0..100)\r\n", ch);
+            } else {
+                int logical = ch + PIO_PWM_CHANNEL_BASE;
+                result = control_set(logical, freq, duty);
+                if (result == PWM_DRIVER_RESULT_OK) {
+                    printf("OK PIO%d: %.3f Hz, %.1f%%\r\n", ch, freq, duty * 100.0f);
+                } else {
+                    printf("ERR PIO%d %s\r\n", ch, write_result_text(result));
+                }
             }
         } else {
             printf("ERR usage: p <ch> <freq> <duty%%>\r\n");
@@ -174,13 +202,17 @@ static void execute_command(char *cmd) {
             int ch = atoi(ch_str);
             float freq = atof(freq_str);
             float duty = atof(duty_str) / 100.0f;
-            int logical = ch + SW_PWM_CHANNEL_BASE;
-            if (ch >= 0 && ch < SW_PWM_COUNT &&
-                control_set_freq(logical, freq) &&
-                control_set_duty(logical, duty)) {
-                printf("OK SW%d: %.3f Hz, %.1f%%\r\n", ch, freq, duty * 100.0f);
-            } else {
+            pwm_driver_result_t result;
+            if (ch < 0 || ch >= SW_PWM_COUNT) {
                 printf("ERR SW%d invalid (ch=0..7, duty=0..100)\r\n", ch);
+            } else {
+                int logical = ch + SW_PWM_CHANNEL_BASE;
+                result = control_set(logical, freq, duty);
+                if (result == PWM_DRIVER_RESULT_OK) {
+                    printf("OK SW%d: %.3f Hz, %.1f%%\r\n", ch, freq, duty * 100.0f);
+                } else {
+                    printf("ERR SW%d %s\r\n", ch, write_result_text(result));
+                }
             }
         } else {
             printf("ERR usage: s <ch> <freq> <duty%%>\r\n");
@@ -192,12 +224,13 @@ static void execute_command(char *cmd) {
         if (ch_str && duty_str) {
             int ch = atoi(ch_str);
             float duty = atof(duty_str) / 100.0f;
-            int logical = ch + SW_PWM_CHANNEL_BASE;
             if (ch >= 0 && ch < SW_PWM_COUNT) {
-                if (control_set_duty(logical, duty)) {
+                int logical = ch + SW_PWM_CHANNEL_BASE;
+                pwm_driver_result_t result = control_set_duty(logical, duty);
+                if (result == PWM_DRIVER_RESULT_OK) {
                     printf("OK SW%d duty: %.1f%%\r\n", ch, duty * 100.0f);
                 } else {
-                    printf("ERR SW%d duty invalid\r\n", ch);
+                    printf("ERR SW%d duty %s\r\n", ch, write_result_text(result));
                 }
             } else {
                 printf("ERR SW%d invalid (ch=0..7)\r\n", ch);
@@ -207,8 +240,12 @@ static void execute_command(char *cmd) {
         }
 
     } else if (strcmp(token, "stop") == 0) {
-        control_stop_all();
-        printf("OK all channels stopped and reset (freq=0, duty=50%%)\r\n");
+        pwm_driver_result_t result = control_stop_all();
+        if (result == PWM_DRIVER_RESULT_OK) {
+            printf("OK all channels stopped and reset (freq=0, duty=50%%)\r\n");
+        } else {
+            printf("ERR stop %s\r\n", write_result_text(result));
+        }
 
     } else if (strcmp(token, "status") == 0 || strcmp(token, "st") == 0) {
         print_status();

@@ -43,7 +43,7 @@ The subsystem is designed around the following goals:
 2. Keep PWM timing engines, IRQs, and backend state on Core 1.
 3. Expose one logical channel model to higher layers.
 4. Separate command submission from backend implementation details.
-5. Publish realized state rather than maintaining a second shadow model in `control.c`.
+5. Publish realized state rather than maintaining a second shadow model in a separate control layer.
 
 ## Source Layout
 
@@ -65,7 +65,7 @@ The higher layers use the following public API:
 ```c
 void pwm_driver_launch(void);
 bool pwm_driver_is_ready(void);
-bool pwm_driver_set_freq(uint channel, float freq_hz, float duty);
+pwm_driver_result_t pwm_driver_set_freq(uint channel, float freq_hz, float duty);
 bool pwm_driver_get(uint channel, pwm_driver_state_t *state);
 ```
 
@@ -84,8 +84,17 @@ typedef struct {
 Architecturally, `pwm_driver_set_freq()` is a command-ingress API.
 
 - It is intended to be called from top-level command paths such as the CDC CLI.
-- If a future I2C write command path is added, it should use the same boundary.
+- If a future I2C write command path is added, it should defer out of the ISR and use the high-level `control_*()` helpers on Core 0.
 - It is not intended as a general-purpose helper for arbitrary internal call sites.
+- Higher command layers should prefer `control_set()` for full-state writes instead of calling `pwm_driver_set_freq()` directly.
+- Core 1 callers must not use this API; it returns `PWM_DRIVER_RESULT_UNAVAILABLE` outside the Core 0 command path.
+- Public write callers first pass through the shared Core 0 serialization lock before they compete for mailbox admission.
+- Core 0 waits for Core 1 to finish the backend apply step before returning.
+- The wrapper returns `PWM_DRIVER_RESULT_BUSY` if the caller reaches the mailbox while another write is already pending or in progress.
+- The wrapper returns `PWM_DRIVER_RESULT_INVALID` for invalid channel or non-finite input.
+- The wrapper returns `PWM_DRIVER_RESULT_UNAVAILABLE` if Core 1 is not ready yet.
+- The wrapper returns `PWM_DRIVER_RESULT_TIMEOUT` if Core 1 does not publish a reply before the apply timeout. This timeout does not cancel the admitted command, so the final hardware outcome is unknown until the caller reads back state.
+- The wrapper returns `PWM_DRIVER_RESULT_APPLY_FAILED` if Core 1 accepts the command but the backend rejects it.
 
 ## Logical Channel Mapping
 
@@ -103,12 +112,13 @@ The subsystem has four internal layers.
 
 ### 1. Command Layer
 
-Owned by `control.c` and the transport layers.
+Owned by the high-level helpers in `pwm_driver.c` and the transport layers.
 
 Responsibilities:
 
 - validate user requests
 - convert CLI or host requests into logical channel operations
+- serialize public write entry points on Core 0
 - call `pwm_driver_set_freq()`
 
 This layer does not know backend-specific register or timing details.
@@ -122,7 +132,8 @@ Responsibilities:
 - launch Core 1
 - initialize backend drivers
 - route logical channels to backend-local channels
-- maintain mailbox queue
+- maintain the single in-flight mailbox command slot
+- maintain synchronous reply state for the active Core 0 command
 - publish coherent channel snapshots
 
 This layer is the architectural boundary between user-facing logic and backend-specific code.
@@ -238,7 +249,7 @@ sequenceDiagram
     participant SW as sw_pwm_driver
 
     C0->>WR: pwm_driver_launch()
-    WR->>WR: init mailbox queue
+    WR->>WR: init pending mailbox slot
     WR->>WR: init snapshot defaults
     WR->>C1: multicore_launch_core1(core_main)
     C1->>HW: hw_pwm_driver_init()
@@ -255,22 +266,24 @@ This is the intended top-level write path.
 ```mermaid
 sequenceDiagram
     participant CLI as CDC CLI / command layer
-    participant CTL as control.c
+    participant CTL as pwm_driver helpers
     participant WR as pwm_driver.c
     participant C1 as Core 1 mailbox loop
     participant BE as selected backend
 
     CLI->>CTL: control_set_freq(ch, freq)
-    CTL->>CTL: validate channel/range
+    CTL->>CTL: Core 0 write lock + validate channel/range
     CTL->>WR: pwm_driver_get(ch, &state)
     WR-->>CTL: current realized duty
     CTL->>WR: pwm_driver_set_freq(ch, freq, state.duty)
-    WR->>WR: enqueue mailbox command
+    WR->>WR: admit one in-flight mailbox command
     WR->>C1: __sev()
-    WR-->>CTL: enqueue accepted / rejected
-    C1->>C1: dequeue command
+    C1->>C1: claim active command
     C1->>BE: backend_set_freq(local_ch, freq, duty)
     BE->>WR: publish realized state
+    C1->>WR: publish apply result
+    WR-->>CTL: applied ok / failed
+    CTL->>CTL: unlock write path
 ```
 
 ### `control_set_duty()` to `pwm_driver_set_freq()`
@@ -278,20 +291,22 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant CLI as CDC CLI / command layer
-    participant CTL as control.c
+    participant CTL as pwm_driver helpers
     participant WR as pwm_driver.c
     participant C1 as Core 1 mailbox loop
     participant BE as selected backend
 
     CLI->>CTL: control_set_duty(ch, duty)
-    CTL->>CTL: clamp duty 0..1
+    CTL->>CTL: Core 0 write lock + clamp duty 0..1
     CTL->>WR: pwm_driver_get(ch, &state)
     WR-->>CTL: current realized freq
     CTL->>WR: pwm_driver_set_freq(ch, state.freq_hz, duty)
-    WR->>C1: mailbox command
-    WR-->>CTL: enqueue accepted / rejected
+    WR->>C1: admitted mailbox command
     C1->>BE: backend_set_freq(local_ch, freq, duty)
     BE->>WR: publish realized state
+    C1->>WR: publish apply result
+    WR-->>CTL: applied ok / failed
+    CTL->>CTL: unlock write path
 ```
 
 ### Read Path
@@ -299,7 +314,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant UI as CLI/I2C status path
-    participant CTL as control.c
+    participant CTL as pwm_driver helpers
     participant WR as pwm_driver.c
     participant SS as shared snapshot
 
@@ -317,13 +332,13 @@ The coherent higher-layer read boundary is `control_get()`, which forwards one c
 
 ## Mailbox Command Structure
 
-The wrapper uses a queue entry containing:
+The wrapper uses one single-slot mailbox record containing:
 
 - logical channel
 - requested frequency
 - requested duty
 
-The queue is implemented with Pico SDK `queue_t`.
+Only one command is admitted at a time. If a second writer arrives while the slot is pending or executing, the wrapper returns `PWM_DRIVER_RESULT_BUSY` immediately.
 
 ### Responsibilities of `pwm_driver.c`
 
@@ -332,9 +347,10 @@ The queue is implemented with Pico SDK `queue_t`.
 1. Channel class detection.
 2. Conversion from logical channel number to backend-local index.
 3. Core 1 launch and ready-state control.
-4. Mailbox dequeue loop.
-5. Shared-state publication.
-6. Readback through a versioned snapshot.
+4. Pending-mailbox claim and apply loop.
+5. Reply publication for the active Core 0 command.
+6. Shared-state publication.
+7. Readback through a versioned snapshot.
 
 ### Logical Routing
 
@@ -701,11 +717,15 @@ PIO PWM may reject frequencies that cannot be represented by the program timing 
 
 Software PWM may clamp internally to representable tick values, but still treats `freq <= 0` as disable.
 
-### Queue Pressure
+### Mailbox Pressure
 
-The mailbox queue depth is 32 commands.
+The wrapper accepts one in-flight mailbox command at a time.
 
-If queue insertion fails, the request fails at the wrapper boundary.
+If another write is already pending or executing on Core 1 when a caller reaches the mailbox admission point, that write attempt gets `PWM_DRIVER_RESULT_BUSY`.
+
+The public write layer also keeps a small Core 0 mutex around the write entry points so stale partner fields are not re-submitted when a read-modify-write helper races another writer.
+
+After admission, the caller waits synchronously for the Core 1 reply, but only up to the apply timeout. If Core 1 does not publish a reply in time, the wrapper returns `PWM_DRIVER_RESULT_TIMEOUT`. That timeout does not cancel the already admitted command, so higher layers must treat the final apply result as unknown until they read back state.
 
 ## Design Constraints and Assumptions
 
@@ -716,7 +736,7 @@ The current design assumes:
 3. CDC CLI is the current write-command ingress path.
 4. I2C is currently read-only.
 
-If a future I2C write path is added, it should enter through `control.c` and use the same `pwm_driver_set_freq()` boundary.
+If a future I2C write path is added, it should enter through the high-level helpers in `pwm_driver.c` and use the same `pwm_driver_set_freq()` boundary.
 
 ## Summary
 

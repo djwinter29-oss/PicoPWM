@@ -11,7 +11,6 @@ pico_sdk_init()
 
 add_executable(pico_pwm
     src/main.c
-    src/control.c
     src/pwmdriver/pwm_driver.c
     src/pwmdriver/hw_pwm_driver.c
     src/pwmdriver/sw_pwm_driver.c

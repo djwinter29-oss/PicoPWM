@@ -1,5 +1,5 @@
 #include "i2c_slave.h"
-#include "control.h"
+#include "pwmdriver/pwm_driver.h"
 #include "hardware/i2c.h"
 #include "hardware/gpio.h"
 #include "hardware/irq.h"
@@ -31,7 +31,7 @@ static void prepare_response(uint8_t cmd) {
         memcpy(resp_buf, s, resp_len);
     } else if (cmd == 0x02) {
         // Channel count (1 byte).
-        resp_buf[0] = CONTROL_CHANNEL_COUNT;
+        resp_buf[0] = PWM_DRIVER_CHANNEL_COUNT;
         resp_len = 1;
     } else if (cmd >= 0x10 && cmd <= 0x27) {
         // Channel properties: freq(float), duty(float), pulse_count(uint32).

@@ -4,7 +4,7 @@ This page documents the current source-level API in `firmware/src/`.
 
 The present design centers on `pwmdriver/pwm_driver.*` as the multicore ownership boundary:
 
-- Core 0 uses `control.c` and the transport layers.
+- Core 0 uses the high-level helper APIs in `pwmdriver/pwm_driver.c` and the transport layers.
 - Core 1 owns all backend driver state and timing engines.
 - `pwm_driver_set_freq()` crosses the core boundary.
 - `pwm_driver_get()` returns the latest published state snapshot.
@@ -15,15 +15,15 @@ For state machines, command sequences, backend timing design, and detailed multi
 
 ---
 
-## `control.h` — Unified Logical Control Layer
+## High-Level Logical Helpers In `pwmdriver/pwm_driver.h`
 
-`control.h` exposes the firmware's user-facing logical channel operations.
+`pwm_driver.h` now exposes the firmware's user-facing logical channel helpers directly; there is no separate `control.h` layer.
 
 ### Constants
 
 | Constant | Value | Description |
 |----------|-------|-------------|
-| `CONTROL_CHANNEL_COUNT` | 24 | Total logical PWM channels |
+| `PWM_DRIVER_CHANNEL_COUNT` | 24 | Total logical PWM channels |
 
 ### Channel Map
 
@@ -35,17 +35,17 @@ For state machines, command sequences, backend timing design, and detailed multi
 
 ### Functions
 
-#### `void control_init(void)`
+#### `pwm_driver_result_t control_set_freq(uint channel, float freq_hz)`
 
-Initialize the control layer before launching Core 1. The current implementation does not maintain a second shadow state cache.
+Validate the requested frequency for the logical channel, read the latest realized duty, and forward the combined update through `pwm_driver_set_freq()`. The read-modify-write helper is serialized on Core 0 so another public write entry point cannot slip between its snapshot read and submit step.
 
-#### `bool control_set_freq(uint channel, float freq_hz)`
+#### `pwm_driver_result_t control_set_duty(uint channel, float duty)`
 
-Validate the requested frequency for the logical channel and forward the update through `pwm_driver_set_freq()`. This is the command-ingress layer above the PWM driver mailbox.
+Clamp and validate `duty` in the range `0.0 .. 1.0`, then forward the update through `pwm_driver_set_freq()` using the channel's current realized frequency. This read-modify-write helper is serialized on Core 0 so another public write entry point cannot slip between its snapshot read and submit step.
 
-#### `bool control_set_duty(uint channel, float duty)`
+#### `pwm_driver_result_t control_set(uint channel, float freq_hz, float duty)`
 
-Clamp and validate `duty` in the range `0.0 .. 1.0`, then forward the update through `pwm_driver_set_freq()` using the channel's current realized frequency.
+Validate one full logical channel update and forward one synchronous apply request through `pwm_driver_set_freq()`. This path participates in the same Core 0 write serialization used by the read-modify-write helpers.
 
 #### `bool control_get(uint channel, pwm_driver_state_t *state)`
 
@@ -67,9 +67,9 @@ Return the read-only pulse counter from the `pwm_driver` snapshot. This is a con
 
 Return `true` when the realized frequency is greater than `0`.
 
-#### `void control_stop_all(void)`
+#### `pwm_driver_result_t control_stop_all(void)`
 
-Request `freq = 0` and `duty = 0.5` for every logical channel. `pulse_count` is not reset.
+Request `freq = 0` and `duty = 0.5` for every logical channel. `pulse_count` is not reset. The stop sweep is serialized on Core 0 so no other public write entry point can interleave partway through the loop. Returns the first non-`OK` write result if any channel stop request fails.
 
 ---
 
@@ -111,14 +111,21 @@ Launch Core 1, initialize all three PWM backends, and start the mailbox loop.
 
 Return `true` once Core 1 has completed backend initialization.
 
-#### `bool pwm_driver_set_freq(uint channel, float freq_hz, float duty)`
+#### `pwm_driver_result_t pwm_driver_set_freq(uint channel, float freq_hz, float duty)`
 
 Command-path mutation API.
 
 - Intended callers are top-level command ingress paths such as the CDC CLI
-- If an I2C write command path is added later, it should use this same API
-- Architectural intent: submit mailbox work to Core 1 asynchronously
-- Core 1 owns the actual backend apply step
+- If an I2C write command path is added later, it should defer out of the ISR and use the high-level `control_*()` helpers from the Core 0 command path
+- Higher command layers should prefer `control_set()` for full-state writes instead of calling `pwm_driver_set_freq()` directly
+- Core 1 callers must not use this API; it returns `PWM_DRIVER_RESULT_UNAVAILABLE` outside the Core 0 command path
+- Public write callers first pass through the shared Core 0 serialization lock before they compete for mailbox admission
+- Core 0 blocks until Core 1 finishes the backend apply step
+- The call returns `PWM_DRIVER_RESULT_BUSY` if the caller reaches the mailbox while another command is already pending or executing on Core 1
+- The call returns `PWM_DRIVER_RESULT_INVALID` for invalid channel or non-finite input
+- The call returns `PWM_DRIVER_RESULT_UNAVAILABLE` if Core 1 is not ready yet
+- The call returns `PWM_DRIVER_RESULT_TIMEOUT` if Core 1 does not publish a reply before the apply timeout; in that case the final hardware outcome is unknown and callers should read back state before retrying
+- The call returns `PWM_DRIVER_RESULT_APPLY_FAILED` if Core 1 accepts the command but the backend rejects it
 
 #### `bool pwm_driver_get(uint channel, pwm_driver_state_t *state)`
 
@@ -139,6 +146,7 @@ are Core 1 implementation details.
 
 They each expose the same minimal shape:
 
+- internal pin allocation arrays
 - `*_driver_init()`
 - `*_driver_set_freq(channel, freq_hz, duty)`
 - `*_driver_get(channel, &state)`
@@ -151,7 +159,7 @@ Higher layers should not depend on these headers directly. Detailed backend beha
 
 ## `cmd_parser.h` / `cdc_cmd.h` / `i2c_slave.h`
 
-These modules are thin transport or parsing layers around `control.c`.
+These modules are thin transport or parsing layers around the high-level helpers in `pwmdriver/pwm_driver.c`.
 
 - `cmd_parser` implements the CLI syntax and formatted status output.
 - `cdc_cmd` handles TinyUSB CDC polling.
@@ -166,8 +174,9 @@ At present, only the CDC path issues write commands. The I2C path is status-read
 | Data or Action | Owner | Access Pattern | Protection |
 |----------------|-------|----------------|------------|
 | Backend driver state | Core 1 | Direct backend access only on Core 1 | Core ownership |
-| Mailbox commands | Core 0 writer, Core 1 reader | `queue_t` | Pico queue synchronization |
+| Mailbox command slot | Core 0 writer, Core 1 reader | Single in-flight record | critical section |
+| Mailbox reply record | Core 1 writer, Core 0 reader | Shared struct | critical section |
 | Published channel snapshot | Core 1 writer, Core 0 reader | Lock-free snapshot read | versioned publish scheme |
 | SW PWM channel timing fields | Core 1 apply path + timer callback | Shared within one backend | interrupt masking |
 
-The design intent is that higher layers interact only with `control.c` and `pwm_driver.*`, while backend drivers remain Core 1 implementation details.
+The design intent is that higher layers interact only with `pwmdriver/pwm_driver.*`, while backend drivers remain Core 1 implementation details.

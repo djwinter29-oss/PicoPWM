@@ -22,14 +22,13 @@ For state machines, API call flows, backend-internal behavior, and publication/r
 │                                                     │
 │  main.c                                             │
 │    ├── stdio_init_all()                             │
-│    ├── control_init()                               │
 │    ├── pwm_driver_launch()                          │
 │    ├── wait for pwm_driver_is_ready()               │
 │    ├── cdc_cmd_init()                               │
 │    ├── i2c_slave_init()                             │
 │    └── main loop: cdc_cmd_poll() + i2c_slave_poll() │
 │                                                     │
-│  control.c                                          │
+│  pwmdriver/pwm_driver.c                             │
 │    ├── validate requested freq/duty                 │
 │    ├── submit pwm_driver_set_freq() command         │
 │    └── read pwm_driver_get() snapshot               │
@@ -37,7 +36,7 @@ For state machines, API call flows, backend-internal behavior, and publication/r
 │  cmd_parser.c / cdc_cmd.c / i2c_slave.c             │
 └─────────────────────────────────────────────────────┘
                  │
-                 │ mailbox command
+                 │ mailbox command + synchronous reply
                  ▼
 ┌─ Core 1 — PWM Backend Ownership ───────────────────┐
 │                                                     │
@@ -75,16 +74,26 @@ This keeps hardware state, IRQ handlers, and backend-specific timing entirely on
 
 `pwm_driver_set_freq()` is not intended to be a general-purpose internal service call. It is reserved for top-level command ingress paths such as the CDC CLI and, if write support is added later, an I2C command handler.
 
+Higher command layers should normally enter through the `control_*()` helpers, with `control_set()` preferred for full-state writes. All public write entry points share one Core 0 serialization lock before they cross into the mailbox path.
+
+Core 1 code must not call `pwm_driver_set_freq()`. Backend code on Core 1 already owns the direct hardware apply path.
+
 ## Mailbox Model
 
 `pwm_driver_set_freq()` is the only cross-core mutation path.
 
 - Core 0 validates and submits logical channel updates.
-- Core 1 dequeues and applies them to the selected backend.
+- Core 1 claims the admitted mailbox command and applies it to the selected backend.
 - Core 1 publishes realized state for later reads.
-- Submission success means the command entered the mailbox; realized state is observed later through `pwm_driver_get()`.
+- Core 0 waits for the apply result before reporting command success.
 
-The architectural model is asynchronous command submission with Core 1 ownership of backend apply timing. The detailed command flow is documented in [detail/pwm_driver_design.md](detail/pwm_driver_design.md).
+The current model uses synchronous command submission across the mailbox so higher layers can preserve read-modify-write behavior and report real backend apply failures. The detailed command flow is documented in [detail/pwm_driver_design.md](detail/pwm_driver_design.md).
+
+If Core 1 already has a write pending or in progress when a caller reaches the mailbox admission point, that write attempt gets a busy result instead of waiting for mailbox admission.
+
+All public write entry points share a small Core 0 lock. That keeps read-modify-write helpers from overwriting newer partner fields, and it keeps full-state writes from interleaving with a stop sweep or helper update.
+
+After a command is admitted, Core 0 still waits synchronously for the apply result, but only up to the wrapper timeout. If Core 1 stops replying, the caller gets a timeout result instead of spinning forever. That timeout does not cancel the admitted command, so the final hardware outcome remains unknown until higher layers read back state.
 
 ## Shared State Snapshot
 
@@ -122,7 +131,7 @@ Backend implementation detail is intentionally kept out of this overview page. S
 
 - Read/write command interface
 - Text commands handled on Core 0
-- Calls into `control.c`
+- Calls into the high-level helpers in `pwmdriver/pwm_driver.c`
 
 ### I2C Slave
 
@@ -131,7 +140,7 @@ Backend implementation detail is intentionally kept out of this overview page. S
 - Interrupt-driven handler on Core 0
 - Returns device info, version, channel count, and per-channel state
 
-If a future write-capable I2C command interface is added, it should use the same `control.c` to `pwm_driver_set_freq()` command path as the CDC CLI.
+If a future write-capable I2C command interface is added, it should defer write requests out of the ISR and then use the same `pwmdriver/pwm_driver.c` command path as the CDC CLI.
 
 ## Pulse Counter Semantics
 
@@ -158,5 +167,5 @@ If a future write-capable I2C command interface is added, it should use the same
 - Core 1 owns all backend driver state and all PWM-related IRQ/timer activity.
 - Core 0 remains dedicated to CLI and I2C responsiveness.
 - The `pwmdriver` wrapper exists to hide backend differences and enforce the multicore ownership boundary.
-- The single source of truth for channel state is the `pwm_driver` snapshot, not a second cache in `control.c`.
+- The single source of truth for channel state is the `pwm_driver` snapshot; there is no separate control-layer cache.
 - `pwm_driver_set_freq()` is intended for external command ingress only, not arbitrary internal call sites.

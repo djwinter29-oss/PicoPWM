@@ -1,3 +1,8 @@
+/**
+ * @file sw_pwm_driver.c
+ * @brief Software PWM backend implementation for the logical `pwmdriver` layer.
+ */
+
 #include "sw_pwm_driver.h"
 
 #include "pwm_driver.h"
@@ -6,25 +11,34 @@
 #include "hardware/sync.h"
 #include "hardware/timer.h"
 
+/** @brief Software PWM scheduler tick period in microseconds. */
 #define SW_PWM_TICK_US 10
+/** @brief Base tick frequency derived from @ref SW_PWM_TICK_US. */
 #define SW_PWM_BASE_HZ 100000.0f
 
+/** @brief Runtime scheduling state for one software PWM backend channel. */
 typedef struct {
-    uint gpio;
-    uint32_t period_ticks;
-    uint32_t duty_ticks;
-    uint32_t counter;
-    volatile uint32_t pulse_count;
-    bool active;
+    uint gpio; /**< Assigned output GPIO. */
+    uint32_t period_ticks; /**< Whole-tick PWM period for the current configuration. */
+    uint32_t duty_ticks; /**< Whole-tick active window for the current configuration. */
+    uint32_t counter; /**< Current tick position within the PWM period. */
+    volatile uint32_t pulse_count; /**< Monotonic generated-period count from power-on. */
+    bool active; /**< Indicates whether the channel currently drives output. */
 } sw_pwm_channel_t;
 
+/** @brief Software PWM runtime state in backend-local channel order. */
 static sw_pwm_channel_t sw_pwm_channels[SW_PWM_COUNT];
+/** @brief Repeating timer that drives the software PWM scheduler. */
 static repeating_timer_t sw_pwm_timer;
 
+/** @brief Realized software PWM frequencies in backend-local channel order. */
 static float actual_freqs[SW_PWM_COUNT] = {0};
+/** @brief Realized software PWM duties in backend-local channel order. */
 static float duties[SW_PWM_COUNT] = {0};
+/** @brief Enabled-state cache for software PWM backend channels. */
 static bool enabled[SW_PWM_COUNT] = {false};
 
+/** @brief Repeating timer callback that advances all active software PWM channels. */
 static bool sw_pwm_tick_callback(repeating_timer_t *rt) {
     (void)rt;
 
@@ -44,6 +58,7 @@ static bool sw_pwm_tick_callback(repeating_timer_t *rt) {
     return true;
 }
 
+/** @copydoc sw_pwm_driver_init */
 void sw_pwm_driver_init(void) {
     for (int i = 0; i < SW_PWM_COUNT; i++) {
         uint gpio = PWM_SW_GPIO_PINS[i];
@@ -67,6 +82,7 @@ void sw_pwm_driver_init(void) {
     add_repeating_timer_us(-SW_PWM_TICK_US, sw_pwm_tick_callback, NULL, &sw_pwm_timer);
 }
 
+/** @copydoc sw_pwm_driver_set_freq */
 bool sw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
     pwm_driver_state_t state;
 
@@ -120,6 +136,7 @@ bool sw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
     return true;
 }
 
+/** @copydoc sw_pwm_driver_get */
 bool sw_pwm_driver_get(uint channel, pwm_driver_state_t *state) {
     if (channel >= SW_PWM_COUNT || state == NULL) return false;
     state->freq_hz = actual_freqs[channel];

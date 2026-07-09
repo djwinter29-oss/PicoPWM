@@ -133,8 +133,10 @@ bool usb_cdc_is_connected(void) {
     return tud_ready() && tud_cdc_n_connected(USB_CDC_ITF);
 }
 
-uint32_t usb_cdc_read(uint8_t *data, uint32_t capacity) {
+uint32_t usb_cdc_read(void *context, uint8_t *data, uint32_t capacity) {
     uint32_t count = 0u;
+
+    (void)context;
 
     if ((data == NULL) || (capacity == 0u)) {
         return 0u;
@@ -150,7 +152,9 @@ uint32_t usb_cdc_read(uint8_t *data, uint32_t capacity) {
     return count;
 }
 
-bool usb_cdc_write(const uint8_t *data, uint32_t length) {
+bool usb_cdc_write(void *context, const uint8_t *data, uint32_t length) {
+    (void)context;
+
     if ((data == NULL) || (length == 0u) || !tud_ready()) {
         return false;
     }

@@ -1,3 +1,8 @@
+/**
+ * @file main.c
+ * @brief Core 0 startup and top-level service loop for PicoPWM.
+ */
+
 #include "pico/stdlib.h"
 #include "hardware/clocks.h"
 #include "pico/multicore.h"
@@ -7,20 +12,14 @@
 #include "pwmdriver/pwm_driver.h"
 #include "usb/usb_cdc.h"
 
-static uint32_t main_usb_cli_read(void *context, uint8_t *data, uint32_t capacity) {
-    (void)context;
-    return usb_cdc_read(data, capacity);
-}
-
-static bool main_usb_cli_write(void *context, const uint8_t *data, uint32_t length) {
-    (void)context;
-    return usb_cdc_write(data, length);
-}
-
+/**
+ * @brief Initialize Core 0 services, launch Core 1 PWM ownership, and run the main loop.
+ * @return Never returns during normal firmware operation.
+ */
 int main(void) {
     static const cli_shell_transport_t usb_cli_transport = {
-        .read = main_usb_cli_read,
-        .write = main_usb_cli_write,
+        .read = usb_cdc_read,
+        .write = usb_cdc_write,
         .context = NULL,
     };
     bool usb_was_connected = false;
@@ -54,6 +53,7 @@ int main(void) {
         bool usb_connected;
 
         usb_cdc_poll();
+        // Detect USB connection events and print the initial CLI help.
         usb_connected = usb_cdc_is_connected();
         if (usb_connected && !usb_was_connected) {
             device_cli_on_connected();

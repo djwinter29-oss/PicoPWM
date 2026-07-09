@@ -1,3 +1,8 @@
+/**
+ * @file hw_pwm_driver.c
+ * @brief Hardware PWM backend implementation for the logical `pwmdriver` layer.
+ */
+
 #include "hw_pwm_driver.h"
 
 #include "pwm_driver.h"
@@ -7,12 +12,23 @@
 #include "hardware/irq.h"
 #include "hardware/pwm.h"
 
+/** @brief Realized hardware PWM frequencies in backend-local channel order. */
 static float actual_freqs[HW_PWM_COUNT] = {0};
+/** @brief Realized hardware PWM duties in backend-local channel order. */
 static float duties[HW_PWM_COUNT] = {0};
+/** @brief Enabled-state cache for hardware PWM backend channels. */
 static bool enabled[HW_PWM_COUNT] = {false};
+/** @brief Realized wrap value cache for hardware PWM backend channels. */
 static uint16_t wraps[HW_PWM_COUNT] = {0};
+/** @brief Monotonic pulse counters updated from the hardware PWM wrap IRQ. */
 static volatile uint32_t pulse_counts[HW_PWM_COUNT] = {0};
 
+/**
+ * @brief Convert a normalized duty into the hardware compare level for one wrap value.
+ * @param top Active wrap value.
+ * @param duty Requested duty in the normalized range `[0.0, 1.0]`.
+ * @return Compare level accepted by the Pico SDK PWM API.
+ */
 static uint32_t hw_pwm_level_from_duty(uint32_t top, float duty) {
     if (duty <= 0.0f) {
         return 0;
@@ -28,10 +44,16 @@ static uint32_t hw_pwm_level_from_duty(uint32_t top, float duty) {
     return level;
 }
 
+/**
+ * @brief Minimal local absolute-value helper used during timing search.
+ * @param x Input float.
+ * @return Absolute value of @p x.
+ */
 static float fabsf_local(float x) {
     return x < 0.0f ? -x : x;
 }
 
+/** @brief Hardware PWM wrap IRQ handler that advances pulse counters and shared snapshots. */
 static void hw_pwm_irq_handler(void) {
     uint32_t status = pwm_get_irq_status_mask();
     for (int i = 0; i < HW_PWM_COUNT; i++) {
@@ -44,6 +66,7 @@ static void hw_pwm_irq_handler(void) {
     }
 }
 
+/** @copydoc hw_pwm_driver_init */
 void hw_pwm_driver_init(void) {
     for (int i = 0; i < HW_PWM_COUNT; i++) {
         uint gpio = PWM_HW_GPIO_PINS[i];
@@ -77,6 +100,7 @@ void hw_pwm_driver_init(void) {
     irq_set_enabled(PWM_IRQ_WRAP, true);
 }
 
+/** @copydoc hw_pwm_driver_set_freq */
 bool hw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
     pwm_driver_state_t state;
 
@@ -154,6 +178,7 @@ bool hw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
     return true;
 }
 
+/** @copydoc hw_pwm_driver_get */
 bool hw_pwm_driver_get(uint channel, pwm_driver_state_t *state) {
     if (channel >= HW_PWM_COUNT || state == NULL) return false;
     state->freq_hz = actual_freqs[channel];

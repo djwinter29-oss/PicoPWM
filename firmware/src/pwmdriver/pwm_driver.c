@@ -1,3 +1,8 @@
+/**
+ * @file pwm_driver.c
+ * @brief Core 0/Core 1 PWM wrapper, mailbox, and realized-state publication layer.
+ */
+
 #include "pwm_driver.h"
 #include "pwm_driver_internal.h"
 
@@ -15,62 +20,93 @@
 
 #include <math.h>
 
+/** @brief Timeout for one admitted cross-core apply request in milliseconds. */
 #define PWM_DRIVER_APPLY_TIMEOUT_MS 1000
 
+/** @brief GPIO pin map for the hardware PWM logical channel bank. */
 const uint PWM_HW_GPIO_PINS[HW_PWM_COUNT] = {
     1, 3, 5, 7, 9, 11, 13, 15
 };
 
+/** @brief GPIO pin map for the software PWM logical channel bank. */
 const uint PWM_SW_GPIO_PINS[SW_PWM_COUNT] = {
     18, 19, 20, 21, 22, 25, 26, 27
 };
 
+/** @brief GPIO pin map for the PIO PWM logical channel bank. */
 const uint PWM_PIO_GPIO_PINS[PIO_PWM_DRIVER_COUNT] = {
     0, 2, 4, 6, 8, 10, 12, 14
 };
 
+/** @brief Indicates whether Core 1 finished backend initialization. */
 static volatile bool pwm_ready = false;
 
+/** @brief One in-flight cross-core mailbox command record. */
 typedef struct {
-    uint8_t channel;
-    float freq_hz;
-    float duty;
+    uint8_t channel; /**< Logical channel index carried across the mailbox. */
+    float freq_hz; /**< Requested frequency in Hz. */
+    float duty; /**< Requested duty in the normalized range `[0.0, 1.0]`. */
 } pwm_driver_cmd_t;
 
+/** @brief Reply record published by Core 1 after one mailbox apply attempt. */
 typedef struct {
-    bool ok;
+    bool ok; /**< Indicates whether the backend accepted the command. */
 } pwm_driver_reply_t;
 
+/** @brief Shared realized-state snapshot record for one logical channel. */
 typedef struct {
-    volatile uint32_t version;
-    volatile float freq_hz;
-    volatile float duty;
-    volatile uint32_t pulse_count;
+    volatile uint32_t version; /**< Even/odd version counter used for lock-free snapshot reads. */
+    volatile float freq_hz; /**< Realized frequency in Hz. */
+    volatile float duty; /**< Realized duty in the normalized range `[0.0, 1.0]`. */
+    volatile uint32_t pulse_count; /**< Monotonic generated-period count from power-on. */
 } pwm_driver_shared_state_t;
 
+/** @brief Critical section protecting mailbox request and reply records. */
 static critical_section_t pwm_reply_lock;
+/** @brief Core 0 serialization lock shared by the public control entry points. */
 static mutex_t control_api_lock;
+/** @brief Published realized-state snapshot cache for all logical channels. */
 static pwm_driver_shared_state_t pwm_state_cache[PWM_DRIVER_CHANNEL_COUNT];
+/** @brief Indicates whether Core 0 has queued one pending mailbox command. */
 static volatile bool pwm_cmd_pending = false;
+/** @brief Indicates whether Core 1 is currently applying a claimed mailbox command. */
 static volatile bool pwm_cmd_active = false;
+/** @brief Indicates whether Core 1 published a reply for the last admitted command. */
 static volatile bool pwm_reply_ready = false;
+/** @brief Pending mailbox command record shared from Core 0 to Core 1. */
 static pwm_driver_cmd_t pwm_pending_cmd = {0};
+/** @brief Last mailbox reply record shared from Core 1 to Core 0. */
 static pwm_driver_reply_t pwm_last_reply = {0};
 
+/** @brief Return whether one logical channel belongs to the hardware PWM bank. */
 static bool pwm_driver_is_hw_channel(uint channel) {
     return channel >= HW_PWM_CHANNEL_BASE && channel < PIO_PWM_CHANNEL_BASE;
 }
 
+/** @brief Return whether one logical channel belongs to the PIO PWM bank. */
 static bool pwm_driver_is_pio_channel(uint channel) {
     return channel >= PIO_PWM_CHANNEL_BASE && channel < SW_PWM_CHANNEL_BASE;
 }
 
+/** @brief Return whether one logical channel belongs to the software PWM bank. */
 static bool pwm_driver_is_sw_channel(uint channel) {
     return channel >= SW_PWM_CHANNEL_BASE && channel < PWM_DRIVER_CHANNEL_COUNT;
 }
 
+/**
+ * @brief Submit one cross-core apply request while the public write lock is already held.
+ * @param channel Logical channel index.
+ * @param freq_hz Requested frequency in Hz.
+ * @param duty Requested duty in the normalized range `[0.0, 1.0]`.
+ * @return Result code for the admitted command attempt.
+ */
 static pwm_driver_result_t pwm_driver_set_freq_locked(uint channel, float freq_hz, float duty);
 
+/**
+ * @brief Read one logical channel snapshot or return the shared default state when invalid.
+ * @param channel Logical channel index.
+ * @return Realized state when available, otherwise the shared default state.
+ */
 static pwm_driver_state_t control_get_state_or_default(uint channel) {
     pwm_driver_state_t state = {
         .freq_hz = 0.0f,
@@ -86,6 +122,12 @@ static pwm_driver_state_t control_get_state_or_default(uint channel) {
     return state;
 }
 
+/**
+ * @brief Check whether one requested frequency is supported by the logical channel class.
+ * @param channel Logical channel index.
+ * @param freq_hz Requested frequency in Hz.
+ * @return `true` when the request falls within the supported range for the channel backend.
+ */
 static bool freq_supported_for_channel(uint channel, float freq_hz) {
     if (!isfinite(freq_hz)) {
         return false;
@@ -113,6 +155,13 @@ static bool freq_supported_for_channel(uint channel, float freq_hz) {
     return freq_hz <= 1000.0f;
 }
 
+/**
+ * @brief Shared logical channel write helper used while the public write lock is already held.
+ * @param channel Logical channel index.
+ * @param freq_hz Requested frequency in Hz.
+ * @param duty Requested duty in the normalized range `[0.0, 1.0]`.
+ * @return Result code from the cross-core apply path.
+ */
 static pwm_driver_result_t control_set_unlocked(uint channel, float freq_hz, float duty) {
     if (channel >= PWM_DRIVER_CHANNEL_COUNT) return PWM_DRIVER_RESULT_INVALID;
     if (!freq_supported_for_channel(channel, freq_hz)) return PWM_DRIVER_RESULT_INVALID;
@@ -125,6 +174,11 @@ static pwm_driver_result_t control_set_unlocked(uint channel, float freq_hz, flo
     return pwm_driver_set_freq_locked(channel, freq_hz, duty);
 }
 
+/**
+ * @brief Publish one full realized channel snapshot into the shared cache.
+ * @param channel Logical channel index.
+ * @param state Caller-owned realized channel snapshot.
+ */
 static void pwm_driver_cache_state(uint channel, const pwm_driver_state_t *state) {
     uint32_t irq_state;
 
@@ -141,10 +195,12 @@ static void pwm_driver_cache_state(uint channel, const pwm_driver_state_t *state
     restore_interrupts(irq_state);
 }
 
+/** @copydoc pwm_driver_store_applied_state */
 void pwm_driver_store_applied_state(uint channel, const pwm_driver_state_t *state) {
     pwm_driver_cache_state(channel, state);
 }
 
+/** @copydoc pwm_driver_store_pulse_count */
 void pwm_driver_store_pulse_count(uint channel, uint32_t pulse_count) {
     uint32_t irq_state;
 
@@ -159,6 +215,13 @@ void pwm_driver_store_pulse_count(uint channel, uint32_t pulse_count) {
     restore_interrupts(irq_state);
 }
 
+/**
+ * @brief Dispatch one logical channel write to the owning backend implementation.
+ * @param channel Logical channel index.
+ * @param freq_hz Requested frequency in Hz.
+ * @param duty Requested duty in the normalized range `[0.0, 1.0]`.
+ * @return `true` when the backend accepted the request.
+ */
 static bool pwm_driver_backend_set_freq(uint channel, float freq_hz, float duty) {
     if (channel >= PWM_DRIVER_CHANNEL_COUNT) {
         return false;
@@ -175,6 +238,12 @@ static bool pwm_driver_backend_set_freq(uint channel, float freq_hz, float duty)
     return sw_pwm_driver_set_freq(channel - SW_PWM_CHANNEL_BASE, freq_hz, duty);
 }
 
+/**
+ * @brief Dispatch one logical channel read to the owning backend implementation.
+ * @param channel Logical channel index.
+ * @param state Caller-owned destination for the realized state.
+ * @return `true` when the backend returned a channel snapshot.
+ */
 static bool pwm_driver_backend_get(uint channel, pwm_driver_state_t *state) {
     if (channel >= PWM_DRIVER_CHANNEL_COUNT || state == NULL) {
         return false;
@@ -191,6 +260,7 @@ static bool pwm_driver_backend_get(uint channel, pwm_driver_state_t *state) {
     return sw_pwm_driver_get(channel - SW_PWM_CHANNEL_BASE, state);
 }
 
+/** @brief Initialize the shared snapshot cache with the logical power-on default state. */
 static void pwm_driver_cache_defaults(void) {
     for (uint channel = 0; channel < PWM_DRIVER_CHANNEL_COUNT; channel++) {
         pwm_driver_state_t state = {
@@ -204,6 +274,7 @@ static void pwm_driver_cache_defaults(void) {
     }
 }
 
+/** @brief Claim and process all currently queued mailbox commands on Core 1. */
 static void pwm_driver_process_mailbox(void) {
     pwm_driver_cmd_t cmd;
     bool has_cmd;
@@ -233,6 +304,7 @@ static void pwm_driver_process_mailbox(void) {
     } while (true);
 }
 
+/** @brief Core 1 main loop that owns backend initialization and mailbox processing. */
 static void pwm_driver_core_main(void) {
     hw_pwm_driver_init();
     pio_pwm_driver_init();
@@ -246,6 +318,7 @@ static void pwm_driver_core_main(void) {
     }
 }
 
+/** @copydoc pwm_driver_launch */
 void pwm_driver_launch(void) {
     pwm_ready = false;
     critical_section_init(&pwm_reply_lock);
@@ -259,10 +332,12 @@ void pwm_driver_launch(void) {
     multicore_launch_core1(pwm_driver_core_main);
 }
 
+/** @copydoc pwm_driver_is_ready */
 bool pwm_driver_is_ready(void) {
     return pwm_ready;
 }
 
+/** @copydoc pwm_driver_set_freq_locked */
 pwm_driver_result_t pwm_driver_set_freq_locked(uint channel, float freq_hz, float duty) {
     absolute_time_t deadline;
     pwm_driver_reply_t reply;
@@ -325,6 +400,7 @@ pwm_driver_result_t pwm_driver_set_freq_locked(uint channel, float freq_hz, floa
     return reply.ok ? PWM_DRIVER_RESULT_OK : PWM_DRIVER_RESULT_APPLY_FAILED;
 }
 
+/** @copydoc pwm_driver_set_freq */
 pwm_driver_result_t pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
     pwm_driver_result_t result;
 
@@ -335,6 +411,7 @@ pwm_driver_result_t pwm_driver_set_freq(uint channel, float freq_hz, float duty)
     return result;
 }
 
+/** @copydoc pwm_driver_get */
 bool pwm_driver_get(uint channel, pwm_driver_state_t *state) {
     uint32_t version_before;
     uint32_t version_after;
@@ -362,6 +439,7 @@ bool pwm_driver_get(uint channel, pwm_driver_state_t *state) {
     return true;
 }
 
+/** @copydoc control_set */
 pwm_driver_result_t control_set(uint channel, float freq_hz, float duty) {
     pwm_driver_result_t result;
 
@@ -372,6 +450,7 @@ pwm_driver_result_t control_set(uint channel, float freq_hz, float duty) {
     return result;
 }
 
+/** @copydoc control_set_freq */
 pwm_driver_result_t control_set_freq(uint channel, float freq_hz) {
     pwm_driver_result_t result;
     pwm_driver_state_t state;
@@ -384,6 +463,7 @@ pwm_driver_result_t control_set_freq(uint channel, float freq_hz) {
     return result;
 }
 
+/** @copydoc control_set_duty */
 pwm_driver_result_t control_set_duty(uint channel, float duty) {
     pwm_driver_result_t result;
     pwm_driver_state_t state;
@@ -396,6 +476,7 @@ pwm_driver_result_t control_set_duty(uint channel, float duty) {
     return result;
 }
 
+/** @copydoc control_get */
 bool control_get(uint channel, pwm_driver_state_t *state) {
     if (channel >= PWM_DRIVER_CHANNEL_COUNT || state == NULL) {
         return false;
@@ -404,14 +485,17 @@ bool control_get(uint channel, pwm_driver_state_t *state) {
     return pwm_driver_get(channel, state);
 }
 
+/** @copydoc control_get_freq */
 float control_get_freq(uint channel) {
     return control_get_state_or_default(channel).freq_hz;
 }
 
+/** @copydoc control_get_duty */
 float control_get_duty(uint channel) {
     return control_get_state_or_default(channel).duty;
 }
 
+/** @copydoc control_get_pulse_count */
 uint32_t control_get_pulse_count(uint channel) {
     pwm_driver_state_t state = {0};
 
@@ -421,10 +505,12 @@ uint32_t control_get_pulse_count(uint channel) {
     return state.pulse_count;
 }
 
+/** @copydoc control_is_enabled */
 bool control_is_enabled(uint channel) {
     return control_get_state_or_default(channel).freq_hz > 0.0f;
 }
 
+/** @copydoc control_stop_all */
 pwm_driver_result_t control_stop_all(void) {
     pwm_driver_result_t status;
 

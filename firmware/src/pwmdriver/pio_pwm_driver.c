@@ -1,3 +1,8 @@
+/**
+ * @file pio_pwm_driver.c
+ * @brief PIO PWM backend implementation for the logical `pwmdriver` layer.
+ */
+
 #include "pio_pwm_driver.h"
 
 #include "pwm_driver.h"
@@ -9,35 +14,47 @@
 
 #include "pio_pwm_driver.pio.h"
 
+/** @brief Realized PIO PWM frequencies in backend-local channel order. */
 static float requested_freqs[PIO_PWM_DRIVER_COUNT] = {0};
+/** @brief Realized PIO PWM duties in backend-local channel order. */
 static float duties[PIO_PWM_DRIVER_COUNT] = {0};
+/** @brief Enabled-state cache for PIO PWM backend channels. */
 static bool enabled[PIO_PWM_DRIVER_COUNT] = {false};
+/** @brief Monotonic pulse counters updated from the PIO interrupt path. */
 static volatile uint32_t pulse_counts[PIO_PWM_DRIVER_COUNT] = {0};
 
+/** @brief Runtime ownership and timing state for one PIO PWM backend channel. */
 typedef struct {
-    PIO pio;
-    uint sm;
-    uint program_offset;
-    uint32_t period_count;
-    float clkdiv;
+    PIO pio; /**< Owning PIO block for the channel. */
+    uint sm; /**< Owning state machine index within @ref pio. */
+    uint program_offset; /**< Loaded program offset used by the state machine. */
+    uint32_t period_count; /**< Current period loop count programmed into the PIO backend. */
+    float clkdiv; /**< Quantized PIO clock divider used for the realized frequency. */
 } pio_pwm_channel_ctx_t;
 
+/** @brief Per-channel PIO runtime ownership table. */
 static pio_pwm_channel_ctx_t pio_pwm_channels[PIO_PWM_DRIVER_COUNT];
+/** @brief Tracks whether the PIO PWM program is already loaded per PIO block. */
 static bool pio_program_loaded[2] = {false, false};
+/** @brief Cached program offsets per PIO block for the PIO PWM program. */
 static uint pio_program_offsets[2] = {0, 0};
 
+/** @brief Map a Pico SDK PIO instance to a dense local array index. */
 static uint pio_index(PIO pio) {
     return pio == pio0 ? 0u : 1u;
 }
 
+/** @brief Return the owning PIO block for one backend-local channel index. */
 static PIO pio_for_channel(uint channel) {
     return channel < 4 ? pio0 : pio1;
 }
 
+/** @brief Return the owning state machine index for one backend-local channel index. */
 static uint sm_for_channel(uint channel) {
     return channel % 4u;
 }
 
+/** @brief Shared IRQ worker that advances pulse counters for one PIO block. */
 static void pio_pwm_driver_irq_handler(PIO pio) {
     uint pio_id = pio_index(pio);
 
@@ -55,14 +72,22 @@ static void pio_pwm_driver_irq_handler(PIO pio) {
     }
 }
 
+/** @brief IRQ wrapper for `pio0`. */
 static void pio0_pwm_driver_irq_handler(void) {
     pio_pwm_driver_irq_handler(pio0);
 }
 
+/** @brief IRQ wrapper for `pio1`. */
 static void pio1_pwm_driver_irq_handler(void) {
     pio_pwm_driver_irq_handler(pio1);
 }
 
+/**
+ * @brief Program a new PIO PWM period value into one state machine.
+ * @param pio Owning PIO block.
+ * @param sm Owning state machine index.
+ * @param period_count Backend loop count representing one PWM period.
+ */
 static void pio_pwm_driver_set_period(PIO pio, uint sm, uint32_t period_count) {
     pio_sm_set_enabled(pio, sm, false);
     pio_sm_clear_fifos(pio, sm);
@@ -72,10 +97,24 @@ static void pio_pwm_driver_set_period(PIO pio, uint sm, uint32_t period_count) {
     pio_sm_exec(pio, sm, pio_encode_out(pio_isr, 32));
 }
 
+/**
+ * @brief Program a new duty level value into one PIO PWM state machine.
+ * @param pio Owning PIO block.
+ * @param sm Owning state machine index.
+ * @param level Backend level count representing the active duty window.
+ */
 static void pio_pwm_driver_set_level(PIO pio, uint sm, uint32_t level) {
     pio_sm_put_blocking(pio, sm, level);
 }
 
+/**
+ * @brief Search for a realizable PIO timing configuration close to the requested frequency.
+ * @param freq_hz Requested frequency in Hz.
+ * @param period_count_out Caller-owned destination for the selected period count.
+ * @param clkdiv_out Caller-owned destination for the selected quantized clock divider.
+ * @param actual_freq_out Caller-owned destination for the realized frequency.
+ * @return `true` when a valid timing configuration was found.
+ */
 static bool pio_pwm_driver_find_timing(float freq_hz, uint32_t *period_count_out, float *clkdiv_out, float *actual_freq_out) {
     const float sys_clk_hz = (float)clock_get_hz(clk_sys);
     const float max_clkdiv = 65535.0f + 255.0f / 256.0f;
@@ -120,6 +159,7 @@ static bool pio_pwm_driver_find_timing(float freq_hz, uint32_t *period_count_out
     return true;
 }
 
+/** @brief Disable one PIO PWM backend channel and drive its output low. */
 static void pio_pwm_driver_disable_channel(uint channel) {
     PIO pio = pio_pwm_channels[channel].pio;
     uint sm = pio_pwm_channels[channel].sm;
@@ -133,6 +173,13 @@ static void pio_pwm_driver_disable_channel(uint channel) {
     gpio_put(pin, 0);
 }
 
+/**
+ * @brief Enable one PIO PWM backend channel with the supplied realized timing.
+ * @param channel Backend-local channel index.
+ * @param period_count Backend loop count representing one PWM period.
+ * @param clkdiv Quantized PIO clock divider.
+ * @param duty Requested duty in the normalized range `[0.0, 1.0]`.
+ */
 static void pio_pwm_driver_enable_channel(uint channel, uint32_t period_count, float clkdiv, float duty) {
     PIO pio = pio_pwm_channels[channel].pio;
     uint sm = pio_pwm_channels[channel].sm;
@@ -152,6 +199,7 @@ static void pio_pwm_driver_enable_channel(uint channel, uint32_t period_count, f
     pio_sm_set_enabled(pio, sm, true);
 }
 
+/** @copydoc pio_pwm_driver_init */
 void pio_pwm_driver_init(void) {
     for (uint pio_id = 0; pio_id < 2; pio_id++) {
         PIO pio = pio_id == 0 ? pio0 : pio1;
@@ -190,6 +238,7 @@ void pio_pwm_driver_init(void) {
     }
 }
 
+/** @copydoc pio_pwm_driver_set_freq */
 bool pio_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
     pwm_driver_state_t state;
 
@@ -232,6 +281,7 @@ bool pio_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
     return true;
 }
 
+/** @copydoc pio_pwm_driver_get */
 bool pio_pwm_driver_get(uint channel, pwm_driver_state_t *state) {
     if (channel >= PIO_PWM_DRIVER_COUNT || state == NULL) return false;
     state->freq_hz = requested_freqs[channel];

@@ -20,18 +20,20 @@ bool usb_cdc_is_connected(void);
 
 /**
  * @brief Read queued CDC bytes from the local receive queue.
+ * @param context Unused transport context.
  * @param data Caller-owned destination buffer.
  * @param capacity Maximum bytes to copy.
  * @return Number of bytes copied into @p data.
  */
-uint32_t usb_cdc_read(uint8_t *data, uint32_t capacity);
+uint32_t usb_cdc_read(void *context, uint8_t *data, uint32_t capacity);
 
 /**
  * @brief Queue CDC transmit bytes and attempt to flush them immediately.
+ * @param context Unused transport context.
  * @param data Caller-owned payload bytes.
  * @param length Number of bytes to queue.
  * @return `true` when the payload was queued, otherwise `false`.
  */
-bool usb_cdc_write(const uint8_t *data, uint32_t length);
+bool usb_cdc_write(void *context, const uint8_t *data, uint32_t length);
 
 #endif

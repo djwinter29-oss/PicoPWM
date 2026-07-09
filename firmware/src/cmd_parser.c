@@ -42,7 +42,7 @@ void print_help(void) {
     printf("  status                  Show all channels\r\n");
     printf("  help                    Show this help\r\n");
     printf("\r\nNotes:\r\n");
-    printf("  pulse_count is read-only. It can only be cleared by the stop command.\r\n");
+    printf("  pulse_count is read-only and accumulates from power-on.\r\n");
     printf("\r\nExamples:\r\n");
     printf("  get 0                   -> read channel 0\r\n");
     printf("  set 0 f 1000            -> HW0 1000 Hz, keeps 50%% duty\r\n");

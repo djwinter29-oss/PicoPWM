@@ -1,0 +1,28 @@
+; Side-set pin 0 is used for PWM output.
+.pio_version 0
+
+.program pio_pwm_driver
+.side_set 1 opt
+
+    pull noblock    side 0
+    mov x, osr
+    mov y, isr
+countloop:
+    jmp x!=y noset
+    jmp skip        side 1
+noset:
+    nop             side 0
+skip:
+    jmp y-- countloop
+    irq set rel 0   side 0
+
+% c-sdk {
+static inline void pio_pwm_driver_program_init(PIO pio, uint sm, uint offset, uint pin) {
+    pio_gpio_init(pio, pin);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+
+    pio_sm_config config = pio_pwm_driver_program_get_default_config(offset);
+    sm_config_set_sideset_pins(&config, pin);
+    pio_sm_init(pio, sm, offset, &config);
+}
+%}

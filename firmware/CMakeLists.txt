@@ -12,8 +12,7 @@ pico_sdk_init()
 add_executable(pico_pwm
     src/main.c
     src/control.c
-    src/hw_pwm.c
-    src/sw_pwm.c
+    src/pwmdriver/pwm_driver.c
     src/pwmdriver/hw_pwm_driver.c
     src/pwmdriver/sw_pwm_driver.c
     src/pwmdriver/pio_pwm_driver.c
@@ -21,6 +20,10 @@ add_executable(pico_pwm
     src/cmd_parser.c
     src/cdc_cmd.c
     src/i2c_slave.c
+)
+
+pico_generate_pio_header(pico_pwm
+    ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/pio_pwm_driver.pio
 )
 
 target_link_libraries(pico_pwm
@@ -32,6 +35,7 @@ target_link_libraries(pico_pwm
     hardware_clocks
     hardware_gpio
     hardware_i2c
+    hardware_pio
     hardware_sync
     tinyusb_device
     tinyusb_board

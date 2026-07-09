@@ -1,6 +1,13 @@
 # Build & Flash
 
-This guide covers building the PicoPWM firmware and flashing it to a Raspberry Pi Pico.
+This guide covers building the PicoPWM firmware and flashing it to a Raspberry Pi Pico or Pico 2.
+
+PicoPWM is intended to support two firmware roles:
+
+- **PWM generator** — the normal build used to generate 24 logical PWM outputs.
+- **PWM monitoring** — a monitoring-oriented build that keeps the same external pin layout.
+
+The current repository build flow below produces the standard firmware image name `pico_pwm`. When adding a monitoring target, keep the same GPIO/channel layout documented in [hardware.md](hardware.md).
 
 ---
 
@@ -30,7 +37,7 @@ git submodule update --init
 export PICO_SDK_PATH=$HOME/pico-sdk
 ```
 
-> The SDK version should be 1.5.0 or newer for the best RP2040 support.
+> Use a recent Pico SDK release with support for both RP2040 and RP2350 targets.
 
 ### 2. Build Tools
 
@@ -50,7 +57,7 @@ Make sure `arm-none-eabi-gcc` is on your PATH.
 ### 1. Open a Terminal in the Project Directory
 
 ```bash
-cd C:\Users\ji\Documents\PicoPWM
+cd C:\Users\ji\Documents\PicoPWM\firmware
 ```
 
 ### 2. Create a Build Directory
@@ -118,7 +125,7 @@ The build directory will contain:
 1. Hold the **BOOTSEL** button on the Pico.
 2. Plug the Pico into USB via a cable.
 3. Release the BOOTSEL button.
-4. The Pico appears as a USB drive named `RPI-RP2`.
+4. The board appears as a USB drive named `RPI-RP2`.
 5. Copy `pico_pwm.uf2` to that drive.
 6. The Pico automatically reboots and runs the new firmware.
 
@@ -138,6 +145,8 @@ If you have a Picoprobe or other CMSIS-DAP probe:
 ```bash
 openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "program pico_pwm.elf verify reset exit"
 ```
+
+For Pico 2 / RP2350, use the matching OpenOCD target script provided by your OpenOCD installation.
 
 ---
 

@@ -1,39 +1,51 @@
 # Hardware Notes
 
-This page documents the GPIO pinout, reserved pins, electrical considerations, and wiring recommendations for PicoPWM.
+This page documents the intended GPIO pinout, reserved pins, electrical considerations, and wiring recommendations for PicoPWM.
+
+The generator and monitoring firmware variants are intended to share the same external connector order. For that reason, the hardware PWM bank uses **PWM channel B** pins.
+
+The intended board targets are Raspberry Pi Pico (RP2040) and Raspberry Pi Pico 2 (RP2350). The documentation assumes the common Pico-style header pinout shared by both boards.
 
 ## GPIO Pinout
 
 | GPIO | Function | Notes |
 |------|----------|-------|
-| 0 | HW PWM ch 0 | Slice 0, channel A |
-| 1 | SW PWM ch 0 | |
-| 2 | HW PWM ch 1 | Slice 1, channel A |
-| 3 | SW PWM ch 1 | |
-| 4 | HW PWM ch 2 | Slice 2, channel A |
-| 5 | SW PWM ch 2 | |
-| 6 | HW PWM ch 3 | Slice 3, channel A |
-| 7 | SW PWM ch 3 | |
-| 8 | HW PWM ch 4 | Slice 4, channel A |
-| 9 | SW PWM ch 4 | |
-| 10 | HW PWM ch 5 | Slice 5, channel A |
-| 11 | SW PWM ch 5 | |
-| 12 | HW PWM ch 6 | Slice 6, channel A |
-| 13 | SW PWM ch 6 | |
-| 14 | HW PWM ch 7 | Slice 7, channel A |
-| 15 | SW PWM ch 7 | |
+| 0 | PIO PWM ch 0 | Companion pin to HW ch 0 |
+| 1 | HW PWM ch 0 | Slice 0, channel B |
+| 2 | PIO PWM ch 1 | Companion pin to HW ch 1 |
+| 3 | HW PWM ch 1 | Slice 1, channel B |
+| 4 | PIO PWM ch 2 | Companion pin to HW ch 2 |
+| 5 | HW PWM ch 2 | Slice 2, channel B |
+| 6 | PIO PWM ch 3 | Companion pin to HW ch 3 |
+| 7 | HW PWM ch 3 | Slice 3, channel B |
+| 8 | PIO PWM ch 4 | Companion pin to HW ch 4 |
+| 9 | HW PWM ch 4 | Slice 4, channel B |
+| 10 | PIO PWM ch 5 | Companion pin to HW ch 5 |
+| 11 | HW PWM ch 5 | Slice 5, channel B |
+| 12 | PIO PWM ch 6 | Companion pin to HW ch 6 |
+| 13 | HW PWM ch 6 | Slice 6, channel B |
+| 14 | PIO PWM ch 7 | Companion pin to HW ch 7 |
+| 15 | HW PWM ch 7 | Slice 7, channel B |
 | 16 | I2C0 SDA | External pull-up required |
 | 17 | I2C0 SCL | External pull-up required |
-| 18 | SW PWM ch 8 | |
-| 19 | SW PWM ch 9 | |
-| 20 | SW PWM ch 10 | |
-| 21 | SW PWM ch 11 | |
-| 22 | SW PWM ch 12 | |
-| 25 | SW PWM ch 13 | On-board LED; remove LED or use as GPIO |
-| 26 | SW PWM ch 14 | Shared with ADC0 |
-| 27 | SW PWM ch 15 | Shared with ADC1 |
+| 18 | SW PWM ch 0 | |
+| 19 | SW PWM ch 1 | |
+| 20 | SW PWM ch 2 | |
+| 21 | SW PWM ch 3 | |
+| 22 | SW PWM ch 4 | |
+| 25 | SW PWM ch 5 | On-board LED, optional |
+| 26 | SW PWM ch 6 | Shared with ADC0 |
+| 27 | SW PWM ch 7 | Shared with ADC1 |
 | 28 | — | ADC2; not used by this firmware |
 | 29 | — | ADC3; not used by this firmware |
+
+## Backend Summary
+
+| Backend | Logical Channels | GPIOs | Target Range |
+|---------|------------------|-------|--------------|
+| Hardware PWM | `0..7` | 1, 3, 5, 7, 9, 11, 13, 15 | about 10 Hz to 1 MHz |
+| PIO PWM | `8..15` | 0, 2, 4, 6, 8, 10, 12, 14 | about 10 Hz to 100 kHz |
+| Software PWM | `16..23` | 18, 19, 20, 21, 22, 25, 26, 27 | about 1 Hz to 1 kHz |
 
 ## Reserved Pins
 
@@ -64,7 +76,7 @@ The USB CDC interface is used by default. Connect the Pico to a host via USB and
 
 ### Output Drive
 
-- RP2040 GPIOs are 3.3 V logic level.
+- Pico and Pico 2 GPIOs are 3.3 V logic level.
 - Each GPIO can source or sink up to **12 mA** maximum, but staying under **4 mA** is recommended for reliability.
 - Driving LEDs, logic gates, MOSFET gates, or optocouplers directly is fine.
 - For heavier loads (motors, relays, high-power LEDs), use a buffer, driver, or transistor.
@@ -97,7 +109,8 @@ GPIO 25 drives the on-board LED through a 510 Ω resistor. If you use it as a PW
 ### Basic Test Setup
 
 - Pico powered from USB.
-- GPIO 0 → oscilloscope probe / LED with 330 Ω resistor to GND.
+- GPIO 1 → oscilloscope probe / LED with 330 Ω resistor to GND for a hardware PWM channel.
+- GPIO 0 → oscilloscope probe for the matching PIO channel if you want to compare backend behavior.
 - GPIO 16 → SDA of host MCU (with 4.7 kΩ pull-up to 3.3 V).
 - GPIO 17 → SCL of host MCU (with 4.7 kΩ pull-up to 3.3 V).
 - Host MCU I2C address: `0x40`.

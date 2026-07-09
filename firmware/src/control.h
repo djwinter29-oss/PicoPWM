@@ -2,8 +2,7 @@
 #define CONTROL_H
 
 #include "pico/stdlib.h"
-#include "hw_pwm.h"
-#include "sw_pwm.h"
+#include "pwmdriver/pwm_driver.h"
 
 #define CONTROL_CHANNEL_COUNT (HW_PWM_COUNT + SW_PWM_COUNT)
 
@@ -51,8 +50,9 @@ void control_process_pending(void);
 
 // ---- Stop / reset ----
 
-// stop_all resets every channel to the power-up default:
-//   freq = 0 Hz, duty = 50%, pulse_count = 0.
+// stop_all disables every channel and restores default output settings:
+//   freq = 0 Hz, duty = 50%.
+// pulse_count remains read-only and monotonic from power-on.
 // Pushes a STOP_ALL command to the queue (processed by Core 1).
 void control_stop_all(void);
 

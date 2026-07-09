@@ -1,6 +1,6 @@
 #include "control.h"
-#include "hw_pwm.h"
-#include "sw_pwm.h"
+#include "pwmdriver/hw_pwm_driver.h"
+#include "pwmdriver/sw_pwm_driver.h"
 #include "hardware/clocks.h"
 #include "pico/util/queue.h"
 
@@ -17,6 +17,18 @@ static float duties[CONTROL_CHANNEL_COUNT];
 // ---- Command queue (Core 0 writes, Core 1 reads) ----
 
 static queue_t cmd_queue;
+
+static pwm_driver_state_t hw_pwm_state_or_default(uint channel) {
+    pwm_driver_state_t state = {0};
+    hw_pwm_driver_get(channel, &state);
+    return state;
+}
+
+static pwm_driver_state_t sw_pwm_state_or_default(uint channel) {
+    pwm_driver_state_t state = {0};
+    sw_pwm_driver_get(channel, &state);
+    return state;
+}
 
 static bool freq_supported_for_channel(uint channel, float freq_hz) {
     if (!isfinite(freq_hz)) {
@@ -100,9 +112,9 @@ float control_get_duty(uint channel) {
 uint32_t control_get_pulse_count(uint channel) {
     if (channel >= CONTROL_CHANNEL_COUNT) return 0;
     if (channel < HW_PWM_COUNT) {
-        return hw_pwm_get_pulse_count(channel);
+        return hw_pwm_state_or_default(channel).pulse_count;
     } else {
-        return sw_pwm_get_pulse_count(channel - SW_CHANNEL_BASE);
+        return sw_pwm_state_or_default(channel - SW_CHANNEL_BASE).pulse_count;
     }
 }
 
@@ -120,28 +132,28 @@ void control_process_pending(void) {
         switch (cmd.type) {
         case CTRL_CMD_SET_FREQ:
             if (cmd.channel < HW_PWM_COUNT) {
-                hw_pwm_set_freq(cmd.channel, cmd.freq, cmd.duty);
+                hw_pwm_driver_set_freq(cmd.channel, cmd.freq, cmd.duty);
             } else {
-                sw_pwm_set_freq(cmd.channel - SW_CHANNEL_BASE, cmd.freq, cmd.duty);
+                sw_pwm_driver_set_freq(cmd.channel - SW_CHANNEL_BASE, cmd.freq, cmd.duty);
             }
             break;
 
         case CTRL_CMD_SET_DUTY:
             if (cmd.channel < HW_PWM_COUNT) {
-                hw_pwm_set_duty(cmd.channel, cmd.duty);
+                pwm_driver_state_t state = hw_pwm_state_or_default(cmd.channel);
+                hw_pwm_driver_set_freq(cmd.channel, state.freq_hz, cmd.duty);
             } else {
-                sw_pwm_set_duty(cmd.channel - SW_CHANNEL_BASE, cmd.duty);
+                pwm_driver_state_t state = sw_pwm_state_or_default(cmd.channel - SW_CHANNEL_BASE);
+                sw_pwm_driver_set_freq(cmd.channel - SW_CHANNEL_BASE, state.freq_hz, cmd.duty);
             }
             break;
 
         case CTRL_CMD_STOP_ALL:
             for (int i = 0; i < CONTROL_CHANNEL_COUNT; i++) {
                 if (i < HW_PWM_COUNT) {
-                    hw_pwm_set_freq(i, 0.0f, 0.5f);
-                    hw_pwm_set_pulse_count(i, 0);
+                    hw_pwm_driver_set_freq(i, 0.0f, 0.5f);
                 } else {
-                    sw_pwm_set_freq(i - SW_CHANNEL_BASE, 0.0f, 0.5f);
-                    sw_pwm_set_pulse_count(i - SW_CHANNEL_BASE, 0);
+                    sw_pwm_driver_set_freq(i - SW_CHANNEL_BASE, 0.0f, 0.5f);
                 }
             }
             break;

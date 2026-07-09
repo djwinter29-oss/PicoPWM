@@ -1,0 +1,117 @@
+#include "sw_pwm_driver.h"
+
+#include "pwm_driver.h"
+#include "hardware/gpio.h"
+#include "hardware/sync.h"
+#include "hardware/timer.h"
+
+#define SW_PWM_TICK_US 10
+#define SW_PWM_BASE_HZ 100000.0f
+
+typedef struct {
+    uint gpio;
+    uint32_t period_ticks;
+    uint32_t duty_ticks;
+    uint32_t counter;
+    volatile uint32_t pulse_count;
+    bool active;
+} sw_pwm_channel_t;
+
+static sw_pwm_channel_t sw_pwm_channels[SW_PWM_COUNT];
+static repeating_timer_t sw_pwm_timer;
+
+static float actual_freqs[SW_PWM_COUNT] = {0};
+static float duties[SW_PWM_COUNT] = {0};
+static bool enabled[SW_PWM_COUNT] = {false};
+
+static bool sw_pwm_tick_callback(repeating_timer_t *rt) {
+    (void)rt;
+
+    for (int i = 0; i < SW_PWM_COUNT; i++) {
+        sw_pwm_channel_t *ch = &sw_pwm_channels[i];
+        if (!ch->active) continue;
+
+        ch->counter++;
+        if (ch->counter >= ch->period_ticks) {
+            ch->counter = 0;
+            ch->pulse_count++;
+        }
+        gpio_put(ch->gpio, ch->counter < ch->duty_ticks);
+    }
+
+    return true;
+}
+
+void sw_pwm_driver_init(void) {
+    for (int i = 0; i < SW_PWM_COUNT; i++) {
+        uint gpio = PWM_SW_GPIO_PINS[i];
+
+        sw_pwm_channels[i].gpio = gpio;
+        sw_pwm_channels[i].period_ticks = 1000;
+        sw_pwm_channels[i].duty_ticks = 500;
+        sw_pwm_channels[i].counter = 0;
+        sw_pwm_channels[i].pulse_count = 0;
+        sw_pwm_channels[i].active = false;
+
+        gpio_init(gpio);
+        gpio_set_dir(gpio, GPIO_OUT);
+        gpio_put(gpio, 0);
+
+        actual_freqs[i] = 0.0f;
+        duties[i] = 0.5f;
+        enabled[i] = false;
+    }
+
+    add_repeating_timer_us(-SW_PWM_TICK_US, sw_pwm_tick_callback, NULL, &sw_pwm_timer);
+}
+
+bool sw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
+    if (channel >= SW_PWM_COUNT) return false;
+    if (duty < 0.0f) duty = 0.0f;
+    if (duty > 1.0f) duty = 1.0f;
+
+    sw_pwm_channel_t *ch = &sw_pwm_channels[channel];
+    duties[channel] = duty;
+
+    if (freq_hz <= 0.0f) {
+        uint32_t save = save_and_disable_interrupts();
+        ch->active = false;
+        ch->period_ticks = 1000;
+        ch->duty_ticks = 500;
+        ch->counter = 0;
+        restore_interrupts(save);
+        gpio_put(ch->gpio, 0);
+        actual_freqs[channel] = 0.0f;
+        enabled[channel] = false;
+        return true;
+    }
+
+    float period_f = SW_PWM_BASE_HZ / freq_hz;
+    if (period_f > 0xFFFFFFFF) period_f = 0xFFFFFFFF;
+
+    uint32_t period = (uint32_t)(period_f + 0.5f);
+    if (period < 1) period = 1;
+
+    uint32_t duty_ticks = (uint32_t)(period * duty + 0.5f);
+    if (duty_ticks > period) duty_ticks = period;
+
+    uint32_t save = save_and_disable_interrupts();
+    ch->period_ticks = period;
+    ch->duty_ticks = duty_ticks;
+    ch->counter = 0;
+    ch->active = true;
+    restore_interrupts(save);
+
+    actual_freqs[channel] = SW_PWM_BASE_HZ / (float)period;
+    enabled[channel] = true;
+
+    return true;
+}
+
+bool sw_pwm_driver_get(uint channel, pwm_driver_state_t *state) {
+    if (channel >= SW_PWM_COUNT || state == NULL) return false;
+    state->freq_hz = actual_freqs[channel];
+    state->duty = duties[channel];
+    state->pulse_count = sw_pwm_channels[channel].pulse_count;
+    return true;
+}

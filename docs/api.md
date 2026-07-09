@@ -1,6 +1,8 @@
 # Internal API
 
-This page documents the C API exposed by the firmware modules. All modules are in `src/`.
+This page documents the C API exposed by the firmware modules. All modules are in `firmware/src/`.
+
+This is an implementation-level reference for the current source tree. It may differ from the higher-level product target described in [../README.md](../README.md) and the public documentation pages, which describe the intended 8 hardware + 8 PIO + 8 software channel split.
 
 ---
 

@@ -2,10 +2,10 @@
 
 Welcome to the PicoPWM documentation. Use the links below to navigate.
 
-- [Architecture](architecture.md) — How the firmware is organized: hardware PWM, software PWM, control interface, and command transports.
+- [Architecture](architecture.md) — Target system layout, firmware roles, backend split, and interface model.
 - [Control Protocol](protocol.md) — USB CDC serial protocol and I2C slave protocol for reading/writing channel properties.
-- [Hardware Notes](hardware.md) — GPIO pinout, reserved pins, electrical notes, and wiring tips.
-- [Internal API](api.md) — C API for the control module, hardware PWM module, and software PWM module.
-- [Build & Flash](build.md) — Step-by-step build instructions for Windows, Linux, and macOS.
+- [Hardware Notes](hardware.md) — Generator/monitor shared pinout, GPIO allocation, and wiring notes.
+- [Internal API](api.md) — Current source-level API for the control and PWM implementation modules.
+- [Build & Flash](build.md) — Build flow, firmware variants, and flash instructions.
 
 For a high-level overview, see the [README.md](../README.md) in the project root.

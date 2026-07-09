@@ -1,8 +1,8 @@
 #include "pwm_core.h"
 
 #include "control.h"
-#include "hw_pwm.h"
-#include "sw_pwm.h"
+#include "pwmdriver/hw_pwm_driver.h"
+#include "pwmdriver/sw_pwm_driver.h"
 
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
@@ -10,8 +10,8 @@
 static volatile bool pwm_ready = false;
 
 static void pwm_core_main(void) {
-    hw_pwm_init();
-    sw_pwm_init();
+    hw_pwm_driver_init();
+    sw_pwm_driver_init();
 
     pwm_ready = true;
 

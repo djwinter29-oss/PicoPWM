@@ -1,6 +1,24 @@
 # Architecture
 
-PicoPWM uses a **dual-core** architecture: Core 0 handles all communication (USB CDC + I2C), Core 1 owns all PWM hardware and interrupts.
+PicoPWM targets a low-cost Raspberry Pi Pico platform with a shared external interface and two firmware roles. The intended hardware targets are:
+
+- **Raspberry Pi Pico (RP2040)**
+- **Raspberry Pi Pico 2 (RP2350)**
+
+- **PWM generator** for producing 24 logical PWM channels.
+- **PWM monitoring** for measurement-oriented use while keeping the same external connector mapping.
+
+The control surface is the same in both roles: USB CDC CLI for interactive control and I2C for host integration.
+
+For the generator role, the intended backend split is:
+
+- **8 hardware PWM channels** on the MCU PWM slice **channel B** pins.
+- **8 PIO PWM channels** for good timing accuracy on a second bank of outputs.
+- **8 software PWM channels** for lower-frequency outputs.
+
+The hardware channels intentionally use **channel B** so the physical pins remain aligned with monitoring-oriented input use cases.
+
+## System Overview
 
 ## Dual-Core Overview
 
@@ -36,16 +54,18 @@ PicoPWM uses a **dual-core** architecture: Core 0 handles all communication (USB
 │          __wfi()                    sleep until IRQ │
 │                                                     │
 │  hw_pwm.c   8 HW PWM channels + wrap ISR            │
-│  sw_pwm.c   16 SW PWM channels + timer ISR          │
+│  pio_pwm.c  8 PIO PWM channels                      │
+│  sw_pwm.c   8 SW PWM channels + timer ISR           │
 │                                                     │
 │  control.c (process_pending)  apply freq/duty/stop  │
 └─────────────────────────────────────────────────────┘
           │
           ▼
 ┌─ Hardware ──────────────────────────────────────────┐
-│  RP2040 PWM slices 0-7 (channel A each)             │
-│  RP2040 hardware timer (10 µs repeating)            │
-│  GPIO 0-27 (PWM outputs)                            │
+│  MCU PWM slices 0-7 (channel B each)                │
+│  MCU PIO state machines for 8 channels              │
+│  MCU hardware timer (10 µs repeating)               │
+│  24 logical PWM pins                                │
 │  GPIO 16/17 (I2C0 slave)                            │
 │  USB (CDC)                                          │
 └─────────────────────────────────────────────────────┘
@@ -56,6 +76,7 @@ PicoPWM uses a **dual-core** architecture: Core 0 handles all communication (USB
 | Concern | Single-Core Problem | Dual-Core Solution |
 |---------|--------------------|--------------------|
 | SW PWM ISR at 100 kHz | Steals CPU from USB/I2C | Core 1 handles it entirely |
+| Mixed backends | Different timing engines complicate control | One logical channel model hides backend differences |
 | HW PWM wrap ISR | Adds interrupt load to comm | Core 1 absorbs it |
 | USB CDC responsiveness | Can stall during ISR | Core 0 is always free |
 | I2C slave latency | Can miss bytes during PWM ISR | Core 0 ISR is never preempted by PWM |
@@ -92,12 +113,20 @@ Reads (`get`, `status`, I2C queries) do **not** go through the queue. Core 0 rea
 | `pulse_count` | `hw_pwm.c` / `sw_pwm.c` volatile | Yes | Yes (atomic 32-bit read) |
 | `enabled` | Derived from `freqs[ch] > 0` | No (Core 0 only) | Yes |
 
+## Channel Classes
+
+| Logical Channels | Backend | GPIOs | Notes |
+|------------------|---------|-------|-------|
+| `0..7` | Hardware PWM | 1, 3, 5, 7, 9, 11, 13, 15 | Slice 0..7, channel B |
+| `8..15` | PIO PWM | 0, 2, 4, 6, 8, 10, 12, 14 | Matched companion pins to the HW bank |
+| `16..23` | Software PWM | 18, 19, 20, 21, 22, 25, 26, 27 | Lower-frequency bank |
+
 ## Hardware PWM (8 channels)
 
-RP2040 has 8 PWM slices, each with two output channels (A/B). The firmware uses **one channel per slice**, so each of the 8 hardware channels has a **fully independent frequency**.
+Both RP2040 and RP2350 provide PWM slices with A/B outputs. The firmware uses **one channel per slice**, so each of the 8 hardware channels has a **fully independent frequency**.
 
-- GPIO: 0, 2, 4, 6, 8, 10, 12, 14 (channel A of slices 0-7)
-- Frequency range: approximately 9 Hz to 586 kHz at 150 MHz (8-bit resolution, TOP=255)
+- GPIO: 1, 3, 5, 7, 9, 11, 13, 15 (channel B of slices 0-7)
+- Target operating range: about 10 Hz to 1 MHz
 - Pulse counting: every PWM wrap triggers an interrupt on Core 1 that increments the channel's 32-bit pulse counter
 
 The frequency is configured by selecting a clock divider (`clkdiv`) and a wrap value (`TOP`). The firmware searches all valid `(TOP, clkdiv)` combinations to find the best match.
@@ -106,12 +135,22 @@ The frequency is configured by selecting a clock divider (`clkdiv`) and a wrap v
 f_pwm = f_sys / (clkdiv * (TOP + 1))
 ```
 
-## Software PWM (16 channels)
+## PIO PWM (8 channels)
+
+The PIO PWM bank fills the gap between hardware PWM and timer-driven software PWM.
+
+- GPIO: 0, 2, 4, 6, 8, 10, 12, 14
+- Target operating range: about 10 Hz to 100 kHz
+- Positioning: good accuracy, deterministic timing, and a pinout that mirrors the hardware bank
+
+This bank is intended for channels that need better timing quality than software PWM but do not need to consume the MCU hardware PWM slices.
+
+## Software PWM (8 channels)
 
 The software PWM channels are driven by a periodic hardware timer interrupt on Core 1.
 
-- GPIO: 1, 3, 5, 7, 9, 11, 13, 15, 18, 19, 20, 21, 22, 25, 26, 27
-- Frequency range: 0.1 Hz to 1 kHz
+- GPIO: 18, 19, 20, 21, 22, 25, 26, 27
+- Target operating range: about 1 Hz to 1 kHz
 - Timer tick: 10 µs (100 kHz interrupt rate)
 - Resolution at 1 kHz: 100 levels (1% duty steps)
 
@@ -121,7 +160,7 @@ State updates (`set_freq`, `set_duty`) use `save_and_disable_interrupts()` / `re
 
 ## Control Interface
 
-`control.c` presents a single, uniform view of all 24 channels.
+`control.c` presents a single, uniform view of all 24 channels, regardless of backend.
 
 Each channel has three properties:
 
@@ -157,11 +196,12 @@ Both transports expose the same data: device type, version, channel count, and p
 3. **Core 0**: `control_init()` — init cached values + command queue
 4. **Core 0**: `pwm_core_launch()` — start Core 1
 5. **Core 1**: `hw_pwm_init()` — init PWM slices + wrap IRQ on Core 1
-6. **Core 1**: `sw_pwm_init()` — init SW PWM GPIO + timer IRQ on Core 1
-7. **Core 1**: set `pwm_ready = true`, enter main loop (`control_process_pending` + `__wfi`)
-8. **Core 0**: wait for `pwm_core_is_ready()`
-9. **Core 0**: `cdc_cmd_init()` / `i2c_slave_init()` — start command interfaces
-10. **Core 0**: print help, enter main loop (`cdc_cmd_poll` + `i2c_slave_poll`)
+6. **Core 1**: `pio_pwm_init()` — init PIO-backed PWM channels
+7. **Core 1**: `sw_pwm_init()` — init SW PWM GPIO + timer IRQ on Core 1
+8. **Core 1**: set `pwm_ready = true`, enter main loop (`control_process_pending` + `__wfi`)
+9. **Core 0**: wait for `pwm_core_is_ready()`
+10. **Core 0**: `cdc_cmd_init()` / `i2c_slave_init()` — start command interfaces
+11. **Core 0**: print help, enter main loop (`cdc_cmd_poll` + `i2c_slave_poll`)
 
 ## Performance Notes
 

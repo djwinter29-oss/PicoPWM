@@ -35,7 +35,10 @@ Connect to the Pico as a USB serial port (CDC) at **115200 baud**. Type commands
 ### Channel Numbers
 
 - `0..7` = hardware PWM channels
-- `8..23` = software PWM channels
+- `8..15` = PIO PWM channels
+- `16..23` = software PWM channels
+
+For the hardware bank, the intended external pin mapping uses PWM slice **channel B** pins so the generator and monitoring firmware variants can share the same physical connector order on both Pico (RP2040) and Pico 2 (RP2350).
 
 ### Response Examples
 
@@ -71,7 +74,7 @@ The Pico acts as an I2C slave on **I2C0** using:
 
 ### Electrical
 
-External pull-up resistors (typically 4.7 kΩ) are required on SDA and SCL. The firmware does enable the RP2040 internal pull-ups, but external pull-ups are recommended for reliable operation, especially at higher clock speeds.
+External pull-up resistors (typically 4.7 kΩ) are required on SDA and SCL. The firmware does enable the MCU internal pull-ups, but external pull-ups are recommended for reliable operation, especially at higher clock speeds.
 
 ### Transaction Format
 
@@ -119,7 +122,7 @@ Master read:  [freq_le32, duty_le32, pulse_count_le32] (12 bytes)
 
 ### Notes
 
-- Multi-byte values are always **little-endian**, matching the RP2040 native byte order.
+- Multi-byte values are always **little-endian**, matching the native byte order of both RP2040 and RP2350.
 - String responses include a null terminator. Allocate at least 8 bytes for `info` and 8 bytes for `version`.
 - The I2C slave handler is interrupt-driven. The master may need a small delay between transactions.
 - `pulse_count` is read-only over I2C. It cannot be set or reset via this interface.

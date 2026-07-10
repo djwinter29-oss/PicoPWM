@@ -7,7 +7,7 @@ PicoPWM exposes two command interfaces with the same logical data:
 
 Both can read device identity and per-channel properties. Both can also drive the same shared control path for channel updates and stop-all requests.
 
-**Important:** `pulse_count` is read-only from both interfaces. It cannot be set or reset directly. The `stop` command disables all channels by restoring `freq = 0 Hz` and `duty = 50%`, but `pulse_count` continues accumulating from power-on.
+**Important:** `pulse_count` is read-only from both interfaces. It cannot be set or reset directly. The `stop` command disables all channels by restoring `freq = 0 Hz` and `duty = 50%`, but `pulse_count` continues accumulating from power-on. For PIO channels, `pulse_count` is an estimated period count derived from elapsed time and realized frequency, not a hardware-counted edge total. That estimate still advances for nonzero-frequency `0%` and `100%` duty settings because it represents generated periods, not observed output toggles.
 
 ---
 

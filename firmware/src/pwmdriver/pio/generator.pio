@@ -4,8 +4,11 @@
 .program generator
 .side_set 1 opt
 
-    pull noblock    side 0
+    pull block      side 0
     mov x, osr
+    pull block      side 0
+    mov isr, osr
+restart:
     mov y, isr
 countloop:
     jmp x!=y noset
@@ -14,7 +17,7 @@ noset:
     nop             side 0
 skip:
     jmp y-- countloop
-    irq set rel 0   side 0
+    jmp restart     side 0
 
 % c-sdk {
 static inline void generator_program_init(PIO pio, uint sm, uint offset, uint pin) {

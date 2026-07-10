@@ -58,7 +58,7 @@ The current implementation is split as follows:
 | `firmware/src/pwmdriver/pwm_driver.h` | Public wrapper API and logical channel constants |
 | `firmware/src/pwmdriver/pwm_driver.c` | Core 1 launch, mailbox loop, channel routing, shared snapshot |
 | `firmware/src/pwmdriver/hw_pwm_driver.c` | Hardware PWM backend |
-| `firmware/src/pwmdriver/pio/generator.c` | PIO PWM generator backend |
+| `firmware/src/pwmdriver/pio/generator.c` | PIO generator backend |
 | `firmware/src/pwmdriver/pio/generator.pio` | PIO assembly program used by the PIO generator backend |
 | `firmware/src/pwmdriver/sw_pwm_driver.c` | Software PWM backend |
 
@@ -503,7 +503,7 @@ The wrap IRQ handler:
 4. publishes pulse count to the shared snapshot
 5. clears the slice IRQ
 
-## PIO PWM Driver Detailed Design
+## PIO Generator Detailed Design
 
 ### Purpose
 
@@ -515,7 +515,7 @@ The PIO backend provides better timing quality than software PWM without consumi
 - distributed over `pio0` and `pio1`
 - 4 state machines on each PIO block
 - one output pin per state machine
-- one interrupt source per state machine for pulse counting
+- no per-period IRQ or DMA path in the current generator implementation
 
 ### Channel Distribution
 
@@ -534,27 +534,31 @@ The PIO backend provides better timing quality than software PWM without consumi
 
 The PIO program:
 
-1. loads a period value
+1. loads a duty level and a period value
 2. compares the running counter against the desired level
 3. drives the side-set output high or low
-4. raises a PIO IRQ at period completion
-
-This IRQ is used for pulse counting, not for waveform generation.
+4. loops with the period cached in `ISR` until the channel is reconfigured
 
 ### Initialization
 
 Initialization steps:
 
 1. load the PIO program into each used PIO block once
-2. register IRQ handlers for `PIO0_IRQ_0` and `PIO1_IRQ_0`
-3. assign each logical channel to one PIO block and one state machine
-4. enable interrupt source for the corresponding state machine
-5. initialize output GPIO low
-6. initialize per-channel cached timing state
+2. assign each logical channel to one PIO block and one state machine
+3. initialize output GPIO low
+4. initialize per-channel cached timing state
 
 ### Timing Search
 
 The PIO driver computes timing by searching `period_count` and deriving a quantized `clkdiv`.
+
+In steady state, one PWM period costs:
+
+$$
+cycles\_per\_period = 3 \times (period\_count + 1) + 2
+$$
+
+The `+2` term comes from the `mov y, isr` reload and the `jmp restart` at the end of each period. The two initial `pull` instructions are startup cost only and are not part of steady-state frequency calculation.
 
 For each candidate `period_count`:
 
@@ -566,15 +570,19 @@ For each candidate `period_count`:
 
 The driver rejects requests that cannot be represented within PIO period and divider constraints.
 
+The current generator firmware also rejects requests above `1 MHz` so the backend behavior stays aligned with the documented intended operating range.
+
 ### Enable Sequence
 
 When enabling or updating a channel:
 
+For `0%` and `100%` duty, the backend skips the PWM loop and drives the pin to a static low or high level after validating the realizable frequency.
+
 1. stop the state machine
 2. clear FIFOs
 3. restart the state machine
-4. push the new period count
-5. load the desired level
+4. push the new duty level
+5. push the new period count
 6. set the state machine divider
 7. clear stale interrupt state
 8. enable the state machine
@@ -593,12 +601,18 @@ When disabling a channel:
 
 ### Pulse Counting
 
-The PIO IRQ handler:
+The PIO backend does not count pulses with a per-period interrupt.
 
-1. identifies which state machine interrupt fired
-2. increments the corresponding local pulse counter
-3. publishes the new pulse count to the shared snapshot
-4. clears the PIO interrupt bit
+Instead it:
+
+1. stores the last synchronized `pulse_count`
+2. stores the timestamp when that count was synchronized
+3. accumulates additional pulses from elapsed time and realized frequency on update/read boundaries
+4. publishes a refreshed snapshot when configuration changes
+
+For PIO channels, `pulse_count` is therefore an estimated period count, not a hardware-observed edge count.
+
+That means `pulse_count` continues to advance for nonzero-frequency `0%` and `100%` duty requests, because the field represents estimated generated periods rather than observed output transitions. Consumers that need true edge counting must not treat the PIO backend's `pulse_count` as a physical pin toggle count.
 
 ## Software PWM Driver Detailed Design
 
@@ -714,7 +728,6 @@ Published fields:
 Used by:
 
 - hardware PWM wrap IRQ
-- PIO IRQ handlers
 - software PWM timer callback
 
 Only the `pulse_count` field is updated for these events.

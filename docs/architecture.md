@@ -145,7 +145,7 @@ That means:
 - `control_iface` does not keep a second cache
 - both USB CDC and I2C observe the same logical channel view
 
-`pulse_count` is monotonic from power-on. `stop` disables output by restoring `freq = 0 Hz` and `duty = 50%`, but it does not reset the counter.
+`pulse_count` is monotonic from power-on. `stop` disables output by restoring `freq = 0 Hz` and `duty = 50%`, but it does not reset the counter. For PIO channels, the count is estimated from elapsed time and realized frequency rather than hardware-counted per pulse.
 
 ## Channel Layout
 

@@ -1,0 +1,48 @@
+; Monitor one PWM input pin and push approximate high/low loop counts for each full period.
+; The state machine waits until both segments are measured, then pushes `high` and `low`
+; back-to-back so DMA sees a compact two-word sample instead of a split stream.
+; This prototype favors a tiny program and simple C-side decode over exact edge timing.
+.pio_version 0
+
+.program monitor
+
+.wrap_target
+sync_low:
+    wait 0 pin 0
+period_start:
+    wait 1 pin 0
+
+    mov x, ~null
+high_loop:
+    jmp pin high_count
+    jmp high_done
+high_count:
+    jmp x-- high_loop
+high_done:
+    mov isr, ~x
+    mov y, isr
+
+    mov x, ~null
+low_loop:
+    jmp pin low_done
+    jmp x-- low_loop
+low_done:
+    mov isr, y
+    push block
+    mov isr, ~x
+    push block
+    jmp period_start
+.wrap
+
+% c-sdk {
+static inline void monitor_program_init(PIO pio, uint sm, uint offset, uint pin) {
+    pio_gpio_init(pio, pin);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, false);
+
+    pio_sm_config config = monitor_program_get_default_config(offset);
+    sm_config_set_jmp_pin(&config, pin);
+    sm_config_set_fifo_join(&config, PIO_FIFO_JOIN_RX);
+    sm_config_set_clkdiv(&config, 1.0f);
+    pio_sm_init(pio, sm, offset, &config);
+}
+%}

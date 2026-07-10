@@ -10,7 +10,6 @@
 #include "pio/generator.h"
 #include "sw_pwm_driver.h"
 
-#include "hardware/clocks.h"
 #include "pico/critical_section.h"
 #include "pico/mutex.h"
 #include "pico/multicore.h"
@@ -59,6 +58,7 @@ typedef struct {
     volatile uint32_t freq_hz; /**< Realized frequency in Hz. */
     volatile uint8_t duty; /**< Realized duty in percent in the range `[0, 100]`. */
     volatile uint32_t pulse_count; /**< Monotonic generated-period count from power-on. */
+    volatile uint64_t pulse_ref_us; /**< Cache timestamp used to derive current PIO pulse counts on Core 0. */
 } pwm_driver_shared_state_t;
 
 /** @brief Critical section protecting mailbox request and reply records. */
@@ -123,33 +123,6 @@ static pwm_driver_state_t control_get_state_or_default(uint channel) {
 }
 
 /**
- * @brief Check whether one requested frequency is supported by the logical channel class.
- * @param channel Logical channel index.
- * @param freq_hz Requested frequency in Hz.
- * @return `true` when the request falls within the supported range for the channel backend.
- */
-static bool freq_supported_for_channel(uint channel, uint32_t freq_hz) {
-    if (freq_hz == 0u) {
-        return true;
-    }
-
-    float requested_hz = (float)freq_hz;
-
-    if (channel < PIO_PWM_CHANNEL_BASE) {
-        const float sys_clk = (float)clock_get_hz(clk_sys);
-        const float min_hw = sys_clk / ((255.0f + 15.0f / 16.0f) * 65536.0f);
-        const float max_hw = sys_clk / 2.0f;
-        return requested_hz >= min_hw && requested_hz <= max_hw;
-    }
-
-    if (channel < SW_PWM_CHANNEL_BASE) {
-        return requested_hz <= 100000.0f;
-    }
-
-    return requested_hz <= 1000.0f;
-}
-
-/**
  * @brief Shared logical channel write helper used while the public write lock is already held.
  * @param channel Logical channel index.
  * @param freq_hz Requested frequency in Hz.
@@ -158,10 +131,27 @@ static bool freq_supported_for_channel(uint channel, uint32_t freq_hz) {
  */
 static pwm_driver_result_t control_set_unlocked(uint channel, uint32_t freq_hz, uint8_t duty) {
     if (channel >= PWM_DRIVER_CHANNEL_COUNT) return PWM_DRIVER_RESULT_INVALID;
-    if (!freq_supported_for_channel(channel, freq_hz)) return PWM_DRIVER_RESULT_INVALID;
     if (duty > 100u) duty = 100u;
 
     return pwm_driver_set_freq_locked(channel, freq_hz, duty);
+}
+
+/** @brief Derive the current PIO pulse count from the cached base count and timestamp. */
+static uint32_t pwm_driver_pio_pulse_count_now(uint channel, uint32_t pulse_count, uint32_t freq_hz, uint64_t pulse_ref_us) {
+    uint64_t elapsed_us;
+    uint64_t total_pulses;
+
+    if (!pwm_driver_is_pio_channel(channel) || freq_hz == 0u) {
+        return pulse_count;
+    }
+
+    elapsed_us = time_us_64() - pulse_ref_us;
+    total_pulses = (uint64_t)pulse_count + (elapsed_us * (uint64_t)freq_hz) / 1000000u;
+    if (total_pulses > UINT32_MAX) {
+        return UINT32_MAX;
+    }
+
+    return (uint32_t)total_pulses;
 }
 
 /**
@@ -181,6 +171,7 @@ static void pwm_driver_cache_state(uint channel, const pwm_driver_state_t *state
     pwm_state_cache[channel].freq_hz = state->freq_hz;
     pwm_state_cache[channel].duty = state->duty;
     pwm_state_cache[channel].pulse_count = state->pulse_count;
+    pwm_state_cache[channel].pulse_ref_us = time_us_64();
     pwm_state_cache[channel].version++;
     restore_interrupts(irq_state);
 }
@@ -201,6 +192,7 @@ void pwm_driver_store_pulse_count(uint channel, uint32_t pulse_count) {
     irq_state = save_and_disable_interrupts();
     pwm_state_cache[channel].version++;
     pwm_state_cache[channel].pulse_count = pulse_count;
+    pwm_state_cache[channel].pulse_ref_us = time_us_64();
     pwm_state_cache[channel].version++;
     restore_interrupts(irq_state);
 }
@@ -213,16 +205,34 @@ void pwm_driver_store_pulse_count(uint channel, uint32_t pulse_count) {
  * @return `true` when the backend accepted the request.
  */
 static bool pwm_driver_backend_set_freq(uint channel, float freq_hz, float duty) {
+    uint32_t requested_hz;
+
     if (channel >= PWM_DRIVER_CHANNEL_COUNT) {
         return false;
     }
 
+    requested_hz = pwm_driver_freq_hz_from_float(freq_hz);
+
     if (pwm_driver_is_hw_channel(channel)) {
+        if (requested_hz != 0u) {
+            const float sys_clk = (float)clock_get_hz(clk_sys);
+            const float min_hw = sys_clk / ((255.0f + 15.0f / 16.0f) * 65536.0f);
+            const float max_hw = sys_clk / 2.0f;
+
+            if (freq_hz < min_hw || freq_hz > max_hw) {
+                return false;
+            }
+        }
+
         return hw_pwm_driver_set_freq(channel - HW_PWM_CHANNEL_BASE, freq_hz, duty);
     }
 
     if (pwm_driver_is_pio_channel(channel)) {
-        return pio_pwm_generator_set_freq(channel - PIO_PWM_CHANNEL_BASE, freq_hz, duty);
+        return pio_gen_set_freq(channel - PIO_PWM_CHANNEL_BASE, requested_hz, pwm_driver_duty_percent_from_float(duty));
+    }
+
+    if (requested_hz > 1000u) {
+        return false;
     }
 
     return sw_pwm_driver_set_freq(channel - SW_PWM_CHANNEL_BASE, freq_hz, duty);
@@ -244,7 +254,7 @@ static bool pwm_driver_backend_get(uint channel, pwm_driver_state_t *state) {
     }
 
     if (pwm_driver_is_pio_channel(channel)) {
-        return pio_pwm_generator_get(channel - PIO_PWM_CHANNEL_BASE, state);
+        return pio_gen_get(channel - PIO_PWM_CHANNEL_BASE, state);
     }
 
     return sw_pwm_driver_get(channel - SW_PWM_CHANNEL_BASE, state);
@@ -301,7 +311,7 @@ static void pwm_driver_process_mailbox(void) {
 /** @brief Core 1 main loop that owns backend initialization and mailbox processing. */
 static void pwm_driver_core_main(void) {
     hw_pwm_driver_init();
-    pio_pwm_generator_init();
+    pio_gen_init();
     sw_pwm_driver_init();
 
     pwm_ready = true;
@@ -406,6 +416,7 @@ pwm_driver_result_t pwm_driver_set_freq(uint channel, uint32_t freq_hz, uint8_t 
 bool pwm_driver_get(uint channel, pwm_driver_state_t *state) {
     uint32_t version_before;
     uint32_t version_after;
+    uint64_t pulse_ref_us;
 
     if (channel >= PWM_DRIVER_CHANNEL_COUNT || state == NULL) {
         return false;
@@ -424,8 +435,11 @@ bool pwm_driver_get(uint channel, pwm_driver_state_t *state) {
         state->freq_hz = pwm_state_cache[channel].freq_hz;
         state->duty = pwm_state_cache[channel].duty;
         state->pulse_count = pwm_state_cache[channel].pulse_count;
+        pulse_ref_us = pwm_state_cache[channel].pulse_ref_us;
         version_after = pwm_state_cache[channel].version;
     } while ((version_before != version_after) || (version_after & 1u));
+
+    state->pulse_count = pwm_driver_pio_pulse_count_now(channel, state->pulse_count, state->freq_hz, pulse_ref_us);
 
     return true;
 }

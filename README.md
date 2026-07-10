@@ -15,7 +15,7 @@ The project targets two firmware variants:
 The generator-oriented channel plan is:
 
 - **8 hardware PWM channels** on the MCU PWM slice **channel B** pins for the highest accuracy and for pin compatibility with monitoring use cases.
-- **8 PIO PWM channels** for good accuracy with flexible timing.
+- **8 PIO PWM channels** for flexible timing across the intended **1 Hz to 1 MHz** operating range.
 - **8 software PWM channels** focused on about **1 Hz to 1 kHz** operation.
 
 Each logical channel exposes frequency, duty cycle, and a read-only 32-bit pulse counter through a unified control model.
@@ -126,7 +126,7 @@ If you are documenting or preparing the monitoring build, keep the same physical
 | Backend | Target Range | Positioning |
 |---------|--------------|-------------|
 | Hardware PWM | about **10 Hz to 1 MHz** | Best accuracy and best fit for measurement-compatible channels |
-| PIO PWM | about **10 Hz to 100 kHz** | Good accuracy with flexible timing |
+| PIO PWM | about **1 Hz to 1 MHz** | Flexible timing over the intended generator range; realized frequency is quantized by PIO divider and period search |
 | Software PWM | about **1 Hz to 1 kHz** | Lowest cost backend for slower signals |
 
 ---

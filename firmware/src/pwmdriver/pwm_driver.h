@@ -40,7 +40,7 @@ typedef enum {
 typedef struct {
     uint32_t freq_hz; /**< Realized output frequency in Hz. */
     uint8_t duty; /**< Realized duty cycle in percent in the range `[0, 100]`. */
-    uint32_t pulse_count; /**< Monotonic generated-period count from power-on. */
+    uint32_t pulse_count; /**< Monotonic generated-period count from power-on; the PIO backend reports this as an estimated period count rather than a hardware-counted edge total. */
 } pwm_driver_state_t;
 
 /**

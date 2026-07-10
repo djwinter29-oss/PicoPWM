@@ -71,7 +71,7 @@ Responsibilities:
 Core 1 owns the backend implementations:
 
 - `pwmdriver/hw_pwm_driver.*`
-- `pwmdriver/pio_pwm_driver.*`
+- `pwmdriver/pio/generator.*`
 - `pwmdriver/sw_pwm_driver.*`
 
 These modules own hardware configuration, IRQ or timer paths, and backend-local state.

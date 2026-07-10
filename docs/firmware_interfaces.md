@@ -108,9 +108,9 @@ const char *control_iface_device_name(void);
 const char *control_iface_firmware_version(void);
 uint8_t control_iface_channel_count(void);
 bool control_iface_get_channel(uint channel, pwm_driver_state_t *state);
-pwm_driver_result_t control_iface_set_channel(uint channel, float freq_hz, float duty);
-pwm_driver_result_t control_iface_set_channel_freq(uint channel, float freq_hz);
-pwm_driver_result_t control_iface_set_channel_duty(uint channel, float duty);
+pwm_driver_result_t control_iface_set_channel(uint channel, uint32_t freq_hz, uint8_t duty);
+pwm_driver_result_t control_iface_set_channel_freq(uint channel, uint32_t freq_hz);
+pwm_driver_result_t control_iface_set_channel_duty(uint channel, uint8_t duty);
 pwm_driver_result_t control_iface_stop_all(void);
 ```
 
@@ -152,8 +152,8 @@ typedef enum {
 } pwm_driver_result_t;
 
 typedef struct {
-    float freq_hz;
-    float duty;
+    uint32_t freq_hz;
+    uint8_t duty;
     uint32_t pulse_count;
 } pwm_driver_state_t;
 ```
@@ -163,12 +163,12 @@ typedef struct {
 These helpers are still declared in `pwm_driver.h` and are used by `control_iface` internally:
 
 ```c
-pwm_driver_result_t control_set(uint channel, float freq_hz, float duty);
-pwm_driver_result_t control_set_freq(uint channel, float freq_hz);
-pwm_driver_result_t control_set_duty(uint channel, float duty);
+pwm_driver_result_t control_set(uint channel, uint32_t freq_hz, uint8_t duty);
+pwm_driver_result_t control_set_freq(uint channel, uint32_t freq_hz);
+pwm_driver_result_t control_set_duty(uint channel, uint8_t duty);
 bool control_get(uint channel, pwm_driver_state_t *state);
-float control_get_freq(uint channel);
-float control_get_duty(uint channel);
+uint32_t control_get_freq(uint channel);
+uint8_t control_get_duty(uint channel);
 uint32_t control_get_pulse_count(uint channel);
 bool control_is_enabled(uint channel);
 pwm_driver_result_t control_stop_all(void);
@@ -185,9 +185,14 @@ These helpers:
 ```c
 void pwm_driver_launch(void);
 bool pwm_driver_is_ready(void);
-pwm_driver_result_t pwm_driver_set_freq(uint channel, float freq_hz, float duty);
+pwm_driver_result_t pwm_driver_set_freq(uint channel, uint32_t freq_hz, uint8_t duty);
 bool pwm_driver_get(uint channel, pwm_driver_state_t *state);
 ```
+
+Notes:
+
+- `freq_hz` is now an integer-Hz API surface.
+- `duty` is now an integer percent in the range `0..100`; higher write values are clamped to `100`.
 
 Intent:
 
@@ -223,8 +228,8 @@ void system_reboot(void);
 The following headers are Core 1 implementation details and should not be used by higher command layers directly:
 
 - `pwmdriver/hw_pwm_driver.h`
+- `pwmdriver/pio/generator.h`
 - `pwmdriver/pwm_driver_internal.h`
-- `pwmdriver/pio_pwm_driver.h`
 - `pwmdriver/sw_pwm_driver.h`
 
 They own backend-local setup, timing, and publish helpers. See [detail/pwm_driver_design.md](detail/pwm_driver_design.md) for the detailed design.

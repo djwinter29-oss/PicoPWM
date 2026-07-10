@@ -26,15 +26,15 @@ bool control_iface_get_channel(uint channel, pwm_driver_state_t *state) {
     return control_get(channel, state);
 }
 
-pwm_driver_result_t control_iface_set_channel(uint channel, float freq_hz, float duty) {
+pwm_driver_result_t control_iface_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
     return control_set(channel, freq_hz, duty);
 }
 
-pwm_driver_result_t control_iface_set_channel_freq(uint channel, float freq_hz) {
+pwm_driver_result_t control_iface_set_channel_freq(uint channel, uint32_t freq_hz) {
     return control_set_freq(channel, freq_hz);
 }
 
-pwm_driver_result_t control_iface_set_channel_duty(uint channel, float duty) {
+pwm_driver_result_t control_iface_set_channel_duty(uint channel, uint8_t duty) {
     return control_set_duty(channel, duty);
 }
 

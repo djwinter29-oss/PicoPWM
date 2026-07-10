@@ -8,6 +8,8 @@
 
 #include "pico/stdlib.h"
 
+#include <stdint.h>
+
 /** @brief Logical hardware PWM channel count. */
 #define HW_PWM_COUNT 8
 /** @brief Logical PIO PWM channel count. */
@@ -36,8 +38,8 @@ typedef enum {
 
 /** @brief Realized logical state snapshot for one PWM channel. */
 typedef struct {
-    float freq_hz; /**< Realized output frequency in Hz. */
-    float duty; /**< Realized duty cycle in the normalized range `[0.0, 1.0]`. */
+    uint32_t freq_hz; /**< Realized output frequency in Hz. */
+    uint8_t duty; /**< Realized duty cycle in percent in the range `[0, 100]`. */
     uint32_t pulse_count; /**< Monotonic generated-period count from power-on. */
 } pwm_driver_state_t;
 
@@ -45,10 +47,10 @@ typedef struct {
  * @brief Apply both frequency and duty to one logical channel.
  * @param channel Logical channel index.
  * @param freq_hz Requested frequency in Hz.
- * @param duty Requested duty in the normalized range `[0.0, 1.0]`.
+ * @param duty Requested duty in percent in the range `[0, 100]`; values above `100` are clamped.
  * @return Result code from the shared PWM control plane.
  */
-pwm_driver_result_t control_set(uint channel, float freq_hz, float duty);
+pwm_driver_result_t control_set(uint channel, uint32_t freq_hz, uint8_t duty);
 
 /**
  * @brief Apply frequency while preserving the currently realized duty.
@@ -56,15 +58,15 @@ pwm_driver_result_t control_set(uint channel, float freq_hz, float duty);
  * @param freq_hz Requested frequency in Hz.
  * @return Result code from the shared PWM control plane.
  */
-pwm_driver_result_t control_set_freq(uint channel, float freq_hz);
+pwm_driver_result_t control_set_freq(uint channel, uint32_t freq_hz);
 
 /**
  * @brief Apply duty while preserving the currently realized frequency.
  * @param channel Logical channel index.
- * @param duty Requested duty in the normalized range `[0.0, 1.0]`.
+ * @param duty Requested duty in percent in the range `[0, 100]`; values above `100` are clamped.
  * @return Result code from the shared PWM control plane.
  */
-pwm_driver_result_t control_set_duty(uint channel, float duty);
+pwm_driver_result_t control_set_duty(uint channel, uint8_t duty);
 
 /**
  * @brief Read one logical channel snapshot.
@@ -77,16 +79,16 @@ bool control_get(uint channel, pwm_driver_state_t *state);
 /**
  * @brief Read the realized frequency for one logical channel.
  * @param channel Logical channel index.
- * @return Realized frequency in Hz, or `0.0f` when the channel is invalid.
+ * @return Realized frequency in Hz, or `0` when the channel is invalid.
  */
-float control_get_freq(uint channel);
+uint32_t control_get_freq(uint channel);
 
 /**
  * @brief Read the realized duty for one logical channel.
  * @param channel Logical channel index.
- * @return Realized duty in the normalized range `[0.0, 1.0]`, or `0.0f` when invalid.
+ * @return Realized duty in percent in the range `[0, 100]`, or `0` when invalid.
  */
-float control_get_duty(uint channel);
+uint8_t control_get_duty(uint channel);
 
 /**
  * @brief Read the monotonic pulse counter for one logical channel.
@@ -123,12 +125,12 @@ bool pwm_driver_is_ready(void);
  * @brief Submit one cross-core logical channel update.
  * @param channel Logical channel index.
  * @param freq_hz Requested frequency in Hz.
- * @param duty Requested duty in the normalized range `[0.0, 1.0]`.
+ * @param duty Requested duty in percent in the range `[0, 100]`; values above `100` are clamped.
  * @return Result code for the admitted command attempt.
  * @note This is a Core 0 command-ingress API. Higher command layers should normally
  *       prefer the `control_*()` helpers for full-state or read-modify-write updates.
  */
-pwm_driver_result_t pwm_driver_set_freq(uint channel, float freq_hz, float duty);
+pwm_driver_result_t pwm_driver_set_freq(uint channel, uint32_t freq_hz, uint8_t duty);
 
 /**
  * @brief Read the latest published realized state for one logical channel.

@@ -58,8 +58,8 @@ The current implementation is split as follows:
 | `firmware/src/pwmdriver/pwm_driver.h` | Public wrapper API and logical channel constants |
 | `firmware/src/pwmdriver/pwm_driver.c` | Core 1 launch, mailbox loop, channel routing, shared snapshot |
 | `firmware/src/pwmdriver/hw_pwm_driver.c` | Hardware PWM backend |
-| `firmware/src/pwmdriver/pio_pwm_driver.c` | PIO PWM backend |
-| `firmware/src/pwmdriver/pio_pwm_driver.pio` | PIO assembly program used by the PIO backend |
+| `firmware/src/pwmdriver/pio/generator.c` | PIO PWM generator backend |
+| `firmware/src/pwmdriver/pio/generator.pio` | PIO assembly program used by the PIO generator backend |
 | `firmware/src/pwmdriver/sw_pwm_driver.c` | Software PWM backend |
 
 ## External Interface
@@ -71,9 +71,9 @@ const char *control_iface_device_name(void);
 const char *control_iface_firmware_version(void);
 uint8_t control_iface_channel_count(void);
 bool control_iface_get_channel(uint channel, pwm_driver_state_t *state);
-pwm_driver_result_t control_iface_set_channel(uint channel, float freq_hz, float duty);
-pwm_driver_result_t control_iface_set_channel_freq(uint channel, float freq_hz);
-pwm_driver_result_t control_iface_set_channel_duty(uint channel, float duty);
+pwm_driver_result_t control_iface_set_channel(uint channel, uint32_t freq_hz, uint8_t duty);
+pwm_driver_result_t control_iface_set_channel_freq(uint channel, uint32_t freq_hz);
+pwm_driver_result_t control_iface_set_channel_duty(uint channel, uint8_t duty);
 pwm_driver_result_t control_iface_stop_all(void);
 ```
 
@@ -84,7 +84,7 @@ The higher layers use the following public API:
 ```c
 void pwm_driver_launch(void);
 bool pwm_driver_is_ready(void);
-pwm_driver_result_t pwm_driver_set_freq(uint channel, float freq_hz, float duty);
+pwm_driver_result_t pwm_driver_set_freq(uint channel, uint32_t freq_hz, uint8_t duty);
 bool pwm_driver_get(uint channel, pwm_driver_state_t *state);
 ```
 
@@ -92,8 +92,8 @@ The shared state type is:
 
 ```c
 typedef struct {
-    float freq_hz;
-    float duty;
+    uint32_t freq_hz;
+    uint8_t duty;
     uint32_t pulse_count;
 } pwm_driver_state_t;
 ```
@@ -110,7 +110,7 @@ Architecturally, `pwm_driver_set_freq()` is a command-ingress API.
 - Public write callers first pass through the shared Core 0 serialization lock before they compete for mailbox admission.
 - Core 0 waits for Core 1 to finish the backend apply step before returning.
 - The wrapper returns `PWM_DRIVER_RESULT_BUSY` if the caller reaches the mailbox while another write is already pending or in progress.
-- The wrapper returns `PWM_DRIVER_RESULT_INVALID` for invalid channel or non-finite input.
+- The wrapper returns `PWM_DRIVER_RESULT_INVALID` for invalid channel or unsupported frequency requests.
 - The wrapper returns `PWM_DRIVER_RESULT_UNAVAILABLE` if Core 1 is not ready yet.
 - The wrapper returns `PWM_DRIVER_RESULT_TIMEOUT` if Core 1 does not publish a reply before the apply timeout. This timeout does not cancel the admitted command, so the final hardware outcome is unknown until the caller reads back state.
 - The wrapper returns `PWM_DRIVER_RESULT_APPLY_FAILED` if Core 1 accepts the command but the backend rejects it.
@@ -174,7 +174,7 @@ This layer is the architectural boundary between the shared Core 0 control plane
 Owned by:
 
 - `hw_pwm_driver.c`
-- `pio_pwm_driver.c`
+- `pio/generator.c`
 - `sw_pwm_driver.c`
 
 Responsibilities:
@@ -276,7 +276,7 @@ sequenceDiagram
     participant WR as pwm_driver.c
     participant C1 as Core 1
     participant HW as hw_pwm_driver
-    participant PIO as pio_pwm_driver
+    participant PIO as pio_pwm_generator
     participant SW as sw_pwm_driver
 
     C0->>WR: pwm_driver_launch()
@@ -284,7 +284,7 @@ sequenceDiagram
     WR->>WR: init snapshot defaults
     WR->>C1: multicore_launch_core1(core_main)
     C1->>HW: hw_pwm_driver_init()
-    C1->>PIO: pio_pwm_driver_init()
+    C1->>PIO: pio_pwm_generator_init()
     C1->>SW: sw_pwm_driver_init()
     C1->>WR: pwm_ready = true
     C1->>C1: mailbox loop + __wfe()

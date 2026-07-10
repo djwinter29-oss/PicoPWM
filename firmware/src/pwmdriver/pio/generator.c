@@ -1,18 +1,18 @@
 /**
- * @file pio_pwm_driver.c
- * @brief PIO PWM backend implementation for the logical `pwmdriver` layer.
+ * @file generator.c
+ * @brief PIO PWM generator backend implementation for the logical `pwmdriver` layer.
  */
 
-#include "pio_pwm_driver.h"
+#include "generator.h"
 
-#include "pwm_driver.h"
-#include "pwm_driver_internal.h"
+#include "../pwm_driver.h"
+#include "../pwm_driver_internal.h"
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
 #include "hardware/irq.h"
 #include "hardware/pio.h"
 
-#include "pio_pwm_driver.pio.h"
+#include "generator.pio.h"
 
 /** @brief Realized PIO PWM frequencies in backend-local channel order. */
 static float requested_freqs[PIO_PWM_DRIVER_COUNT] = {0};
@@ -55,7 +55,7 @@ static uint sm_for_channel(uint channel) {
 }
 
 /** @brief Shared IRQ worker that advances pulse counters for one PIO block. */
-static void pio_pwm_driver_irq_handler(PIO pio) {
+static void pio_pwm_generator_irq_handler(PIO pio) {
     uint pio_id = pio_index(pio);
 
     for (uint channel = 0; channel < PIO_PWM_DRIVER_COUNT; channel++) {
@@ -73,13 +73,13 @@ static void pio_pwm_driver_irq_handler(PIO pio) {
 }
 
 /** @brief IRQ wrapper for `pio0`. */
-static void pio0_pwm_driver_irq_handler(void) {
-    pio_pwm_driver_irq_handler(pio0);
+static void pio0_pwm_generator_irq_handler(void) {
+    pio_pwm_generator_irq_handler(pio0);
 }
 
 /** @brief IRQ wrapper for `pio1`. */
-static void pio1_pwm_driver_irq_handler(void) {
-    pio_pwm_driver_irq_handler(pio1);
+static void pio1_pwm_generator_irq_handler(void) {
+    pio_pwm_generator_irq_handler(pio1);
 }
 
 /**
@@ -88,7 +88,7 @@ static void pio1_pwm_driver_irq_handler(void) {
  * @param sm Owning state machine index.
  * @param period_count Backend loop count representing one PWM period.
  */
-static void pio_pwm_driver_set_period(PIO pio, uint sm, uint32_t period_count) {
+static void pio_pwm_generator_set_period(PIO pio, uint sm, uint32_t period_count) {
     pio_sm_set_enabled(pio, sm, false);
     pio_sm_clear_fifos(pio, sm);
     pio_sm_restart(pio, sm);
@@ -103,7 +103,7 @@ static void pio_pwm_driver_set_period(PIO pio, uint sm, uint32_t period_count) {
  * @param sm Owning state machine index.
  * @param level Backend level count representing the active duty window.
  */
-static void pio_pwm_driver_set_level(PIO pio, uint sm, uint32_t level) {
+static void pio_pwm_generator_set_level(PIO pio, uint sm, uint32_t level) {
     pio_sm_put_blocking(pio, sm, level);
 }
 
@@ -115,7 +115,7 @@ static void pio_pwm_driver_set_level(PIO pio, uint sm, uint32_t level) {
  * @param actual_freq_out Caller-owned destination for the realized frequency.
  * @return `true` when a valid timing configuration was found.
  */
-static bool pio_pwm_driver_find_timing(float freq_hz, uint32_t *period_count_out, float *clkdiv_out, float *actual_freq_out) {
+static bool pio_pwm_generator_find_timing(float freq_hz, uint32_t *period_count_out, float *clkdiv_out, float *actual_freq_out) {
     const float sys_clk_hz = (float)clock_get_hz(clk_sys);
     const float max_clkdiv = 65535.0f + 255.0f / 256.0f;
 
@@ -160,7 +160,7 @@ static bool pio_pwm_driver_find_timing(float freq_hz, uint32_t *period_count_out
 }
 
 /** @brief Disable one PIO PWM backend channel and drive its output low. */
-static void pio_pwm_driver_disable_channel(uint channel) {
+static void pio_pwm_generator_disable_channel(uint channel) {
     PIO pio = pio_pwm_channels[channel].pio;
     uint sm = pio_pwm_channels[channel].sm;
     uint pin = PWM_PIO_GPIO_PINS[channel];
@@ -180,7 +180,7 @@ static void pio_pwm_driver_disable_channel(uint channel) {
  * @param clkdiv Quantized PIO clock divider.
  * @param duty Requested duty in the normalized range `[0.0, 1.0]`.
  */
-static void pio_pwm_driver_enable_channel(uint channel, uint32_t period_count, float clkdiv, float duty) {
+static void pio_pwm_generator_enable_channel(uint channel, uint32_t period_count, float clkdiv, float duty) {
     PIO pio = pio_pwm_channels[channel].pio;
     uint sm = pio_pwm_channels[channel].sm;
     uint pin = PWM_PIO_GPIO_PINS[channel];
@@ -191,27 +191,27 @@ static void pio_pwm_driver_enable_channel(uint channel, uint32_t period_count, f
         level = period_count + 1u;
     }
 
-    pio_pwm_driver_program_init(pio, sm, offset, pin);
+    generator_program_init(pio, sm, offset, pin);
     pio_sm_set_clkdiv(pio, sm, clkdiv);
-    pio_pwm_driver_set_period(pio, sm, period_count);
-    pio_pwm_driver_set_level(pio, sm, level);
+    pio_pwm_generator_set_period(pio, sm, period_count);
+    pio_pwm_generator_set_level(pio, sm, level);
     pio_interrupt_clear(pio, sm);
     pio_sm_set_enabled(pio, sm, true);
 }
 
-/** @copydoc pio_pwm_driver_init */
-void pio_pwm_driver_init(void) {
+/** @copydoc pio_pwm_generator_init */
+void pio_pwm_generator_init(void) {
     for (uint pio_id = 0; pio_id < 2; pio_id++) {
         PIO pio = pio_id == 0 ? pio0 : pio1;
         if (!pio_program_loaded[pio_id]) {
-            pio_program_offsets[pio_id] = pio_add_program(pio, &pio_pwm_driver_program);
+            pio_program_offsets[pio_id] = pio_add_program(pio, &generator_program);
             pio_program_loaded[pio_id] = true;
         }
     }
 
-    irq_set_exclusive_handler(PIO0_IRQ_0, pio0_pwm_driver_irq_handler);
+    irq_set_exclusive_handler(PIO0_IRQ_0, pio0_pwm_generator_irq_handler);
     irq_set_enabled(PIO0_IRQ_0, true);
-    irq_set_exclusive_handler(PIO1_IRQ_0, pio1_pwm_driver_irq_handler);
+    irq_set_exclusive_handler(PIO1_IRQ_0, pio1_pwm_generator_irq_handler);
     irq_set_enabled(PIO1_IRQ_0, true);
 
     for (int i = 0; i < PIO_PWM_DRIVER_COUNT; i++) {
@@ -238,8 +238,8 @@ void pio_pwm_driver_init(void) {
     }
 }
 
-/** @copydoc pio_pwm_driver_set_freq */
-bool pio_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
+/** @copydoc pio_pwm_generator_set_freq */
+bool pio_pwm_generator_set_freq(uint channel, float freq_hz, float duty) {
     pwm_driver_state_t state;
 
     if (channel >= PIO_PWM_DRIVER_COUNT) return false;
@@ -250,12 +250,12 @@ bool pio_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
     duties[channel] = duty;
 
     if (freq_hz <= 0.0f) {
-        pio_pwm_driver_disable_channel(channel);
+        pio_pwm_generator_disable_channel(channel);
         requested_freqs[channel] = 0.0f;
         enabled[channel] = false;
         pio_pwm_channels[channel].period_count = 0;
-        state.freq_hz = requested_freqs[channel];
-        state.duty = duties[channel];
+        state.freq_hz = pwm_driver_freq_hz_from_float(requested_freqs[channel]);
+        state.duty = pwm_driver_duty_percent_from_float(duties[channel]);
         state.pulse_count = pulse_counts[channel];
         pwm_driver_store_applied_state(PIO_PWM_CHANNEL_BASE + channel, &state);
         return true;
@@ -264,28 +264,28 @@ bool pio_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
     uint32_t period_count = 0;
     float clkdiv = 1.0f;
     float actual_freq = 0.0f;
-    if (!pio_pwm_driver_find_timing(freq_hz, &period_count, &clkdiv, &actual_freq)) {
+    if (!pio_pwm_generator_find_timing(freq_hz, &period_count, &clkdiv, &actual_freq)) {
         return false;
     }
 
-    pio_pwm_driver_enable_channel(channel, period_count, clkdiv, duty);
+    pio_pwm_generator_enable_channel(channel, period_count, clkdiv, duty);
 
     requested_freqs[channel] = actual_freq;
     enabled[channel] = true;
     pio_pwm_channels[channel].period_count = period_count;
     pio_pwm_channels[channel].clkdiv = clkdiv;
-    state.freq_hz = requested_freqs[channel];
-    state.duty = duties[channel];
+    state.freq_hz = pwm_driver_freq_hz_from_float(requested_freqs[channel]);
+    state.duty = pwm_driver_duty_percent_from_float(duties[channel]);
     state.pulse_count = pulse_counts[channel];
     pwm_driver_store_applied_state(PIO_PWM_CHANNEL_BASE + channel, &state);
     return true;
 }
 
-/** @copydoc pio_pwm_driver_get */
-bool pio_pwm_driver_get(uint channel, pwm_driver_state_t *state) {
+/** @copydoc pio_pwm_generator_get */
+bool pio_pwm_generator_get(uint channel, pwm_driver_state_t *state) {
     if (channel >= PIO_PWM_DRIVER_COUNT || state == NULL) return false;
-    state->freq_hz = requested_freqs[channel];
-    state->duty = duties[channel];
+    state->freq_hz = pwm_driver_freq_hz_from_float(requested_freqs[channel]);
+    state->duty = pwm_driver_duty_percent_from_float(duties[channel]);
     state->pulse_count = pulse_counts[channel];
     return true;
 }

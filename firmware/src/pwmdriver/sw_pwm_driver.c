@@ -103,8 +103,8 @@ bool sw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
         gpio_put(ch->gpio, 0);
         actual_freqs[channel] = 0.0f;
         enabled[channel] = false;
-        state.freq_hz = actual_freqs[channel];
-        state.duty = duties[channel];
+        state.freq_hz = pwm_driver_freq_hz_from_float(actual_freqs[channel]);
+        state.duty = pwm_driver_duty_percent_from_float(duties[channel]);
         state.pulse_count = ch->pulse_count;
         pwm_driver_store_applied_state(SW_PWM_CHANNEL_BASE + channel, &state);
         return true;
@@ -128,8 +128,8 @@ bool sw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
 
     actual_freqs[channel] = SW_PWM_BASE_HZ / (float)period;
     enabled[channel] = true;
-    state.freq_hz = actual_freqs[channel];
-    state.duty = duties[channel];
+    state.freq_hz = pwm_driver_freq_hz_from_float(actual_freqs[channel]);
+    state.duty = pwm_driver_duty_percent_from_float(duties[channel]);
     state.pulse_count = ch->pulse_count;
     pwm_driver_store_applied_state(SW_PWM_CHANNEL_BASE + channel, &state);
 
@@ -139,8 +139,8 @@ bool sw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
 /** @copydoc sw_pwm_driver_get */
 bool sw_pwm_driver_get(uint channel, pwm_driver_state_t *state) {
     if (channel >= SW_PWM_COUNT || state == NULL) return false;
-    state->freq_hz = actual_freqs[channel];
-    state->duty = duties[channel];
+    state->freq_hz = pwm_driver_freq_hz_from_float(actual_freqs[channel]);
+    state->duty = pwm_driver_duty_percent_from_float(duties[channel]);
     state->pulse_count = sw_pwm_channels[channel].pulse_count;
     return true;
 }

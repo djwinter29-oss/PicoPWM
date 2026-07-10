@@ -11,6 +11,7 @@
 #include "pwmdriver/pwm_driver.h"
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -91,25 +92,56 @@ static bool device_cli_parse_int(const char *text, int *value_out) {
 }
 
 /**
- * @brief Parse a decimal float value.
+ * @brief Parse a decimal unsigned 32-bit value.
  * @param text Null-terminated decimal input.
  * @param value_out Caller-owned destination.
  * @return `true` when parsing succeeded.
  */
-static bool device_cli_parse_float(const char *text, float *value_out) {
+static bool device_cli_parse_u32(const char *text, uint32_t *value_out) {
     char *end = NULL;
-    float parsed;
+    unsigned long parsed;
 
     if ((text == NULL) || (value_out == NULL) || (text[0] == '\0')) {
         return false;
     }
 
-    parsed = strtof(text, &end);
+    parsed = strtoul(text, &end, 10);
     if ((end == text) || (end == NULL) || (*end != '\0')) {
         return false;
     }
 
-    *value_out = parsed;
+    if (parsed > UINT32_MAX) {
+        return false;
+    }
+
+    *value_out = (uint32_t)parsed;
+    return true;
+}
+
+/**
+ * @brief Parse a decimal duty percentage.
+ * @param text Null-terminated decimal input.
+ * @param value_out Caller-owned destination.
+ * @return `true` when parsing succeeded.
+ */
+static bool device_cli_parse_u8(const char *text, uint8_t *value_out) {
+    char *end = NULL;
+    unsigned long parsed;
+
+    if ((text == NULL) || (value_out == NULL) || (text[0] == '\0')) {
+        return false;
+    }
+
+    parsed = strtoul(text, &end, 10);
+    if ((end == text) || (end == NULL) || (*end != '\0')) {
+        return false;
+    }
+
+    if (parsed > UINT8_MAX) {
+        return false;
+    }
+
+    *value_out = (uint8_t)parsed;
     return true;
 }
 
@@ -121,12 +153,12 @@ static bool device_cli_write_status_row(int channel, const pwm_driver_state_t *s
 
     snprintf(line,
              sizeof(line),
-             "%-2d  %-4s  %-3s  %9.3f  %6.1f  %lu",
+             "%-2d  %-4s  %-3s  %9lu  %6u  %lu",
              channel,
              type,
-             state->freq_hz > 0.0f ? "ON" : "OFF",
-             state->freq_hz,
-             state->duty * 100.0f,
+             state->freq_hz > 0u ? "ON" : "OFF",
+             (unsigned long)state->freq_hz,
+             (unsigned)state->duty,
              (unsigned long)state->pulse_count);
     return cli_shell_write_line(line);
 }
@@ -174,7 +206,7 @@ static bool device_cli_version(int argc, const char *const *argv) {
 }
 
 static bool device_cli_get(int argc, const char *const *argv) {
-    pwm_driver_state_t state = {0.0f, 0.5f, 0u};
+    pwm_driver_state_t state = {0u, 50u, 0u};
     char line[96];
     int ch;
 
@@ -190,23 +222,23 @@ static bool device_cli_get(int argc, const char *const *argv) {
     control_iface_get_channel((uint)ch, &state);
     snprintf(line,
              sizeof(line),
-             "CH%d: freq=%.3f Hz, duty=%.1f%%, pulses=%lu, enabled=%s",
+             "CH%d: freq=%lu Hz, duty=%u%%, pulses=%lu, enabled=%s",
              ch,
-             state.freq_hz,
-             state.duty * 100.0f,
+             (unsigned long)state.freq_hz,
+             (unsigned)state.duty,
              (unsigned long)state.pulse_count,
-             state.freq_hz > 0.0f ? "yes" : "no");
+             state.freq_hz > 0u ? "yes" : "no");
     return cli_shell_write_line(line);
 }
 
 static bool device_cli_set(int argc, const char *const *argv) {
     char line[64];
     int ch;
-    float freq;
-    float duty = 50.0f;
+    uint32_t freq;
+    uint8_t duty = 50u;
     pwm_driver_result_t result;
 
-    if (((argc != 3) && (argc != 4)) || !device_cli_parse_int(argv[1], &ch) || !device_cli_parse_float(argv[2], &freq)) {
+    if (((argc != 3) && (argc != 4)) || !device_cli_parse_int(argv[1], &ch) || !device_cli_parse_u32(argv[2], &freq)) {
         return cli_shell_write_line("ERR usage: set <ch> <freq> [duty%]");
     }
 
@@ -215,13 +247,13 @@ static bool device_cli_set(int argc, const char *const *argv) {
         return cli_shell_write_line(line);
     }
 
-    if ((argc == 4) && !device_cli_parse_float(argv[3], &duty)) {
+    if ((argc == 4) && !device_cli_parse_u8(argv[3], &duty)) {
         return cli_shell_write_line("ERR usage: set <ch> <freq> [duty%]");
     }
 
-    result = control_iface_set_channel((uint)ch, freq, duty / 100.0f);
+    result = control_iface_set_channel((uint)ch, freq, duty);
     if (result == PWM_DRIVER_RESULT_OK) {
-        snprintf(line, sizeof(line), "OK CH%d freq=%.3f Hz duty=%.1f%%", ch, freq, duty);
+        snprintf(line, sizeof(line), "OK CH%d freq=%lu Hz duty=%u%%", ch, (unsigned long)freq, (unsigned)duty);
     } else {
         snprintf(line, sizeof(line), "ERR CH%d set %s", ch, device_cli_result_text(result));
     }
@@ -288,7 +320,7 @@ static bool device_cli_status(int argc, const char *const *argv) {
     cli_shell_write_line("=== All PWM channels (logical 0..23) ===");
     cli_shell_write_line("Ch  Type  State  Freq(Hz)   Duty(%)   Pulses");
     for (int channel = 0; channel < PWM_DRIVER_CHANNEL_COUNT; ++channel) {
-        state = (pwm_driver_state_t){0.0f, 0.5f, 0u};
+        state = (pwm_driver_state_t){0u, 50u, 0u};
         control_iface_get_channel((uint)channel, &state);
         device_cli_write_status_row(channel, &state);
     }

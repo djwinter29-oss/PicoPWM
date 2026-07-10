@@ -7,7 +7,7 @@
 #include "pwm_driver_internal.h"
 
 #include "hw_pwm_driver.h"
-#include "pio_pwm_driver.h"
+#include "pio/generator.h"
 #include "sw_pwm_driver.h"
 
 #include "hardware/clocks.h"
@@ -44,8 +44,8 @@ static volatile bool pwm_ready = false;
 /** @brief One in-flight cross-core mailbox command record. */
 typedef struct {
     uint8_t channel; /**< Logical channel index carried across the mailbox. */
-    float freq_hz; /**< Requested frequency in Hz. */
-    float duty; /**< Requested duty in the normalized range `[0.0, 1.0]`. */
+    uint32_t freq_hz; /**< Requested frequency in Hz. */
+    uint8_t duty; /**< Requested duty in percent in the range `[0, 100]`. */
 } pwm_driver_cmd_t;
 
 /** @brief Reply record published by Core 1 after one mailbox apply attempt. */
@@ -56,8 +56,8 @@ typedef struct {
 /** @brief Shared realized-state snapshot record for one logical channel. */
 typedef struct {
     volatile uint32_t version; /**< Even/odd version counter used for lock-free snapshot reads. */
-    volatile float freq_hz; /**< Realized frequency in Hz. */
-    volatile float duty; /**< Realized duty in the normalized range `[0.0, 1.0]`. */
+    volatile uint32_t freq_hz; /**< Realized frequency in Hz. */
+    volatile uint8_t duty; /**< Realized duty in percent in the range `[0, 100]`. */
     volatile uint32_t pulse_count; /**< Monotonic generated-period count from power-on. */
 } pwm_driver_shared_state_t;
 
@@ -97,10 +97,10 @@ static bool pwm_driver_is_sw_channel(uint channel) {
  * @brief Submit one cross-core apply request while the public write lock is already held.
  * @param channel Logical channel index.
  * @param freq_hz Requested frequency in Hz.
- * @param duty Requested duty in the normalized range `[0.0, 1.0]`.
+ * @param duty Requested duty in percent in the range `[0, 100]`.
  * @return Result code for the admitted command attempt.
  */
-static pwm_driver_result_t pwm_driver_set_freq_locked(uint channel, float freq_hz, float duty);
+static pwm_driver_result_t pwm_driver_set_freq_locked(uint channel, uint32_t freq_hz, uint8_t duty);
 
 /**
  * @brief Read one logical channel snapshot or return the shared default state when invalid.
@@ -109,8 +109,8 @@ static pwm_driver_result_t pwm_driver_set_freq_locked(uint channel, float freq_h
  */
 static pwm_driver_state_t control_get_state_or_default(uint channel) {
     pwm_driver_state_t state = {
-        .freq_hz = 0.0f,
-        .duty = 0.5f,
+        .freq_hz = 0u,
+        .duty = 50u,
         .pulse_count = 0,
     };
 
@@ -128,48 +128,38 @@ static pwm_driver_state_t control_get_state_or_default(uint channel) {
  * @param freq_hz Requested frequency in Hz.
  * @return `true` when the request falls within the supported range for the channel backend.
  */
-static bool freq_supported_for_channel(uint channel, float freq_hz) {
-    if (!isfinite(freq_hz)) {
-        return false;
-    }
-
-    if (freq_hz < 0.0f) {
-        return false;
-    }
-
-    if (freq_hz == 0.0f) {
+static bool freq_supported_for_channel(uint channel, uint32_t freq_hz) {
+    if (freq_hz == 0u) {
         return true;
     }
+
+    float requested_hz = (float)freq_hz;
 
     if (channel < PIO_PWM_CHANNEL_BASE) {
         const float sys_clk = (float)clock_get_hz(clk_sys);
         const float min_hw = sys_clk / ((255.0f + 15.0f / 16.0f) * 65536.0f);
         const float max_hw = sys_clk / 2.0f;
-        return freq_hz >= min_hw && freq_hz <= max_hw;
+        return requested_hz >= min_hw && requested_hz <= max_hw;
     }
 
     if (channel < SW_PWM_CHANNEL_BASE) {
-        return freq_hz <= 100000.0f;
+        return requested_hz <= 100000.0f;
     }
 
-    return freq_hz <= 1000.0f;
+    return requested_hz <= 1000.0f;
 }
 
 /**
  * @brief Shared logical channel write helper used while the public write lock is already held.
  * @param channel Logical channel index.
  * @param freq_hz Requested frequency in Hz.
- * @param duty Requested duty in the normalized range `[0.0, 1.0]`.
+ * @param duty Requested duty in percent in the range `[0, 100]`.
  * @return Result code from the cross-core apply path.
  */
-static pwm_driver_result_t control_set_unlocked(uint channel, float freq_hz, float duty) {
+static pwm_driver_result_t control_set_unlocked(uint channel, uint32_t freq_hz, uint8_t duty) {
     if (channel >= PWM_DRIVER_CHANNEL_COUNT) return PWM_DRIVER_RESULT_INVALID;
     if (!freq_supported_for_channel(channel, freq_hz)) return PWM_DRIVER_RESULT_INVALID;
-    if (!isfinite(duty)) return PWM_DRIVER_RESULT_INVALID;
-
-    if (freq_hz < 0.0f) freq_hz = 0.0f;
-    if (duty < 0.0f) duty = 0.0f;
-    if (duty > 1.0f) duty = 1.0f;
+    if (duty > 100u) duty = 100u;
 
     return pwm_driver_set_freq_locked(channel, freq_hz, duty);
 }
@@ -232,7 +222,7 @@ static bool pwm_driver_backend_set_freq(uint channel, float freq_hz, float duty)
     }
 
     if (pwm_driver_is_pio_channel(channel)) {
-        return pio_pwm_driver_set_freq(channel - PIO_PWM_CHANNEL_BASE, freq_hz, duty);
+        return pio_pwm_generator_set_freq(channel - PIO_PWM_CHANNEL_BASE, freq_hz, duty);
     }
 
     return sw_pwm_driver_set_freq(channel - SW_PWM_CHANNEL_BASE, freq_hz, duty);
@@ -254,7 +244,7 @@ static bool pwm_driver_backend_get(uint channel, pwm_driver_state_t *state) {
     }
 
     if (pwm_driver_is_pio_channel(channel)) {
-        return pio_pwm_driver_get(channel - PIO_PWM_CHANNEL_BASE, state);
+        return pio_pwm_generator_get(channel - PIO_PWM_CHANNEL_BASE, state);
     }
 
     return sw_pwm_driver_get(channel - SW_PWM_CHANNEL_BASE, state);
@@ -264,8 +254,8 @@ static bool pwm_driver_backend_get(uint channel, pwm_driver_state_t *state) {
 static void pwm_driver_cache_defaults(void) {
     for (uint channel = 0; channel < PWM_DRIVER_CHANNEL_COUNT; channel++) {
         pwm_driver_state_t state = {
-            .freq_hz = 0.0f,
-            .duty = 0.5f,
+            .freq_hz = 0u,
+            .duty = 50u,
             .pulse_count = 0,
         };
 
@@ -293,7 +283,11 @@ static void pwm_driver_process_mailbox(void) {
             break;
         }
 
-        bool ok = pwm_driver_backend_set_freq(cmd.channel, cmd.freq_hz, cmd.duty);
+        bool ok = pwm_driver_backend_set_freq(
+            cmd.channel,
+            (float)cmd.freq_hz,
+            pwm_driver_duty_ratio_from_percent(cmd.duty)
+        );
 
         critical_section_enter_blocking(&pwm_reply_lock);
         pwm_last_reply.ok = ok;
@@ -307,7 +301,7 @@ static void pwm_driver_process_mailbox(void) {
 /** @brief Core 1 main loop that owns backend initialization and mailbox processing. */
 static void pwm_driver_core_main(void) {
     hw_pwm_driver_init();
-    pio_pwm_driver_init();
+    pio_pwm_generator_init();
     sw_pwm_driver_init();
 
     pwm_ready = true;
@@ -338,11 +332,11 @@ bool pwm_driver_is_ready(void) {
 }
 
 /** @copydoc pwm_driver_set_freq_locked */
-pwm_driver_result_t pwm_driver_set_freq_locked(uint channel, float freq_hz, float duty) {
+pwm_driver_result_t pwm_driver_set_freq_locked(uint channel, uint32_t freq_hz, uint8_t duty) {
     absolute_time_t deadline;
     pwm_driver_reply_t reply;
 
-    if (channel >= PWM_DRIVER_CHANNEL_COUNT || !isfinite(freq_hz) || !isfinite(duty)) {
+    if (channel >= PWM_DRIVER_CHANNEL_COUNT) {
         return PWM_DRIVER_RESULT_INVALID;
     }
 
@@ -354,11 +348,8 @@ pwm_driver_result_t pwm_driver_set_freq_locked(uint channel, float freq_hz, floa
         return PWM_DRIVER_RESULT_UNAVAILABLE;
     }
 
-    if (duty < 0.0f) {
-        duty = 0.0f;
-    }
-    if (duty > 1.0f) {
-        duty = 1.0f;
+    if (duty > 100u) {
+        duty = 100u;
     }
 
     pwm_driver_cmd_t cmd = {
@@ -401,7 +392,7 @@ pwm_driver_result_t pwm_driver_set_freq_locked(uint channel, float freq_hz, floa
 }
 
 /** @copydoc pwm_driver_set_freq */
-pwm_driver_result_t pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
+pwm_driver_result_t pwm_driver_set_freq(uint channel, uint32_t freq_hz, uint8_t duty) {
     pwm_driver_result_t result;
 
     mutex_enter_blocking(&control_api_lock);
@@ -440,7 +431,7 @@ bool pwm_driver_get(uint channel, pwm_driver_state_t *state) {
 }
 
 /** @copydoc control_set */
-pwm_driver_result_t control_set(uint channel, float freq_hz, float duty) {
+pwm_driver_result_t control_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     pwm_driver_result_t result;
 
     mutex_enter_blocking(&control_api_lock);
@@ -451,7 +442,7 @@ pwm_driver_result_t control_set(uint channel, float freq_hz, float duty) {
 }
 
 /** @copydoc control_set_freq */
-pwm_driver_result_t control_set_freq(uint channel, float freq_hz) {
+pwm_driver_result_t control_set_freq(uint channel, uint32_t freq_hz) {
     pwm_driver_result_t result;
     pwm_driver_state_t state;
 
@@ -464,7 +455,7 @@ pwm_driver_result_t control_set_freq(uint channel, float freq_hz) {
 }
 
 /** @copydoc control_set_duty */
-pwm_driver_result_t control_set_duty(uint channel, float duty) {
+pwm_driver_result_t control_set_duty(uint channel, uint8_t duty) {
     pwm_driver_result_t result;
     pwm_driver_state_t state;
 
@@ -486,12 +477,12 @@ bool control_get(uint channel, pwm_driver_state_t *state) {
 }
 
 /** @copydoc control_get_freq */
-float control_get_freq(uint channel) {
+uint32_t control_get_freq(uint channel) {
     return control_get_state_or_default(channel).freq_hz;
 }
 
 /** @copydoc control_get_duty */
-float control_get_duty(uint channel) {
+uint8_t control_get_duty(uint channel) {
     return control_get_state_or_default(channel).duty;
 }
 
@@ -507,7 +498,7 @@ uint32_t control_get_pulse_count(uint channel) {
 
 /** @copydoc control_is_enabled */
 bool control_is_enabled(uint channel) {
-    return control_get_state_or_default(channel).freq_hz > 0.0f;
+    return control_get_state_or_default(channel).freq_hz > 0u;
 }
 
 /** @copydoc control_stop_all */
@@ -516,7 +507,7 @@ pwm_driver_result_t control_stop_all(void) {
 
     mutex_enter_blocking(&control_api_lock);
     for (int i = 0; i < PWM_DRIVER_CHANNEL_COUNT; i++) {
-        status = control_set_unlocked(i, 0.0f, 0.5f);
+        status = control_set_unlocked(i, 0u, 50u);
         if (status != PWM_DRIVER_RESULT_OK) {
             mutex_exit(&control_api_lock);
             return status;

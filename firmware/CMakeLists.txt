@@ -15,7 +15,7 @@ add_executable(pico_pwm
     src/pwmdriver/pwm_driver.c
     src/pwmdriver/hw_pwm_driver.c
     src/pwmdriver/sw_pwm_driver.c
-    src/pwmdriver/pio_pwm_driver.c
+    src/pwmdriver/pio/generator.c
     src/cli/cli_shell.c
     src/cli/device_cli.c
     src/i2c/i2c_control_map.c
@@ -25,7 +25,7 @@ add_executable(pico_pwm
 )
 
 pico_generate_pio_header(pico_pwm
-    ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/pio_pwm_driver.pio
+    ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/pio/generator.pio
 )
 
 target_link_libraries(pico_pwm

@@ -42,14 +42,14 @@ For the hardware bank, the intended external pin mapping uses PWM slice **channe
 
 ```text
 > get 0
-CH 0: freq=1000.00 Hz, duty=50.00%, pulses=1234
+CH 0: freq=1000 Hz, duty=50%, pulses=1234
 
 > set 0 2000
-OK CH0 freq=2000.000 Hz duty=50.0%
+OK CH0 freq=2000 Hz duty=50%
 
 > status
-CH 0: freq=2000.00 Hz, duty=50.00%, pulses=42
-CH 1: freq=0.00 Hz, duty=50.00%, pulses=0
+CH 0: freq=2000 Hz, duty=50%, pulses=42
+CH 1: freq=0 Hz, duty=50%, pulses=0
 ...
 
 > info
@@ -90,44 +90,44 @@ Read commands are answered from the realized channel snapshot published by the P
 | `REG_INFO` | `0x00` | 1 | variable | Device type string, e.g. `PicoPWM` |
 | `REG_VERSION` | `0x01` | 1 | variable | Version string, e.g. `1.0.0` |
 | `REG_CHANNELS` | `0x02` | 1 | 1 | Channel count (24) |
-| `REG_GET_CH0`..`REG_GET_CH23` | `0x10`..`0x27` | 1 | 12 | Read one channel's realized properties |
-| `REG_SET_CH0`..`REG_SET_CH23` | `0x30`..`0x47` | 9 | 1 | Write one channel's frequency and duty, read back last status |
+| `REG_GET_CH0`..`REG_GET_CH23` | `0x10`..`0x27` | 1 | 9 | Read one channel's realized properties |
+| `REG_SET_CH0`..`REG_SET_CH23` | `0x30`..`0x47` | 6 | 1 | Write one channel's frequency and duty, read back last status |
 | `REG_SET_FREQ_CH0`..`REG_SET_FREQ_CH23` | `0x50`..`0x67` | 5 | 1 | Write one channel's frequency, read back last status |
-| `REG_SET_DUTY_CH0`..`REG_SET_DUTY_CH23` | `0x70`..`0x87` | 5 | 1 | Write one channel's duty, read back last status |
+| `REG_SET_DUTY_CH0`..`REG_SET_DUTY_CH23` | `0x70`..`0x87` | 2 | 1 | Write one channel's duty, read back last status |
 | `REG_STOP_ALL` | `0x90` | 1 | 1 | Stop all channels and read back last status |
 | `REG_LED` | `0x91` | 2 | 1 | Set board LED state (`0` = off, `1` = on) and read back last status |
 | `REG_REBOOT` | `0x92` | 1 | 1 | Request board reboot and read back last status |
 
 ### Channel Property Layout
 
-For `0x10 .. 0x27` (12 bytes, little-endian):
+For `0x10 .. 0x27` (9 bytes, little-endian):
 
 | Byte | Size | Field | Type |
 |------|------|-------|------|
-| 0-3 | 4 | `freq` | `float32` (Hz) |
-| 4-7 | 4 | `duty` | `float32` (0.0..1.0) |
-| 8-11 | 4 | `pulse_count` | `uint32_t` |
+| 0-3 | 4 | `freq` | `uint32_t` (Hz) |
+| 4 | 1 | `duty` | `uint8_t` (0..100) |
+| 5-8 | 4 | `pulse_count` | `uint32_t` |
 
 ### Write Payload Layouts
 
-For `0x30 .. 0x47` (8 payload bytes after the register byte, little-endian):
+For `0x30 .. 0x47` (5 payload bytes after the register byte, little-endian):
 
 | Byte | Size | Field | Type |
 |------|------|-------|------|
-| 0-3 | 4 | `freq` | `float32` (Hz) |
-| 4-7 | 4 | `duty` | `float32` (0.0..1.0) |
+| 0-3 | 4 | `freq` | `uint32_t` (Hz) |
+| 4 | 1 | `duty` | `uint8_t` (0..100, values above 100 are clamped) |
 
 For `0x50 .. 0x67` (4 payload bytes after the register byte, little-endian):
 
 | Byte | Size | Field | Type |
 |------|------|-------|------|
-| 0-3 | 4 | `freq` | `float32` (Hz) |
+| 0-3 | 4 | `freq` | `uint32_t` (Hz) |
 
-For `0x70 .. 0x87` (4 payload bytes after the register byte, little-endian):
+For `0x70 .. 0x87` (1 payload byte after the register byte):
 
 | Byte | Size | Field | Type |
 |------|------|-------|------|
-| 0-3 | 4 | `duty` | `float32` (0.0..1.0) |
+| 0 | 1 | `duty` | `uint8_t` (0..100, values above 100 are clamped) |
 
 For `0x91` (1 payload byte after the register byte):
 
@@ -161,7 +161,7 @@ Master read:  "PicoPWM" (7 bytes + null terminator = 8 bytes)
 
 ```
 Master write: [0x10]
-Master read:  [freq_le32, duty_le32, pulse_count_le32] (12 bytes)
+Master read:  [freq_le32, duty_u8, pulse_count_le32] (9 bytes)
 ```
 
 **Set channel 0 frequency and duty**
@@ -170,6 +170,8 @@ Master read:  [freq_le32, duty_le32, pulse_count_le32] (12 bytes)
 Master write: [0x30, freq_le32, duty_le32]
 Master read:  [0x01] or [0x00]
 ```
+
+Here `freq_le32` is a little-endian `uint32_t` in Hz and `duty_u8` is one byte representing duty percent.
 
 `0x01` means the request is still busy or queued when read immediately after the write transaction. After a short delay, the master can repeat a one-byte write of `0x30` followed by a read to fetch the latest status byte for that command register.
 
@@ -203,3 +205,4 @@ Master read:  [status]
 - `REG_REBOOT` follows the same deferred path, but the device may reset before a later status re-read is possible.
 - `pulse_count` is read-only over I2C. It cannot be set or reset via this interface.
 - `freq` and `duty` returned over I2C are the realized values published by the PWM driver layer.
+- The public control API now uses integer Hz and integer duty percent rather than float inputs.

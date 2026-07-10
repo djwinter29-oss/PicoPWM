@@ -119,8 +119,8 @@ bool hw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
         pwm_set_chan_level(slice, ch, 0);
         enabled[channel] = false;
         actual_freqs[channel] = 0.0f;
-        state.freq_hz = actual_freqs[channel];
-        state.duty = duties[channel];
+        state.freq_hz = pwm_driver_freq_hz_from_float(actual_freqs[channel]);
+        state.duty = pwm_driver_duty_percent_from_float(duties[channel]);
         state.pulse_count = pulse_counts[channel];
         pwm_driver_store_applied_state(HW_PWM_CHANNEL_BASE + channel, &state);
         return true;
@@ -170,8 +170,8 @@ bool hw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
     actual_freqs[channel] = (float)sys_clk / (best_div * (best_top + 1));
     wraps[channel] = (uint16_t)best_top;
 
-    state.freq_hz = actual_freqs[channel];
-    state.duty = duties[channel];
+    state.freq_hz = pwm_driver_freq_hz_from_float(actual_freqs[channel]);
+    state.duty = pwm_driver_duty_percent_from_float(duties[channel]);
     state.pulse_count = pulse_counts[channel];
     pwm_driver_store_applied_state(HW_PWM_CHANNEL_BASE + channel, &state);
 
@@ -181,8 +181,8 @@ bool hw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
 /** @copydoc hw_pwm_driver_get */
 bool hw_pwm_driver_get(uint channel, pwm_driver_state_t *state) {
     if (channel >= HW_PWM_COUNT || state == NULL) return false;
-    state->freq_hz = actual_freqs[channel];
-    state->duty = duties[channel];
+    state->freq_hz = pwm_driver_freq_hz_from_float(actual_freqs[channel]);
+    state->duty = pwm_driver_duty_percent_from_float(duties[channel]);
     state->pulse_count = pulse_counts[channel];
     return true;
 }

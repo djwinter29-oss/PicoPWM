@@ -6,7 +6,7 @@
 #include "pwm_driver.h"
 #include "pwm_driver_internal.h"
 
-#include "hw_pwm_driver.h"
+#include "hw/generator.h"
 #include "pio/generator.h"
 #include "sw_pwm_driver.h"
 
@@ -224,7 +224,7 @@ static bool pwm_driver_backend_set_freq(uint channel, float freq_hz, float duty)
             }
         }
 
-        return hw_pwm_driver_set_freq(channel - HW_PWM_CHANNEL_BASE, freq_hz, duty);
+        return hw_gen_set_freq(channel - HW_PWM_CHANNEL_BASE, freq_hz, duty);
     }
 
     if (pwm_driver_is_pio_channel(channel)) {
@@ -250,7 +250,7 @@ static bool pwm_driver_backend_get(uint channel, pwm_driver_state_t *state) {
     }
 
     if (pwm_driver_is_hw_channel(channel)) {
-        return hw_pwm_driver_get(channel - HW_PWM_CHANNEL_BASE, state);
+        return hw_gen_get(channel - HW_PWM_CHANNEL_BASE, state);
     }
 
     if (pwm_driver_is_pio_channel(channel)) {
@@ -310,7 +310,7 @@ static void pwm_driver_process_mailbox(void) {
 
 /** @brief Core 1 main loop that owns backend initialization and mailbox processing. */
 static void pwm_driver_core_main(void) {
-    hw_pwm_driver_init();
+    hw_gen_init();
     pio_gen_init();
     sw_pwm_driver_init();
 
@@ -422,7 +422,7 @@ bool pwm_driver_get(uint channel, pwm_driver_state_t *state) {
         return false;
     }
 
-    if (get_core_num() != 0) {
+    if (get_core_num() != 0 && !pwm_driver_is_pio_channel(channel)) {
         return pwm_driver_backend_get(channel, state);
     }
 

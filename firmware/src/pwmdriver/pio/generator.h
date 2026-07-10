@@ -25,6 +25,8 @@ bool pio_gen_set_freq(uint channel, uint32_t freq_hz, uint8_t duty);
  * @param channel Backend-local PIO generator channel index.
  * @param state Caller-owned destination for the realized state.
  * @return `true` when the channel exists and the state was copied.
+ * @note This backend getter returns the cached base `pulse_count`. The shared
+ *       `pwm_driver_get()` path owns live PIO pulse extrapolation.
  */
 bool pio_gen_get(uint channel, pwm_driver_state_t *state);
 

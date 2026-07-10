@@ -35,6 +35,7 @@
 
 #include "pico/time.h"
 
+#include "hardware/clocks.h"
 #include "hardware/dma.h"
 #include "hardware/gpio.h"
 #include "hardware/pio.h"
@@ -45,18 +46,18 @@
 
 /** @brief Dominant PIO instruction cost for one measured high or low loop iteration. */
 #define PIO_MON_LOOP_CYCLES 2u
-/** @brief Fixed board clock assumption used by this standalone prototype. */
-#define PIO_MON_SYS_CLK_HZ 200000000u
 /** @brief Word count in one DMA snapshot buffer; one coherent sample is high plus low. */
 #define PIO_MON_DMA_BUFFER_WORDS 2u
 /** @brief Byte-size ring selector used by the RP2040 DMA ring configuration. */
 #define PIO_MON_DMA_RING_SIZE_BITS 3u
 /** @brief Large one-shot DMA transfer count used to approximate continuous draining. */
-#define PIO_MON_DMA_TRANSFER_COUNT 0xffffffffu
+#define PIO_MON_DMA_TRANSFER_COUNT UINT32_MAX
 /** @brief Inactivity threshold used to treat a channel as a permanent level. */
 #define PIO_MON_STATIC_TIMEOUT_US 1000000u
 
-/* Read policy for the latest-snapshot monitor path. */
+/* Latest-snapshot read policy. These thresholds are tuned together because they define when
+ * two decoded samples are close enough to accept as one exported reading.
+ */
 /** @brief Maximum snapshot attempts before the monitor reports an unstable-read sentinel. */
 #define PIO_MON_READ_POLICY_ATTEMPTS 5u
 /** @brief Minimum allowed delta in decoded frequency between two acceptable snapshot reads. */
@@ -67,12 +68,13 @@
 /** @brief Runtime ownership and last sample state for one PIO monitor channel. */
 typedef struct {
     pwm_driver_state_t state; /**< Latest exported monitor state. */
-    uint64_t dma_last_pair_count; /**< Monotonic completed-pair count already reflected in @ref state. */
+    uint32_t published_pair_count; /**< Monotonic completed-pair count already reflected in @ref state. */
     uint64_t last_sample_us; /**< Timestamp of the most recent raw segment drained from DMA. */
+    bool sample_valid; /**< Indicates whether one full PWM period has been captured. */
+
     PIO pio; /**< Owning PIO block for the channel. */
     int dma_channel; /**< Owning DMA channel that drains the PIO RX FIFO. */
     uint8_t sm; /**< Owning state machine index within @ref pio. */
-    bool sample_valid; /**< Indicates whether one full PWM period has been captured. */
     uint32_t dma_buffer[PIO_MON_DMA_BUFFER_WORDS]; /**< Circular DMA destination buffer that always holds the latest high/low pair. */
 } pio_mon_channel_t;
 
@@ -82,6 +84,8 @@ static pio_mon_channel_t pio_mon_channels[PIO_PWM_DRIVER_COUNT];
 static uint8_t pio_mon_program_offsets[2] = {UINT8_MAX, UINT8_MAX};
 /** @brief Guards the standalone monitor lifecycle so init only runs once. */
 static bool pio_mon_initialized = false;
+/** @brief Cached system clock used by the monitor decode path. */
+static uint32_t pio_mon_sys_clk_hz = 0u;
 /** @brief Map a Pico SDK PIO instance to a dense local array index. */
 static uint8_t pio_mon_index(PIO pio) {
     return pio == pio0 ? 0u : 1u;
@@ -157,6 +161,14 @@ static bool pio_mon_read_stable_pair(const pio_mon_channel_t *ctx, uint32_t *hig
     return true;
 }
 
+/** @brief Read the current DMA progress for one monitor channel as pair count plus exhaustion state. */
+static void pio_mon_dma_status(const pio_mon_channel_t *ctx, uint32_t *pair_count, bool *dma_exhausted) {
+    uint32_t transfer_count = dma_hw->ch[ctx->dma_channel].transfer_count;
+
+    *pair_count = (PIO_MON_DMA_TRANSFER_COUNT - transfer_count) / PIO_MON_DMA_BUFFER_WORDS;
+    *dma_exhausted = transfer_count == 0u;
+}
+
 /** @brief Return whether two decoded monitor values are close enough to treat as one reading. */
 static bool pio_mon_values_close(uint32_t first_freq_hz, uint8_t first_duty, uint32_t second_freq_hz, uint8_t second_duty) {
     uint32_t freq_delta = first_freq_hz > second_freq_hz ? first_freq_hz - second_freq_hz : second_freq_hz - first_freq_hz;
@@ -171,14 +183,19 @@ static bool pio_mon_values_close(uint32_t first_freq_hz, uint8_t first_duty, uin
     return freq_delta <= allowed_freq_delta && duty_delta <= PIO_MON_READ_POLICY_DUTY_CLOSE_PERCENT;
 }
 
+/** @brief Publish one exported monitor state and matching validity flag. */
+static void pio_mon_publish_state(pio_mon_channel_t *ctx, uint32_t freq_hz, uint8_t duty, bool sample_valid) {
+    ctx->state.freq_hz = freq_hz;
+    ctx->state.duty = duty;
+    ctx->state.pulse_count = 0u;
+    ctx->sample_valid = sample_valid;
+}
+
 /** @brief Clear one channel's cached monitor sample and transient decode state. */
 static void pio_mon_reset_channel(pio_mon_channel_t *ctx) {
-    ctx->state.freq_hz = 0u;
-    ctx->state.duty = 0u;
-    ctx->state.pulse_count = 0u;
-    ctx->dma_last_pair_count = 0u;
+    pio_mon_publish_state(ctx, 0u, 0u, false);
+    ctx->published_pair_count = 0u;
     ctx->last_sample_us = time_us_64();
-    ctx->sample_valid = false;
     ctx->dma_buffer[0] = 0u;
     ctx->dma_buffer[1] = 0u;
 }
@@ -188,23 +205,18 @@ static void pio_mon_publish_static_level(uint channel) {
     pio_mon_channel_t *ctx = &pio_mon_channels[channel];
     bool high = gpio_get(PWM_PIO_GPIO_PINS[channel]);
 
-    ctx->state.freq_hz = 0u;
-    ctx->state.duty = high ? 100u : 0u;
-    ctx->state.pulse_count = 0u;
-    ctx->sample_valid = true;
+    pio_mon_publish_state(ctx, 0u, high ? 100u : 0u, true);
 }
 
 /** @brief Publish the defined unstable-read sentinel state. */
-static void pio_mon_publish_error_state(pio_mon_channel_t *ctx) {
-    ctx->state.freq_hz = PIO_MON_UNSTABLE_FREQ_HZ;
-    ctx->state.duty = PIO_MON_UNSTABLE_DUTY;
-    ctx->state.pulse_count = 0u;
-    ctx->sample_valid = false;
+static void pio_mon_publish_unstable(pio_mon_channel_t *ctx) {
+    pio_mon_publish_state(ctx, PIO_MON_UNSTABLE_FREQ_HZ, PIO_MON_UNSTABLE_DUTY, false);
 }
 
 /** @brief Convert one raw high/low sample pair into approximate exported frequency and duty values. */
 static bool pio_mon_decode_pair(uint32_t high_ticks, uint32_t low_ticks, uint32_t *freq_hz, uint8_t *duty) {
     uint64_t total_ticks;
+    uint64_t decode_denominator;
     uint64_t scaled_freq_hz;
     uint32_t duty_percent;
 
@@ -218,7 +230,14 @@ static bool pio_mon_decode_pair(uint32_t high_ticks, uint32_t low_ticks, uint32_
      * and decode path small for now. If high-frequency accuracy matters later, upgrade this to
      * a compensated timing model or edge timestamp design.
      */
-    scaled_freq_hz = ((uint64_t)PIO_MON_SYS_CLK_HZ + total_ticks) / (PIO_MON_LOOP_CYCLES * total_ticks);
+    /* ponytail: The decode caches clk_sys at init time. The ceiling is runtime reclocking:
+     * if firmware changes the system clock after pio_mon_init(), the exported frequency will
+     * drift until the monitor is reinitialized. That tradeoff is acceptable now because the
+     * current firmware sets the clock once at startup. If runtime reclocking is added later,
+     * refresh this cached value or query the live clock here.
+     */
+    decode_denominator = (uint64_t)PIO_MON_LOOP_CYCLES * total_ticks;
+    scaled_freq_hz = ((uint64_t)pio_mon_sys_clk_hz + (decode_denominator / 2u)) / decode_denominator;
     if (scaled_freq_hz > UINT32_MAX) {
         scaled_freq_hz = UINT32_MAX;
     }
@@ -242,62 +261,56 @@ static bool pio_mon_read_close_sample(const pio_mon_channel_t *ctx, uint32_t *fr
     for (uint attempt = 0; attempt < PIO_MON_READ_POLICY_ATTEMPTS; attempt++) {
         uint32_t high_ticks;
         uint32_t low_ticks;
-        uint32_t current_freq_hz;
-        uint8_t current_duty;
+        uint32_t candidate_freq_hz;
+        uint8_t candidate_duty;
 
         if (!pio_mon_read_stable_pair(ctx, &high_ticks, &low_ticks)) {
             continue;
         }
 
-        if (!pio_mon_decode_pair(high_ticks, low_ticks, &current_freq_hz, &current_duty)) {
+        if (!pio_mon_decode_pair(high_ticks, low_ticks, &candidate_freq_hz, &candidate_duty)) {
             continue;
         }
 
-        if (have_previous && pio_mon_values_close(previous_freq_hz, previous_duty, current_freq_hz, current_duty)) {
-            *freq_hz = current_freq_hz;
-            *duty = current_duty;
+        if (have_previous && pio_mon_values_close(previous_freq_hz, previous_duty, candidate_freq_hz, candidate_duty)) {
+            *freq_hz = candidate_freq_hz;
+            *duty = candidate_duty;
             return true;
         }
 
-        previous_freq_hz = current_freq_hz;
-        previous_duty = current_duty;
+        previous_freq_hz = candidate_freq_hz;
+        previous_duty = candidate_duty;
         have_previous = true;
     }
 
     return false;
 }
 
-/** @brief Publish one decoded raw high/low sample pair into the exported monitor state. */
-static void pio_mon_publish_sample(pio_mon_channel_t *ctx, uint32_t freq_hz, uint8_t duty) {
-    ctx->state.freq_hz = freq_hz;
-    ctx->state.duty = duty;
-    ctx->state.pulse_count = 0u;
-    ctx->sample_valid = true;
-}
-
 /** @brief Drain the DMA ring and refresh one backend-local monitor channel state. */
 static void pio_mon_refresh_channel(uint channel) {
     pio_mon_channel_t *ctx = &pio_mon_channels[channel];
-    uint32_t transfer_count = dma_hw->ch[ctx->dma_channel].transfer_count;
-    uint64_t pair_count = (uint64_t)(PIO_MON_DMA_TRANSFER_COUNT - transfer_count) / PIO_MON_DMA_BUFFER_WORDS;
-    bool dma_exhausted = transfer_count == 0u;
+    uint64_t now_us = time_us_64();
+    uint32_t pair_count;
+    bool dma_exhausted;
 
-    if (pair_count != ctx->dma_last_pair_count) {
+    pio_mon_dma_status(ctx, &pair_count, &dma_exhausted);
+
+    if (pair_count != ctx->published_pair_count) {
         uint32_t freq_hz;
         uint8_t duty;
 
-        ctx->last_sample_us = time_us_64();
+        ctx->last_sample_us = now_us;
 
         if (pio_mon_read_close_sample(ctx, &freq_hz, &duty)) {
-            pio_mon_publish_sample(ctx, freq_hz, duty);
+            pio_mon_publish_state(ctx, freq_hz, duty, true);
         } else {
-            pio_mon_publish_error_state(ctx);
+            pio_mon_publish_unstable(ctx);
         }
 
-        ctx->dma_last_pair_count = pair_count;
+        ctx->published_pair_count = pair_count;
     }
 
-    if (!dma_exhausted && (time_us_64() - ctx->last_sample_us) >= PIO_MON_STATIC_TIMEOUT_US) {
+    if (!dma_exhausted && (now_us - ctx->last_sample_us) >= PIO_MON_STATIC_TIMEOUT_US) {
         pio_mon_publish_static_level(channel);
     }
 }
@@ -307,6 +320,8 @@ void pio_mon_init(void) {
     if (pio_mon_initialized) {
         return;
     }
+
+    pio_mon_sys_clk_hz = clock_get_hz(clk_sys);
 
     if (pio_mon_program_offsets[0] == UINT8_MAX) {
         pio_mon_program_offsets[0] = pio_add_program(pio0, &monitor_program);
@@ -340,7 +355,7 @@ void pio_mon_init(void) {
 
 /** @copydoc pio_mon_get */
 bool pio_mon_get(uint channel, pwm_driver_state_t *state) {
-    if (channel >= PIO_PWM_DRIVER_COUNT || state == NULL) {
+    if (!pio_mon_initialized || channel >= PIO_PWM_DRIVER_COUNT || state == NULL) {
         return false;
     }
 

@@ -1,12 +1,13 @@
 /**
- * @file hw_pwm_driver.c
- * @brief Hardware PWM backend implementation for the logical `pwmdriver` layer.
+ * @file generator.c
+ * @brief Hardware PWM generator backend implementation for the logical `pwmdriver` layer.
  */
 
-#include "hw_pwm_driver.h"
+#include "generator.h"
 
-#include "pwm_driver.h"
-#include "pwm_driver_internal.h"
+#include "../pwm_driver.h"
+#include "../pwm_driver_internal.h"
+
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
 #include "hardware/irq.h"
@@ -66,8 +67,8 @@ static void hw_pwm_irq_handler(void) {
     }
 }
 
-/** @copydoc hw_pwm_driver_init */
-void hw_pwm_driver_init(void) {
+/** @copydoc hw_gen_init */
+void hw_gen_init(void) {
     for (int i = 0; i < HW_PWM_COUNT; i++) {
         uint gpio = PWM_HW_GPIO_PINS[i];
         gpio_set_function(gpio, GPIO_FUNC_PWM);
@@ -100,8 +101,8 @@ void hw_pwm_driver_init(void) {
     irq_set_enabled(PWM_IRQ_WRAP, true);
 }
 
-/** @copydoc hw_pwm_driver_set_freq */
-bool hw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
+/** @copydoc hw_gen_set_freq */
+bool hw_gen_set_freq(uint channel, float freq_hz, float duty) {
     pwm_driver_state_t state;
 
     if (channel >= HW_PWM_COUNT) return false;
@@ -178,8 +179,8 @@ bool hw_pwm_driver_set_freq(uint channel, float freq_hz, float duty) {
     return true;
 }
 
-/** @copydoc hw_pwm_driver_get */
-bool hw_pwm_driver_get(uint channel, pwm_driver_state_t *state) {
+/** @copydoc hw_gen_get */
+bool hw_gen_get(uint channel, pwm_driver_state_t *state) {
     if (channel >= HW_PWM_COUNT || state == NULL) return false;
     state->freq_hz = pwm_driver_freq_hz_from_float(actual_freqs[channel]);
     state->duty = pwm_driver_duty_percent_from_float(duties[channel]);

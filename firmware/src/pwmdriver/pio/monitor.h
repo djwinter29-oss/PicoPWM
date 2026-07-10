@@ -34,28 +34,13 @@ void pio_mon_init(void);
  * @return `true` when the returned state is a stable PWM measurement or a stable static level.
  *         Returns `false` before the first stable sample and when the exported state is the
  *         unstable-read sentinel.
- * @note This standalone prototype keeps only the latest DMA-written high/low sample pair,
- *       so intermediate PWM periods are intentionally discarded when callers read slowly.
- * @note This backend does not provide a reliable received pulse count. It always reports
- *       `pulse_count = 0`.
- * @note The DMA drain is intentionally a finite long-running transfer rather than a permanent
- *       self-rearming stream. With the current transfer count, monitoring eventually stops
- *       updating after roughly 36 minutes at 1 MHz input. Because initialization is one-shot,
- *       that exhausted state persists until reboot. After that point the backend preserves the
- *       last exported state and no longer applies the one-second static-level fallback.
- * @note Reads retry up to five times and accept the sample when two decoded results are close
- *       in both frequency and duty. Frequency closeness uses a `max(1 Hz, 1%)` rule and duty
- *       closeness uses `1%`. If the sample keeps moving, the monitor returns the
- *       defined sentinel state `freq_hz = PIO_MON_UNSTABLE_FREQ_HZ`,
+ * @note This read-driven prototype keeps only the latest DMA-written high/low pair, so
+ *       intermediate PWM periods are intentionally discarded when callers read slowly.
+ * @note Unstable reads return the sentinel `freq_hz = PIO_MON_UNSTABLE_FREQ_HZ`,
  *       `duty = PIO_MON_UNSTABLE_DUTY`.
- * @note The snapshot acceptance path is still best-effort rather than strictly coherent, but
- *       the residual risk is intentionally treated as negligible for this prototype because
- *       callers require two similar decoded reads before accepting a sample.
- * @note This module is read-driven. Unstable-read handling and the one-second static-level
- *       timeout are serviced when callers invoke @ref pio_mon_get.
- * @note If no input transition is observed for more than one second, the monitor treats the
- *       signal as out of spec for PWM and returns `freq_hz = 0` with `duty = 0` or `100`
- *       based on the sampled GPIO level.
+ * @note If no input transition is observed for more than one second, the monitor reports a
+ *       static level as `freq_hz = 0` with `duty = 0` or `100` based on the sampled GPIO.
+ * @note `pulse_count` is always `0`.
  */
 bool pio_mon_get(uint channel, pwm_driver_state_t *state);
 

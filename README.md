@@ -63,6 +63,34 @@ Build outputs of interest:
 - `pico_pwm.uf2` for USB flashing
 - `pico_pwm.elf` for debug tools
 
+Helper scripts are provided under:
+
+- `tools/windows/` for PowerShell build, test, and load helpers
+- `tools/linux/` for POSIX shell build, test, and load helpers
+
+Examples:
+
+```powershell
+tools\windows\build.ps1
+tools\windows\test.ps1
+tools\windows\load.ps1
+tools\windows\coverage.ps1
+```
+
+```sh
+./tools/linux/build.sh
+./tools/linux/test.sh
+./tools/linux/load.sh
+./tools/linux/coverage.sh
+```
+
+Coverage helpers expect:
+
+- `gcovr` on `PATH`
+- CMake tests configured in the active build tree
+
+The current repository does not define any CMake tests yet, so the coverage scripts stop with a clear error until tests are added.
+
 ### Flash
 
 1. Hold **BOOTSEL** while connecting the board over USB.

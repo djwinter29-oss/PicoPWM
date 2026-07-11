@@ -1,0 +1,9 @@
+/firmware/build/
+/firmware/build-coverage/
+
+# Firmware build artifacts
+*.uf2
+*.elf
+*.bin
+*.hex
+*.map

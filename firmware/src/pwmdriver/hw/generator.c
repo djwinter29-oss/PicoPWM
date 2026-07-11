@@ -10,170 +10,254 @@
 
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
-#include "hardware/irq.h"
 #include "hardware/pwm.h"
 
-/** @brief Realized hardware PWM frequencies in backend-local channel order. */
-static float actual_freqs[HW_PWM_COUNT] = {0};
-/** @brief Realized hardware PWM duties in backend-local channel order. */
-static float duties[HW_PWM_COUNT] = {0};
-/** @brief Enabled-state cache for hardware PWM backend channels. */
-static bool enabled[HW_PWM_COUNT] = {false};
-/** @brief Realized wrap value cache for hardware PWM backend channels. */
-static uint16_t wraps[HW_PWM_COUNT] = {0};
-/** @brief Monotonic pulse counters updated from the hardware PWM wrap IRQ. */
-static volatile uint32_t pulse_counts[HW_PWM_COUNT] = {0};
+/** @brief Exported realized state cached for one backend-local hardware channel. */
+typedef struct {
+    uint32_t realized_freq_hz; /**< Realized output frequency in Hz. */
+    uint8_t realized_duty; /**< Realized duty in percent in the range `[0, 100]`. */
+} hw_gen_channel_state_t;
+
+/** @brief Realized hardware PWM state in backend-local channel order. */
+static hw_gen_channel_state_t hw_gen_channels[HW_PWM_COUNT] = {0};
+/** @brief Cached system clock used by the hardware generator timing search. */
+static uint32_t hw_gen_sys_clk_hz = 0u;
+
+/** @brief Smallest supported hardware PWM divider in sixteenth-step units. */
+#define HW_GEN_MIN_DIV_X16 16u
+/** @brief Largest supported hardware PWM divider in sixteenth-step units. */
+#define HW_GEN_MAX_DIV_X16 (255u * 16u + 15u)
+/** @brief Largest supported wrap value plus one. */
+#define HW_GEN_MAX_PERIOD_COUNTS 65536u
+/** @brief Local seeded-search window size in sixteenth-step divider units. */
+#define HW_GEN_DIV_SEARCH_WINDOW_X16 128u
 
 /**
- * @brief Convert a normalized duty into the hardware compare level for one wrap value.
+ * @brief Convert a duty percent into the hardware compare level for one wrap value.
  * @param top Active wrap value.
- * @param duty Requested duty in the normalized range `[0.0, 1.0]`.
+ * @param duty_percent Requested duty in percent in the range `[0, 100]`.
  * @return Compare level accepted by the Pico SDK PWM API.
  */
-static uint32_t hw_pwm_level_from_duty(uint32_t top, float duty) {
-    if (duty <= 0.0f) {
+static uint32_t hw_pwm_level_from_duty(uint32_t top, uint8_t duty_percent) {
+    if (duty_percent == 0u) {
         return 0;
     }
-    if (duty >= 1.0f) {
+    if (duty_percent >= 100u) {
         return top + 1u;
     }
 
-    uint32_t level = (uint32_t)((float)(top + 1u) * duty + 0.5f);
+    uint32_t level = (uint32_t)(((uint64_t)(top + 1u) * duty_percent + 50u) / 100u);
     if (level > top + 1u) {
         level = top + 1u;
     }
     return level;
 }
 
-/**
- * @brief Minimal local absolute-value helper used during timing search.
- * @param x Input float.
- * @return Absolute value of @p x.
- */
-static float fabsf_local(float x) {
-    return x < 0.0f ? -x : x;
+/** @brief Bind one hardware generator pin back to PWM mode. */
+static void hw_gen_bind_pwm_pin(uint gpio) {
+    gpio_set_function(gpio, GPIO_FUNC_PWM);
 }
 
-/** @brief Hardware PWM wrap IRQ handler that advances pulse counters and shared snapshots. */
-static void hw_pwm_irq_handler(void) {
-    uint32_t status = pwm_get_irq_status_mask();
-    for (int i = 0; i < HW_PWM_COUNT; i++) {
-        uint slice = pwm_gpio_to_slice_num(PWM_HW_GPIO_PINS[i]);
-        if (status & (1u << slice)) {
-            pulse_counts[i]++;
-            pwm_driver_store_pulse_count(HW_PWM_CHANNEL_BASE + i, pulse_counts[i]);
-            pwm_clear_irq(slice);
+/** @brief Drive one hardware generator pin as a static GPIO level outside PWM mode. */
+static void hw_gen_drive_static_level(uint gpio, bool high) {
+    gpio_set_function(gpio, GPIO_FUNC_SIO);
+    gpio_set_dir(gpio, GPIO_OUT);
+    gpio_put(gpio, high);
+}
+
+/** @brief Copy one backend-local realized channel state into a caller-owned snapshot. */
+static void hw_gen_fill_state(uint channel, pwm_driver_state_t *state) {
+    state->freq_hz = hw_gen_channels[channel].realized_freq_hz;
+    state->duty = hw_gen_channels[channel].realized_duty;
+    state->pulse_count = 0u;
+}
+
+/** @brief Return the smallest supported hardware PWM frequency in Hz for the current clock plan. */
+static uint32_t hw_gen_min_freq_hz(void) {
+    uint64_t denominator = (uint64_t)HW_GEN_MAX_DIV_X16 * (uint64_t)HW_GEN_MAX_PERIOD_COUNTS;
+    uint64_t numerator = (uint64_t)hw_gen_sys_clk_hz * 16u;
+
+    return (uint32_t)((numerator + denominator - 1u) / denominator);
+}
+
+/** @brief Return whether one requested hardware frequency is within the backend timing envelope. */
+static bool hw_gen_freq_supported(uint32_t freq_hz) {
+    uint32_t min_hw_hz;
+    uint32_t max_hw_hz;
+
+    if (freq_hz == 0u) {
+        return false;
+    }
+
+    min_hw_hz = hw_gen_min_freq_hz();
+    max_hw_hz = hw_gen_sys_clk_hz / 2u;
+    return freq_hz >= min_hw_hz && freq_hz <= max_hw_hz;
+}
+
+/** @brief Return one realized frequency from a wrap value and divider in sixteenth-step units. */
+static uint32_t hw_gen_realized_freq_hz(uint32_t top, uint16_t div_x16) {
+    uint64_t denominator = (uint64_t)div_x16 * (uint64_t)(top + 1u);
+    uint64_t numerator = (uint64_t)hw_gen_sys_clk_hz * 16u;
+
+    if (denominator == 0u) {
+        return 0u;
+    }
+
+    return (uint32_t)((numerator + (denominator / 2u)) / denominator);
+}
+
+/** @brief Evaluate one timing candidate and keep it when it improves the current best error. */
+static void hw_gen_consider_timing(uint32_t freq_hz, uint32_t div_x16, uint32_t *best_top, uint16_t *best_div_x16, uint32_t *best_delta_hz) {
+    uint64_t numerator = (uint64_t)hw_gen_sys_clk_hz * 16u;
+    uint64_t denominator = (uint64_t)freq_hz * div_x16;
+    uint64_t period_counts;
+    uint32_t top;
+    uint32_t actual_freq_hz;
+    uint32_t delta_hz;
+
+    if (denominator == 0u) {
+        return;
+    }
+
+    period_counts = (numerator + (denominator / 2u)) / denominator;
+    if (period_counts < 2u || period_counts > HW_GEN_MAX_PERIOD_COUNTS) {
+        return;
+    }
+
+    top = (uint32_t)(period_counts - 1u);
+    actual_freq_hz = hw_gen_realized_freq_hz(top, (uint16_t)div_x16);
+    delta_hz = actual_freq_hz > freq_hz ? actual_freq_hz - freq_hz : freq_hz - actual_freq_hz;
+    if (delta_hz < *best_delta_hz) {
+        *best_delta_hz = delta_hz;
+        *best_top = top;
+        *best_div_x16 = (uint16_t)div_x16;
+    }
+}
+
+/** @brief Seed the local divider search window for one requested hardware frequency. */
+static void hw_gen_seed_div_window(uint32_t freq_hz, uint32_t *start_div_x16, uint32_t *end_div_x16) {
+    uint64_t min_div_x16_numerator = ((uint64_t)hw_gen_sys_clk_hz * 16u) + ((uint64_t)freq_hz * 65536u) - 1u;
+    uint32_t min_div_x16 = (uint32_t)(min_div_x16_numerator / ((uint64_t)freq_hz * 65536u));
+
+    if (min_div_x16 < HW_GEN_MIN_DIV_X16) {
+        min_div_x16 = HW_GEN_MIN_DIV_X16;
+    }
+
+    *start_div_x16 = min_div_x16;
+    *end_div_x16 = min_div_x16 + HW_GEN_DIV_SEARCH_WINDOW_X16;
+    if (*end_div_x16 > HW_GEN_MAX_DIV_X16) {
+        *end_div_x16 = HW_GEN_MAX_DIV_X16;
+    }
+}
+
+/**
+ * @brief Find one hardware timing pair for the requested output frequency.
+ * @param freq_hz Requested frequency in Hz.
+ * @param best_top Caller-owned destination for the chosen wrap value.
+ * @param best_div_x16 Caller-owned destination for the chosen divider in sixteenth-step units.
+ * @return `true` when the requested frequency is supported by the hardware backend.
+ */
+static bool hw_gen_find_timing(uint32_t freq_hz, uint32_t *best_top, uint16_t *best_div_x16) {
+    uint32_t start_div_x16;
+    uint32_t end_div_x16;
+    uint32_t best_delta_hz = UINT32_MAX;
+
+    if (best_top == NULL || best_div_x16 == NULL || !hw_gen_freq_supported(freq_hz)) {
+        return false;
+    }
+
+    *best_top = 255u;
+    *best_div_x16 = HW_GEN_MIN_DIV_X16;
+
+    /* ponytail: This seeded integer search only probes a local divider window above the
+     * smallest divider that keeps top in range. The ceiling is that an unusually distant
+     * divider candidate could beat the local window for a future clock plan. That tradeoff is
+     * acceptable now because the current clock plan and frequency range keep good candidates
+     * near the minimum valid divider. If that assumption breaks later, widen the window or
+     * fall back to an exhaustive integer sweep.
+     */
+    hw_gen_seed_div_window(freq_hz, &start_div_x16, &end_div_x16);
+
+    for (uint32_t div_x16 = start_div_x16; div_x16 <= end_div_x16; div_x16++) {
+        hw_gen_consider_timing(freq_hz, div_x16, best_top, best_div_x16, &best_delta_hz);
+        if (best_delta_hz == 0u) {
+            return true;
         }
     }
+
+    return best_delta_hz != UINT32_MAX;
 }
 
 /** @copydoc hw_gen_init */
 void hw_gen_init(void) {
+    hw_gen_sys_clk_hz = clock_get_hz(clk_sys);
+
     for (int i = 0; i < HW_PWM_COUNT; i++) {
         uint gpio = PWM_HW_GPIO_PINS[i];
-        gpio_set_function(gpio, GPIO_FUNC_PWM);
+        hw_gen_bind_pwm_pin(gpio);
 
         uint slice = pwm_gpio_to_slice_num(gpio);
         uint ch = pwm_gpio_to_channel(gpio);
 
         pwm_config cfg = pwm_get_default_config();
-        pwm_config_set_clkdiv(&cfg, 1.0f);
+        pwm_config_set_clkdiv_int_frac(&cfg, 1u, 0u);
         pwm_config_set_wrap(&cfg, 255);
         pwm_init(slice, &cfg, true);
 
         pwm_set_chan_level(slice, ch, 0);
         pwm_set_enabled(slice, false);
 
-        actual_freqs[i] = 0.0f;
-        duties[i] = 0.5f;
-        enabled[i] = false;
-        wraps[i] = 255;
-        pulse_counts[i] = 0;
+        hw_gen_channels[i].realized_freq_hz = 0u;
+        hw_gen_channels[i].realized_duty = 50u;
     }
-
-    for (int i = 0; i < HW_PWM_COUNT; i++) {
-        uint slice = pwm_gpio_to_slice_num(PWM_HW_GPIO_PINS[i]);
-        pwm_clear_irq(slice);
-        pwm_set_irq_enabled(slice, true);
-    }
-
-    irq_set_exclusive_handler(PWM_IRQ_WRAP, hw_pwm_irq_handler);
-    irq_set_enabled(PWM_IRQ_WRAP, true);
 }
 
 /** @copydoc hw_gen_set_freq */
-bool hw_gen_set_freq(uint channel, float freq_hz, float duty) {
+bool hw_gen_set_freq(uint channel, uint32_t freq_hz, uint8_t duty) {
     pwm_driver_state_t state;
+    uint32_t best_top;
+    uint16_t best_div_x16;
 
     if (channel >= HW_PWM_COUNT) return false;
-    if (duty < 0.0f) duty = 0.0f;
-    if (duty > 1.0f) duty = 1.0f;
+    if (duty > 100u) duty = 100u;
 
     uint gpio = PWM_HW_GPIO_PINS[channel];
     uint slice = pwm_gpio_to_slice_num(gpio);
     uint ch = pwm_gpio_to_channel(gpio);
 
-    duties[channel] = duty;
-
-    if (freq_hz <= 0.0f) {
+    if (freq_hz == 0u) {
         pwm_set_enabled(slice, false);
         pwm_set_chan_level(slice, ch, 0);
-        enabled[channel] = false;
-        actual_freqs[channel] = 0.0f;
-        state.freq_hz = pwm_driver_freq_hz_from_float(actual_freqs[channel]);
-        state.duty = pwm_driver_duty_percent_from_float(duties[channel]);
-        state.pulse_count = pulse_counts[channel];
+        hw_gen_drive_static_level(gpio, duty >= 100u);
+        hw_gen_channels[channel].realized_freq_hz = 0u;
+        hw_gen_channels[channel].realized_duty = duty;
+        hw_gen_fill_state(channel, &state);
         pwm_driver_store_applied_state(HW_PWM_CHANNEL_BASE + channel, &state);
         return true;
     }
 
-    uint32_t sys_clk = clock_get_hz(clk_sys);
-
-    uint32_t best_top = 255;
-    float best_div = 1.0f;
-    float best_err = 1e10f;
-
-    for (uint32_t int_div = 1; int_div <= 255; int_div++) {
-        for (uint32_t frac_div = 0; frac_div < 16; frac_div++) {
-            float div = (float)int_div + (float)frac_div / 16.0f;
-
-            float top_f = ((float)sys_clk / (freq_hz * div)) - 1.0f;
-            if (top_f < 0.0f) continue;
-            if (top_f > 65535.0f) continue;
-
-            uint32_t top = (uint32_t)(top_f + 0.5f);
-            if (top < 1) top = 1;
-            if (top > 65535) continue;
-
-            float actual_freq = (float)sys_clk / (div * (top + 1));
-            float err = fabsf_local(actual_freq - freq_hz) / freq_hz;
-
-            if (err < best_err) {
-                best_err = err;
-                best_top = top;
-                best_div = div;
-
-                if (err < 1e-6f) {
-                    int_div = 256;
-                    break;
-                }
-            }
-        }
+    if (!hw_gen_find_timing(freq_hz, &best_top, &best_div_x16)) {
+        return false;
     }
+
+    hw_gen_bind_pwm_pin(gpio);
 
     pwm_set_enabled(slice, false);
     pwm_set_wrap(slice, best_top);
-    pwm_set_clkdiv(slice, best_div);
+    pwm_set_clkdiv_int_frac(slice, best_div_x16 / 16u, best_div_x16 % 16u);
     pwm_set_chan_level(slice, ch, hw_pwm_level_from_duty(best_top, duty));
     pwm_set_enabled(slice, true);
 
-    enabled[channel] = true;
-    actual_freqs[channel] = (float)sys_clk / (best_div * (best_top + 1));
-    wraps[channel] = (uint16_t)best_top;
+    /* ponytail: The generator caches clk_sys at init time. The ceiling is runtime reclocking:
+     * if firmware changes the system clock after hw_gen_init(), realized frequency publication
+     * drifts until the backend is reinitialized. That tradeoff is acceptable now because the
+     * current firmware sets the system clock once at startup. If runtime reclocking is added
+     * later, refresh this cached value or read the live clock here.
+     */
+    hw_gen_channels[channel].realized_freq_hz = hw_gen_realized_freq_hz(best_top, best_div_x16);
+    hw_gen_channels[channel].realized_duty = duty;
 
-    state.freq_hz = pwm_driver_freq_hz_from_float(actual_freqs[channel]);
-    state.duty = pwm_driver_duty_percent_from_float(duties[channel]);
-    state.pulse_count = pulse_counts[channel];
+    hw_gen_fill_state(channel, &state);
     pwm_driver_store_applied_state(HW_PWM_CHANNEL_BASE + channel, &state);
 
     return true;
@@ -182,8 +266,6 @@ bool hw_gen_set_freq(uint channel, float freq_hz, float duty) {
 /** @copydoc hw_gen_get */
 bool hw_gen_get(uint channel, pwm_driver_state_t *state) {
     if (channel >= HW_PWM_COUNT || state == NULL) return false;
-    state->freq_hz = pwm_driver_freq_hz_from_float(actual_freqs[channel]);
-    state->duty = pwm_driver_duty_percent_from_float(duties[channel]);
-    state->pulse_count = pulse_counts[channel];
+    hw_gen_fill_state(channel, state);
     return true;
 }

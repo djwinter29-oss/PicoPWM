@@ -8,17 +8,17 @@
 
 #include "../pwm_driver.h"
 
-/** @brief Initialize the hardware PWM generator backend and its wrap IRQ handling. */
+/** @brief Initialize the hardware PWM generator backend. */
 void hw_gen_init(void);
 
 /**
  * @brief Apply one logical hardware-PWM channel update.
  * @param channel Backend-local hardware PWM channel index.
  * @param freq_hz Requested frequency in Hz.
- * @param duty Requested duty in the normalized range `[0.0, 1.0]`.
+ * @param duty Requested duty in percent in the range `[0, 100]`.
  * @return `true` when the backend accepted the request.
  */
-bool hw_gen_set_freq(uint channel, float freq_hz, float duty);
+bool hw_gen_set_freq(uint channel, uint32_t freq_hz, uint8_t duty);
 
 /**
  * @brief Read the realized state for one hardware PWM backend channel.

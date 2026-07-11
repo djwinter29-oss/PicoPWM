@@ -5,6 +5,11 @@
  * This module is intentionally not integrated into `pwm_driver.c` yet. It measures the
  * hardware PWM logical channel pin bank and reports approximate frequency and duty cycle
  * using the existing `pwm_driver_state_t` shape.
+ *
+ * This monitor is intentionally limited to low-frequency, best-effort observation. It uses
+ * one software GPIO interrupt per edge plus microsecond timestamps, so it is not suitable
+ * for high-rate PWM monitoring and should not be treated as a peer to the PIO monitor for
+ * kHz-to-MHz measurement work.
  */
 
 #ifndef PWMDRIVER_HW_MONITOR_H
@@ -35,6 +40,8 @@ void hw_mon_init(void);
  *         unstable sentinel.
  * @note The monitor timestamps GPIO edges in microseconds and derives one period from
  *       consecutive rising edges plus one high width from the falling edge between them.
+ * @note This is a low-frequency, best-effort monitor only. Use the PIO monitor for serious
+ *       higher-rate PWM measurement.
  * @note If no input transition is observed for more than one second, the monitor reports a
  *       static level as `freq_hz = 0` with `duty = 0` or `100` based on the sampled GPIO.
  * @note `pulse_count` is always `0`.

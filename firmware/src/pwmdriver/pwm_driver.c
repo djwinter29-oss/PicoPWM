@@ -17,8 +17,6 @@
 
 #include "hardware/sync.h"
 
-#include <math.h>
-
 /** @brief Timeout for one admitted cross-core apply request in milliseconds. */
 #define PWM_DRIVER_APPLY_TIMEOUT_MS 1000
 
@@ -206,29 +204,21 @@ void pwm_driver_store_pulse_count(uint channel, uint32_t pulse_count) {
  */
 static bool pwm_driver_backend_set_freq(uint channel, float freq_hz, float duty) {
     uint32_t requested_hz;
+    uint8_t requested_duty;
 
     if (channel >= PWM_DRIVER_CHANNEL_COUNT) {
         return false;
     }
 
     requested_hz = pwm_driver_freq_hz_from_float(freq_hz);
+    requested_duty = pwm_driver_duty_percent_from_float(duty);
 
     if (pwm_driver_is_hw_channel(channel)) {
-        if (requested_hz != 0u) {
-            const float sys_clk = (float)clock_get_hz(clk_sys);
-            const float min_hw = sys_clk / ((255.0f + 15.0f / 16.0f) * 65536.0f);
-            const float max_hw = sys_clk / 2.0f;
-
-            if (freq_hz < min_hw || freq_hz > max_hw) {
-                return false;
-            }
-        }
-
-        return hw_gen_set_freq(channel - HW_PWM_CHANNEL_BASE, freq_hz, duty);
+        return hw_gen_set_freq(channel - HW_PWM_CHANNEL_BASE, requested_hz, requested_duty);
     }
 
     if (pwm_driver_is_pio_channel(channel)) {
-        return pio_gen_set_freq(channel - PIO_PWM_CHANNEL_BASE, requested_hz, pwm_driver_duty_percent_from_float(duty));
+        return pio_gen_set_freq(channel - PIO_PWM_CHANNEL_BASE, requested_hz, requested_duty);
     }
 
     if (requested_hz > 1000u) {

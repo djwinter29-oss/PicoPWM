@@ -4,6 +4,7 @@ set -eu
 BUILD_DIR="${BUILD_DIR:-firmware/build}"
 GENERATOR="${GENERATOR:-}"
 PICO_SDK_PATH_VALUE="${PICO_SDK_PATH:-}"
+FIRMWARE_VERSION="${PICO_PWM_FIRMWARE_VERSION:-}"
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -17,6 +18,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --pico-sdk-path)
             PICO_SDK_PATH_VALUE="$2"
+            shift 2
+            ;;
+        --firmware-version)
+            FIRMWARE_VERSION="$2"
             shift 2
             ;;
         *)
@@ -44,5 +49,9 @@ if [ -z "$GENERATOR" ]; then
     fi
 fi
 
-cmake -S "$SOURCE_DIR" -B "$BUILD_DIR_PATH" -G "$GENERATOR" -DPICO_SDK_PATH="$PICO_SDK_PATH_VALUE"
+if [ -n "$FIRMWARE_VERSION" ]; then
+    cmake -S "$SOURCE_DIR" -B "$BUILD_DIR_PATH" -G "$GENERATOR" -DPICO_SDK_PATH="$PICO_SDK_PATH_VALUE" -DPICO_PWM_FIRMWARE_VERSION="$FIRMWARE_VERSION"
+else
+    cmake -S "$SOURCE_DIR" -B "$BUILD_DIR_PATH" -G "$GENERATOR" -DPICO_SDK_PATH="$PICO_SDK_PATH_VALUE"
+fi
 cmake --build "$BUILD_DIR_PATH" --parallel

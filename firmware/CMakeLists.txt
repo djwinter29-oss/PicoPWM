@@ -7,6 +7,8 @@ project(PicoPWM C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
+set(PICO_PWM_FIRMWARE_VERSION "0.0.0-dev" CACHE STRING "Firmware version string exposed over CDC and I2C")
+
 pico_sdk_init()
 
 add_executable(pico_pwm
@@ -43,6 +45,10 @@ target_link_libraries(pico_pwm
     hardware_sync
     tinyusb_device
     tinyusb_board
+)
+
+target_compile_definitions(pico_pwm PRIVATE
+    PICO_PWM_FIRMWARE_VERSION_STR="${PICO_PWM_FIRMWARE_VERSION}"
 )
 
 # USB CDC is handled directly through TinyUSB; UART is disabled.

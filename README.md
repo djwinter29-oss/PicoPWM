@@ -91,6 +91,14 @@ Coverage helpers expect:
 
 The current repository does not define any CMake tests yet, so the coverage scripts stop with a clear error until tests are added.
 
+Firmware versioning:
+
+- local builds default to firmware version `0.0.0-dev`
+- pass `-DPICO_PWM_FIRMWARE_VERSION=x.y.z` to CMake, or set `PICO_PWM_FIRMWARE_VERSION`, to override it
+- the `version` CDC command and the I2C `REG_VERSION` register both return this build-time firmware version
+- the release workflow triggers on tags matching `vx.y.z` and builds the firmware with version `x.y.z`
+- a normal local CMake build does not require Git tags or GitHub Actions; it builds with the default version unless you override it
+
 ### Flash
 
 1. Hold **BOOTSEL** while connecting the board over USB.

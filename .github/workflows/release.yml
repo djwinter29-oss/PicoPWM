@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    env:
+      PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
+      PICO_SDK_REF: master
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout Pico SDK
+        uses: actions/checkout@v4
+        with:
+          repository: raspberrypi/pico-sdk
+          ref: ${{ env.PICO_SDK_REF }}
+          path: pico-sdk
+          submodules: recursive
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            gcc-arm-none-eabi \
+            libnewlib-arm-none-eabi
+
+      - name: Derive firmware version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Expected tag format vx.y.z, got ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+          echo "PICO_PWM_FIRMWARE_VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Build firmware
+        run: ./tools/linux/build.sh
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pico-pwm-release-build
+          path: |
+            firmware/build/pico_pwm.uf2
+            firmware/build/pico_pwm.elf
+            firmware/build/pico_pwm.bin
+            firmware/build/pico_pwm.hex
+            firmware/build/pico_pwm.dis
+          if-no-files-found: error
+
+      - name: Publish GitHub release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            firmware/build/pico_pwm.uf2
+            firmware/build/pico_pwm.elf
+            firmware/build/pico_pwm.bin
+            firmware/build/pico_pwm.hex
+            firmware/build/pico_pwm.dis
+          generate_release_notes: true

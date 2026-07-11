@@ -20,7 +20,7 @@ Connect to the Pico as a USB serial port (CDC) at **115200 baud**. Type commands
 | Command | Description | Example |
 |---------|-------------|---------|
 | `info` | Returns device type | `info` → `PicoPWM` |
-| `version` | Returns firmware version | `version` → `1.0.0` |
+| `version` | Returns the build-time firmware version | `version` → `1.2.3` |
 | `get <ch>` | Read all properties of channel `ch` | `get 0` |
 | `set <ch> <freq>` | Set channel frequency and default duty to 50% | `set 0 1000` |
 | `set <ch> <freq> <duty%>` | Set channel frequency and duty | `set 0 1000 50` |
@@ -88,7 +88,7 @@ Read commands are answered from the realized channel snapshot published by the P
 | Register / Command | Value | Write Length | Read Length | Description |
 |--------------------|-------|--------------|-------------|-------------|
 | `REG_INFO` | `0x00` | 1 | variable | Device type string, e.g. `PicoPWM` |
-| `REG_VERSION` | `0x01` | 1 | variable | Version string, e.g. `1.0.0` |
+| `REG_VERSION` | `0x01` | 1 | variable | Build-time version string, e.g. `1.2.3` |
 | `REG_CHANNELS` | `0x02` | 1 | 1 | Channel count (24) |
 | `REG_GET_CH0`..`REG_GET_CH23` | `0x10`..`0x27` | 1 | 9 | Read one channel's realized properties |
 | `REG_SET_CH0`..`REG_SET_CH23` | `0x30`..`0x47` | 6 | 1 | Write one channel's frequency and duty, read back last status |
@@ -199,7 +199,7 @@ Master read:  [status]
 ### Notes
 
 - Multi-byte values are always **little-endian**, matching the native byte order of both RP2040 and RP2350.
-- String responses include a null terminator. Allocate at least 8 bytes for `info` and 8 bytes for `version`.
+- String responses include a null terminator. Allocate enough space for the full version string plus the terminator.
 - The I2C ISR only captures request bytes and serves prepared response bytes. Write commands are executed later from normal Core 0 polling.
 - A write command can therefore report `busy` if read back immediately. The master should allow a small delay and then re-read the same command register to fetch the final result.
 - `REG_REBOOT` follows the same deferred path, but the device may reset before a later status re-read is possible.

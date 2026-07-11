@@ -14,7 +14,7 @@
 /** @brief Return the fixed device name exposed by control/status transports. */
 const char *control_iface_device_name(void);
 
-/** @brief Return the fixed firmware version exposed by control/status transports. */
+/** @brief Return the build-time firmware version exposed by control/status transports. */
 const char *control_iface_firmware_version(void);
 
 /** @brief Return the logical PWM channel count exposed by the firmware. */

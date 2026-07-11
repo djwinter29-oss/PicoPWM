@@ -7,15 +7,18 @@
 
 /** @brief Fixed device name reported through control/status transports. */
 #define CONTROL_IFACE_DEVICE_NAME "PicoPWM"
-/** @brief Fixed firmware version reported through control/status transports. */
-#define CONTROL_IFACE_FIRMWARE_VERSION "1.0.0"
+
+#ifndef PICO_PWM_FIRMWARE_VERSION_STR
+/** @brief Fallback firmware version when the build does not inject one. */
+#define PICO_PWM_FIRMWARE_VERSION_STR "0.0.0-dev"
+#endif
 
 const char *control_iface_device_name(void) {
     return CONTROL_IFACE_DEVICE_NAME;
 }
 
 const char *control_iface_firmware_version(void) {
-    return CONTROL_IFACE_FIRMWARE_VERSION;
+    return PICO_PWM_FIRMWARE_VERSION_STR;
 }
 
 uint8_t control_iface_channel_count(void) {

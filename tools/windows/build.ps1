@@ -1,7 +1,8 @@
 param(
     [string]$BuildDir = "firmware/build",
     [string]$Generator,
-    [string]$PicoSdkPath = $env:PICO_SDK_PATH
+    [string]$PicoSdkPath = $env:PICO_SDK_PATH,
+    [string]$FirmwareVersion = $env:PICO_PWM_FIRMWARE_VERSION
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,5 +23,16 @@ if ([string]::IsNullOrWhiteSpace($Generator)) {
     }
 }
 
-cmake -S $sourceDir -B $buildDirPath -G $Generator -DPICO_SDK_PATH=$PicoSdkPath
+$cmakeArgs = @(
+    "-S", $sourceDir,
+    "-B", $buildDirPath,
+    "-G", $Generator,
+    "-DPICO_SDK_PATH=$PicoSdkPath"
+)
+
+if (-not [string]::IsNullOrWhiteSpace($FirmwareVersion)) {
+    $cmakeArgs += "-DPICO_PWM_FIRMWARE_VERSION=$FirmwareVersion"
+}
+
+& cmake @cmakeArgs
 cmake --build $buildDirPath --parallel

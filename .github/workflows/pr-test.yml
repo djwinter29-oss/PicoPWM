@@ -1,0 +1,51 @@
+name: PR Test
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    env:
+      PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
+      PICO_SDK_REF: master
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout Pico SDK
+        uses: actions/checkout@v4
+        with:
+          repository: raspberrypi/pico-sdk
+          ref: ${{ env.PICO_SDK_REF }}
+          path: pico-sdk
+          submodules: recursive
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            gcc-arm-none-eabi \
+            libnewlib-arm-none-eabi
+
+      - name: Build firmware
+        run: ./tools/linux/build.sh
+
+      - name: Run configured CMake tests
+        run: ./tools/linux/test.sh --skip-build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pico-pwm-pr-build
+          path: |
+            firmware/build/pico_pwm.uf2
+            firmware/build/pico_pwm.elf
+            firmware/build/pico_pwm.bin
+            firmware/build/pico_pwm.hex
+            firmware/build/pico_pwm.dis
+          if-no-files-found: error

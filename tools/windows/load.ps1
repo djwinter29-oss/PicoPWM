@@ -1,5 +1,6 @@
 param(
     [string]$BuildDir = "firmware/build",
+    [string]$Board,
     [string]$Uf2Path,
     [string]$MountPath,
     [string]$Generator,
@@ -9,11 +10,25 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+if ([string]::IsNullOrWhiteSpace($Board)) {
+    $Board = $env:PICO_BOARD
+}
+
+if (-not [string]::IsNullOrWhiteSpace($Board)) {
+    if (($Board -ne "pico") -and ($Board -ne "pico2")) {
+        throw "Unsupported board '$Board'. Use 'pico' or 'pico2'."
+    }
+
+    if ($BuildDir -eq "firmware/build") {
+        $BuildDir = "firmware/build-$Board"
+    }
+}
+
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $buildDirPath = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $BuildDir))
 
 if (-not $SkipBuild) {
-    & (Join-Path $PSScriptRoot "build.ps1") -BuildDir $BuildDir -Generator $Generator -PicoSdkPath $PicoSdkPath
+    & (Join-Path $PSScriptRoot "build.ps1") -BuildDir $BuildDir -Board $Board -Generator $Generator -PicoSdkPath $PicoSdkPath
 }
 
 if ([string]::IsNullOrWhiteSpace($Uf2Path)) {

@@ -1,5 +1,6 @@
 param(
     [string]$BuildDir = "firmware/build",
+    [string]$Board,
     [string]$Generator,
     [string]$PicoSdkPath = $env:PICO_SDK_PATH,
     [string]$FirmwareVersion = $env:PICO_PWM_FIRMWARE_VERSION
@@ -9,6 +10,20 @@ $ErrorActionPreference = "Stop"
 
 if ([string]::IsNullOrWhiteSpace($PicoSdkPath)) {
     throw "PICO_SDK_PATH is not set."
+}
+
+if ([string]::IsNullOrWhiteSpace($Board)) {
+    $Board = $env:PICO_BOARD
+}
+
+if (-not [string]::IsNullOrWhiteSpace($Board)) {
+    if (($Board -ne "pico") -and ($Board -ne "pico2")) {
+        throw "Unsupported board '$Board'. Use 'pico' or 'pico2'."
+    }
+
+    if ($BuildDir -eq "firmware/build") {
+        $BuildDir = "firmware/build-$Board"
+    }
 }
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
@@ -32,6 +47,10 @@ $cmakeArgs = @(
 
 if (-not [string]::IsNullOrWhiteSpace($FirmwareVersion)) {
     $cmakeArgs += "-DPICO_PWM_FIRMWARE_VERSION=$FirmwareVersion"
+}
+
+if (-not [string]::IsNullOrWhiteSpace($Board)) {
+    $cmakeArgs += "-DPICO_BOARD=$Board"
 }
 
 & cmake @cmakeArgs

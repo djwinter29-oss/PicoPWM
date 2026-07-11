@@ -72,17 +72,27 @@ Examples:
 
 ```powershell
 tools\windows\build.ps1
+tools\windows\build.ps1 -Board pico2
 tools\windows\test.ps1
 tools\windows\load.ps1
+tools\windows\load.ps1 -Board pico2
 tools\windows\coverage.ps1
 ```
 
 ```sh
 ./tools/linux/build.sh
+./tools/linux/build.sh --board pico2
 ./tools/linux/test.sh
 ./tools/linux/load.sh
+./tools/linux/load.sh --board pico2
 ./tools/linux/coverage.sh
 ```
+
+Board selection:
+
+- `pico` builds for Raspberry Pi Pico on RP2040
+- `pico2` builds for Raspberry Pi Pico 2 on RP2350 through Pico SDK `PICO_BOARD=pico2`
+- when `pico` or `pico2` is selected and no custom build directory is provided, the scripts use `firmware/build-pico` or `firmware/build-pico2` to avoid mixing board-specific CMake caches
 
 Coverage helpers expect:
 

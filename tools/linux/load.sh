@@ -2,6 +2,7 @@
 set -eu
 
 BUILD_DIR="${BUILD_DIR:-firmware/build}"
+BOARD="${PICO_BOARD:-}"
 UF2_PATH=""
 MOUNT_PATH="${PICO_MOUNT_PATH:-}"
 GENERATOR="${GENERATOR:-}"
@@ -12,6 +13,10 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         --build-dir)
             BUILD_DIR="$2"
+            shift 2
+            ;;
+        --board)
+            BOARD="$2"
             shift 2
             ;;
         --uf2)
@@ -41,12 +46,27 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
+if [ -n "$BOARD" ]; then
+    case "$BOARD" in
+        pico|pico2)
+            ;;
+        *)
+            echo "Unsupported board '$BOARD'. Use 'pico' or 'pico2'." >&2
+            exit 1
+            ;;
+    esac
+
+    if [ "$BUILD_DIR" = "firmware/build" ]; then
+        BUILD_DIR="firmware/build-$BOARD"
+    fi
+fi
+
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 BUILD_DIR_PATH="$REPO_ROOT/$BUILD_DIR"
 
 if [ "$SKIP_BUILD" -eq 0 ]; then
-    BUILD_DIR="$BUILD_DIR" GENERATOR="$GENERATOR" PICO_SDK_PATH="$PICO_SDK_PATH_VALUE" "$SCRIPT_DIR/build.sh"
+    BUILD_DIR="$BUILD_DIR" PICO_BOARD="$BOARD" GENERATOR="$GENERATOR" PICO_SDK_PATH="$PICO_SDK_PATH_VALUE" "$SCRIPT_DIR/build.sh"
 fi
 
 if [ -z "$UF2_PATH" ]; then

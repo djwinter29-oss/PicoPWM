@@ -2,6 +2,7 @@
 set -eu
 
 BUILD_DIR="${BUILD_DIR:-firmware/build}"
+BOARD="${PICO_BOARD:-}"
 GENERATOR="${GENERATOR:-}"
 PICO_SDK_PATH_VALUE="${PICO_SDK_PATH:-}"
 FIRMWARE_VERSION="${PICO_PWM_FIRMWARE_VERSION:-}"
@@ -10,6 +11,10 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         --build-dir)
             BUILD_DIR="$2"
+            shift 2
+            ;;
+        --board)
+            BOARD="$2"
             shift 2
             ;;
         --generator)
@@ -36,6 +41,21 @@ if [ -z "$PICO_SDK_PATH_VALUE" ]; then
     exit 1
 fi
 
+if [ -n "$BOARD" ]; then
+    case "$BOARD" in
+        pico|pico2)
+            ;;
+        *)
+            echo "Unsupported board '$BOARD'. Use 'pico' or 'pico2'." >&2
+            exit 1
+            ;;
+    esac
+
+    if [ "$BUILD_DIR" = "firmware/build" ]; then
+        BUILD_DIR="firmware/build-$BOARD"
+    fi
+fi
+
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 SOURCE_DIR="$REPO_ROOT/firmware"
@@ -49,9 +69,19 @@ if [ -z "$GENERATOR" ]; then
     fi
 fi
 
+set -- \
+    -S "$SOURCE_DIR" \
+    -B "$BUILD_DIR_PATH" \
+    -G "$GENERATOR" \
+    -DPICO_SDK_PATH="$PICO_SDK_PATH_VALUE"
+
 if [ -n "$FIRMWARE_VERSION" ]; then
-    cmake -S "$SOURCE_DIR" -B "$BUILD_DIR_PATH" -G "$GENERATOR" -DPICO_SDK_PATH="$PICO_SDK_PATH_VALUE" -DPICO_PWM_FIRMWARE_VERSION="$FIRMWARE_VERSION"
-else
-    cmake -S "$SOURCE_DIR" -B "$BUILD_DIR_PATH" -G "$GENERATOR" -DPICO_SDK_PATH="$PICO_SDK_PATH_VALUE"
+    set -- "$@" -DPICO_PWM_FIRMWARE_VERSION="$FIRMWARE_VERSION"
 fi
+
+if [ -n "$BOARD" ]; then
+    set -- "$@" -DPICO_BOARD="$BOARD"
+fi
+
+cmake "$@"
 cmake --build "$BUILD_DIR_PATH" --parallel

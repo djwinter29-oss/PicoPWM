@@ -57,10 +57,12 @@ The current implementation is split as follows:
 | `firmware/src/i2c/i2c_control_map.c` | I2C register encode/decode and deferred write translation into `control_iface` |
 | `firmware/src/pwmdriver/pwm_driver.h` | Public wrapper API and logical channel constants |
 | `firmware/src/pwmdriver/pwm_driver.c` | Core 1 launch, mailbox loop, channel routing, shared snapshot |
-| `firmware/src/pwmdriver/hw_pwm_driver.c` | Hardware PWM backend |
+| `firmware/src/pwmdriver/hw/generator.c` | Hardware PWM generator backend |
+| `firmware/src/pwmdriver/hw/monitor.c` | Standalone hardware PWM monitor prototype |
 | `firmware/src/pwmdriver/pio/generator.c` | PIO generator backend |
 | `firmware/src/pwmdriver/pio/generator.pio` | PIO assembly program used by the PIO generator backend |
-| `firmware/src/pwmdriver/sw_pwm_driver.c` | Software PWM backend |
+| `firmware/src/pwmdriver/sw/generator.c` | Software PWM generator backend |
+| `firmware/src/pwmdriver/sw/monitor.c` | Standalone software PWM monitor prototype |
 
 ## External Interface
 
@@ -173,9 +175,15 @@ This layer is the architectural boundary between the shared Core 0 control plane
 
 Owned by:
 
-- `hw_pwm_driver.c`
+- `hw/generator.c`
 - `pio/generator.c`
-- `sw_pwm_driver.c`
+- `sw/generator.c`
+
+Standalone monitor prototypes currently live beside that integrated backend set under:
+
+- `hw/monitor.c`
+- `pio/monitor.c`
+- `sw/monitor.c`
 
 Responsibilities:
 
@@ -190,7 +198,8 @@ Owned by the Pico SDK and the MCU peripherals.
 
 Resources used:
 
-- PWM slices and wrap IRQ
+- PWM slices
+- GPIO edge IRQs for the standalone hardware monitor prototype
 - PIO programs, state machines, and IRQs
 - repeating timer callback for software PWM
 - multicore event signaling
@@ -277,7 +286,7 @@ sequenceDiagram
     participant C1 as Core 1
     participant HW as hw_pwm_driver
     participant PIO as pio_pwm_generator
-    participant SW as sw_pwm_driver
+    participant SW as sw_generator
 
     C0->>WR: pwm_driver_launch()
     WR->>WR: init pending mailbox slot
@@ -285,7 +294,7 @@ sequenceDiagram
     WR->>C1: multicore_launch_core1(core_main)
     C1->>HW: hw_pwm_driver_init()
     C1->>PIO: pio_pwm_generator_init()
-    C1->>SW: sw_pwm_driver_init()
+    C1->>SW: sw_gen_init()
     C1->>WR: pwm_ready = true
     C1->>C1: mailbox loop + __wfe()
 ```
@@ -412,96 +421,55 @@ Reader behavior:
 
 This provides a lock-free coherent snapshot read on Core 0.
 
-## Hardware PWM Driver Detailed Design
+## Hardware PWM Summary
 
-### Purpose
+The hardware PWM implementation is now split into:
 
-The hardware PWM backend provides the highest timing accuracy and the widest practical frequency range.
+- `firmware/src/pwmdriver/hw/generator.c` for the integrated generator backend
+- `firmware/src/pwmdriver/hw/monitor.c` for the standalone monitor prototype
 
-### Resource Allocation
+The integrated generator backend:
 
-- 8 PWM slices
-- one logical channel per slice
-- channel B pins only
-- wrap IRQ for pulse counting
+- accepts integer `freq_hz` and integer duty percent
+- uses one PWM slice per logical hardware channel
+- treats `freq_hz = 0` as a static-output policy case
+- publishes realized `freq_hz` and `duty`
+- always publishes `pulse_count = 0`
 
-### Pin Mapping
+The current hardware generator no longer uses a wrap IRQ for pulse counting.
 
-| Local Channel | GPIO | Slice | Channel |
-|---------------|------|-------|---------|
-| 0 | 1 | 0 | B |
-| 1 | 3 | 1 | B |
-| 2 | 5 | 2 | B |
-| 3 | 7 | 3 | B |
-| 4 | 9 | 4 | B |
-| 5 | 11 | 5 | B |
-| 6 | 13 | 6 | B |
-| 7 | 15 | 7 | B |
+The standalone hardware monitor prototype:
 
-### Initialization
+- observes the same GPIO bank with one edge interrupt per transition
+- reconstructs frequency and duty from microsecond timestamps
+- is intentionally low-frequency and best-effort only
+- always publishes `pulse_count = 0`
 
-For each channel:
+For the current hardware timing equations, counter-width limits, divider limits, and the recommended operating range, see [Hardware PWM Design](hw_pwm_design.md).
 
-1. set GPIO function to PWM
-2. compute slice and channel identity
-3. configure default divider and wrap
-4. initialize PWM slice
-5. force output low and disabled
-6. initialize local state arrays
+## Software PWM Summary
 
-After per-channel setup:
+The software PWM implementation is now split into:
 
-1. enable wrap IRQ on each used slice
-2. install a single wrap interrupt handler
+- `firmware/src/pwmdriver/sw/generator.c` for the integrated generator backend
+- `firmware/src/pwmdriver/sw/monitor.c` for the standalone monitor prototype
 
-### Frequency Programming
+The integrated generator backend:
 
-Input parameters:
+- accepts integer `freq_hz` and integer duty percent
+- uses one shared software scheduler tick for the software channel bank
+- treats `freq_hz = 0` and endpoint duties as static-output policy cases
+- publishes realized `freq_hz`, `duty`, and generated `pulse_count`
 
-- local channel
-- requested frequency
-- duty cycle
+The standalone software monitor prototype:
 
-Behavior:
+- observes the same GPIO bank with one edge interrupt per transition
+- reconstructs frequency and duty from microsecond timestamps
+- is intentionally low-frequency and best-effort only
+- always publishes `pulse_count = 0`
+- is intentionally standalone and not yet integrated with the software generator ownership model
 
-1. clamp duty into `0.0..1.0`
-2. if `freq_hz <= 0`, disable slice and drive output low
-3. otherwise iterate over valid integer and fractional divider values
-4. compute `TOP` candidate for each divider
-5. reject invalid combinations
-6. choose the smallest normalized frequency error
-7. program wrap, divider, and compare level
-8. enable slice
-9. publish realized state
-
-Realized frequency equation:
-
-$$
-f_{pwm} = \frac{f_{sys}}{clkdiv \cdot (TOP + 1)}
-$$
-
-### Duty Conversion
-
-Duty is mapped to compare level using:
-
-$$
-level \approx duty \cdot (TOP + 1)
-$$
-
-Special cases:
-
-- `duty <= 0` -> level `0`
-- `duty >= 1` -> level `TOP + 1`
-
-### Pulse Counting
-
-The wrap IRQ handler:
-
-1. reads IRQ status mask
-2. identifies which slice triggered
-3. increments that logical channel's pulse counter
-4. publishes pulse count to the shared snapshot
-5. clears the slice IRQ
+For the current software timing model, target range, and standalone monitor role, see [Software PWM Design](sw_pwm_design.md).
 
 ## PIO Generator Detailed Design
 
@@ -727,7 +695,6 @@ Published fields:
 
 Used by:
 
-- hardware PWM wrap IRQ
 - software PWM timer callback
 
 Only the `pulse_count` field is updated for these events.

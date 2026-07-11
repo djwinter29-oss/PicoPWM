@@ -15,7 +15,8 @@ add_executable(pico_pwm
     src/pwmdriver/pwm_driver.c
     src/pwmdriver/hw/generator.c
     src/pwmdriver/hw/monitor.c
-    src/pwmdriver/sw_pwm_driver.c
+    src/pwmdriver/sw/generator.c
+    src/pwmdriver/sw/monitor.c
     src/pwmdriver/pio/generator.c
     src/cli/cli_shell.c
     src/cli/device_cli.c

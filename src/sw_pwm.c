@@ -1,6 +1,6 @@
 #include "sw_pwm.h"
 
-#include "pwmdriver/sw_pwm_driver.h"
+#include "pwmdriver/sw/generator.h"
 
 void sw_pwm_init(void) {
     sw_pwm_driver_init();

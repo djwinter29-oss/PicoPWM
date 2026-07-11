@@ -8,7 +8,7 @@
 
 #include "hw/generator.h"
 #include "pio/generator.h"
-#include "sw_pwm_driver.h"
+#include "sw/generator.h"
 
 #include "pico/critical_section.h"
 #include "pico/mutex.h"
@@ -199,33 +199,27 @@ void pwm_driver_store_pulse_count(uint channel, uint32_t pulse_count) {
  * @brief Dispatch one logical channel write to the owning backend implementation.
  * @param channel Logical channel index.
  * @param freq_hz Requested frequency in Hz.
- * @param duty Requested duty in the normalized range `[0.0, 1.0]`.
+ * @param duty Requested duty in percent in the range `[0, 100]`.
  * @return `true` when the backend accepted the request.
  */
-static bool pwm_driver_backend_set_freq(uint channel, float freq_hz, float duty) {
-    uint32_t requested_hz;
-    uint8_t requested_duty;
-
+static bool pwm_driver_backend_set_freq(uint channel, uint32_t freq_hz, uint8_t duty) {
     if (channel >= PWM_DRIVER_CHANNEL_COUNT) {
         return false;
     }
 
-    requested_hz = pwm_driver_freq_hz_from_float(freq_hz);
-    requested_duty = pwm_driver_duty_percent_from_float(duty);
-
     if (pwm_driver_is_hw_channel(channel)) {
-        return hw_gen_set_freq(channel - HW_PWM_CHANNEL_BASE, requested_hz, requested_duty);
+        return hw_gen_set_freq(channel - HW_PWM_CHANNEL_BASE, freq_hz, duty);
     }
 
     if (pwm_driver_is_pio_channel(channel)) {
-        return pio_gen_set_freq(channel - PIO_PWM_CHANNEL_BASE, requested_hz, requested_duty);
+        return pio_gen_set_freq(channel - PIO_PWM_CHANNEL_BASE, freq_hz, duty);
     }
 
-    if (requested_hz > 1000u) {
+    if (freq_hz > 1000u) {
         return false;
     }
 
-    return sw_pwm_driver_set_freq(channel - SW_PWM_CHANNEL_BASE, freq_hz, duty);
+    return sw_gen_set_freq(channel - SW_PWM_CHANNEL_BASE, freq_hz, duty);
 }
 
 /**
@@ -247,7 +241,7 @@ static bool pwm_driver_backend_get(uint channel, pwm_driver_state_t *state) {
         return pio_gen_get(channel - PIO_PWM_CHANNEL_BASE, state);
     }
 
-    return sw_pwm_driver_get(channel - SW_PWM_CHANNEL_BASE, state);
+    return sw_gen_get(channel - SW_PWM_CHANNEL_BASE, state);
 }
 
 /** @brief Initialize the shared snapshot cache with the logical power-on default state. */
@@ -285,8 +279,8 @@ static void pwm_driver_process_mailbox(void) {
 
         bool ok = pwm_driver_backend_set_freq(
             cmd.channel,
-            (float)cmd.freq_hz,
-            pwm_driver_duty_ratio_from_percent(cmd.duty)
+            cmd.freq_hz,
+            cmd.duty
         );
 
         critical_section_enter_blocking(&pwm_reply_lock);
@@ -302,7 +296,7 @@ static void pwm_driver_process_mailbox(void) {
 static void pwm_driver_core_main(void) {
     hw_gen_init();
     pio_gen_init();
-    sw_pwm_driver_init();
+    sw_gen_init();
 
     pwm_ready = true;
 

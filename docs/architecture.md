@@ -11,6 +11,8 @@ Use the architecture-related pages as follows:
 - [Architecture](architecture.md) — system structure, layer boundaries, and request flow
 - [Firmware Interfaces](firmware_interfaces.md) — source-level interface reference for the current modules
 - [PWM Driver Design](detail/pwm_driver_design.md) — detailed `pwmdriver` and backend internals
+- [Hardware PWM Design](detail/hw_pwm_design.md) — hardware generator and monitor design, limits, and target range
+- [Software PWM Design](detail/sw_pwm_design.md) — software generator and monitor design, limits, and standalone monitor role
 
 ## System Model
 

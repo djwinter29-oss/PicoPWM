@@ -230,7 +230,8 @@ The following headers are Core 1 implementation details and should not be used b
 - `pwmdriver/hw_pwm_driver.h`
 - `pwmdriver/pio/generator.h`
 - `pwmdriver/pwm_driver_internal.h`
-- `pwmdriver/sw_pwm_driver.h`
+- `pwmdriver/sw/generator.h`
+- `pwmdriver/sw/monitor.h`
 
 They own backend-local setup, timing, and publish helpers. See [detail/pwm_driver_design.md](detail/pwm_driver_design.md) for the detailed design.
 

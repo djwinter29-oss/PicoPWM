@@ -128,14 +128,15 @@ This keeps the ISR transport-focused and avoids running backend-affecting logic 
 
 ## Cross-Core Mutation Boundary
 
-`pwm_driver_set_freq()` is the only public cross-core mutation API.
+`control_iface` is the only public Core 0 mutation facade.
 
-- Core 0 validates and submits logical writes.
+- Core 0 transport code enters through `control_iface`.
+- `control_iface` forwards writes into the internal `pwmdriver` mailbox API.
 - Core 1 applies the write to the selected backend.
 - Core 1 publishes the realized state after successful apply.
 - Core 0 waits for the result and reports `ok`, `busy`, `invalid`, `timeout`, `unavailable`, or `apply failed` to the caller.
 
-Higher layers should normally enter through `control_iface` rather than calling `pwm_driver_set_freq()` directly.
+The internal `pwmdriver` mailbox API is not part of the transport-facing interface.
 
 ## Shared State Model
 

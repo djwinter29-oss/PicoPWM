@@ -5,7 +5,7 @@ PicoPWM exposes two command interfaces with the same logical data:
 - **USB CDC serial** — text commands, easy for humans and scripts
 - **I2C slave** — binary protocol, efficient for microcontrollers and host boards
 
-Both can read device identity and per-channel properties. Both can also drive the same shared control path for channel updates and stop-all requests.
+Both can read device identity and per-channel properties. Both can also drive the same shared control path for channel updates and restore-defaults requests.
 
 **Important:** `pulse_count` is read-only from both interfaces. It cannot be set or reset directly. The `stop` command disables all channels by restoring `freq = 0 Hz` and `duty = 50%`, but `pulse_count` continues accumulating from power-on. For PIO channels, `pulse_count` is an estimated period count derived from elapsed time and realized frequency, not a hardware-counted edge total. That estimate still advances for nonzero-frequency `0%` and `100%` duty settings because it represents generated periods, not observed output toggles.
 
@@ -26,7 +26,7 @@ Connect to the Pico as a USB serial port (CDC) at **115200 baud**. Type commands
 | `set <ch> <freq> <duty%>` | Set channel frequency and duty | `set 0 1000 50` |
 | `led <on\\|off>` | Set the board LED state | `led on` |
 | `reboot` | Reboot the board | `reboot` |
-| `stop` | Stop all channels and reset to power-up defaults | `stop` |
+| `stop` | Restore all channels to power-up defaults | `stop` |
 | `status` | Print all channels | `status` |
 | `help` | Show command list | `help` |
 
@@ -92,9 +92,7 @@ Read commands are answered from the realized channel snapshot published by the P
 | `REG_CHANNELS` | `0x02` | 1 | 1 | Channel count (24) |
 | `REG_GET_CH0`..`REG_GET_CH23` | `0x10`..`0x27` | 1 | 9 | Read one channel's realized properties |
 | `REG_SET_CH0`..`REG_SET_CH23` | `0x30`..`0x47` | 6 | 1 | Write one channel's frequency and duty, read back last status |
-| `REG_SET_FREQ_CH0`..`REG_SET_FREQ_CH23` | `0x50`..`0x67` | 5 | 1 | Write one channel's frequency, read back last status |
-| `REG_SET_DUTY_CH0`..`REG_SET_DUTY_CH23` | `0x70`..`0x87` | 2 | 1 | Write one channel's duty, read back last status |
-| `REG_STOP_ALL` | `0x90` | 1 | 1 | Stop all channels and read back last status |
+| `REG_STOP_ALL` | `0x90` | 1 | 1 | Restore all channels to defaults and read back last status |
 | `REG_LED` | `0x91` | 2 | 1 | Set board LED state (`0` = off, `1` = on) and read back last status |
 | `REG_REBOOT` | `0x92` | 1 | 1 | Request board reboot and read back last status |
 
@@ -116,18 +114,6 @@ For `0x30 .. 0x47` (5 payload bytes after the register byte, little-endian):
 |------|------|-------|------|
 | 0-3 | 4 | `freq` | `uint32_t` (Hz) |
 | 4 | 1 | `duty` | `uint8_t` (0..100, values above 100 are clamped) |
-
-For `0x50 .. 0x67` (4 payload bytes after the register byte, little-endian):
-
-| Byte | Size | Field | Type |
-|------|------|-------|------|
-| 0-3 | 4 | `freq` | `uint32_t` (Hz) |
-
-For `0x70 .. 0x87` (1 payload byte after the register byte):
-
-| Byte | Size | Field | Type |
-|------|------|-------|------|
-| 0 | 1 | `duty` | `uint8_t` (0..100, values above 100 are clamped) |
 
 For `0x91` (1 payload byte after the register byte):
 

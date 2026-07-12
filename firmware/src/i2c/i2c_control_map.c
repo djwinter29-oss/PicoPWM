@@ -21,20 +21,8 @@ static bool i2c_control_map_is_full_write(uint8_t reg) {
            reg < (uint8_t)(I2C_CONTROL_MAP_REG_SET_BASE + PWM_DRIVER_CHANNEL_COUNT);
 }
 
-static bool i2c_control_map_is_freq_write(uint8_t reg) {
-    return reg >= I2C_CONTROL_MAP_REG_SET_FREQ_BASE &&
-           reg < (uint8_t)(I2C_CONTROL_MAP_REG_SET_FREQ_BASE + PWM_DRIVER_CHANNEL_COUNT);
-}
-
-static bool i2c_control_map_is_duty_write(uint8_t reg) {
-    return reg >= I2C_CONTROL_MAP_REG_SET_DUTY_BASE &&
-           reg < (uint8_t)(I2C_CONTROL_MAP_REG_SET_DUTY_BASE + PWM_DRIVER_CHANNEL_COUNT);
-}
-
 bool i2c_control_map_is_write_register(uint8_t reg) {
     return i2c_control_map_is_full_write(reg) ||
-           i2c_control_map_is_freq_write(reg) ||
-           i2c_control_map_is_duty_write(reg) ||
            (reg == I2C_CONTROL_MAP_REG_STOP_ALL) ||
            (reg == I2C_CONTROL_MAP_REG_LED) ||
            (reg == I2C_CONTROL_MAP_REG_REBOOT);
@@ -56,14 +44,6 @@ uint8_t i2c_control_map_expected_write_length(uint8_t reg) {
 
     if (i2c_control_map_is_full_write(reg)) {
         return 6u;
-    }
-
-    if (i2c_control_map_is_freq_write(reg)) {
-        return 5u;
-    }
-
-    if (i2c_control_map_is_duty_write(reg)) {
-        return 2u;
     }
 
     return 0u;
@@ -127,7 +107,7 @@ pwm_driver_result_t i2c_control_map_execute_write(uint8_t reg, const uint8_t *pa
         if (payload_len != 0u) {
             return PWM_DRIVER_RESULT_INVALID;
         }
-        return control_iface_stop_all();
+        return control_iface_restore_defaults();
     }
 
     if (reg == I2C_CONTROL_MAP_REG_LED) {
@@ -157,26 +137,6 @@ pwm_driver_result_t i2c_control_map_execute_write(uint8_t reg, const uint8_t *pa
         memcpy(&value_freq, payload + 0, sizeof(uint32_t));
         memcpy(&value_duty, payload + 4, sizeof(uint8_t));
         return control_iface_set_channel(channel, value_freq, value_duty);
-    }
-
-    if (i2c_control_map_is_freq_write(reg)) {
-        if ((payload == NULL) || (payload_len != 4u)) {
-            return PWM_DRIVER_RESULT_INVALID;
-        }
-
-        channel = (uint)(reg - I2C_CONTROL_MAP_REG_SET_FREQ_BASE);
-        memcpy(&value_freq, payload, sizeof(uint32_t));
-        return control_iface_set_channel_freq(channel, value_freq);
-    }
-
-    if (i2c_control_map_is_duty_write(reg)) {
-        if ((payload == NULL) || (payload_len != 1u)) {
-            return PWM_DRIVER_RESULT_INVALID;
-        }
-
-        channel = (uint)(reg - I2C_CONTROL_MAP_REG_SET_DUTY_BASE);
-        value_duty = payload[0];
-        return control_iface_set_channel_duty(channel, value_duty);
     }
 
     return PWM_DRIVER_RESULT_INVALID;

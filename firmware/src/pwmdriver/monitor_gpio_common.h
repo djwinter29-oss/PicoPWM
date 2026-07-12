@@ -25,6 +25,7 @@ typedef struct {
 /** @brief Shared runtime ownership and latest sample state for one GPIO monitor channel. */
 typedef struct {
     pwm_driver_state_t state; /**< Latest exported monitor state. */
+    uint32_t pulse_count; /**< Monotonic observed-period count accumulated from completed samples. */
     bool sample_valid; /**< Indicates whether one full PWM sample has been captured. */
     pwm_gpio_mon_capture_t capture; /**< Transient edge timestamps and partial-sample tracking. */
 } pwm_gpio_mon_channel_t;
@@ -33,7 +34,7 @@ typedef struct {
 static inline void pwm_gpio_mon_publish_state(pwm_gpio_mon_channel_t *ctx, uint32_t freq_hz, uint8_t duty, bool sample_valid) {
     ctx->state.freq_hz = freq_hz;
     ctx->state.duty = duty;
-    ctx->state.pulse_count = 0u;
+    ctx->state.pulse_count = ctx->pulse_count;
     ctx->sample_valid = sample_valid;
 }
 
@@ -47,6 +48,7 @@ static inline void pwm_gpio_mon_init_pin(uint pin) {
 static inline void pwm_gpio_mon_reset_channel(pwm_gpio_mon_channel_t *ctx) {
     uint64_t now_us = time_us_64();
 
+    ctx->pulse_count = 0u;
     pwm_gpio_mon_publish_state(ctx, 0u, 0u, false);
     ctx->capture.last_edge_us = now_us;
     ctx->capture.last_rise_us = now_us;
@@ -55,14 +57,14 @@ static inline void pwm_gpio_mon_reset_channel(pwm_gpio_mon_channel_t *ctx) {
     ctx->capture.have_high = false;
 }
 
-/** @brief Publish one captured period plus high width as exported frequency and duty. */
-static inline void pwm_gpio_mon_publish_sample(pwm_gpio_mon_channel_t *ctx, uint64_t period_us, uint32_t high_us, uint32_t unstable_freq_hz, uint8_t unstable_duty) {
+/** @brief Publish one accepted captured period plus high width as exported frequency and duty. */
+static inline bool pwm_gpio_mon_publish_sample(pwm_gpio_mon_channel_t *ctx, uint64_t period_us, uint32_t high_us, uint32_t unstable_freq_hz, uint8_t unstable_duty) {
     uint64_t rounded_freq_hz;
     uint32_t duty_percent;
 
     if (period_us == 0u || high_us > period_us) {
         pwm_gpio_mon_publish_state(ctx, unstable_freq_hz, unstable_duty, false);
-        return;
+        return false;
     }
 
     rounded_freq_hz = (1000000u + (period_us / 2u)) / period_us;
@@ -75,7 +77,9 @@ static inline void pwm_gpio_mon_publish_sample(pwm_gpio_mon_channel_t *ctx, uint
         duty_percent = 100u;
     }
 
+    ctx->pulse_count++;
     pwm_gpio_mon_publish_state(ctx, (uint32_t)rounded_freq_hz, (uint8_t)duty_percent, true);
+    return true;
 }
 
 /** @brief Update one GPIO monitor bank from one observed edge event. */
@@ -99,7 +103,7 @@ static inline void pwm_gpio_mon_handle_irq(uint gpio, uint32_t events, uint gpio
 
     if ((events & GPIO_IRQ_EDGE_RISE) != 0u) {
         if (ctx->capture.have_rise && ctx->capture.have_high) {
-            pwm_gpio_mon_publish_sample(ctx, now_us - ctx->capture.last_rise_us, ctx->capture.high_us, unstable_freq_hz, unstable_duty);
+            (void)pwm_gpio_mon_publish_sample(ctx, now_us - ctx->capture.last_rise_us, ctx->capture.high_us, unstable_freq_hz, unstable_duty);
         }
 
         ctx->capture.last_rise_us = now_us;
@@ -134,7 +138,7 @@ static inline bool pwm_gpio_mon_read_channel(uint channel, pwm_driver_state_t *s
         restore_interrupts(irq_state);
         state->freq_hz = 0u;
         state->duty = gpio_get(gpio_pins[channel]) ? 100u : 0u;
-        state->pulse_count = 0u;
+        state->pulse_count = channels[channel].pulse_count;
         return true;
     }
 

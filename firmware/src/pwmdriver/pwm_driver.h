@@ -44,73 +44,6 @@ typedef struct {
 } pwm_driver_state_t;
 
 /**
- * @brief Apply both frequency and duty to one logical channel.
- * @param channel Logical channel index.
- * @param freq_hz Requested frequency in Hz.
- * @param duty Requested duty in percent in the range `[0, 100]`; values above `100` are clamped.
- * @return Result code from the shared PWM control plane.
- */
-pwm_driver_result_t control_set(uint channel, uint32_t freq_hz, uint8_t duty);
-
-/**
- * @brief Apply frequency while preserving the currently realized duty.
- * @param channel Logical channel index.
- * @param freq_hz Requested frequency in Hz.
- * @return Result code from the shared PWM control plane.
- */
-pwm_driver_result_t control_set_freq(uint channel, uint32_t freq_hz);
-
-/**
- * @brief Apply duty while preserving the currently realized frequency.
- * @param channel Logical channel index.
- * @param duty Requested duty in percent in the range `[0, 100]`; values above `100` are clamped.
- * @return Result code from the shared PWM control plane.
- */
-pwm_driver_result_t control_set_duty(uint channel, uint8_t duty);
-
-/**
- * @brief Read one logical channel snapshot.
- * @param channel Logical channel index.
- * @param state Caller-owned destination for the realized channel state.
- * @return `true` when the channel exists and the state was copied.
- */
-bool control_get(uint channel, pwm_driver_state_t *state);
-
-/**
- * @brief Read the realized frequency for one logical channel.
- * @param channel Logical channel index.
- * @return Realized frequency in Hz, or `0` when the channel is invalid.
- */
-uint32_t control_get_freq(uint channel);
-
-/**
- * @brief Read the realized duty for one logical channel.
- * @param channel Logical channel index.
- * @return Realized duty in percent in the range `[0, 100]`, or `0` when invalid.
- */
-uint8_t control_get_duty(uint channel);
-
-/**
- * @brief Read the monotonic pulse counter for one logical channel.
- * @param channel Logical channel index.
- * @return Realized pulse counter, or `0` when the channel is invalid.
- */
-uint32_t control_get_pulse_count(uint channel);
-
-/**
- * @brief Return whether one logical channel is currently enabled.
- * @param channel Logical channel index.
- * @return `true` when the realized frequency is greater than `0`.
- */
-bool control_is_enabled(uint channel);
-
-/**
- * @brief Stop all channels and restore the shared default state.
- * @return Result code from the shared PWM control plane.
- */
-pwm_driver_result_t control_stop_all(void);
-
-/**
  * @brief Launch Core 1 backend ownership and start the PWM driver runtime.
  */
 void pwm_driver_launch(void);
@@ -120,24 +53,5 @@ void pwm_driver_launch(void);
  * @return `true` once the PWM driver runtime is ready to accept commands.
  */
 bool pwm_driver_is_ready(void);
-
-/**
- * @brief Submit one cross-core logical channel update.
- * @param channel Logical channel index.
- * @param freq_hz Requested frequency in Hz.
- * @param duty Requested duty in percent in the range `[0, 100]`; values above `100` are clamped.
- * @return Result code for the admitted command attempt.
- * @note This is a Core 0 command-ingress API. Higher command layers should normally
- *       prefer the `control_*()` helpers for full-state or read-modify-write updates.
- */
-pwm_driver_result_t pwm_driver_set_freq(uint channel, uint32_t freq_hz, uint8_t duty);
-
-/**
- * @brief Read the latest published realized state for one logical channel.
- * @param channel Logical channel index.
- * @param state Caller-owned destination for the realized channel state.
- * @return `true` when the channel exists and the state was copied.
- */
-bool pwm_driver_get(uint channel, pwm_driver_state_t *state);
 
 #endif

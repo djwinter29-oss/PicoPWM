@@ -12,14 +12,6 @@
 #include "hardware/gpio.h"
 #include "hardware/pwm.h"
 
-/** @brief Exported realized state cached for one backend-local hardware channel. */
-typedef struct {
-    uint32_t realized_freq_hz; /**< Realized output frequency in Hz. */
-    uint8_t realized_duty; /**< Realized duty in percent in the range `[0, 100]`. */
-} hw_gen_channel_state_t;
-
-/** @brief Realized hardware PWM state in backend-local channel order. */
-static hw_gen_channel_state_t hw_gen_channels[HW_PWM_COUNT] = {0};
 /** @brief Cached system clock used by the hardware generator timing search. */
 static uint32_t hw_gen_sys_clk_hz = 0u;
 
@@ -65,11 +57,15 @@ static void hw_gen_drive_static_level(uint gpio, bool high) {
     gpio_put(gpio, high);
 }
 
-/** @brief Copy one backend-local realized channel state into a caller-owned snapshot. */
-static void hw_gen_fill_state(uint channel, pwm_driver_state_t *state) {
-    state->freq_hz = hw_gen_channels[channel].realized_freq_hz;
-    state->duty = hw_gen_channels[channel].realized_duty;
-    state->pulse_count = 0u;
+/** @brief Publish one hardware backend realized state snapshot into the shared logical cache. */
+static void hw_gen_publish_state(uint channel, uint32_t realized_freq_hz, uint8_t realized_duty) {
+    pwm_driver_state_t state = {
+        .freq_hz = realized_freq_hz,
+        .duty = realized_duty,
+        .pulse_count = 0u,
+    };
+
+    pwm_driver_store_applied_state(HW_PWM_CHANNEL_BASE + channel, &state);
 }
 
 /** @brief Return the smallest supported hardware PWM frequency in Hz for the current clock plan. */
@@ -207,16 +203,14 @@ void hw_gen_init(void) {
         pwm_set_chan_level(slice, ch, 0);
         pwm_set_enabled(slice, false);
 
-        hw_gen_channels[i].realized_freq_hz = 0u;
-        hw_gen_channels[i].realized_duty = 50u;
     }
 }
 
-/** @copydoc hw_gen_set_freq */
-bool hw_gen_set_freq(uint channel, uint32_t freq_hz, uint8_t duty) {
-    pwm_driver_state_t state;
+/** @copydoc hw_gen_set */
+bool hw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     uint32_t best_top;
     uint16_t best_div_x16;
+    uint32_t realized_freq_hz;
 
     if (channel >= HW_PWM_COUNT) return false;
     if (duty > 100u) duty = 100u;
@@ -229,10 +223,7 @@ bool hw_gen_set_freq(uint channel, uint32_t freq_hz, uint8_t duty) {
         pwm_set_enabled(slice, false);
         pwm_set_chan_level(slice, ch, 0);
         hw_gen_drive_static_level(gpio, duty >= 100u);
-        hw_gen_channels[channel].realized_freq_hz = 0u;
-        hw_gen_channels[channel].realized_duty = duty;
-        hw_gen_fill_state(channel, &state);
-        pwm_driver_store_applied_state(HW_PWM_CHANNEL_BASE + channel, &state);
+        hw_gen_publish_state(channel, 0u, duty);
         return true;
     }
 
@@ -254,18 +245,24 @@ bool hw_gen_set_freq(uint channel, uint32_t freq_hz, uint8_t duty) {
      * current firmware sets the system clock once at startup. If runtime reclocking is added
      * later, refresh this cached value or read the live clock here.
      */
-    hw_gen_channels[channel].realized_freq_hz = hw_gen_realized_freq_hz(best_top, best_div_x16);
-    hw_gen_channels[channel].realized_duty = duty;
-
-    hw_gen_fill_state(channel, &state);
-    pwm_driver_store_applied_state(HW_PWM_CHANNEL_BASE + channel, &state);
+    realized_freq_hz = hw_gen_realized_freq_hz(best_top, best_div_x16);
+    hw_gen_publish_state(channel, realized_freq_hz, duty);
 
     return true;
 }
 
-/** @copydoc hw_gen_get */
-bool hw_gen_get(uint channel, pwm_driver_state_t *state) {
-    if (channel >= HW_PWM_COUNT || state == NULL) return false;
-    hw_gen_fill_state(channel, state);
+/** @copydoc hw_gen_restore_defaults */
+bool hw_gen_restore_defaults(void) {
+    for (uint channel = 0; channel < HW_PWM_COUNT; channel++) {
+        uint gpio = PWM_HW_GPIO_PINS[channel];
+        uint slice = pwm_gpio_to_slice_num(gpio);
+        uint ch = pwm_gpio_to_channel(gpio);
+
+        pwm_set_enabled(slice, false);
+        pwm_set_chan_level(slice, ch, 0u);
+        hw_gen_drive_static_level(gpio, false);
+        hw_gen_publish_state(channel, 0u, 50u);
+    }
+
     return true;
 }

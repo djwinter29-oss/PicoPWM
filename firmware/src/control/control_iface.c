@@ -5,6 +5,8 @@
 
 #include "control/control_iface.h"
 
+#include "pwmdriver/pwm_driver_internal.h"
+
 /** @brief Fixed device name reported through control/status transports. */
 #define CONTROL_IFACE_DEVICE_NAME "PicoPWM"
 
@@ -26,21 +28,13 @@ uint8_t control_iface_channel_count(void) {
 }
 
 bool control_iface_get_channel(uint channel, pwm_driver_state_t *state) {
-    return control_get(channel, state);
+    return pwm_driver_get(channel, state);
 }
 
 pwm_driver_result_t control_iface_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
-    return control_set(channel, freq_hz, duty);
+    return pwm_driver_set(channel, freq_hz, duty);
 }
 
-pwm_driver_result_t control_iface_set_channel_freq(uint channel, uint32_t freq_hz) {
-    return control_set_freq(channel, freq_hz);
-}
-
-pwm_driver_result_t control_iface_set_channel_duty(uint channel, uint8_t duty) {
-    return control_set_duty(channel, duty);
-}
-
-pwm_driver_result_t control_iface_stop_all(void) {
-    return control_stop_all();
+pwm_driver_result_t control_iface_restore_defaults(void) {
+    return pwm_driver_restore_defaults();
 }

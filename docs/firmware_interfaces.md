@@ -109,9 +109,7 @@ const char *control_iface_firmware_version(void);
 uint8_t control_iface_channel_count(void);
 bool control_iface_get_channel(uint channel, pwm_driver_state_t *state);
 pwm_driver_result_t control_iface_set_channel(uint channel, uint32_t freq_hz, uint8_t duty);
-pwm_driver_result_t control_iface_set_channel_freq(uint channel, uint32_t freq_hz);
-pwm_driver_result_t control_iface_set_channel_duty(uint channel, uint8_t duty);
-pwm_driver_result_t control_iface_stop_all(void);
+pwm_driver_result_t control_iface_restore_defaults(void);
 ```
 
 Use this layer when you are writing transport code on Core 0.
@@ -158,35 +156,14 @@ typedef struct {
 } pwm_driver_state_t;
 ```
 
-### High-Level Logical Helpers
-
-These helpers are still declared in `pwm_driver.h` and are used by `control_iface` internally:
-
-```c
-pwm_driver_result_t control_set(uint channel, uint32_t freq_hz, uint8_t duty);
-pwm_driver_result_t control_set_freq(uint channel, uint32_t freq_hz);
-pwm_driver_result_t control_set_duty(uint channel, uint8_t duty);
-bool control_get(uint channel, pwm_driver_state_t *state);
-uint32_t control_get_freq(uint channel);
-uint8_t control_get_duty(uint channel);
-uint32_t control_get_pulse_count(uint channel);
-bool control_is_enabled(uint channel);
-pwm_driver_result_t control_stop_all(void);
-```
-
-These helpers:
-
-- operate on logical channel numbers
-- preserve read-modify-write behavior where needed
-- participate in the Core 0 public-write serialization path
-
-### Cross-Core Public API
+### Internal Mailbox API
 
 ```c
 void pwm_driver_launch(void);
 bool pwm_driver_is_ready(void);
-pwm_driver_result_t pwm_driver_set_freq(uint channel, uint32_t freq_hz, uint8_t duty);
+pwm_driver_result_t pwm_driver_set(uint channel, uint32_t freq_hz, uint8_t duty);
 bool pwm_driver_get(uint channel, pwm_driver_state_t *state);
+pwm_driver_result_t pwm_driver_restore_defaults(void);
 ```
 
 Notes:
@@ -198,10 +175,11 @@ Intent:
 
 - `pwm_driver_launch()` starts Core 1 backend ownership
 - `pwm_driver_is_ready()` gates command acceptance
-- `pwm_driver_set_freq()` is the command-ingress mutation path from Core 0
+- `pwm_driver_set()` is the internal command-ingress mutation path from `control_iface`
 - `pwm_driver_get()` returns the latest published realized state
+- `pwm_driver_restore_defaults()` submits one bulk restore-defaults mailbox command
 
-For transport-facing code, prefer `control_iface` over calling these entry points directly unless you are working on the shared control layer itself.
+For transport-facing code, use `control_iface`. These `pwmdriver` entry points are internal to the shared control layer and backend boundary.
 
 ## Board Utility APIs
 

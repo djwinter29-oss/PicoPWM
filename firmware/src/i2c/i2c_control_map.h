@@ -18,8 +18,6 @@ typedef enum {
 	I2C_CONTROL_MAP_REG_CHANNEL_COUNT = 0x02u, /**< Read-only register returning the logical channel count. */
 	I2C_CONTROL_MAP_REG_CH_BASE = 0x10u, /**< Base register for 24 channel snapshot reads, one 9-byte record per channel. */
 	I2C_CONTROL_MAP_REG_SET_BASE = 0x30u, /**< Base register for full channel write commands carrying freq and duty. */
-	I2C_CONTROL_MAP_REG_SET_FREQ_BASE = 0x50u, /**< Base register for frequency-only write commands. */
-	I2C_CONTROL_MAP_REG_SET_DUTY_BASE = 0x70u, /**< Base register for duty-only write commands. */
 	I2C_CONTROL_MAP_REG_STOP_ALL = 0x90u, /**< Register used to request stop-all and to read the last command result. */
 	I2C_CONTROL_MAP_REG_LED = 0x91u, /**< Register used to set the board LED state and to read the last command result. */
 	I2C_CONTROL_MAP_REG_REBOOT = 0x92u, /**< Register used to request a board reboot and to read the last command result. */

@@ -13,8 +13,8 @@
  * - It keeps only the latest exported sample for each channel.
  * - Inputs slower than 1 Hz are intentionally treated as permanent high or low levels rather
  *   than as in-spec PWM measurements.
- * - The backend does not provide a reliable received pulse count and always reports
- *   `pulse_count = 0`.
+ * - `pulse_count` increments once per completed observed period, so it reflects accepted
+ *   edge-reconstructed cycles rather than hardware-captured edges.
  *
  * ponytail: This module intentionally mirrors the small edge-timestamp pattern used by the
  * hardware monitor backend instead of introducing a shared private abstraction immediately.

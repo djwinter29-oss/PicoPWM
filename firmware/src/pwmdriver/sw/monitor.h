@@ -49,7 +49,8 @@ void sw_mon_init(void);
  * @note This is a low-frequency, best-effort monitor only.
  * @note If no input transition is observed for more than one second, the monitor reports a
  *       static level as `freq_hz = 0` with `duty = 0` or `100` based on the sampled GPIO.
- * @note `pulse_count` is always `0`.
+ * @note `pulse_count` increments once per completed observed period reconstructed from
+ *       rising/falling/rising edge sequences.
  */
 bool sw_mon_get(uint channel, pwm_driver_state_t *state);
 

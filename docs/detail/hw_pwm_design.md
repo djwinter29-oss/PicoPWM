@@ -220,11 +220,12 @@ If a channel sees no transition for more than one second, the monitor treats the
 
 ### Monitor Pulse Count Policy
 
-The hardware monitor does not provide a reliable received pulse count.
+The hardware monitor increments a monotonic observed-period counter whenever it reconstructs one
+full PWM cycle from a rising edge, the following falling edge, and the next rising edge.
 
-For that reason it always reports:
+That means `pulse_count` reflects accepted edge-reconstructed cycles, not hardware-counted edges:
 
-- `pulse_count = 0`
+- `pulse_count` increments once per completed observed period
 
 ## Summary
 

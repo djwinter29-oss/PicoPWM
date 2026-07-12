@@ -300,7 +300,7 @@ static bool device_cli_stop(int argc, const char *const *argv) {
         return cli_shell_write_line("ERR usage: stop");
     }
 
-    result = control_iface_stop_all();
+    result = control_iface_restore_defaults();
     if (result == PWM_DRIVER_RESULT_OK) {
         return cli_shell_write_line("OK all channels stopped and reset (freq=0, duty=50%)");
     }

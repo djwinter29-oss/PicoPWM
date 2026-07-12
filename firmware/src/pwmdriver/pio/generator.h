@@ -18,16 +18,17 @@ void pio_gen_init(void);
  * @param duty Requested duty in percent in the range `[0, 100]`.
  * @return `true` when the backend accepted the request.
  */
-bool pio_gen_set_freq(uint channel, uint32_t freq_hz, uint8_t duty);
+bool pio_gen_set(uint channel, uint32_t freq_hz, uint8_t duty);
+
+/** @brief Restore the PIO PWM backend channels to the shared logical default state. */
+bool pio_gen_restore_defaults(void);
 
 /**
- * @brief Read the realized state for one PIO generator backend channel.
+ * @brief Finalize one published PIO readback snapshot for Core 0 consumers.
  * @param channel Backend-local PIO generator channel index.
- * @param state Caller-owned destination for the realized state.
- * @return `true` when the channel exists and the state was copied.
- * @note This backend getter returns the cached base `pulse_count`. The shared
- *       `pwm_driver_get()` path owns live PIO pulse extrapolation.
+ * @param state Caller-owned snapshot to finalize in place.
+ * @param pulse_ref_us Reference timestamp paired with `state->pulse_count`.
  */
-bool pio_gen_get(uint channel, pwm_driver_state_t *state);
+void pio_gen_finalize_readback(uint channel, pwm_driver_state_t *state, uint64_t pulse_ref_us);
 
 #endif

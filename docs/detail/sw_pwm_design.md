@@ -96,7 +96,14 @@ It also treats nonzero-frequency endpoint duties as static outputs:
 - `duty = 0` means static low
 - `duty = 100` means static high
 
-Those endpoint cases are intentionally removed from the per-tick scheduler path.
+Those static-output cases intentionally bypass the scheduled-output path, so the software-only
+frequency ceiling applies only to requests that actually need the repeating-timer scheduler.
+
+When the backend realizes a static level, it exports the driven stable level as:
+
+- `freq_hz = 0`
+- `duty = 0` for static low
+- `duty = 100` for static high
 
 ### Generator Tradeoffs
 

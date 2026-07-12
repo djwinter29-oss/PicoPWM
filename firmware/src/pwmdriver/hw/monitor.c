@@ -51,26 +51,6 @@ static int8_t hw_mon_gpio_to_channel[HW_MON_GPIO_COUNT] = {
 /** @brief Guards the standalone hardware monitor lifecycle so init only runs once. */
 static bool hw_mon_initialized = false;
 
-/** @brief Clear one channel's cached monitor sample and transient decode state. */
-static void hw_mon_reset_channel(hw_mon_channel_t *ctx) {
-    pwm_gpio_mon_reset_channel(ctx);
-}
-
-/** @brief Publish the defined unstable-read sentinel state. */
-static void hw_mon_publish_unstable(hw_mon_channel_t *ctx) {
-    /* ponytail: The unstable sentinel is retained to match the PIO monitor contract.
-     * The ceiling is that this simpler hardware monitor could arguably use validity alone.
-     * That tradeoff is acceptable now because cross-backend monitor consistency is more useful
-     * than shaving one publication state. If the monitor APIs diverge later, revisit this.
-     */
-    pwm_gpio_mon_publish_state(ctx, HW_MON_UNSTABLE_FREQ_HZ, HW_MON_UNSTABLE_DUTY, false);
-}
-
-/** @brief Publish one captured period plus high width as exported frequency and duty. */
-static void hw_mon_publish_sample(hw_mon_channel_t *ctx, uint64_t period_us, uint32_t high_us) {
-    pwm_gpio_mon_publish_sample(ctx, period_us, high_us, HW_MON_UNSTABLE_FREQ_HZ, HW_MON_UNSTABLE_DUTY);
-}
-
 /** @brief Shared GPIO edge callback that timestamps hardware-monitor pin transitions. */
 static void hw_mon_gpio_irq(uint gpio, uint32_t events) {
     pwm_gpio_mon_handle_irq(gpio, events, HW_MON_GPIO_COUNT, hw_mon_gpio_to_channel, hw_mon_channels, HW_MON_UNSTABLE_FREQ_HZ, HW_MON_UNSTABLE_DUTY);
@@ -93,7 +73,7 @@ void hw_mon_init(void) {
         pwm_gpio_mon_init_pin(pin);
 
         hw_mon_gpio_to_channel[pin] = (int8_t)channel;
-        hw_mon_reset_channel(&hw_mon_channels[channel]);
+        pwm_gpio_mon_reset_channel(&hw_mon_channels[channel]);
 
         /* ponytail: The monitor uses the SDK's one global GPIO callback. The ceiling is that
          * another module cannot install a different callback without coordination. That is

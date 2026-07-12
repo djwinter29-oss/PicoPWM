@@ -761,7 +761,14 @@ Hardware PWM may reject invalid channel numbers.
 
 PIO PWM may reject frequencies that cannot be represented by the program timing search.
 
-Software PWM owns its own maximum supported frequency policy and treats `freq_hz == 0` as disable while preserving the logical duty value in published state.
+Software PWM owns its own maximum supported frequency policy and resolves static outputs to the
+driven realized level in published state.
+
+Launch-time cache seeding uses the same shared logical default as backend restore-defaults:
+
+- `freq_hz = 0`
+- `duty = 0`
+- `pulse_count = 0`
 
 ### Mailbox Pressure
 

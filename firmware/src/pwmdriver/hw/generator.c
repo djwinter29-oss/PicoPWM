@@ -57,6 +57,23 @@ static void hw_gen_drive_static_level(uint gpio, bool high) {
     gpio_put(gpio, high);
 }
 
+/** @brief Resolve one hardware static-output request to the realized driven level. */
+static uint8_t hw_gen_static_duty(uint8_t duty_percent) {
+    return duty_percent >= 100u ? 100u : 0u;
+}
+
+/** @brief Apply one realized static hardware output state and publish the matching shared snapshot. */
+static void hw_gen_apply_static_state(uint channel, uint8_t realized_duty) {
+    uint gpio = PWM_HW_GPIO_PINS[channel];
+    uint slice = pwm_gpio_to_slice_num(gpio);
+    uint ch = pwm_gpio_to_channel(gpio);
+
+    pwm_set_enabled(slice, false);
+    pwm_set_chan_level(slice, ch, 0u);
+    hw_gen_drive_static_level(gpio, realized_duty >= 100u);
+    hw_gen_publish_state(channel, 0u, realized_duty);
+}
+
 /** @brief Publish one hardware backend realized state snapshot into the shared logical cache. */
 static void hw_gen_publish_state(uint channel, uint32_t realized_freq_hz, uint8_t realized_duty) {
     pwm_driver_state_t state = {
@@ -211,6 +228,7 @@ bool hw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     uint32_t best_top;
     uint16_t best_div_x16;
     uint32_t realized_freq_hz;
+    uint8_t static_duty;
 
     if (channel >= HW_PWM_COUNT) return false;
     if (duty > 100u) duty = 100u;
@@ -219,11 +237,10 @@ bool hw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     uint slice = pwm_gpio_to_slice_num(gpio);
     uint ch = pwm_gpio_to_channel(gpio);
 
-    if (freq_hz == 0u) {
-        pwm_set_enabled(slice, false);
-        pwm_set_chan_level(slice, ch, 0);
-        hw_gen_drive_static_level(gpio, duty >= 100u);
-        hw_gen_publish_state(channel, 0u, duty);
+    static_duty = hw_gen_static_duty(duty);
+
+    if (freq_hz == 0u || duty == 0u || duty >= 100u) {
+        hw_gen_apply_static_state(channel, static_duty);
         return true;
     }
 
@@ -254,14 +271,7 @@ bool hw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
 /** @copydoc hw_gen_restore_defaults */
 bool hw_gen_restore_defaults(void) {
     for (uint channel = 0; channel < HW_PWM_COUNT; channel++) {
-        uint gpio = PWM_HW_GPIO_PINS[channel];
-        uint slice = pwm_gpio_to_slice_num(gpio);
-        uint ch = pwm_gpio_to_channel(gpio);
-
-        pwm_set_enabled(slice, false);
-        pwm_set_chan_level(slice, ch, 0u);
-        hw_gen_drive_static_level(gpio, false);
-        hw_gen_publish_state(channel, 0u, 50u);
+        hw_gen_apply_static_state(channel, 0u);
     }
 
     return true;

@@ -91,6 +91,11 @@ The zero-frequency policy is:
 - `freq_hz = 0`, `duty = 100` means static high
 - `freq_hz = 0`, any other duty means static low
 
+Nonzero-frequency endpoint duties also resolve directly to static levels:
+
+- `duty = 0` means static low
+- `duty = 100` means static high
+
 This keeps the public policy aligned with the monitor-oriented interpretation of static levels.
 
 ### Generator Tradeoffs
@@ -154,7 +159,7 @@ sequenceDiagram
 The current generator workflow is:
 
 1. accept one logical request in integer `freq_hz` and integer duty percent
-2. treat `freq_hz = 0` as a static output policy case
+2. resolve static outputs first for `freq_hz = 0` and endpoint duties
 3. otherwise search for a divider and period that best approximate the request
 4. push timing values into the running PIO state machine
 5. publish realized frequency and duty through the backend state
@@ -246,6 +251,10 @@ Instead:
 - DMA is configured as one long-running finite transfer
 - the state machine keeps running continuously
 - the backend does not rearm DMA from the measurement fast path
+
+This is an intentional prototype boundary, not an incidental limitation. The monitor treats the
+finite DMA lifetime as part of its current behavior so the runtime remains a small latest-snapshot
+design instead of also carrying a rearm or stream-management layer.
 
 With the current transfer count, updates eventually stop after about 36 minutes at a `1 MHz` input.
 

@@ -310,7 +310,11 @@ static void pio_mon_refresh_channel(uint channel) {
         ctx->published_pair_count = pair_count;
     }
 
-    if (!dma_exhausted && (now_us - ctx->last_sample_us) >= PIO_MON_STATIC_TIMEOUT_US) {
+    if (dma_exhausted) {
+        return;
+    }
+
+    if ((now_us - ctx->last_sample_us) >= PIO_MON_STATIC_TIMEOUT_US) {
         pio_mon_publish_static_level(channel);
     }
 }

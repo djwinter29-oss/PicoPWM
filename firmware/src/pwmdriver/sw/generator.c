@@ -76,8 +76,8 @@ static bool sw_gen_resolve_static_target(uint32_t freq_hz, uint8_t duty, sw_gen_
         return false;
     }
 
-    target->realized_duty = duty;
     target->high = duty >= 100u;
+    target->realized_duty = target->high ? 100u : 0u;
     return true;
 }
 
@@ -171,13 +171,13 @@ bool sw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     if (channel >= SW_PWM_COUNT) return false;
     if (duty > 100u) duty = 100u;
 
-    if (freq_hz > SW_GEN_MAX_FREQ_HZ) {
-        return false;
-    }
-
     if (sw_gen_resolve_static_target(freq_hz, duty, &static_target)) {
         sw_gen_drive_static_level(channel, static_target.realized_duty, static_target.high);
         return true;
+    }
+
+    if (freq_hz > SW_GEN_MAX_FREQ_HZ) {
+        return false;
     }
 
     period = (SW_PWM_BASE_HZ + (freq_hz / 2u)) / freq_hz;

@@ -223,6 +223,11 @@ static bool gen_resolve_target(uint32_t freq_hz, uint8_t duty, pio_gen_realized_
         return true;
     }
 
+    if (target->duty_percent == 0u || target->duty_percent == 100u) {
+        target->mode = target->duty_percent == 100u ? PIO_GEN_MODE_STATIC_HIGH : PIO_GEN_MODE_STATIC_LOW;
+        return true;
+    }
+
     if (freq_hz > PIO_GEN_MAX_FREQ_HZ) {
         return false;
     }
@@ -233,12 +238,10 @@ static bool gen_resolve_target(uint32_t freq_hz, uint8_t duty, pio_gen_realized_
         return false;
     }
 
-    target->mode = target->duty_percent == 0u ? PIO_GEN_MODE_STATIC_LOW : target->duty_percent == 100u ? PIO_GEN_MODE_STATIC_HIGH : PIO_GEN_MODE_PWM;
-    if (target->mode == PIO_GEN_MODE_PWM) {
-        target->period_count = period_count;
-        target->clkdiv_x256 = clkdiv_x256;
-        target->realized_freq_hz = gen_realized_freq_hz_for_timing(period_count, clkdiv_x256);
-    }
+    target->mode = PIO_GEN_MODE_PWM;
+    target->period_count = period_count;
+    target->clkdiv_x256 = clkdiv_x256;
+    target->realized_freq_hz = gen_realized_freq_hz_for_timing(period_count, clkdiv_x256);
 
     return true;
 }
@@ -518,7 +521,7 @@ bool pio_gen_restore_defaults(void) {
     for (uint channel = 0; channel < PIO_PWM_DRIVER_COUNT; channel++) {
         pio_gen_realized_target_t target;
 
-        hard_assert(gen_resolve_target(0u, 50u, &target));
+        hard_assert(gen_resolve_target(0u, 0u, &target));
         gen_apply_mode(channel, &target);
     }
 

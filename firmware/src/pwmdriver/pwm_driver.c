@@ -164,32 +164,6 @@ static const pwm_driver_backend_t *pwm_driver_classify_channel(uint channel, uin
 static pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd);
 
 /**
- * @brief Shared logical channel write helper used while the public write lock is already held.
- * @param channel Logical channel index.
- * @param freq_hz Requested frequency in Hz.
- * @param duty Requested duty in percent in the range `[0, 100]`.
- * @return Result code from the cross-core apply path.
- */
-static pwm_driver_result_t pwm_driver_set_unlocked(uint channel, uint32_t freq_hz, uint8_t duty) {
-    if (channel >= PWM_DRIVER_CHANNEL_COUNT) return PWM_DRIVER_RESULT_INVALID;
-    if (duty > 100u) duty = 100u;
-
-    return pwm_driver_submit_locked(&(pwm_driver_cmd_t) {
-        .op = PWM_DRIVER_OP_SET_CHANNEL,
-        .channel = (uint8_t)channel,
-        .freq_hz = freq_hz,
-        .duty = duty,
-    });
-}
-
-/** @brief Restore all logical channels to the shared default state while the public write lock is already held. */
-static pwm_driver_result_t pwm_driver_restore_defaults_unlocked(void) {
-    return pwm_driver_submit_locked(&(pwm_driver_cmd_t) {
-        .op = PWM_DRIVER_OP_RESTORE_DEFAULTS,
-    });
-}
-
-/**
  * @brief Publish one versioned snapshot update while the caller already owns the required coherence boundary.
  * @param channel Logical channel index.
  * @param freq_hz Optional realized frequency update; `NULL` keeps the current cached value.
@@ -292,7 +266,7 @@ static void pwm_driver_cache_defaults(void) {
     for (uint channel = 0; channel < PWM_DRIVER_CHANNEL_COUNT; channel++) {
         pwm_driver_state_t state = {
             .freq_hz = 0u,
-            .duty = 50u,
+            .duty = 0u,
             .pulse_count = 0,
         };
 
@@ -433,8 +407,20 @@ pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd) {
 pwm_driver_result_t pwm_driver_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     pwm_driver_result_t result;
 
+    if (channel >= PWM_DRIVER_CHANNEL_COUNT) {
+        return PWM_DRIVER_RESULT_INVALID;
+    }
+    if (duty > 100u) {
+        duty = 100u;
+    }
+
     mutex_enter_blocking(&control_api_lock);
-    result = pwm_driver_set_unlocked(channel, freq_hz, duty);
+    result = pwm_driver_submit_locked(&(pwm_driver_cmd_t) {
+        .op = PWM_DRIVER_OP_SET_CHANNEL,
+        .channel = (uint8_t)channel,
+        .freq_hz = freq_hz,
+        .duty = duty,
+    });
     mutex_exit(&control_api_lock);
 
     return result;
@@ -482,7 +468,9 @@ pwm_driver_result_t pwm_driver_restore_defaults(void) {
     pwm_driver_result_t status;
 
     mutex_enter_blocking(&control_api_lock);
-    status = pwm_driver_restore_defaults_unlocked();
+    status = pwm_driver_submit_locked(&(pwm_driver_cmd_t) {
+        .op = PWM_DRIVER_OP_RESTORE_DEFAULTS,
+    });
     mutex_exit(&control_api_lock);
 
     return status;

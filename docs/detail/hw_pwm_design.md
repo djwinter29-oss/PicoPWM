@@ -54,6 +54,11 @@ The generator treats `freq_hz = 0` as a static-output policy case:
 - `freq_hz = 0`, `duty = 100` means static high
 - `freq_hz = 0`, any other duty means static low
 
+Nonzero-frequency endpoint duties also resolve directly to static levels:
+
+- `duty = 0` means static low
+- `duty = 100` means static high
+
 ### Timing Model
 
 The hardware PWM block uses:
@@ -147,7 +152,7 @@ The current generator workflow is:
 
 1. accept one logical request in integer `freq_hz` and integer duty percent
 2. clamp duty into `0..100`
-3. treat `freq_hz = 0` as a static-output policy case
+3. resolve static outputs first for `freq_hz = 0` and endpoint duties
 4. otherwise search a local divider window for the best valid `TOP` and divider pair
 5. program wrap, divider, and compare level into the slice
 6. publish the realized frequency and duty through the backend state

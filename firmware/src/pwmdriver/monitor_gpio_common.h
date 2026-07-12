@@ -127,18 +127,20 @@ static inline void pwm_gpio_mon_handle_irq(uint gpio, uint32_t events, uint gpio
 static inline bool pwm_gpio_mon_read_channel(uint channel, pwm_driver_state_t *state, pwm_gpio_mon_channel_t *channels, uint32_t static_timeout_us, const uint *gpio_pins) {
     uint32_t irq_state;
     uint64_t last_edge_us;
+    uint32_t pulse_count;
     bool sample_valid;
     uint64_t now_us;
 
     irq_state = save_and_disable_interrupts();
     last_edge_us = channels[channel].capture.last_edge_us;
+    pulse_count = channels[channel].pulse_count;
     sample_valid = channels[channel].sample_valid;
     now_us = time_us_64();
     if ((now_us - last_edge_us) >= static_timeout_us) {
         restore_interrupts(irq_state);
         state->freq_hz = 0u;
         state->duty = gpio_get(gpio_pins[channel]) ? 100u : 0u;
-        state->pulse_count = channels[channel].pulse_count;
+        state->pulse_count = pulse_count;
         return true;
     }
 

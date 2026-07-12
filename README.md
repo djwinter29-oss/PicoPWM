@@ -182,7 +182,7 @@ If you are documenting or preparing the monitoring build, keep the same physical
 - **USB CDC serial**: text commands at 115200 baud
 - **I2C slave**: binary register map at 7-bit address `0x40` on GPIO 16 (SDA) / GPIO 17 (SCL)
 
-Use the `stop` command to reset all channels to the power-up state: frequency = 0 Hz and duty = 50%. `pulse_count` is monotonic from power-on and is not reset by `stop`.
+Use the `stop` command to reset all channels to the power-up state: frequency = 0 Hz and duty = 0%. `pulse_count` is monotonic from power-on and is not reset by `stop`.
 
 ---
 
@@ -207,7 +207,7 @@ After power-up or reset, **all 24 channels are off**:
 | Property | Value |
 |----------|-------|
 | Frequency | 0 Hz (off) |
-| Duty | 50% |
+| Duty | 0% |
 | Pulse count | 0 |
 
 No demo channels are configured. Use CDC or I2C commands to set frequencies and duty cycles.

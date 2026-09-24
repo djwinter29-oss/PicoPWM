@@ -12,30 +12,17 @@ This page is implementation-oriented and reflects the current source tree.
 ## Source Layout
 
 | File | Responsibility |
-|------|----------------|
+| ------ | ---------------- |
 | `firmware/src/pwmdriver/sw/generator.c` | Software PWM generator backend implementation |
 | `firmware/src/pwmdriver/sw/generator.h` | Software PWM generator backend interface |
 | `firmware/src/pwmdriver/sw/monitor.c` | Standalone software PWM monitor prototype |
 | `firmware/src/pwmdriver/sw/monitor.h` | Standalone software PWM monitor interface |
 
-## Channel and Pin Model
+## Channel Model
 
 The software PWM bank uses logical channels `16..23` in the unified driver model.
-
-Those channels map to these GPIOs:
-
-| Logical Channel | Backend-local Channel | GPIO |
-|-----------------|-----------------------|------|
-| 16 | 0 | 18 |
-| 17 | 1 | 19 |
-| 18 | 2 | 20 |
-| 19 | 3 | 21 |
-| 20 | 4 | 22 |
-| 21 | 5 | 25 |
-| 22 | 6 | 26 |
-| 23 | 7 | 27 |
-
-The monitor prototype reuses that same physical pin order, so it is intentionally a standalone
+The physical mapping is documented in [Pinout](../pinout.md). The monitor
+prototype reuses that same physical channel order, so it is intentionally a standalone
 alternative that observes the software PWM bank rather than a concurrent companion to the
 generator backend.
 
@@ -65,6 +52,19 @@ f_{tick} = \frac{1}{10\,us} = 100000\,Hz
 $$
 
 The backend then quantizes each PWM channel into an integer number of scheduler ticks per period.
+
+### Generator Workflow
+
+```mermaid
+flowchart TD
+    Request[Frequency and duty request] --> Static{Zero frequency or endpoint duty?}
+    Static -- Yes --> Level[Drive static low or high]
+    Static -- No --> Period[Calculate period ticks]
+    Period --> Window[Calculate active duty window]
+    Window --> Schedule[Update shared timer state]
+    Level --> Publish[Publish realized state]
+    Schedule --> Publish
+```
 
 ### Generator Timing Model
 
@@ -169,6 +169,19 @@ One exported sample is reconstructed from:
 
 1. one high width captured from a rising edge to the next falling edge
 2. one full period captured from consecutive rising edges
+
+```mermaid
+sequenceDiagram
+    participant Signal as PWM output
+    participant IRQ as GPIO edge IRQ
+    participant Monitor as Software monitor
+    participant State as Published state
+
+    Signal->>IRQ: Rising and falling edges
+    IRQ->>Monitor: Capture timestamps
+    Monitor->>Monitor: Derive high width and period
+    Monitor->>State: Publish approximate frequency and duty
+```
 
 If no transition is observed for more than one second, the monitor reports a static level as:
 

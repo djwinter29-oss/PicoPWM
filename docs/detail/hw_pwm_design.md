@@ -12,30 +12,18 @@ This page is implementation-oriented and reflects the current source tree.
 ## Source Layout
 
 | File | Responsibility |
-|------|----------------|
+| ------ | ---------------- |
 | `firmware/src/pwmdriver/hw/generator.c` | Hardware PWM generator backend implementation |
 | `firmware/src/pwmdriver/hw/generator.h` | Hardware PWM generator backend interface |
 | `firmware/src/pwmdriver/hw/monitor.c` | Standalone hardware PWM monitor prototype |
 | `firmware/src/pwmdriver/hw/monitor.h` | Standalone hardware PWM monitor interface |
 
-## Channel and Pin Model
+## Channel Model
 
 The hardware PWM bank uses logical channels `0..7` in the unified driver model.
-
-Those channels map to these GPIOs and slices:
-
-| Logical Channel | Backend-local Channel | GPIO | Slice | PWM Channel |
-|-----------------|-----------------------|------|-------|-------------|
-| 0 | 0 | 1 | 0 | B |
-| 1 | 1 | 3 | 1 | B |
-| 2 | 2 | 5 | 2 | B |
-| 3 | 3 | 7 | 3 | B |
-| 4 | 4 | 9 | 4 | B |
-| 5 | 5 | 11 | 5 | B |
-| 6 | 6 | 13 | 6 | B |
-| 7 | 7 | 15 | 7 | B |
-
-The design intentionally uses the slice-B pins so the physical channel order stays aligned with the measurement-oriented wiring plan.
+The physical GPIO and slice mapping is documented in [Pinout](../pinout.md).
+The design intentionally uses slice-B pins so the physical channel order stays
+aligned with the measurement-oriented wiring plan.
 
 ## Generator Design
 
@@ -58,6 +46,19 @@ Nonzero-frequency endpoint duties also resolve directly to static levels:
 
 - `duty = 0` means static low
 - `duty = 100` means static high
+
+### Generator Decision Flow
+
+```mermaid
+flowchart TD
+    Request[Logical frequency and duty request] --> Clamp[Clamp duty to 0..100]
+    Clamp --> Static{Frequency is zero or duty is an endpoint?}
+    Static -- Yes --> Level[Drive static low or high]
+    Static -- No --> Search[Search valid TOP and divider pair]
+    Search --> Program[Program slice wrap, divider, and compare]
+    Level --> Publish[Publish realized frequency and duty]
+    Program --> Publish
+```
 
 ### Timing Model
 
@@ -129,7 +130,7 @@ Above that range the backend can still generate outputs, but duty granularity de
 Examples with `clkdiv = 1`:
 
 | Frequency | Counts per period at `150 MHz` | Approximate duty step |
-|-----------|--------------------------------|-----------------------|
+| ----------- | -------------------------------- | ----------------------- |
 | `1 MHz` | `150` | `0.67%` |
 | `5 MHz` | `30` | `3.3%` |
 | `10 MHz` | `15` | `6.7%` |
@@ -138,7 +139,7 @@ Examples with `clkdiv = 1`:
 For a `200 MHz` reference point with `clkdiv = 1`:
 
 | Frequency | Counts per period at `200 MHz` | Approximate duty step |
-|-----------|--------------------------------|-----------------------|
+| ----------- | -------------------------------- | ----------------------- |
 | `1 MHz` | `200` | `0.5%` |
 | `5 MHz` | `40` | `2.5%` |
 | `10 MHz` | `20` | `5%` |
@@ -197,6 +198,25 @@ One exported sample is reconstructed from:
 2. one full period captured from consecutive rising edges
 
 The monitor then publishes integer frequency and integer duty.
+
+### Monitor Measurement Flow
+
+```mermaid
+sequenceDiagram
+    participant Signal as PWM input
+    participant IRQ as GPIO edge IRQ
+    participant Monitor as Hardware monitor
+    participant State as Published state
+
+    Signal->>IRQ: Rising and falling edges
+    IRQ->>Monitor: Capture timestamp
+    Monitor->>Monitor: Pair high width with full period
+    alt Complete period
+        Monitor->>State: Publish frequency, duty, and pulse count
+    else No transition for one second
+        Monitor->>State: Publish static low or high
+    end
+```
 
 ### Monitor Working Range
 

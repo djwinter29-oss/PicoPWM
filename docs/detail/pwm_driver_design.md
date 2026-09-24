@@ -50,7 +50,7 @@ The subsystem is designed around the following goals:
 The current implementation is split as follows:
 
 | File | Responsibility |
-|------|----------------|
+| ------ | ---------------- |
 | `firmware/src/control/control_iface.h` | Shared Core 0 control/status API used by CDC and I2C |
 | `firmware/src/control/control_iface.c` | Shared device info, channel reads, and channel write helpers above `pwmdriver` |
 | `firmware/src/i2c/i2c_control_map.h` | I2C register map definitions and protocol helpers |
@@ -121,13 +121,13 @@ Architecturally, `pwm_driver_set()` is an internal command-ingress API.
 
 ## Logical Channel Mapping
 
-| Logical Channel | Backend | Backend-local Channel | GPIO |
-|-----------------|---------|-----------------------|------|
-| `0..7` | HW PWM | `0..7` | `1,3,5,7,9,11,13,15` |
-| `8..15` | PIO PWM | `0..7` | `0,2,4,6,8,10,12,14` |
-| `16..23` | SW PWM | `0..7` | `18,19,20,21,22,25,26,27` |
+| Logical Channel | Backend | Backend-local Channel |
+| ----------------- | --------- | ----------------------- |
+| `0..7` | HW PWM | `0..7` |
+| `8..15` | PIO PWM | `0..7` |
+| `16..23` | SW PWM | `0..7` |
 
-The hardware bank uses PWM slice channel B pins intentionally so the pinout remains compatible with measurement-oriented or monitoring-oriented firmware that expects identical physical channel positions.
+The physical mapping and slice assignments are documented in [Pinout](../pinout.md).
 
 ## Internal Separation
 
@@ -251,7 +251,7 @@ stateDiagram-v2
 ### State Descriptions
 
 | State | Meaning |
-|------|---------|
+| ------ | --------- |
 | `Reset` | Static memory and snapshot defaults only |
 | `LaunchRequested` | Core 0 requested Core 1 startup |
 | `BackendInit` | Core 1 is initializing all backends |
@@ -512,16 +512,16 @@ The PIO backend provides better timing quality than software PWM without consumi
 
 ### Channel Distribution
 
-| Local Channel | PIO | State Machine | GPIO |
-|---------------|-----|---------------|------|
-| 0 | `pio0` | 0 | 0 |
-| 1 | `pio0` | 1 | 2 |
-| 2 | `pio0` | 2 | 4 |
-| 3 | `pio0` | 3 | 6 |
-| 4 | `pio1` | 0 | 8 |
-| 5 | `pio1` | 1 | 10 |
-| 6 | `pio1` | 2 | 12 |
-| 7 | `pio1` | 3 | 14 |
+| Local Channel | PIO | State Machine |
+| --------------- | ----- | --------------- |
+| 0 | `pio0` | 0 |
+| 1 | `pio0` | 1 |
+| 2 | `pio0` | 2 |
+| 3 | `pio0` | 3 |
+| 4 | `pio1` | 0 |
+| 5 | `pio1` | 1 |
+| 6 | `pio1` | 2 |
+| 7 | `pio1` | 3 |
 
 ### PIO Program Role
 

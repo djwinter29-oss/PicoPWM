@@ -4,12 +4,45 @@ This page describes the current PicoPWM runtime structure. It focuses on module 
 
 For mailbox state machines, publication internals, and backend-specific behavior, see [detail/pwm_driver_design.md](detail/pwm_driver_design.md).
 
+## At A Glance
+
+The runtime has one command path on Core 0, one multicore boundary, and one
+backend owner on Core 1. Both host transports read the same published state.
+
+```mermaid
+flowchart LR
+    Host[Host controller]
+
+    subgraph Core0[Core 0: command ingress]
+        USB[USB CDC CLI]
+        I2C[I2C slave]
+        Control[control_iface]
+    end
+
+    Boundary[pwm_driver mailbox]
+
+    subgraph Core1[Core 1: PWM ownership]
+        Backend[HW / PIO / SW backends]
+        Snapshot[Published state snapshot]
+    end
+
+    Host --> USB
+    Host --> I2C
+    USB --> Control
+    I2C --> Control
+    Control --> Boundary
+    Boundary --> Backend
+    Backend --> Snapshot
+    Snapshot --> Control
+```
+
 ## Architecture Documents
 
 Use the architecture-related pages as follows:
 
 - [Architecture](architecture.md) — system structure, layer boundaries, and request flow
 - [Firmware Interfaces](firmware_interfaces.md) — source-level interface reference for the current modules
+- [Pinout](pinout.md) — physical PWM, I2C, and shared-pin mapping
 - [PWM Driver Design](detail/pwm_driver_design.md) — detailed `pwmdriver` and backend internals
 - [Hardware PWM Design](detail/hw_pwm_design.md) — hardware generator and monitor design, limits, and target range
 - [Software PWM Design](detail/sw_pwm_design.md) — software generator and monitor design, limits, and standalone monitor role
@@ -30,11 +63,13 @@ Each logical channel exposes the same readback model:
 - `duty`
 - `pulse_count`
 
-The hardware PWM bank intentionally uses PWM slice channel B pins so the external pin order stays aligned with the monitoring-oriented wiring plan.
+The hardware PWM bank intentionally uses PWM slice channel B pins so the external pin order stays aligned with the monitoring-oriented wiring plan. See [Pinout](pinout.md) for the physical mapping.
 
 ## Runtime Layers
 
-The current firmware is split into four practical layers.
+The current firmware is split into four practical layers. The important rule is
+that transport code reaches PWM hardware only through `control_iface` and
+`pwm_driver`.
 
 ### 1. Transport Layer
 
@@ -105,24 +140,41 @@ Core 0 must not call backend driver APIs directly.
 
 ## Request Flow
 
-### USB CDC Flow
+USB and I2C converge at the same Core 0 control facade and then cross the same
+mailbox boundary:
 
-USB commands flow through the following path:
+```mermaid
+sequenceDiagram
+    participant Host
+    participant Transport as USB CDC or I2C
+    participant Control as control_iface
+    participant Mailbox as pwm_driver
+    participant Backend as Core 1 backend
+    participant State as Published snapshot
 
-`usb_cdc` -> `cli_shell` -> `device_cli` -> `control_iface` -> `pwmdriver` -> backend
+    Host->>Transport: Read or write request
+    Transport->>Control: Translate transport data
+    alt Read
+        Control->>State: Read realized state
+        State-->>Control: Channel snapshot
+        Control-->>Transport: Format response
+    else Write
+        Control->>Mailbox: Submit validated command
+        Mailbox->>Backend: Apply on Core 1
+        Backend->>State: Publish realized state
+        Backend-->>Mailbox: Apply result
+        Mailbox-->>Control: Result status
+        Control-->>Transport: Format response
+    end
+    Transport-->>Host: Response
+```
 
-The USB CLI is text-based and supports read, write, LED, reboot, and stop commands.
-
-### I2C Flow
-
-I2C transactions flow through the following path:
-
-`i2c_slave` -> `i2c_control_map` -> `control_iface` -> `pwmdriver` -> backend
-
-Important detail:
+Transport-specific details:
 
 - I2C reads can be served directly from the published snapshot or last command status.
 - I2C writes are captured in the ISR, deferred into normal Core 0 polling, and then executed through the same shared control path used by USB CDC.
+- USB commands are parsed by `cli_shell` and `device_cli` before they reach `control_iface`.
+- I2C commands are decoded by `i2c_slave` and `i2c_control_map` before they reach `control_iface`.
 
 This keeps the ISR transport-focused and avoids running backend-affecting logic in interrupt context.
 
@@ -152,15 +204,32 @@ That means:
 
 ## Channel Layout
 
-| Logical Channels | Backend | GPIOs | Notes |
-|------------------|---------|-------|-------|
-| `0..7` | Hardware PWM | 1, 3, 5, 7, 9, 11, 13, 15 | PWM slices 0..7, channel B |
-| `8..15` | PIO PWM | 0, 2, 4, 6, 8, 10, 12, 14 | Companion pins to the hardware bank |
-| `16..23` | Software PWM | 18, 19, 20, 21, 22, 25, 26, 27 | Lower-frequency bank |
+The logical layout is `0..7` hardware PWM, `8..15` PIO PWM, and `16..23`
+software PWM. See [Pinout](pinout.md) for backend-local channels and physical
+GPIO assignments.
 
 ## Startup Sequence
 
-The current startup flow is:
+The startup order matters because Core 0 must not accept host commands before
+Core 1 has initialized the PWM ownership boundary.
+
+```mermaid
+flowchart TD
+    Reset[Power-on or reset] --> Clock[Set system clock target]
+    Clock --> LED[Initialize board LED helper]
+    LED --> USB[Initialize TinyUSB CDC and CLI binding]
+    USB --> Launch[Launch Core 1 with pwm_driver_launch]
+    Launch --> Ready{pwm_driver_is_ready?}
+    Ready -- No --> Ready
+    Ready -- Yes --> I2C[Initialize I2C slave]
+    I2C --> Loop[Run Core 0 polling loop]
+    Loop --> USBPoll[usb_cdc_poll]
+    USBPoll --> CLIPoll[device_cli_poll]
+    CLIPoll --> I2CPoll[i2c_slave_poll]
+    I2CPoll --> Loop
+```
+
+In ordered form:
 
 1. Core 0 raises the system clock target to 150 MHz when possible.
 2. Core 0 initializes the board LED helper.

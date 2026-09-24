@@ -36,7 +36,7 @@ Connect to the Pico as a USB serial port (CDC) at **115200 baud**. Type commands
 - `8..15` = PIO PWM channels
 - `16..23` = software PWM channels
 
-For the hardware bank, the intended external pin mapping uses PWM slice **channel B** pins so the generator and monitoring firmware variants can share the same physical connector order on both Pico (RP2040) and Pico 2 (RP2350).
+For the hardware bank, the intended external mapping uses PWM slice **channel B** pins so the generator and monitoring firmware variants can share the same physical connector order on both Pico (RP2040) and Pico 2 (RP2350). See [Pinout](pinout.md) for physical assignments.
 
 ### Response Examples
 
@@ -64,11 +64,8 @@ Invalid commands print `ERR: <message>` and print a short help line. Valid comma
 
 ## I2C Slave Protocol
 
-The Pico acts as an I2C slave on **I2C0** using:
-
-- **SDA**: GPIO 16
-- **SCL**: GPIO 17
-- **7-bit address**: `0x40`
+The Pico acts as an I2C slave on **I2C0** at 7-bit address `0x40`. See
+[Pinout](pinout.md) for SDA and SCL assignments.
 
 ### Electrical
 

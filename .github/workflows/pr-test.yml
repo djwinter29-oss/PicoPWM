@@ -1,51 +1,79 @@
-name: PR Test
+name: PR Check
 
 on:
   pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: pr-check-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PICO_SDK_VERSION: "2.3.0"
+  PICO_SDK_REVISION: "98a542c1a62fb549ffb5d66a3e5892b06276b670"
+  PICO_SDK_PATH: ${{ github.workspace }}/.pico-sdk
+
 jobs:
-  build-and-check:
-    runs-on: ubuntu-latest
+  firmware:
+    name: Firmware (${{ matrix.board }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [pico, pico2]
+
     env:
-      PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
-      PICO_SDK_REF: master
+      BOARD: ${{ matrix.board }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Checkout Pico SDK
-        uses: actions/checkout@v4
-        with:
-          repository: raspberrypi/pico-sdk
-          ref: ${{ env.PICO_SDK_REF }}
-          path: pico-sdk
-          submodules: recursive
-
-      - name: Install toolchain
+      - name: Install host build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            cmake \
-            ninja-build \
-            gcc-arm-none-eabi \
-            libnewlib-arm-none-eabi
+          sudo apt-get install -y --no-install-recommends cmake ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi
+
+      - name: Cache Pico SDK
+        uses: actions/cache@v4
+        with:
+          path: .pico-sdk
+          key: pico-sdk-${{ env.PICO_SDK_VERSION }}-${{ env.PICO_SDK_REVISION }}-${{ runner.os }}
+
+      - name: Setup Pico SDK
+        run: |
+          tools/firmware/setup-sdk-env.sh \
+            --sdk-version "$PICO_SDK_VERSION" \
+            --sdk-revision "$PICO_SDK_REVISION"
+
+      - name: Syntax-check Python tools
+        run: tools/test/syntax-check-python.sh
+
+      - name: Syntax-check shell tools
+        run: tools/test/syntax-check-shell.sh
 
       - name: Build firmware
-        run: ./tools/linux/build.sh
+        run: tools/firmware/build.sh --board "$BOARD"
 
       - name: Run configured CMake tests
-        run: ./tools/linux/test.sh --skip-build
+        run: tools/test/check.sh --build-dir "firmware/build-$BOARD" --skip-build
+
+      - name: Check USB identity
+        run: python3 tools/release/check-usb-identity.py
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: pico-pwm-pr-build
+          name: pico-pwm-pr-${{ matrix.board }}
           path: |
-            firmware/build/pico_pwm.uf2
-            firmware/build/pico_pwm.elf
-            firmware/build/pico_pwm.bin
-            firmware/build/pico_pwm.hex
-            firmware/build/pico_pwm.dis
+            firmware/build-${{ matrix.board }}/pico_pwm.uf2
+            firmware/build-${{ matrix.board }}/pico_pwm.elf
+            firmware/build-${{ matrix.board }}/pico_pwm.bin
+            firmware/build-${{ matrix.board }}/pico_pwm.hex
+            firmware/build-${{ matrix.board }}/pico_pwm.dis
           if-no-files-found: error

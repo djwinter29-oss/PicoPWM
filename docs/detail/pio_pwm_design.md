@@ -14,14 +14,23 @@ This page is implementation-oriented and reflects the current source tree.
 The PIO PWM design serves two different use cases:
 
 1. generate PWM over the intended PIO channel range
-2. monitor PWM on the same physical pin bank used by the PIO generator layout
+2. monitor PWM on the same physical channel bank used by the PIO generator layout
 
 The design intentionally favors small, understandable PIO programs over feature-heavy state machines.
+
+```mermaid
+flowchart LR
+    Request[Logical PWM request] --> Generator[PIO generator]
+    Generator --> Output[Free-running PWM output]
+    Input[Measured PWM input] --> Monitor[PIO monitor]
+    Monitor --> Snapshot[DMA high/low snapshot]
+    Snapshot --> Read[Best-effort decoded state]
+```
 
 ## Source Layout
 
 | File | Responsibility |
-|------|----------------|
+| ------ | ---------------- |
 | `firmware/src/pwmdriver/pio/generator.c` | PIO PWM generator backend implementation |
 | `firmware/src/pwmdriver/pio/generator.h` | PIO PWM generator backend interface |
 | `firmware/src/pwmdriver/pio/generator.pio` | PIO assembly program for PWM generation |
@@ -29,24 +38,12 @@ The design intentionally favors small, understandable PIO programs over feature-
 | `firmware/src/pwmdriver/pio/monitor.h` | Standalone PIO PWM monitor interface |
 | `firmware/src/pwmdriver/pio/monitor.pio` | PIO assembly program for PWM monitoring |
 
-## Channel and Pin Model
+## Channel Model
 
 The PIO PWM bank uses logical channels `8..15` in the unified driver model.
-
-Those channels map to these GPIOs:
-
-| Logical Channel | Backend-local Channel | GPIO |
-|-----------------|-----------------------|------|
-| 8 | 0 | 0 |
-| 9 | 1 | 2 |
-| 10 | 2 | 4 |
-| 11 | 3 | 6 |
-| 12 | 4 | 8 |
-| 13 | 5 | 10 |
-| 14 | 6 | 12 |
-| 15 | 7 | 14 |
-
-The monitor prototype reuses that same physical pin order so generator-oriented and monitor-oriented firmware can share harness wiring.
+The physical mapping is documented in [Pinout](../pinout.md). The monitor
+prototype reuses that same channel order so generator-oriented and
+monitor-oriented firmware can share harness wiring.
 
 ## Generator Design
 
@@ -118,17 +115,17 @@ The generator backend has a small logical state machine around requested frequen
 
 ```mermaid
 stateDiagram-v2
-	[*] --> Disabled
-	Disabled --> StaticLow: set(freq=0, duty<100)
-	Disabled --> StaticHigh: set(freq=0, duty=100)
-	Disabled --> Running: set(freq>0, duty)
-	StaticLow --> StaticHigh: set(freq=0, duty=100)
-	StaticLow --> Running: set(freq>0, duty)
-	StaticHigh --> StaticLow: set(freq=0, duty<100)
-	StaticHigh --> Running: set(freq>0, duty)
-	Running --> StaticLow: set(freq=0, duty<100)
-	Running --> StaticHigh: set(freq=0, duty=100)
-	Running --> Running: set(freq>0, duty)
+ [*] --> Disabled
+ Disabled --> StaticLow: set(freq=0, duty<100)
+ Disabled --> StaticHigh: set(freq=0, duty=100)
+ Disabled --> Running: set(freq>0, duty)
+ StaticLow --> StaticHigh: set(freq=0, duty=100)
+ StaticLow --> Running: set(freq>0, duty)
+ StaticHigh --> StaticLow: set(freq=0, duty<100)
+ StaticHigh --> Running: set(freq>0, duty)
+ Running --> StaticLow: set(freq=0, duty<100)
+ Running --> StaticHigh: set(freq=0, duty=100)
+ Running --> Running: set(freq>0, duty)
 ```
 
 ### Generator Update Sequence
@@ -137,21 +134,21 @@ This sequence shows the current control flow when the PIO generator backend appl
 
 ```mermaid
 sequenceDiagram
-	participant Caller as Caller / pwmdriver
-	participant Gen as generator.c
-	participant PIO as PIO SM
+ participant Caller as Caller / pwmdriver
+ participant Gen as generator.c
+ participant PIO as PIO SM
 
-	Caller->>Gen: set_freq(local_ch, freq_hz, duty)
-	alt freq_hz == 0
-		Gen->>Gen: choose static high or static low
-		Gen->>PIO: disable PWM loop output
-		Gen->>Gen: publish realized state
-	else freq_hz > 0
-		Gen->>Gen: search divider + period
-		Gen->>PIO: load period and duty threshold
-		Gen->>PIO: keep SM running free-running loop
-		Gen->>Gen: publish realized state
-	end
+ Caller->>Gen: set_freq(local_ch, freq_hz, duty)
+ alt freq_hz == 0
+  Gen->>Gen: choose static high or static low
+  Gen->>PIO: disable PWM loop output
+  Gen->>Gen: publish realized state
+ else freq_hz > 0
+  Gen->>Gen: search divider + period
+  Gen->>PIO: load period and duty threshold
+  Gen->>PIO: keep SM running free-running loop
+  Gen->>Gen: publish realized state
+ end
 ```
 
 ### Generator Workflow
@@ -289,17 +286,17 @@ The monitor backend has a small logical lifecycle around startup, active samplin
 
 ```mermaid
 stateDiagram-v2
-	[*] --> Reset
-	Reset --> Active: init()
-	Active --> Active: new pair decoded and accepted
-	Active --> Unstable: new pair observed but retries do not settle
-	Unstable --> Active: later pair accepted
-	Active --> StaticLevel: >1 s without new pair and DMA still active
-	StaticLevel --> Active: later pair accepted
-	Active --> Exhausted: DMA transfer count reaches zero
-	Unstable --> Exhausted: DMA transfer count reaches zero
-	StaticLevel --> Exhausted: DMA transfer count reaches zero
-	Exhausted --> Exhausted: preserve last exported state until reboot
+ [*] --> Reset
+ Reset --> Active: init()
+ Active --> Active: new pair decoded and accepted
+ Active --> Unstable: new pair observed but retries do not settle
+ Unstable --> Active: later pair accepted
+ Active --> StaticLevel: >1 s without new pair and DMA still active
+ StaticLevel --> Active: later pair accepted
+ Active --> Exhausted: DMA transfer count reaches zero
+ Unstable --> Exhausted: DMA transfer count reaches zero
+ StaticLevel --> Exhausted: DMA transfer count reaches zero
+ Exhausted --> Exhausted: preserve last exported state until reboot
 ```
 
 ### Monitor Measurement Sequence
@@ -308,29 +305,42 @@ This sequence shows how one accepted monitor read flows through the current best
 
 ```mermaid
 sequenceDiagram
-	participant Sig as Input PWM signal
-	participant SM as monitor.pio SM
-	participant DMA as DMA snapshot buffer
-	participant Mon as monitor.c
-	participant Caller as Caller
+ participant Sig as Input PWM signal
+ participant SM as monitor.pio SM
+ participant DMA as DMA snapshot buffer
+ participant Mon as monitor.c
+ participant Caller as Caller
 
-	Sig->>SM: high and low segments
-	SM->>SM: count high
-	SM->>SM: count low
-	SM->>DMA: push high
-	SM->>DMA: push low
-	Caller->>Mon: pio_mon_get(channel, &state)
-	Mon->>DMA: read snapshot pair
-	Mon->>Mon: decode freq_hz + duty
-	Mon->>DMA: retry until two decoded reads are close
-	alt accepted
-		Mon->>Caller: stable freq_hz, duty, pulse_count=0
-	else unstable
-		Mon->>Caller: sentinel state, return false
-	end
+ Sig->>SM: high and low segments
+ SM->>SM: count high
+ SM->>SM: count low
+ SM->>DMA: push high
+ SM->>DMA: push low
+ Caller->>Mon: pio_mon_get(channel, &state)
+ Mon->>DMA: read snapshot pair
+ Mon->>Mon: decode freq_hz + duty
+ Mon->>DMA: retry until two decoded reads are close
+ alt accepted
+  Mon->>Caller: stable freq_hz, duty, pulse_count=0
+ else unstable
+  Mon->>Caller: sentinel state, return false
+ end
 ```
 
 ### Monitor Workflows
+
+```mermaid
+flowchart TD
+    Pair[PIO measures high and low] --> DMA[DMA updates latest pair]
+    DMA --> Read[Software reads and retries pair]
+    Read --> Stable{Two decoded reads agree?}
+    Stable -- Yes --> Publish[Publish stable state]
+    Stable -- No --> Unstable[Publish unstable sentinel]
+    DMA --> Idle{No new pair for one second?}
+    Idle -- Yes --> Static[Publish static level]
+    DMA --> Exhausted{DMA count reaches zero?}
+    Exhausted -- Yes --> Hold[Preserve last state until reboot]
+```
 
 #### Normal Sampling Workflow
 
@@ -360,7 +370,7 @@ This workflow is only active while DMA is still running.
 ## Generator vs Monitor Summary
 
 | Property | Generator | Monitor |
-|----------|-----------|---------|
+| ---------- | ----------- | --------- |
 | Role | Produce PWM | Measure PWM |
 | PIO output | side-set output pin | input edge measurement |
 | PIO sample model | free-running period loop | full-period high/low pair |

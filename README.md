@@ -32,74 +32,31 @@ The current firmware exposes:
 
 ### Prerequisites
 
-- Install the [Raspberry Pi Pico SDK](https://github.com/raspberrypi/pico-sdk).
+- Install `git` and the [Raspberry Pi Pico SDK prerequisites](https://datasheets.raspberrypi.com/pico/getting-started-with-pico.pdf).
 - Put `cmake`, a supported build tool, and `arm-none-eabi-gcc` on your `PATH`.
-- Set `PICO_SDK_PATH`.
+- The setup helper downloads the pinned Pico SDK into `.pico-sdk`.
 
 ### Build
 
-Build the firmware from the repository `firmware/` directory:
+The Linux helper scripts select a suitable CMake generator and keep Pico and
+Pico 2 build directories separate. From the repository root:
 
-```bash
-cd firmware
-mkdir build && cd build
-cmake -DPICO_SDK_PATH=%PICO_SDK_PATH% -G "MinGW Makefiles" ..
-make -j4
+On Linux or macOS:
+
+```sh
+. tools/firmware/setup-sdk-env.sh
+./tools/firmware/build.sh --board pico
 ```
 
-On Linux or macOS, use the same flow but point CMake at `$PICO_SDK_PATH`.
-
-If `make` is not the right backend on your machine, use a generator that matches your toolchain. For example, on Windows with Ninja:
-
-```bash
-cd firmware
-mkdir build && cd build
-cmake -DPICO_SDK_PATH=%PICO_SDK_PATH% -G Ninja ..
-ninja
-```
+Use `pico2` instead of `pico` for Raspberry Pi Pico 2. The matching helpers
+under `tools/firmware/` handle loading, while `tools/test/` contains the CTest
+and syntax-check entry points. A direct CMake build is also possible from
+`firmware/` when a custom generator or build layout is needed.
 
 Build outputs of interest:
 
 - `pico_pwm.uf2` for USB flashing
 - `pico_pwm.elf` for debug tools
-
-Helper scripts are provided under:
-
-- `tools/windows/` for PowerShell build, test, and load helpers
-- `tools/linux/` for POSIX shell build, test, and load helpers
-
-Examples:
-
-```powershell
-tools\windows\build.ps1
-tools\windows\build.ps1 -Board pico2
-tools\windows\test.ps1
-tools\windows\load.ps1
-tools\windows\load.ps1 -Board pico2
-tools\windows\coverage.ps1
-```
-
-```sh
-./tools/linux/build.sh
-./tools/linux/build.sh --board pico2
-./tools/linux/test.sh
-./tools/linux/load.sh
-./tools/linux/load.sh --board pico2
-./tools/linux/coverage.sh
-```
-
-Board selection:
-
-- `pico` builds for Raspberry Pi Pico on RP2040
-- `pico2` builds for Raspberry Pi Pico 2 on RP2350 through Pico SDK `PICO_BOARD=pico2`
-- when `pico` or `pico2` is selected and no custom build directory is provided, the scripts use `firmware/build-pico` or `firmware/build-pico2` to avoid mixing board-specific CMake caches
-
-Coverage helpers expect:
-
-- `gcovr` on `PATH`
-- CMake tests configured in the active build tree
-
-The current repository does not define any CMake tests yet, so the coverage scripts stop with a clear error until tests are added.
 
 Firmware versioning:
 
@@ -124,7 +81,7 @@ Other flash options:
 ### Connect
 
 - USB CDC serial at **115200 baud**
-- I2C slave at address `0x40` on GPIO 16/17
+- I2C slave at address `0x40`; see [Pinout](docs/pinout.md) for physical connections.
 
 ### Troubleshooting
 
@@ -132,40 +89,13 @@ Other flash options:
 - Confirm `arm-none-eabi-gcc` is on your `PATH`.
 - If the Pico SDK checkout is incomplete, run `git submodule update --init --recursive` inside the SDK.
 - If USB CDC does not enumerate, reconnect the cable and confirm it supports data.
-- If I2C does not respond, confirm 4.7 kΩ pull-ups on GPIO 16/17 and start at 100 kHz.
-
-If you are documenting or preparing the monitoring build, keep the same physical channel order and pinout shown below so generator and monitoring firmware stay interchangeable at the harness level.
+- If I2C does not respond, confirm external pull-ups on SDA/SCL and start at 100 kHz; see [Pinout](docs/pinout.md).
 
 ---
 
-## Channel Map
+## Pinout
 
-| Logical Channel | Type | GPIO | Notes |
-|-----------------|------|------|-------|
-| 0 | Hardware PWM | GPIO 1 | Slice 0, channel B |
-| 1 | Hardware PWM | GPIO 3 | Slice 1, channel B |
-| 2 | Hardware PWM | GPIO 5 | Slice 2, channel B |
-| 3 | Hardware PWM | GPIO 7 | Slice 3, channel B |
-| 4 | Hardware PWM | GPIO 9 | Slice 4, channel B |
-| 5 | Hardware PWM | GPIO 11 | Slice 5, channel B |
-| 6 | Hardware PWM | GPIO 13 | Slice 6, channel B |
-| 7 | Hardware PWM | GPIO 15 | Slice 7, channel B |
-| 8 | PIO PWM | GPIO 0 | Companion pin to HW channel 0 |
-| 9 | PIO PWM | GPIO 2 | Companion pin to HW channel 1 |
-| 10 | PIO PWM | GPIO 4 | Companion pin to HW channel 2 |
-| 11 | PIO PWM | GPIO 6 | Companion pin to HW channel 3 |
-| 12 | PIO PWM | GPIO 8 | Companion pin to HW channel 4 |
-| 13 | PIO PWM | GPIO 10 | Companion pin to HW channel 5 |
-| 14 | PIO PWM | GPIO 12 | Companion pin to HW channel 6 |
-| 15 | PIO PWM | GPIO 14 | Companion pin to HW channel 7 |
-| 16 | Software PWM | GPIO 18 | |
-| 17 | Software PWM | GPIO 19 | |
-| 18 | Software PWM | GPIO 20 | |
-| 19 | Software PWM | GPIO 21 | |
-| 20 | Software PWM | GPIO 22 | |
-| 21 | Software PWM | GPIO 25 | On-board LED, optional |
-| 22 | Software PWM | GPIO 26 | Shared with ADC0 |
-| 23 | Software PWM | GPIO 27 | Shared with ADC1 |
+See [docs/pinout.md](docs/pinout.md) for the complete PWM channel and host-interface pinout.
 
 ### Target Frequency Ranges
 
@@ -180,7 +110,7 @@ If you are documenting or preparing the monitoring build, keep the same physical
 ## Command Interfaces
 
 - **USB CDC serial**: text commands at 115200 baud
-- **I2C slave**: binary register map at 7-bit address `0x40` on GPIO 16 (SDA) / GPIO 17 (SCL)
+- **I2C slave**: binary register map at 7-bit address `0x40`; see [Pinout](docs/pinout.md) for physical connections
 
 Use the `stop` command to reset all channels to the power-up state: frequency = 0 Hz and duty = 0%. `pulse_count` is monotonic from power-on and is not reset by `stop`.
 
@@ -191,11 +121,22 @@ Use the `stop` command to reset all channels to the power-up state: frequency = 
 - [Architecture](docs/architecture.md)
 - [Control Protocol](docs/protocol.md)
 - [Firmware Interfaces](docs/firmware_interfaces.md)
+- [Pinout](docs/pinout.md)
+
+## Related Project
+
+[PicoUART](https://github.com/djwinter29-oss/PicoUART) is the companion
+Raspberry Pi Pico project for UART-oriented host communication. PicoPWM is a
+separate firmware and keeps its host interfaces focused on USB CDC and I2C;
+the projects can be used as related building blocks without sharing a runtime
+dependency.
 
 ## Repository Layout
 
 - `firmware/` — CMake project, Pico SDK import, and all firmware source code
 - `docs/` — user and design documentation
+- `tools/firmware/` — Linux firmware build and flashing helpers
+- `tools/test/` — Linux CTest and coverage helpers
 - `README.md` — top-level project overview
 
 ---

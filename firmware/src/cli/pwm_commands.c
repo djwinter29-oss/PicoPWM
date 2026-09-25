@@ -1,0 +1,358 @@
+/**
+ * @file pwm_commands.c
+ * @brief PicoPWM command table layered on top of the generic CLI shell.
+ */
+
+#include "cli/pwm_commands.h"
+
+#include "control/control_iface.h"
+#include "driver/led.h"
+#include "driver/system.h"
+#include "config/pwm_profile.h"
+#include "pwmdriver/pwm_driver.h"
+
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+
+/** @brief Handle the `help` command. */
+static bool pwm_commands_help(int argc, const char *const *argv);
+/** @brief Handle the `info` command. */
+static bool pwm_commands_info(int argc, const char *const *argv);
+/** @brief Handle the `version` command. */
+static bool pwm_commands_version(int argc, const char *const *argv);
+/** @brief Handle the `get` command. */
+static bool pwm_commands_get(int argc, const char *const *argv);
+/** @brief Handle the `set` command. */
+static bool pwm_commands_set(int argc, const char *const *argv);
+/** @brief Handle the `led` command. */
+static bool pwm_commands_led(int argc, const char *const *argv);
+/** @brief Handle the `reboot` command. */
+static bool pwm_commands_reboot(int argc, const char *const *argv);
+/** @brief Handle the `stop` command. */
+static bool pwm_commands_stop(int argc, const char *const *argv);
+/** @brief Handle the `status` command. */
+static bool pwm_commands_status(int argc, const char *const *argv);
+/** @brief Handle unknown command names by printing help. */
+static bool pwm_commands_unknown(const char *command_name);
+
+/** @brief Static command table registered with the CLI shell. */
+static const usb_cli_command_t pwm_commands[] = {
+    {"help", "help                    Show this help", pwm_commands_help},
+    {"info", "info                    Show device type", pwm_commands_info},
+    {"version", "version              Show firmware version", pwm_commands_version},
+    {"get", "get <ch>                 Read channel properties (ch=0..23)", pwm_commands_get},
+    {"set", "set <ch> <freq> [duty%]  Set freq, optional duty defaults to 50%", pwm_commands_set},
+    {"led", "led <on|off>             Set board LED state", pwm_commands_led},
+    {"reboot", "reboot                Reboot the board", pwm_commands_reboot},
+    {"stop", "stop                    Stop all channels and reset defaults", pwm_commands_stop},
+    {"status", "status                Show all channels", pwm_commands_status},
+};
+
+/** @brief Map write results into CLI-visible text. */
+static const char *pwm_commands_result_text(pwm_driver_result_t result) {
+    switch (result) {
+    case PWM_DRIVER_RESULT_BUSY:
+        return "busy";
+    case PWM_DRIVER_RESULT_INVALID:
+        return "invalid";
+    case PWM_DRIVER_RESULT_UNAVAILABLE:
+        return "unavailable";
+    case PWM_DRIVER_RESULT_TIMEOUT:
+        return "timeout";
+    case PWM_DRIVER_RESULT_APPLY_FAILED:
+        return "apply failed";
+    case PWM_DRIVER_RESULT_OK:
+    default:
+        return "ok";
+    }
+}
+
+/**
+ * @brief Parse a decimal channel index.
+ * @param text Null-terminated decimal input.
+ * @param value_out Caller-owned destination.
+ * @return `true` when parsing succeeded.
+ */
+static bool pwm_commands_parse_int(const char *text, int *value_out) {
+    char *end = NULL;
+    long parsed;
+
+    if ((text == NULL) || (value_out == NULL) || (text[0] == '\0')) {
+        return false;
+    }
+
+    parsed = strtol(text, &end, 10);
+    if ((end == text) || (end == NULL) || (*end != '\0')) {
+        return false;
+    }
+
+    *value_out = (int)parsed;
+    return true;
+}
+
+/**
+ * @brief Parse a decimal unsigned 32-bit value.
+ * @param text Null-terminated decimal input.
+ * @param value_out Caller-owned destination.
+ * @return `true` when parsing succeeded.
+ */
+static bool pwm_commands_parse_u32(const char *text, uint32_t *value_out) {
+    char *end = NULL;
+    unsigned long parsed;
+
+    if ((text == NULL) || (value_out == NULL) || (text[0] == '\0')) {
+        return false;
+    }
+
+    parsed = strtoul(text, &end, 10);
+    if ((end == text) || (end == NULL) || (*end != '\0')) {
+        return false;
+    }
+
+    if (parsed > UINT32_MAX) {
+        return false;
+    }
+
+    *value_out = (uint32_t)parsed;
+    return true;
+}
+
+/**
+ * @brief Parse a decimal duty percentage.
+ * @param text Null-terminated decimal input.
+ * @param value_out Caller-owned destination.
+ * @return `true` when parsing succeeded.
+ */
+static bool pwm_commands_parse_u8(const char *text, uint8_t *value_out) {
+    char *end = NULL;
+    unsigned long parsed;
+
+    if ((text == NULL) || (value_out == NULL) || (text[0] == '\0')) {
+        return false;
+    }
+
+    parsed = strtoul(text, &end, 10);
+    if ((end == text) || (end == NULL) || (*end != '\0')) {
+        return false;
+    }
+
+    if (parsed > UINT8_MAX) {
+        return false;
+    }
+
+    *value_out = (uint8_t)parsed;
+    return true;
+}
+
+/** @brief Format and emit one status row. */
+static bool pwm_commands_write_status_row(int channel, const pwm_driver_state_t *state) {
+    char line[96];
+    const pwm_profile_channel_t *profile = pwm_profile_get_channel((uint)channel);
+    const char *type = (profile == NULL) ? "?" : pwm_profile_backend_name(profile->backend);
+
+    snprintf(line,
+             sizeof(line),
+             "%-2d  %-4s  %-3s  %9lu  %6u  %lu",
+             channel,
+             type,
+             state->freq_hz > 0u ? "ON" : "OFF",
+             (unsigned long)state->freq_hz,
+             (unsigned)state->duty,
+             (unsigned long)state->pulse_count);
+    return usb_cli_write_line(line);
+}
+
+/** @brief Emit the fixed help listing for all registered CLI commands. */
+static void pwm_commands_write_help(void) {
+    usb_cli_write_line("Unified control interface: each channel has freq, duty, pulse_count.");
+    usb_cli_write_line("Logical channels and backend assignment are firmware-configured.");
+    usb_cli_write_line(NULL);
+    usb_cli_write_line("Commands:");
+    for (uint32_t index = 0u; index < (sizeof(pwm_commands) / sizeof(pwm_commands[0])); ++index) {
+        usb_cli_write_line(pwm_commands[index].help);
+    }
+    usb_cli_write_line(NULL);
+    usb_cli_write_line("Notes:");
+    usb_cli_write_line("pulse_count is read-only and accumulates from power-on.");
+}
+
+static bool pwm_commands_help(int argc, const char *const *argv) {
+    (void)argc;
+    (void)argv;
+
+    pwm_commands_write_help();
+    return true;
+}
+
+static bool pwm_commands_info(int argc, const char *const *argv) {
+    (void)argv;
+
+    if (argc != 1) {
+        return usb_cli_write_line("ERR usage: info");
+    }
+
+    return usb_cli_write_line(control_iface_device_name());
+}
+
+static bool pwm_commands_version(int argc, const char *const *argv) {
+    (void)argv;
+
+    if (argc != 1) {
+        return usb_cli_write_line("ERR usage: version");
+    }
+
+    return usb_cli_write_line(control_iface_firmware_version());
+}
+
+static bool pwm_commands_get(int argc, const char *const *argv) {
+    pwm_driver_state_t state = {0u, 50u, 0u};
+    char line[96];
+    int ch;
+
+    if ((argc != 2) || !pwm_commands_parse_int(argv[1], &ch)) {
+        return usb_cli_write_line("ERR usage: get <ch>");
+    }
+
+    if ((ch < 0) || (ch >= PWM_DRIVER_CHANNEL_COUNT)) {
+        snprintf(line, sizeof(line), "ERR channel %d invalid (0..23)", ch);
+        return usb_cli_write_line(line);
+    }
+
+    control_iface_get_channel((uint)ch, &state);
+    snprintf(line,
+             sizeof(line),
+             "CH%d: freq=%lu Hz, duty=%u%%, pulses=%lu, enabled=%s",
+             ch,
+             (unsigned long)state.freq_hz,
+             (unsigned)state.duty,
+             (unsigned long)state.pulse_count,
+             state.freq_hz > 0u ? "yes" : "no");
+    return usb_cli_write_line(line);
+}
+
+static bool pwm_commands_set(int argc, const char *const *argv) {
+    char line[64];
+    int ch;
+    uint32_t freq;
+    uint8_t duty = 50u;
+    pwm_driver_result_t result;
+
+    if (((argc != 3) && (argc != 4)) || !pwm_commands_parse_int(argv[1], &ch) || !pwm_commands_parse_u32(argv[2], &freq)) {
+        return usb_cli_write_line("ERR usage: set <ch> <freq> [duty%]");
+    }
+
+    if ((ch < 0) || (ch >= PWM_DRIVER_CHANNEL_COUNT)) {
+        snprintf(line, sizeof(line), "ERR channel %d invalid (0..23)", ch);
+        return usb_cli_write_line(line);
+    }
+
+    if ((argc == 4) && !pwm_commands_parse_u8(argv[3], &duty)) {
+        return usb_cli_write_line("ERR usage: set <ch> <freq> [duty%]");
+    }
+
+    result = control_iface_set_channel((uint)ch, freq, duty);
+    if (result == PWM_DRIVER_RESULT_OK) {
+        snprintf(line, sizeof(line), "OK CH%d freq=%lu Hz duty=%u%%", ch, (unsigned long)freq, (unsigned)duty);
+    } else {
+        snprintf(line, sizeof(line), "ERR CH%d set %s", ch, pwm_commands_result_text(result));
+    }
+
+    return usb_cli_write_line(line);
+}
+
+static bool pwm_commands_led(int argc, const char *const *argv) {
+    if (argc != 2) {
+        return usb_cli_write_line("ERR usage: led <on|off>");
+    }
+
+    if ((strcmp(argv[1], "on") == 0) || (strcmp(argv[1], "1") == 0)) {
+        led_set(true);
+        return usb_cli_write_line("OK led on");
+    }
+
+    if ((strcmp(argv[1], "off") == 0) || (strcmp(argv[1], "0") == 0)) {
+        led_set(false);
+        return usb_cli_write_line("OK led off");
+    }
+
+    return usb_cli_write_line("ERR usage: led <on|off>");
+}
+
+static bool pwm_commands_reboot(int argc, const char *const *argv) {
+    (void)argv;
+
+    if (argc != 1) {
+        return usb_cli_write_line("ERR usage: reboot");
+    }
+
+    usb_cli_write_line("OK rebooting");
+    system_reboot();
+    return true;
+}
+
+static bool pwm_commands_stop(int argc, const char *const *argv) {
+    char line[64];
+    pwm_driver_result_t result;
+
+    (void)argv;
+    if (argc != 1) {
+        return usb_cli_write_line("ERR usage: stop");
+    }
+
+    result = control_iface_restore_defaults();
+    if (result == PWM_DRIVER_RESULT_OK) {
+        return usb_cli_write_line("OK all channels stopped and reset (freq=0, duty=50%)");
+    }
+
+    snprintf(line, sizeof(line), "ERR stop %s", pwm_commands_result_text(result));
+    return usb_cli_write_line(line);
+}
+
+static bool pwm_commands_status(int argc, const char *const *argv) {
+    pwm_driver_state_t state;
+
+    (void)argv;
+    if (argc != 1) {
+        return usb_cli_write_line("ERR usage: status");
+    }
+
+    usb_cli_write_line("=== All PWM channels (logical 0..23) ===");
+    usb_cli_write_line("Ch  Type  State  Freq(Hz)   Duty(%)   Pulses");
+    for (int channel = 0; channel < PWM_DRIVER_CHANNEL_COUNT; ++channel) {
+        state = (pwm_driver_state_t){0u, 50u, 0u};
+        control_iface_get_channel((uint)channel, &state);
+        pwm_commands_write_status_row(channel, &state);
+    }
+    return usb_cli_write_line(NULL);
+}
+
+static bool pwm_commands_unknown(const char *command_name) {
+    char line[64];
+
+    snprintf(line, sizeof(line), "ERR unknown command: '%s'. Type 'help'.", command_name);
+    usb_cli_write_line(line);
+    return true;
+}
+
+void pwm_commands_init(const usb_cli_transport_t *transport) {
+    usb_cli_config_t config = {
+        .transport = transport,
+        .commands = pwm_commands,
+        .command_count = sizeof(pwm_commands) / sizeof(pwm_commands[0]),
+        .unknown_message = "ERR unknown command",
+        .unknown_handler = pwm_commands_unknown,
+    };
+
+    usb_cli_init(&config);
+}
+
+void pwm_commands_on_connected(void) {
+    pwm_commands_write_help();
+    usb_cli_prompt();
+}
+
+void pwm_commands_poll(void) {
+    usb_cli_poll();
+}

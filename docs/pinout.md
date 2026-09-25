@@ -1,8 +1,10 @@
 # Pinout
 
-This page is the canonical physical pin and logical-channel mapping for
-PicoPWM. The same channel order is intended for generator and monitoring
-firmware so a harness can be reused between firmware variants.
+This page documents the physical mapping for the current default profile. The
+logical channel IDs are stable across generator and monitoring firmware, but a
+different build profile may assign different backends, directions, or GPIOs.
+The selected profile must be treated as the source of truth for a particular
+firmware image.
 
 ## PWM Channels
 
@@ -33,8 +35,10 @@ firmware so a harness can be reused between firmware variants.
 | 22 | Software PWM | 6 | GPIO 26 | Shared with ADC0 |
 | 23 | Software PWM | 7 | GPIO 27 | Shared with ADC1 |
 
-The hardware bank uses PWM slice channel B pins intentionally. This keeps the
-external channel order aligned with monitoring-oriented firmware.
+The current default generator profile uses PWM slice channel B pins
+intentionally. This keeps the external channel order aligned with the planned
+monitoring-oriented firmware; alternate profiles may provide a different
+assignment.
 
 ## I2C
 

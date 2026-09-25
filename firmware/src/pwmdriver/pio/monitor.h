@@ -2,10 +2,9 @@
  * @file monitor.h
  * @brief Standalone Core 1 PIO PWM monitor backend prototype for the logical `pwmdriver` layer.
  *
- * This module is intentionally not integrated into `pwm_driver.c` yet. It provides a
- * PIO-based monitor implementation that measures the PIO logical channel pin bank and
- * reports approximate frequency and duty cycle using the existing `pwm_driver_state_t`
- * shape.
+ * This module provides a PIO-based monitor implementation that measures the configured
+ * PIO monitor channel bank and reports approximate frequency and duty cycle using the
+ * existing `pwm_driver_state_t` shape.
  */
 
 #ifndef PWMDRIVER_PIO_MONITOR_H

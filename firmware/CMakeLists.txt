@@ -8,29 +8,51 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
 set(PICO_PWM_FIRMWARE_VERSION "0.0.0-dev" CACHE STRING "Firmware version string exposed over CDC and I2C")
+set(PICO_PWM_PROFILE "generator" CACHE STRING "Firmware channel profile (generator or monitor)")
+set_property(CACHE PICO_PWM_PROFILE PROPERTY STRINGS generator monitor)
+
+if(PICO_PWM_PROFILE STREQUAL "generator")
+    set(PICO_PWM_BACKEND_SOURCES
+        src/pwmdriver/hw/generator.c
+        src/pwmdriver/pio/generator.c
+        src/pwmdriver/sw/generator.c
+    )
+elseif(PICO_PWM_PROFILE STREQUAL "monitor")
+    set(PICO_PWM_BACKEND_SOURCES
+        src/pwmdriver/hw/monitor.c
+        src/pwmdriver/pio/monitor.c
+        src/pwmdriver/sw/monitor.c
+    )
+else()
+    message(FATAL_ERROR "PICO_PWM_PROFILE must be generator or monitor")
+endif()
 
 pico_sdk_init()
 
 add_executable(pico_pwm
     src/main.c
     src/control/control_iface.c
+    src/config/pwm_profile.c
     src/pwmdriver/pwm_driver.c
-    src/pwmdriver/hw/generator.c
-    src/pwmdriver/hw/monitor.c
-    src/pwmdriver/sw/generator.c
-    src/pwmdriver/sw/monitor.c
-    src/pwmdriver/pio/generator.c
-    src/cli/cli_shell.c
-    src/cli/device_cli.c
+    ${PICO_PWM_BACKEND_SOURCES}
+    src/cli/usb_cli.c
+    src/cli/pwm_commands.c
+    third_party/microrl/microrl.c
     src/i2c/i2c_control_map.c
     src/usb/usb_cdc.c
     src/usb/usb_descriptors.c
     src/i2c/i2c_slave.c
 )
 
-pico_generate_pio_header(pico_pwm
-    ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/pio/generator.pio
-)
+if(PICO_PWM_PROFILE STREQUAL "generator")
+    pico_generate_pio_header(pico_pwm
+        ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/pio/generator.pio
+    )
+else()
+    pico_generate_pio_header(pico_pwm
+        ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/pio/monitor.pio
+    )
+endif()
 
 target_link_libraries(pico_pwm
     pico_stdlib
@@ -47,8 +69,20 @@ target_link_libraries(pico_pwm
     tinyusb_board
 )
 
+if(PICO_PWM_PROFILE STREQUAL "monitor")
+    target_link_libraries(pico_pwm hardware_dma)
+endif()
+
 target_compile_definitions(pico_pwm PRIVATE
     PICO_PWM_FIRMWARE_VERSION_STR="${PICO_PWM_FIRMWARE_VERSION}"
+)
+
+if(PICO_PWM_PROFILE STREQUAL "monitor")
+    target_compile_definitions(pico_pwm PRIVATE PICO_PWM_MONITOR_PROFILE=1)
+endif()
+
+target_include_directories(pico_pwm PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/third_party/microrl
 )
 
 # USB CDC is handled directly through TinyUSB; UART is disabled.

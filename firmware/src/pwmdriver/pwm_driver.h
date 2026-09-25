@@ -7,6 +7,7 @@
 #define PWMDRIVER_PWM_DRIVER_H
 
 #include "pico/stdlib.h"
+#include "config/pwm_profile.h"
 
 #include <stdint.h>
 
@@ -24,7 +25,7 @@
 /** @brief Logical base index for software PWM channels. */
 #define SW_PWM_CHANNEL_BASE (PIO_PWM_CHANNEL_BASE + PIO_PWM_DRIVER_COUNT)
 /** @brief Total logical PWM channel count across all backends. */
-#define PWM_DRIVER_CHANNEL_COUNT (HW_PWM_COUNT + PIO_PWM_DRIVER_COUNT + SW_PWM_COUNT)
+#define PWM_DRIVER_CHANNEL_COUNT PWM_PROFILE_CHANNEL_COUNT
 
 /** @brief Result codes returned by shared PWM control operations. */
 typedef enum {

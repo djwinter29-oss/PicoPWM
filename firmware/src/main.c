@@ -6,7 +6,7 @@
 #include "pico/stdlib.h"
 #include "hardware/clocks.h"
 #include "pico/multicore.h"
-#include "cli/device_cli.h"
+#include "cli/pwm_commands.h"
 #include "driver/led.h"
 #include "i2c/i2c_slave.h"
 #include "pwmdriver/pwm_driver.h"
@@ -17,7 +17,7 @@
  * @return Never returns during normal firmware operation.
  */
 int main(void) {
-    static const cli_shell_transport_t usb_cli_transport = {
+    static const usb_cli_transport_t usb_cli_transport = {
         .read = usb_cdc_read,
         .write = usb_cdc_write,
         .context = NULL,
@@ -35,7 +35,7 @@ int main(void) {
 
     // USB CDC command interface.
     usb_cdc_init();
-    device_cli_init(&usb_cli_transport);
+    pwm_commands_init(&usb_cli_transport);
 
     // Launch Core 1 to manage all PWM hardware.
     pwm_driver_launch();
@@ -56,10 +56,10 @@ int main(void) {
         // Detect USB connection events and print the initial CLI help.
         usb_connected = usb_cdc_is_connected();
         if (usb_connected && !usb_was_connected) {
-            device_cli_on_connected();
+            pwm_commands_on_connected();
         }
         usb_was_connected = usb_connected;
-        device_cli_poll();
+        pwm_commands_poll();
         i2c_slave_poll();
         sleep_us(100);
     }

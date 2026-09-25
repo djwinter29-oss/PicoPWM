@@ -2,8 +2,7 @@
  * @file monitor.c
  * @brief Standalone Core 1 software-PWM pin monitor backend for the logical `pwmdriver` layer.
  *
- * This module measures the same GPIO bank used by the software PWM generator backend, but it
- * is intentionally not wired into `pwm_driver.c` yet. Each backend-local channel timestamps
+ * This module measures the configured software monitor GPIO bank. Each backend-local channel timestamps
  * GPIO edges in software and reconstructs one PWM sample from a high width plus the next full
  * period.
  *
@@ -53,8 +52,8 @@ static int8_t sw_mon_gpio_to_channel[SW_MON_GPIO_COUNT] = {
 /** @brief Guards the standalone software monitor lifecycle so init only runs once. */
 static bool sw_mon_initialized = false;
 
-/** @brief Shared GPIO edge callback that timestamps software-monitor pin transitions. */
-static void sw_mon_gpio_irq(uint gpio, uint32_t events) {
+/** @copydoc sw_mon_handle_gpio_irq */
+void sw_mon_handle_gpio_irq(uint gpio, uint32_t events) {
     pwm_gpio_mon_handle_irq(gpio, events, SW_MON_GPIO_COUNT, sw_mon_gpio_to_channel, sw_mon_channels, SW_MON_UNSTABLE_FREQ_HZ, SW_MON_UNSTABLE_DUTY);
 }
 
@@ -80,12 +79,6 @@ void sw_mon_init(void) {
             gpio_set_irq_enabled(pin, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
         }
     }
-
-    gpio_set_irq_enabled_with_callback(
-        PWM_SW_GPIO_PINS[0],
-        GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
-        true,
-        &sw_mon_gpio_irq);
 
     sw_mon_initialized = true;
 }

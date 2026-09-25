@@ -8,13 +8,15 @@ If you need the design narrative first, read these pages before this one:
 
 1. [Architecture](architecture.md)
 2. [Control Protocol](protocol.md)
-3. [PWM Driver Design](detail/pwm_driver_design.md)
+3. [USB CDC CLI](usb_cdc_cli.md)
+4. [PWM Driver Design](detail/pwm_driver_design.md)
 
 ## Reference Scope
 
 This page covers the current interface surface for:
 
 - transport-facing helpers used on Core 0
+- profile and channel-configuration interfaces
 - the shared `control_iface` layer
 - the `pwmdriver` public API and shared types
 - small board utility helpers used by command paths
@@ -41,14 +43,14 @@ Responsibilities:
 - service TinyUSB background work
 - provide byte-oriented read/write helpers to the CLI shell
 
-### `cli/device_cli.h`
+### `cli/pwm_commands.h`
 
-User-facing command layer on top of the generic shell.
+User-facing command layer on top of the microrl-backed shell adapter.
 
 ```c
-void device_cli_init(const cli_shell_transport_t *transport);
-void device_cli_on_connected(void);
-void device_cli_poll(void);
+void pwm_commands_init(const usb_cli_transport_t *transport);
+void pwm_commands_on_connected(void);
+void pwm_commands_poll(void);
 ```
 
 Responsibilities:

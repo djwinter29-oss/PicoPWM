@@ -2,8 +2,7 @@
  * @file monitor.c
  * @brief Standalone Core 1 PIO PWM monitor backend prototype for the logical `pwmdriver` layer.
  *
- * This module measures the same GPIO bank used by the PIO generator backend, but it is
- * intentionally not wired into `pwm_driver.c` yet. Each backend-local channel owns one
+ * This module measures the configured PIO monitor GPIO bank. Each backend-local channel owns one
  * PIO state machine that watches a single input pin and pushes one raw high-loop count
  * followed by one raw low-loop count for every completed PWM period.
  *

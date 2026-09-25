@@ -2,8 +2,7 @@
  * @file monitor.c
  * @brief Standalone Core 1 hardware-pin PWM monitor backend for the logical `pwmdriver` layer.
  *
- * This module measures the same GPIO bank used by the hardware PWM generator backend, but it
- * is intentionally not wired into `pwm_driver.c` yet. Each backend-local channel timestamps
+ * This module measures the configured hardware monitor GPIO bank. Each backend-local channel timestamps
  * GPIO edges in software and reconstructs one PWM sample from a high width plus the next full
  * period.
  *
@@ -51,8 +50,8 @@ static int8_t hw_mon_gpio_to_channel[HW_MON_GPIO_COUNT] = {
 /** @brief Guards the standalone hardware monitor lifecycle so init only runs once. */
 static bool hw_mon_initialized = false;
 
-/** @brief Shared GPIO edge callback that timestamps hardware-monitor pin transitions. */
-static void hw_mon_gpio_irq(uint gpio, uint32_t events) {
+/** @copydoc hw_mon_handle_gpio_irq */
+void hw_mon_handle_gpio_irq(uint gpio, uint32_t events) {
     pwm_gpio_mon_handle_irq(gpio, events, HW_MON_GPIO_COUNT, hw_mon_gpio_to_channel, hw_mon_channels, HW_MON_UNSTABLE_FREQ_HZ, HW_MON_UNSTABLE_DUTY);
 }
 
@@ -75,21 +74,8 @@ void hw_mon_init(void) {
         hw_mon_gpio_to_channel[pin] = (int8_t)channel;
         pwm_gpio_mon_reset_channel(&hw_mon_channels[channel]);
 
-        /* ponytail: The monitor uses the SDK's one global GPIO callback. The ceiling is that
-         * another module cannot install a different callback without coordination. That is
-         * acceptable now because this firmware does not use GPIO callbacks anywhere else.
-         * If that changes later, move to a shared callback dispatcher.
-         */
-        if (channel != 0u) {
-            gpio_set_irq_enabled(pin, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
-        }
+        gpio_set_irq_enabled(pin, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
     }
-
-    gpio_set_irq_enabled_with_callback(
-        PWM_HW_GPIO_PINS[0],
-        GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
-        true,
-        &hw_mon_gpio_irq);
 
     hw_mon_initialized = true;
 }

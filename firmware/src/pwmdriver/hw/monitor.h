@@ -2,9 +2,8 @@
  * @file monitor.h
  * @brief Standalone Core 1 hardware-pin PWM monitor backend for the logical `pwmdriver` layer.
  *
- * This module is intentionally not integrated into `pwm_driver.c` yet. It measures the
- * hardware PWM logical channel pin bank and reports approximate frequency and duty cycle
- * using the existing `pwm_driver_state_t` shape.
+ * This module measures the configured hardware monitor channel bank and reports approximate
+ * frequency and duty cycle using the existing `pwm_driver_state_t` shape.
  *
  * This monitor is intentionally limited to low-frequency, best-effort observation. It uses
  * one software GPIO interrupt per edge plus microsecond timestamps, so it is not suitable
@@ -30,6 +29,9 @@
  * Repeated calls are ignored after the first successful initialization.
  */
 void hw_mon_init(void);
+
+/** @brief Forward one shared GPIO edge event to the hardware monitor bank. */
+void hw_mon_handle_gpio_irq(uint gpio, uint32_t events);
 
 /**
  * @brief Read the latest exported monitor state for one backend-local hardware channel.

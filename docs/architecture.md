@@ -41,6 +41,7 @@ flowchart LR
 Use the architecture-related pages as follows:
 
 - [Architecture](architecture.md) — system structure, layer boundaries, and request flow
+- [Firmware Configuration](configuration.md) — build profiles, channel tables, and capability rules
 - [Firmware Interfaces](firmware_interfaces.md) — source-level interface reference for the current modules
 - [Pinout](pinout.md) — physical PWM, I2C, and shared-pin mapping
 - [PWM Driver Design](detail/pwm_driver_design.md) — detailed `pwmdriver` and backend internals
@@ -49,13 +50,16 @@ Use the architecture-related pages as follows:
 
 ## System Model
 
-PicoPWM targets Raspberry Pi Pico (RP2040) and Pico 2 (RP2350) with one shared logical PWM model.
+PicoPWM targets Raspberry Pi Pico (RP2040) and Pico 2 (RP2350) with one shared
+logical channel model. Build configuration selects whether those channels act
+as PWM generators, PWM monitors, or a project-specific combination of
+supported channel backends.
 
-The current firmware image implements the generator role with 24 logical channels:
-
-- `0..7` hardware PWM
-- `8..15` PIO PWM
-- `16..23` software PWM
+The host-visible channel IDs and command syntax remain stable across profiles.
+The channel table, not the CLI, defines each channel's backend, direction,
+GPIO, limits, and supported operations. The current firmware still uses the
+legacy 24-channel generator mapping internally; that mapping is the default
+profile to migrate into the configuration table.
 
 Each logical channel exposes the same readback model:
 
@@ -76,8 +80,8 @@ that transport code reaches PWM hardware only through `control_iface` and
 Core 0 owns the host-facing transports:
 
 - `usb/usb_cdc.*` for TinyUSB CDC byte transport
-- `cli/cli_shell.*` for line-oriented command parsing
-- `cli/device_cli.*` for human-readable CLI commands
+- `cli/usb_cli.*` for the microrl-backed line editor and command dispatch
+- `cli/pwm_commands.*` for human-readable CLI commands
 - `i2c/i2c_slave.*` for the I2C slave ISR and deferred write scheduling
 - `i2c/i2c_control_map.*` for the I2C register map and payload translation
 
@@ -103,13 +107,18 @@ Responsibilities:
 - forward one admitted command across the multicore mailbox
 - publish realized state snapshots for Core 0 readers
 
-### 4. Backend Layer
+### 4. Configuration and Backend Layer
+
+The profile configuration owns the logical channel table and capability
+validation. Core 1 then dispatches each configured channel to its selected
+backend.
 
 Core 1 owns the backend implementations:
 
 - `pwmdriver/hw_pwm_driver.*`
 - `pwmdriver/pio/generator.*`
 - `pwmdriver/sw_pwm_driver.*`
+- monitor backends for configured input channels
 
 These modules own hardware configuration, IRQ or timer paths, and backend-local state.
 
@@ -173,7 +182,7 @@ Transport-specific details:
 
 - I2C reads can be served directly from the published snapshot or last command status.
 - I2C writes are captured in the ISR, deferred into normal Core 0 polling, and then executed through the same shared control path used by USB CDC.
-- USB commands are parsed by `cli_shell` and `device_cli` before they reach `control_iface`.
+- USB commands are parsed by `usb_cli` and the CLI command handlers before they reach `control_iface`.
 - I2C commands are decoded by `i2c_slave` and `i2c_control_map` before they reach `control_iface`.
 
 This keeps the ISR transport-focused and avoids running backend-affecting logic in interrupt context.
@@ -204,9 +213,10 @@ That means:
 
 ## Channel Layout
 
-The logical layout is `0..7` hardware PWM, `8..15` PIO PWM, and `16..23`
-software PWM. See [Pinout](pinout.md) for backend-local channels and physical
-GPIO assignments.
+Logical IDs are configuration-defined and stable for host software. The
+current default profile exposes `0..23`; backend ownership and GPIO assignment
+must be read from the selected profile rather than inferred from an ID range.
+See [Firmware Configuration](configuration.md) and [Pinout](pinout.md).
 
 ## Startup Sequence
 
@@ -224,7 +234,7 @@ flowchart TD
     Ready -- Yes --> I2C[Initialize I2C slave]
     I2C --> Loop[Run Core 0 polling loop]
     Loop --> USBPoll[usb_cdc_poll]
-    USBPoll --> CLIPoll[device_cli_poll]
+    USBPoll --> CLIPoll[pwm_commands_poll]
     CLIPoll --> I2CPoll[i2c_slave_poll]
     I2CPoll --> Loop
 ```
@@ -237,9 +247,9 @@ In ordered form:
 4. Core 0 launches Core 1 with `pwm_driver_launch()`.
 5. Core 0 waits for `pwm_driver_is_ready()`.
 6. Core 0 initializes the I2C slave transport.
-7. The main loop services `usb_cdc_poll()`, `device_cli_poll()`, and `i2c_slave_poll()`.
+7. The main loop services `usb_cdc_poll()`, `pwm_commands_poll()`, and `i2c_slave_poll()`.
 
-When the USB CDC host opens the connection, the CLI prints help once through `device_cli_on_connected()`.
+When the USB CDC host opens the connection, the CLI prints help once through `pwm_commands_on_connected()`.
 
 ## Where To Read Next
 

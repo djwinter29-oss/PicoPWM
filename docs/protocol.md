@@ -32,11 +32,13 @@ Connect to the Pico as a USB serial port (CDC) at **115200 baud**. Type commands
 
 ### Channel Numbers
 
-- `0..7` = hardware PWM channels
-- `8..15` = PIO PWM channels
-- `16..23` = software PWM channels
+Channel numbers are stable logical IDs assigned by the selected firmware
+profile. The current default build exposes `0..23`; backend ownership,
+direction, and GPIO assignment are configuration details and must not be
+inferred from the channel number.
 
-For the hardware bank, the intended external mapping uses PWM slice **channel B** pins so the generator and monitoring firmware variants can share the same physical connector order on both Pico (RP2040) and Pico 2 (RP2350). See [Pinout](pinout.md) for physical assignments.
+See [Firmware Configuration](configuration.md) and [Pinout](pinout.md) for the
+selected profile's capabilities and physical assignments.
 
 ### Response Examples
 

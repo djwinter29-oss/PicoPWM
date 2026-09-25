@@ -15,11 +15,9 @@ This document is implementation-oriented and follows the current firmware under 
 
 ## Scope
 
-The `pwmdriver` subsystem provides one logical PWM service for 24 channels:
-
-- `0..7` hardware PWM
-- `8..15` PIO PWM
-- `16..23` software PWM
+The `pwmdriver` subsystem provides one logical channel service. The default
+profile currently exposes 24 channels, but backend ownership and direction are
+intended to come from a profile channel table rather than fixed ID ranges.
 
 It is responsible for:
 
@@ -119,7 +117,10 @@ Architecturally, `pwm_driver_set()` is an internal command-ingress API.
 - The wrapper returns `PWM_DRIVER_RESULT_APPLY_FAILED` if Core 1 accepts the command but the backend rejects it.
 - `pwm_driver_restore_defaults()` uses the same mailbox path but applies one bulk restore-defaults command on Core 1 instead of 24 separate round trips.
 
-## Logical Channel Mapping
+## Current Default Mapping
+
+The following mapping is still used by the current implementation and is the
+default profile that the configuration layer must replace:
 
 | Logical Channel | Backend | Backend-local Channel |
 | ----------------- | --------- | ----------------------- |
@@ -127,7 +128,9 @@ Architecturally, `pwm_driver_set()` is an internal command-ingress API.
 | `8..15` | PIO PWM | `0..7` |
 | `16..23` | SW PWM | `0..7` |
 
-The physical mapping and slice assignments are documented in [Pinout](../pinout.md).
+The current default physical mapping and slice assignments are documented in
+[Pinout](../pinout.md). Profile selection and the planned channel table are
+documented in [Firmware Configuration](../configuration.md).
 
 ## Internal Separation
 

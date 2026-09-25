@@ -17,7 +17,7 @@
  * @return Never returns during normal firmware operation.
  */
 int main(void) {
-    static const usb_cli_transport_t usb_cli_transport = {
+    static const shell_transport_t shell_transport = {
         .read = usb_cdc_read,
         .write = usb_cdc_write,
         .context = NULL,
@@ -35,7 +35,7 @@ int main(void) {
 
     // USB CDC command interface.
     usb_cdc_init();
-    pwm_commands_init(&usb_cli_transport);
+    pwm_commands_init(&shell_transport);
 
     // Launch Core 1 to manage all PWM hardware.
     pwm_driver_launch();

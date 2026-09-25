@@ -35,8 +35,10 @@ add_executable(pico_pwm
     src/config/pwm_profile.c
     src/pwmdriver/pwm_driver.c
     ${PICO_PWM_BACKEND_SOURCES}
-    src/cli/usb_cli.c
+    src/cli/shell.c
     src/cli/pwm_commands.c
+    src/cli/pwm_channel_commands.c
+    src/cli/board_commands.c
     third_party/microrl/microrl.c
     src/i2c/i2c_control_map.c
     src/usb/usb_cdc.c

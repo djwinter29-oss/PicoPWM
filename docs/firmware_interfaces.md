@@ -48,7 +48,7 @@ Responsibilities:
 User-facing command layer on top of the microrl-backed shell adapter.
 
 ```c
-void pwm_commands_init(const usb_cli_transport_t *transport);
+void pwm_commands_init(const shell_transport_t *transport);
 void pwm_commands_on_connected(void);
 void pwm_commands_poll(void);
 ```
@@ -58,6 +58,12 @@ Responsibilities:
 - register human-readable CLI commands such as `get`, `set`, `status`, `led`, `reboot`, and `stop`
 - print help when the CDC connection is first opened
 - translate command lines into `control_iface` operations
+
+The command handlers are split by responsibility:
+
+- `cli/pwm_channel_commands.*` handles `get`, `set`, and `status`
+- `cli/board_commands.*` handles `info`, `version`, `led`, `reboot`, and `stop`
+- `cli/pwm_commands.*` owns registration, help output, and shell lifecycle
 
 ### `i2c/i2c_control_map.h`
 

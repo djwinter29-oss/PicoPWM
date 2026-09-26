@@ -6,35 +6,53 @@ For mailbox state machines, publication internals, and backend-specific behavior
 
 ## At A Glance
 
-The runtime has one command path on Core 0, one multicore boundary, and one
-backend owner on Core 1. Both host transports read the same published state.
+The firmware has two deliberately different responsibilities:
+
+- **Core 0** owns control requests and responses for both USB CDC and I2C.
+- **Core 1** owns real-time work for every configured channel, whether that
+  channel is a PWM generator or a PWM monitor.
+
+The cores communicate through a small command mailbox and a published state
+snapshot. Host transports never call generator or monitor backends directly.
 
 ```mermaid
 flowchart LR
     Host[Host controller]
 
-    subgraph Core0[Core 0: command ingress]
-        USB[USB CDC CLI]
+    subgraph Core0[Core 0: control and responses]
+        CDC[USB CDC shell]
         I2C[I2C slave]
         Control[control_iface]
+        Response[Format response]
     end
 
-    Boundary[pwm_driver mailbox]
+    Mailbox{{Command mailbox}}
 
-    subgraph Core1[Core 1: PWM ownership]
-        Backend[HW / PIO / SW backends]
-        Snapshot[Published state snapshot]
+    subgraph Core1[Core 1: real-time channel owner]
+        Router[Profile channel router]
+        Channels[24 configured channel slots]
+        Engines[Generator or monitor engines]
+        Snapshot[(Realized state snapshot)]
     end
 
-    Host --> USB
+    Host --> CDC
     Host --> I2C
-    USB --> Control
+    CDC --> Control
     I2C --> Control
-    Control --> Boundary
-    Boundary --> Backend
-    Backend --> Snapshot
+    Control --> Response
+    Control -->|validated mutation| Mailbox
+    Mailbox --> Router
+    Router --> Channels
+    Channels --> Engines
+    Engines --> Snapshot
     Snapshot --> Control
+    Response --> CDC
+    Response --> I2C
 ```
+
+Reads use the snapshot directly. Writes enter the mailbox, are applied by
+Core 1, and return a result after the selected channel backend accepts or
+rejects the request.
 
 ## Architecture Documents
 
@@ -42,7 +60,6 @@ Use the architecture-related pages as follows:
 
 - [Architecture](architecture.md) — system structure, layer boundaries, and request flow
 - [Firmware Configuration](configuration.md) — build profiles, channel tables, and capability rules
-- [Firmware Interfaces](firmware_interfaces.md) — source-level interface reference for the current modules
 - [Pinout](pinout.md) — physical PWM, I2C, and shared-pin mapping
 - [PWM Driver Design](detail/pwm_driver_design.md) — detailed `pwmdriver` and backend internals
 - [Hardware PWM Design](detail/hw_pwm_design.md) — hardware generator and monitor design, limits, and target range
@@ -115,10 +132,10 @@ backend.
 
 Core 1 owns the backend implementations:
 
-- `pwmdriver/hw_pwm_driver.*`
+- `pwmdriver/hw/generator.*` and `pwmdriver/hw/monitor.*`
 - `pwmdriver/pio/generator.*`
-- `pwmdriver/sw_pwm_driver.*`
-- monitor backends for configured input channels
+- `pwmdriver/pio/monitor.*`
+- `pwmdriver/sw/generator.*` and `pwmdriver/sw/monitor.*`
 
 These modules own hardware configuration, IRQ or timer paths, and backend-local state.
 
@@ -149,16 +166,17 @@ Core 0 must not call backend driver APIs directly.
 
 ## Request Flow
 
-USB and I2C converge at the same Core 0 control facade and then cross the same
-mailbox boundary:
+USB and I2C converge at the same Core 0 control facade. Reads are answered
+from the published snapshot; mutations cross the mailbox boundary:
 
 ```mermaid
 sequenceDiagram
     participant Host
     participant Transport as USB CDC or I2C
     participant Control as control_iface
-    participant Mailbox as pwm_driver
-    participant Backend as Core 1 backend
+    participant Mailbox as Command mailbox
+    participant Router as Core 1 profile router
+    participant Backend as Generator or monitor
     participant State as Published snapshot
 
     Host->>Transport: Read or write request
@@ -169,9 +187,10 @@ sequenceDiagram
         Control-->>Transport: Format response
     else Write
         Control->>Mailbox: Submit validated command
-        Mailbox->>Backend: Apply on Core 1
+        Mailbox->>Router: Route by profile
+        Router->>Backend: Apply or reject on Core 1
         Backend->>State: Publish realized state
-        Backend-->>Mailbox: Apply result
+        Backend-->>Mailbox: Result status
         Mailbox-->>Control: Result status
         Control-->>Transport: Format response
     end
@@ -186,6 +205,29 @@ Transport-specific details:
 - I2C commands are decoded by `i2c_slave` and `i2c_control_map` before they reach `control_iface`.
 
 This keeps the ISR transport-focused and avoids running backend-affecting logic in interrupt context.
+
+## Core 1 Real-Time Loop
+
+Core 1 does not wait for host traffic to manage channels. It initializes the
+selected profile, services the command mailbox, and continuously services the
+configured generator or monitor backends.
+
+```mermaid
+flowchart TD
+    Start[Core 1 starts] --> Init[Initialize profile and backends]
+    Init --> Ready[Publish ready]
+    Ready --> Loop{Real-time loop}
+    Loop --> Commands[Claim pending mailbox command]
+    Commands --> Apply[Apply to selected channel]
+    Apply --> Publish[Publish result and realized state]
+    Publish --> Service[Service generator timers, PIO, IRQs, or monitor sampling]
+    Service --> Loop
+    Commands -->|no command| Service
+```
+
+The mailbox is for control mutations and command results, not for streaming
+every PWM edge. High-rate timing and measurement stay local to Core 1; Core 0
+sees coherent realized snapshots.
 
 ## Cross-Core Mutation Boundary
 
@@ -253,6 +295,7 @@ When the USB CDC host opens the connection, the CLI prints help once through `pw
 
 ## Where To Read Next
 
-- [Control Protocol](protocol.md) for command syntax and I2C register values
-- [Firmware Interfaces](firmware_interfaces.md) for the source-level interfaces
+- [Control Interfaces](control/README.md) for shared semantics and transport links
+- [I2C Protocol](control/i2c_protocol.md) for binary register values
+- Source headers under `firmware/src` for current C declarations and APIs
 - [PWM Driver Design](detail/pwm_driver_design.md) for backend and mailbox internals

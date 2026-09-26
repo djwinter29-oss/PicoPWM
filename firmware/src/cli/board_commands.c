@@ -1,5 +1,6 @@
 #include "cli/board_commands.h"
 
+#include "config/pwm_profile.h"
 #include "control/control_iface.h"
 #include "driver/led.h"
 #include "driver/system.h"
@@ -7,6 +8,8 @@
 
 #include <stdio.h>
 #include <string.h>
+
+#define COMMAND_SHELL ((shell_t *)context)
 
 static const char *board_commands_result_text(pwm_driver_result_t result) {
     switch (result) {
@@ -26,70 +29,73 @@ static const char *board_commands_result_text(pwm_driver_result_t result) {
     }
 }
 
-bool board_commands_info(int argc, const char *const *argv) {
+bool board_commands_info(void *context, int argc, const char *const *argv) {
     (void)argv;
 
     if (argc != 1) {
-        return shell_write_line("ERR usage: info");
+        return shell_write_line(COMMAND_SHELL, "ERR usage: info");
     }
 
-    return shell_write_line(control_iface_device_name());
+    return shell_write_line(COMMAND_SHELL, control_iface_device_name());
 }
 
-bool board_commands_version(int argc, const char *const *argv) {
+bool board_commands_version(void *context, int argc, const char *const *argv) {
     (void)argv;
 
     if (argc != 1) {
-        return shell_write_line("ERR usage: version");
+        return shell_write_line(COMMAND_SHELL, "ERR usage: version");
     }
 
-    return shell_write_line(control_iface_firmware_version());
+    return shell_write_line(COMMAND_SHELL, control_iface_firmware_version());
 }
 
-bool board_commands_led(int argc, const char *const *argv) {
+bool board_commands_led(void *context, int argc, const char *const *argv) {
     if (argc != 2) {
-        return shell_write_line("ERR usage: led <on|off>");
+        return shell_write_line(COMMAND_SHELL, "ERR usage: led <on|off>");
     }
 
     if ((strcmp(argv[1], "on") == 0) || (strcmp(argv[1], "1") == 0)) {
         led_set(true);
-        return shell_write_line("OK led on");
+        return shell_write_line(COMMAND_SHELL, "OK led on");
     }
 
     if ((strcmp(argv[1], "off") == 0) || (strcmp(argv[1], "0") == 0)) {
         led_set(false);
-        return shell_write_line("OK led off");
+        return shell_write_line(COMMAND_SHELL, "OK led off");
     }
 
-    return shell_write_line("ERR usage: led <on|off>");
+    return shell_write_line(COMMAND_SHELL, "ERR usage: led <on|off>");
 }
 
-bool board_commands_reboot(int argc, const char *const *argv) {
+bool board_commands_reboot(void *context, int argc, const char *const *argv) {
     (void)argv;
 
     if (argc != 1) {
-        return shell_write_line("ERR usage: reboot");
+        return shell_write_line(COMMAND_SHELL, "ERR usage: reboot");
     }
 
-    shell_write_line("OK rebooting");
+    shell_write_line(COMMAND_SHELL, "OK rebooting");
     system_reboot();
     return true;
 }
 
-bool board_commands_stop(int argc, const char *const *argv) {
+bool board_commands_stop(void *context, int argc, const char *const *argv) {
     char line[64];
     pwm_driver_result_t result;
 
     (void)argv;
     if (argc != 1) {
-        return shell_write_line("ERR usage: stop");
+        return shell_write_line(COMMAND_SHELL, "ERR usage: stop");
     }
 
     result = control_iface_restore_defaults();
     if (result == PWM_DRIVER_RESULT_OK) {
-        return shell_write_line("OK all channels stopped and reset (freq=0, duty=50%)");
+        if (pwm_profile_is_monitor()) {
+            return shell_write_line(COMMAND_SHELL, "OK monitor channels unchanged");
+        }
+        return shell_write_line(COMMAND_SHELL, "OK all channels stopped and reset (freq=0, duty=50%)");
     }
 
     snprintf(line, sizeof(line), "ERR stop %s", board_commands_result_text(result));
-    return shell_write_line(line);
+    return shell_write_line(COMMAND_SHELL, line);
 }

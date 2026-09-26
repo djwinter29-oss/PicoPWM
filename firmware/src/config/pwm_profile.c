@@ -69,6 +69,14 @@ const pwm_profile_channel_t *pwm_profile_get_channel(uint channel) {
     return &pwm_profile_channels[channel];
 }
 
+bool pwm_profile_is_monitor(void) {
+#ifdef PICO_PWM_MONITOR_PROFILE
+    return true;
+#else
+    return false;
+#endif
+}
+
 const char *pwm_profile_backend_name(pwm_profile_backend_t backend) {
     switch (backend) {
     case PWM_PROFILE_BACKEND_HW_GENERATOR:

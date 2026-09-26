@@ -17,6 +17,7 @@
  * @return Never returns during normal firmware operation.
  */
 int main(void) {
+    static pwm_commands_t pwm_command_session;
     static const shell_transport_t shell_transport = {
         .read = usb_cdc_read,
         .write = usb_cdc_write,
@@ -35,7 +36,7 @@ int main(void) {
 
     // USB CDC command interface.
     usb_cdc_init();
-    pwm_commands_init(&shell_transport);
+    pwm_commands_init(&pwm_command_session, &shell_transport);
 
     // Launch Core 1 to manage all PWM hardware.
     pwm_driver_launch();
@@ -56,10 +57,10 @@ int main(void) {
         // Detect USB connection events and print the initial CLI help.
         usb_connected = usb_cdc_is_connected();
         if (usb_connected && !usb_was_connected) {
-            pwm_commands_on_connected();
+            pwm_commands_on_connected(&pwm_command_session);
         }
         usb_was_connected = usb_connected;
-        pwm_commands_poll();
+        pwm_commands_poll(&pwm_command_session);
         i2c_slave_poll();
         sleep_us(100);
     }

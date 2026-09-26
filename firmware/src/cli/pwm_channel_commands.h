@@ -3,8 +3,8 @@
 
 #include "shell.h"
 
-bool pwm_channel_commands_get(int argc, const char *const *argv);
-bool pwm_channel_commands_set(int argc, const char *const *argv);
-bool pwm_channel_commands_status(int argc, const char *const *argv);
+bool pwm_channel_commands_get(void *context, int argc, const char *const *argv);
+bool pwm_channel_commands_set(void *context, int argc, const char *const *argv);
+bool pwm_channel_commands_status(void *context, int argc, const char *const *argv);
 
 #endif

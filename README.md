@@ -120,9 +120,9 @@ Use the `stop` command to reset all channels to the power-up state: frequency = 
 
 - [Architecture](docs/architecture.md)
 - [Firmware Configuration](docs/configuration.md)
-- [Control Protocol](docs/protocol.md)
-- [USB CDC CLI](docs/usb_cdc_cli.md)
-- [Firmware Interfaces](docs/firmware_interfaces.md)
+- [Control Interfaces](docs/control/README.md)
+- [I2C Protocol](docs/control/i2c_protocol.md)
+- [USB CDC CLI](docs/control/usb_cdc_cli.md)
 - [Pinout](docs/pinout.md)
 
 The USB CDC CLI uses the vendored [microrl](https://github.com/Helius/microrl)

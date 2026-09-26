@@ -6,6 +6,8 @@
 #ifndef SHELL_H
 #define SHELL_H
 
+#include "microrl.h"
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -36,18 +38,29 @@ typedef struct {
 
 /**
  * @brief Command handler invoked for one parsed CLI command line.
+ * @param context Command context supplied during shell initialization.
  * @param argc Number of parsed argument tokens.
  * @param argv Null-terminated token strings backed by the shell line buffer.
  * @return `true` when the handler completed normally, otherwise `false`.
  */
-typedef bool (*shell_command_handler_t)(int argc, const char *const *argv);
+typedef bool (*shell_command_handler_t)(void *context, int argc, const char *const *argv);
 
 /**
  * @brief Unknown-command handler invoked when no registered command matches the first token.
+ * @param context Command context supplied during shell initialization.
  * @param command_name First token from the unrecognized command line.
  * @return `true` when the handler already produced its own response, otherwise `false`.
  */
-typedef bool (*shell_unknown_handler_t)(const char *command_name);
+typedef bool (*shell_unknown_handler_t)(void *context, const char *command_name);
+
+/**
+ * @brief Return command completions for the current shell input.
+ * @param context Caller-owned command context.
+ * @param argc Number of parsed completion tokens.
+ * @param argv Parsed completion tokens.
+ * @return Null-terminated completion strings owned by the callback.
+ */
+typedef char **(*shell_completion_handler_t)(void *context, int argc, const char *const *argv);
 
 /** @brief One registered CLI command entry. */
 typedef struct {
@@ -63,32 +76,54 @@ typedef struct {
     uint32_t command_count; /**< Number of entries in @ref commands. */
     const char *unknown_message; /**< Fallback message used when no unknown-handler responds. */
     shell_unknown_handler_t unknown_handler; /**< Optional callback for unknown command names. */
+    shell_completion_handler_t completion_handler; /**< Optional Tab-completion callback. */
+    void *command_context; /**< Context passed to command callbacks. */
 } shell_config_t;
+
+/** @brief One independent interactive shell session.
+ *
+ * Shell sessions have independent microrl buffers and parser state. Only one
+ * session may be inside @ref shell_poll or @ref shell_prompt at a time because
+ * microrl invokes callbacks through a library-compatible process-wide bridge.
+ */
+typedef struct {
+    shell_transport_t transport; /**< Active byte transport. */
+    const shell_command_t *commands; /**< Registered command table. */
+    uint32_t command_count; /**< Number of entries in @ref commands. */
+    const char *unknown_message; /**< Fallback message for unmatched commands. */
+    shell_unknown_handler_t unknown_handler; /**< Optional unmatched-command callback. */
+    shell_completion_handler_t completion_handler; /**< Optional Tab-completion callback. */
+    void *command_context; /**< Context passed to command callbacks. */
+    microrl_t microrl; /**< Interactive line editor state. */
+    bool initialized; /**< Indicates whether @ref shell_init completed successfully. */
+} shell_t;
 
 /**
  * @brief Initialize the generic CLI shell.
  * @param config Caller-owned shell configuration.
  */
-void shell_init(const shell_config_t *config);
+void shell_init(shell_t *shell, const shell_config_t *config);
 
-/** @brief Poll the shell transport, assemble input lines, and dispatch complete commands. */
-void shell_poll(void);
+/** @brief Poll the shell transport, assemble input lines, and dispatch complete commands.
+ * @note Calls must not be nested across shell instances.
+ */
+void shell_poll(shell_t *shell);
 
 /** @brief Emit the configured interactive prompt through the shell transport. */
-void shell_prompt(void);
+void shell_prompt(shell_t *shell);
 
 /**
  * @brief Write raw text through the shell transport.
  * @param text Null-terminated text to write.
  * @return `true` when the text was accepted, otherwise `false`.
  */
-bool shell_write(const char *text);
+bool shell_write(shell_t *shell, const char *text);
 
 /**
  * @brief Write one text line followed by CRLF through the shell transport.
  * @param text Null-terminated line text, or `NULL` to emit only CRLF.
  * @return `true` when the line was accepted, otherwise `false`.
  */
-bool shell_write_line(const char *text);
+bool shell_write_line(shell_t *shell, const char *text);
 
 #endif

@@ -35,6 +35,8 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 BUILD_DIR_PATH="$REPO_ROOT/$BUILD_DIR"
 
+"$SCRIPT_DIR/cli-shell-test.sh"
+
 if [ "$SKIP_BUILD" -eq 0 ]; then
     BUILD_DIR="$BUILD_DIR" GENERATOR="$GENERATOR" PICO_SDK_PATH="$PICO_SDK_PATH_VALUE" "$SCRIPT_DIR/../firmware/build.sh"
 fi

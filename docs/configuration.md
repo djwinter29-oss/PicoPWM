@@ -74,4 +74,4 @@ A profile must validate these conditions at build time or startup:
   shared pin without an explicit ownership policy
 
 See [Architecture](architecture.md) for ownership boundaries and [USB CDC
-CLI](usb_cdc_cli.md) for the stable interactive interface.
+CLI](control/usb_cdc_cli.md) for the stable interactive interface.

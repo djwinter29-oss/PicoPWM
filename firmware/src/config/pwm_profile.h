@@ -44,6 +44,9 @@ typedef struct {
 /** @brief Return the active profile's logical channel table. */
 const pwm_profile_channel_t *pwm_profile_get_channel(uint channel);
 
+/** @brief Return whether the selected profile is input-monitoring oriented. */
+bool pwm_profile_is_monitor(void);
+
 /** @brief Return a short name for one configured backend. */
 const char *pwm_profile_backend_name(pwm_profile_backend_t backend);
 

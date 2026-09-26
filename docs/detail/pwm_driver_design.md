@@ -289,16 +289,16 @@ sequenceDiagram
     participant C0 as Core 0 main
     participant WR as pwm_driver.c
     participant C1 as Core 1
-    participant HW as hw_pwm_driver
-    participant PIO as pio_pwm_generator
+    participant HW as hw_generator or hw_monitor
+    participant PIO as pio_generator or pio_monitor
     participant SW as sw_generator
 
     C0->>WR: pwm_driver_launch()
     WR->>WR: init pending mailbox slot
     WR->>WR: init snapshot defaults
     WR->>C1: multicore_launch_core1(core_main)
-    C1->>HW: hw_pwm_driver_init()
-    C1->>PIO: pio_pwm_generator_init()
+    C1->>HW: initialize selected profile backend
+    C1->>PIO: initialize selected profile backend
     C1->>SW: sw_gen_init()
     C1->>WR: pwm_ready = true
     C1->>C1: mailbox loop + __wfe()
@@ -368,8 +368,6 @@ sequenceDiagram
 
 The coherent higher-layer read boundary is `control_iface_get_channel()`, which forwards one channel snapshot from `pwm_driver_get()`.
 
-## Wrapper Layer Detailed Design
-
 ## Mailbox Command Structure
 
 The wrapper uses one single-slot mailbox record containing:
@@ -392,12 +390,27 @@ This replaces separate pending, active, and reply-ready booleans and keeps the s
 
 The mailbox state, command payload, and reply payload now live together in one small mailbox struct rather than as separate globals.
 
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE
+    IDLE --> PENDING: Core 0 publishes command
+    PENDING --> ACTIVE: Core 1 claims command
+    ACTIVE --> COMPLETE: Core 1 publishes result
+    COMPLETE --> IDLE: Core 0 collects result
+    PENDING --> IDLE: rejected as busy
+    ACTIVE --> IDLE: timeout observed by Core 0
+```
+
+The mailbox carries control mutations and their result status. It does not
+carry real-time PWM edges or monitor samples; those remain local to Core 1 and
+are exposed through the versioned realized-state snapshot.
+
 ### Responsibilities of `pwm_driver.c`
 
 `pwm_driver.c` performs the following functions.
 
-1. Channel class detection.
-2. Small range-based channel classification from logical channel number to backend-local index.
+1. Profile-table channel routing.
+2. Profile-based mapping from logical channel number to backend and backend-local index.
 3. Core 1 launch and ready-state control.
 4. Mailbox state transitions for the one-slot Core 0/Core 1 command exchange.
 5. Reply publication for the active Core 0 command.
@@ -406,16 +419,16 @@ The mailbox state, command payload, and reply payload now live together in one s
 
 ### Logical Routing
 
-Routing is done by a small fixed channel classifier:
-
-- hardware bank: logical channels `0..7`
-- PIO bank: logical channels `8..15`
-- software bank: logical channels `16..23`
+Routing is performed by the selected profile table. Each logical channel maps
+to a backend, direction, GPIO, backend-local index, and capability set. The
+default profile currently exposes 24 channels, but higher layers must not
+infer backend ownership from a channel-number range.
 
 Each descriptor owns:
 
-- backend `set()` callback
-- backend-native `restore_defaults()` callback
+- backend initialization and channel operations
+- generator `set()` and restore callbacks when the channel is output-capable
+- monitor read callbacks when the channel is input-capable
 - optional backend-owned readback finalizer
 
 ### Shared Snapshot Design

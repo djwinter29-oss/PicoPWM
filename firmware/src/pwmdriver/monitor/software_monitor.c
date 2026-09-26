@@ -29,7 +29,7 @@
 
 #include "hardware/gpio.h"
 
-#include "shared/monitor_gpio_common.h"
+#include "../shared/monitor_gpio_common.h"
 #include "../pwm_driver_internal.h"
 
 /** @brief Inactivity threshold used to treat one channel as a permanent level. */
@@ -59,7 +59,7 @@ void sw_mon_handle_gpio_irq(uint gpio, uint32_t events) {
 
 /** @brief Read one channel state under interrupt exclusion and apply static-level fallback when idle. */
 static bool sw_mon_read_channel(uint channel, pwm_driver_state_t *state) {
-    return pwm_gpio_mon_read_channel(channel, state, sw_mon_channels, SW_MON_STATIC_TIMEOUT_US, PWM_SW_GPIO_PINS);
+    return pwm_gpio_mon_read_channel(channel, state, sw_mon_channels, SW_MON_STATIC_TIMEOUT_US, PWM_PROFILE_BACKEND_SW_MONITOR);
 }
 
 /** @copydoc sw_mon_init */
@@ -69,7 +69,7 @@ void sw_mon_init(void) {
     }
 
     for (uint channel = 0; channel < SW_PWM_COUNT; channel++) {
-        uint pin = PWM_SW_GPIO_PINS[channel];
+        uint pin = pwm_driver_get_gpio(PWM_PROFILE_BACKEND_SW_MONITOR, channel);
 
         pwm_gpio_mon_init_pin(pin);
         sw_mon_gpio_to_channel[pin] = (int8_t)channel;

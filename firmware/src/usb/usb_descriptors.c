@@ -95,7 +95,7 @@ static char const *string_desc_arr[] = {
     USB_STR_PRODUCT,
     NULL,
     USB_STR_CDC,
-}
+};
 
 /** @brief Scratch UTF-16 string descriptor buffer returned by TinyUSB string callbacks. */
 static uint16_t desc_str[32 + 1];

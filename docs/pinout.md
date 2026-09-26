@@ -36,9 +36,9 @@ LED and ADC pins.
 | 18 | Software PWM | 2 | GPIO 20 | |
 | 19 | Software PWM | 3 | GPIO 21 | |
 | 20 | Software PWM | 4 | GPIO 22 | |
-| 21 | Software PWM | 5 | GPIO 25 | On-board LED, optional |
-| 22 | Software PWM | 6 | GPIO 26 | Shared with ADC0 |
-| 23 | Software PWM | 7 | GPIO 27 | Shared with ADC1 |
+| 21 | Software PWM | 5 | GPIO 26 | Shared with ADC0 |
+| 22 | Software PWM | 6 | GPIO 27 | Shared with ADC1 |
+| 23 | Software PWM | 7 | GPIO 28 | Shared with ADC2 |
 
 The current default generator profile uses PWM slice channel B pins
 intentionally. This keeps the external channel order aligned with the planned
@@ -59,6 +59,7 @@ typically use 4.7 kOhm pull-ups on SDA and SCL.
 
 ## Shared Pins
 
-- GPIO 25 is the optional on-board LED output and software PWM channel 21.
-- GPIO 26 is software PWM channel 22 and ADC0.
-- GPIO 27 is software PWM channel 23 and ADC1.
+- GPIO 25 is reserved for the on-board LED and is not assigned to a default PWM channel.
+- GPIO 26 is software PWM channel 21 and ADC0.
+- GPIO 27 is software PWM channel 22 and ADC1.
+- GPIO 28 is software PWM channel 23 and ADC2.

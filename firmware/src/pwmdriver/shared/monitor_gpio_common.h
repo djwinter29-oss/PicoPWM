@@ -6,7 +6,7 @@
 #ifndef PWMDRIVER_MONITOR_GPIO_COMMON_H
 #define PWMDRIVER_MONITOR_GPIO_COMMON_H
 
-#include "pwm_driver.h"
+#include "../pwm_driver_internal.h"
 
 #include "pico/time.h"
 
@@ -124,7 +124,7 @@ static inline void pwm_gpio_mon_handle_irq(uint gpio, uint32_t events, uint gpio
 }
 
 /** @brief Read one GPIO monitor channel and apply static-level fallback when idle. */
-static inline bool pwm_gpio_mon_read_channel(uint channel, pwm_driver_state_t *state, pwm_gpio_mon_channel_t *channels, uint32_t static_timeout_us, const uint *gpio_pins) {
+static inline bool pwm_gpio_mon_read_channel(uint channel, pwm_driver_state_t *state, pwm_gpio_mon_channel_t *channels, uint32_t static_timeout_us, pwm_profile_backend_t backend) {
     uint32_t irq_state;
     uint64_t last_edge_us;
     uint32_t pulse_count;
@@ -139,7 +139,7 @@ static inline bool pwm_gpio_mon_read_channel(uint channel, pwm_driver_state_t *s
     if ((now_us - last_edge_us) >= static_timeout_us) {
         restore_interrupts(irq_state);
         state->freq_hz = 0u;
-        state->duty = gpio_get(gpio_pins[channel]) ? 100u : 0u;
+        state->duty = gpio_get(pwm_driver_get_gpio(backend, channel)) ? 100u : 0u;
         state->pulse_count = pulse_count;
         return true;
     }

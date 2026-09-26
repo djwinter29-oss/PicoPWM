@@ -7,7 +7,7 @@
 #define PWMDRIVER_PWM_DRIVER_H
 
 #include "pico/stdlib.h"
-#include "config/pwm_profile.h"
+#include "profile/pwm_profile.h"
 
 #include <stdint.h>
 

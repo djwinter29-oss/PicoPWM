@@ -66,7 +66,7 @@ static uint8_t hw_gen_static_duty(uint8_t duty_percent) {
 
 /** @brief Apply one realized static hardware output state and publish the matching shared snapshot. */
 static void hw_gen_apply_static_state(uint channel, uint8_t realized_duty) {
-    uint gpio = PWM_HW_GPIO_PINS[channel];
+    uint gpio = pwm_driver_get_gpio(PWM_PROFILE_BACKEND_HW_GENERATOR, channel);
     uint slice = pwm_gpio_to_slice_num(gpio);
     uint ch = pwm_gpio_to_channel(gpio);
 
@@ -208,7 +208,7 @@ void hw_gen_init(void) {
     hw_gen_sys_clk_hz = clock_get_hz(clk_sys);
 
     for (int i = 0; i < HW_PWM_COUNT; i++) {
-        uint gpio = PWM_HW_GPIO_PINS[i];
+        uint gpio = pwm_driver_get_gpio(PWM_PROFILE_BACKEND_HW_GENERATOR, i);
         hw_gen_bind_pwm_pin(gpio);
 
         uint slice = pwm_gpio_to_slice_num(gpio);
@@ -235,7 +235,7 @@ bool hw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     if (channel >= HW_PWM_COUNT) return false;
     if (duty > 100u) duty = 100u;
 
-    uint gpio = PWM_HW_GPIO_PINS[channel];
+    uint gpio = pwm_driver_get_gpio(PWM_PROFILE_BACKEND_HW_GENERATOR, channel);
     uint slice = pwm_gpio_to_slice_num(gpio);
     uint ch = pwm_gpio_to_channel(gpio);
 

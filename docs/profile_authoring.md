@@ -8,7 +8,7 @@ compiled into the firmware; profiles are not switched at runtime.
 Profile tables live under:
 
 ```text
-firmware/src/config/profiles/
+firmware/src/profile/profiles/
   generator.c
   monitor.c
   software_generator.c
@@ -23,11 +23,11 @@ cmake -S firmware -B build-generator \
 ```
 
 The common implementation remains in
-`firmware/src/config/pwm_profile.c`. A profile file should only define the
+`firmware/src/profile/pwm_profile.c`. A profile file should only define the
 channel table:
 
 ```c
-#include "config/profile_table.h"
+#include "profile/profile_table.h"
 
 const pwm_profile_channel_t pwm_profile_channels[PWM_PROFILE_CHANNEL_COUNT] = {
     /* one entry per logical channel */
@@ -67,10 +67,12 @@ A profile must validate:
 - Generator requests stay within the profile frequency envelope.
 - Monitor limits describe the actual measurement capability.
 - I2C register ranges still cover the advertised logical channel count.
+- board-specific reserved pins and connector availability are respected by the
+  selected profile and CMake board configuration.
 
-The default all-software profiles use GPIO `0..15` and `18..25`, leaving GPIO
-`16` and `17` available for I2C. A different board or transport arrangement may
-use a different map.
+The default all-software profiles use GPIO `0..15`, `18..22`, and `26..28`,
+leaving GPIO `16` and `17` available for I2C and GPIO `25` available for the
+board LED. A different board or transport arrangement may use a different map.
 
 ## Build Definitions
 
@@ -85,7 +87,7 @@ not inspect a profile name to route individual channels.
 
 ## Adding a Profile
 
-1. Add a new table under `firmware/src/config/profiles/`.
+1. Add a new table under `firmware/src/profile/profiles/`.
 2. Add one `PICO_PWM_PROFILE` branch in `firmware/CMakeLists.txt`.
 3. Select the required backend sources and PIO program, if any.
 4. Add compile definitions only when shared storage or backend compilation
@@ -97,3 +99,8 @@ not inspect a profile name to route individual channels.
 The USB shell and I2C protocol must remain unchanged when adding a profile.
 Unsupported operations should return `PWM_DRIVER_RESULT_UNAVAILABLE` through
 `control_iface`.
+
+The built-in `mixed` profile is an example of a heterogeneous table: it uses
+PIO generation, software generation, and software monitoring in one image.
+Its GPIO map is board-specific and demonstrates why profile validation must
+reject unavailable or conflicting pins before Core 1 starts.

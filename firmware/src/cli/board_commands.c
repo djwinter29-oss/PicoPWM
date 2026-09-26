@@ -1,6 +1,6 @@
 #include "cli/board_commands.h"
 
-#include "config/pwm_profile.h"
+#include "profile/pwm_profile.h"
 #include "control/control_iface.h"
 #include "driver/led.h"
 #include "driver/system.h"

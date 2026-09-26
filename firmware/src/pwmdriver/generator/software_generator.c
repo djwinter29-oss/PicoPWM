@@ -143,7 +143,7 @@ void sw_gen_init(void) {
     sw_pwm_active_mask = 0u;
 
     for (int i = 0; i < SW_PWM_COUNT; i++) {
-        uint gpio = PWM_SW_GPIO_PINS[i];
+        uint gpio = pwm_driver_get_gpio(PWM_PROFILE_BACKEND_SW_GENERATOR, i);
 
         sw_pwm_channels[i].gpio = gpio;
         sw_pwm_channels[i].period_ticks = 0u;

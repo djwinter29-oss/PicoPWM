@@ -421,7 +421,7 @@ static void gen_timing_self_check(void) {
 static void gen_drive_level(uint channel, bool high) {
     PIO pio = pio_channels[channel].pio;
     uint sm = pio_channels[channel].sm;
-    uint pin = PWM_PIO_GPIO_PINS[channel];
+    uint pin = pwm_driver_get_gpio(PWM_PROFILE_BACKEND_PIO_GENERATOR, channel);
 
     pio_sm_set_enabled(pio, sm, false);
     pio_sm_clear_fifos(pio, sm);
@@ -441,7 +441,7 @@ static void gen_enable_channel(uint channel, uint16_t period_count, uint32_t clk
     pio_gen_channel_t *ctx = &pio_channels[channel];
     PIO pio = ctx->pio;
     uint sm = ctx->sm;
-    uint pin = PWM_PIO_GPIO_PINS[channel];
+    uint pin = pwm_driver_get_gpio(PWM_PROFILE_BACKEND_PIO_GENERATOR, channel);
     uint16_t clkdiv_int;
     uint8_t clkdiv_frac;
     uint32_t level = gen_level_from_duty(period_count, duty_percent);
@@ -497,7 +497,7 @@ void pio_gen_init(void) {
             pio_channels[i].pio,
             pio_channels[i].sm,
             pio_program_offsets[pio_index(pio_channels[i].pio)],
-            PWM_PIO_GPIO_PINS[i]
+            pwm_driver_get_gpio(PWM_PROFILE_BACKEND_PIO_GENERATOR, i)
         );
         gen_drive_level(i, false);
     }

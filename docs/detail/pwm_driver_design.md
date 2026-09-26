@@ -119,8 +119,8 @@ Architecturally, `pwm_driver_set()` is an internal command-ingress API.
 
 ## Current Default Mapping
 
-The following mapping is still used by the current implementation and is the
-default profile that the configuration layer must replace:
+The default generator profile uses the following mapping. Other build profiles
+use their own standalone profile table.
 
 | Logical Channel | Backend | Backend-local Channel |
 | ----------------- | --------- | ----------------------- |
@@ -502,7 +502,7 @@ The software monitor backend:
 - reconstructs frequency and duty from microsecond timestamps
 - is intentionally low-frequency and best-effort only
 - increments `pulse_count` once per completed observed period
-- is intentionally standalone and not yet integrated with the software generator ownership model
+- owns software-monitor channels selected by the active profile
 
 For the current software timing model, target range, and monitor role, see [Software PWM Generator](generator/software_generator.md) and [Software PWM Monitor](monitor/software_monitor.md).
 

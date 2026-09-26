@@ -79,14 +79,18 @@ cmake -S firmware -B build-software-generator \
 
 cmake -S firmware -B build-software-monitor \
 	-DPICO_PWM_PROFILE=software_monitor
+
+cmake -S firmware -B build-mixed \
+	-DPICO_PWM_PROFILE=mixed
 ```
 
 The current profiles use the default 24-channel pin arrangement. Project-specific
 profiles can later change backend, direction, GPIO, and capabilities while
 preserving the host-facing control model.
 
-The all-software profiles use 24 logical software channels on GPIO `0..15` and
-`18..25`; GPIO `16` and `17` remain reserved for I2C. This is a different
+The all-software profiles use 24 logical software channels on GPIO `0..15`,
+`18..22`, and `26..28`; GPIO `16` and `17` remain reserved for I2C and GPIO
+`25` remains available for the board LED. This is a different
 physical arrangement from the mixed hardware/PIO/software default profile.
 
 Build outputs of interest:

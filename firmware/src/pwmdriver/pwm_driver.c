@@ -9,6 +9,10 @@
 #ifdef PICO_PWM_MONITOR_PROFILE
 #ifdef PICO_PWM_SOFTWARE_PROFILE
 #include "monitor/software_monitor.h"
+#elif defined(PICO_PWM_MIXED_PROFILE)
+#include "generator/pio_generator.h"
+#include "generator/software_generator.h"
+#include "monitor/software_monitor.h"
 #else
 #include "monitor/hardware_monitor.h"
 #include "monitor/pio_monitor.h"
@@ -36,25 +40,12 @@
 /** @brief Timeout for one admitted cross-core apply request in milliseconds. */
 #define PWM_DRIVER_APPLY_TIMEOUT_MS 1000
 
-/** @brief GPIO pin map for the hardware PWM logical channel bank. */
-const uint PWM_HW_GPIO_PINS[HW_PWM_COUNT] = {
-    1, 3, 5, 7, 9, 11, 13, 15
-};
+uint pwm_driver_get_gpio(pwm_profile_backend_t backend, uint backend_channel) {
+    uint gpio = 0u;
 
-/** @brief GPIO pin map for the software PWM logical channel bank. */
-const uint PWM_SW_GPIO_PINS[SW_PWM_COUNT] = {
-#ifdef PICO_PWM_SOFTWARE_PROFILE
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-    18, 19, 20, 21, 22, 23, 24, 25
-#else
-    18, 19, 20, 21, 22, 25, 26, 27
-#endif
-};
-
-/** @brief GPIO pin map for the PIO PWM logical channel bank. */
-const uint PWM_PIO_GPIO_PINS[PIO_PWM_DRIVER_COUNT] = {
-    0, 2, 4, 6, 8, 10, 12, 14
-};
+    hard_assert(pwm_profile_get_gpio(backend, backend_channel, &gpio));
+    return gpio;
+}
 
 /** @brief Indicates whether Core 1 finished backend initialization. */
 static volatile bool pwm_ready = false;
@@ -150,6 +141,28 @@ static const pwm_driver_backend_t pwm_driver_backends[PWM_PROFILE_BACKEND_SW_MON
         .get = sw_mon_get,
         .finalize_readback = NULL,
     },
+#elif defined(PICO_PWM_MIXED_PROFILE)
+    [PWM_PROFILE_BACKEND_PIO_GENERATOR] = {
+        .init = pio_gen_init,
+        .set = pio_gen_set,
+        .restore_defaults = pio_gen_restore_defaults,
+        .get = NULL,
+        .finalize_readback = pio_gen_finalize_readback,
+    },
+    [PWM_PROFILE_BACKEND_SW_GENERATOR] = {
+        .init = sw_gen_init,
+        .set = sw_gen_set,
+        .restore_defaults = sw_gen_restore_defaults,
+        .get = NULL,
+        .finalize_readback = NULL,
+    },
+    [PWM_PROFILE_BACKEND_SW_MONITOR] = {
+        .init = sw_mon_init,
+        .set = NULL,
+        .restore_defaults = NULL,
+        .get = sw_mon_get,
+        .finalize_readback = NULL,
+    },
 #else
     [PWM_PROFILE_BACKEND_HW_MONITOR] = {
         .init = hw_mon_init,
@@ -209,7 +222,7 @@ static const pwm_driver_backend_t pwm_driver_backends[PWM_PROFILE_BACKEND_SW_MON
 #ifdef PICO_PWM_MONITOR_PROFILE
 /** @brief Dispatch the Pico SDK's single GPIO callback to all configured monitor banks. */
 static void pwm_driver_monitor_gpio_irq(uint gpio, uint32_t events) {
-#ifndef PICO_PWM_SOFTWARE_PROFILE
+#if !defined(PICO_PWM_SOFTWARE_PROFILE) && !defined(PICO_PWM_MIXED_PROFILE)
     hw_mon_handle_gpio_irq(gpio, events);
 #endif
     sw_mon_handle_gpio_irq(gpio, events);
@@ -453,6 +466,7 @@ static void pwm_driver_core_main(void) {
 
 /** @copydoc pwm_driver_launch */
 void pwm_driver_launch(void) {
+    hard_assert(pwm_profile_validate());
     pwm_ready = false;
     critical_section_init(&pwm_reply_lock);
     mutex_init(&control_api_lock);

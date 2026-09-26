@@ -12,13 +12,22 @@ The current profile selections are:
 - **Monitor**: channels sample PWM input signals and report measured state.
 - **Software generator**: all logical channels use the software output backend.
 - **Software monitor**: all logical channels use the software input backend.
+- **Mixed**: 8 PIO generator channels, 8 software generator channels, and 8
+  software monitor channels.
 
 Project-specific custom profiles are the extension point: add another profile
 table and CMake selection while preserving the same host control interfaces.
 
+The mixed profile uses logical channels `0..7` for PIO generation, `8..15`
+for software generation, and `16..23` for software monitoring. It requires a
+board map exposing GPIO `23` and `24`; the standard Pico header does not expose
+those pins, so this profile is intended for a compatible custom board or pin
+map.
+
 The `software_generator` and `software_monitor` profiles assign all 24 logical
 channels to the software backend. Their dedicated default map uses GPIO
-`0..15` and `18..25`; GPIO `16` and `17` remain reserved for I2C. These
+`0..15`, `18..22`, and `26..28`; GPIO `16` and `17` remain reserved for I2C
+and GPIO `25` remains available for the board LED. These
 profiles therefore trade the hardware/PIO resource limits for a larger shared
 software scheduling and GPIO-ownership budget.
 

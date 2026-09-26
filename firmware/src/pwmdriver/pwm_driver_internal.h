@@ -33,12 +33,8 @@ static inline uint32_t pwm_driver_accumulate_pulse_count(uint32_t pulse_count, u
 	return (uint32_t)total_pulses;
 }
 
-/** @brief GPIO pin map for the hardware PWM backend. */
-extern const uint PWM_HW_GPIO_PINS[];
-/** @brief GPIO pin map for the software PWM backend. */
-extern const uint PWM_SW_GPIO_PINS[];
-/** @brief GPIO pin map for the PIO PWM backend. */
-extern const uint PWM_PIO_GPIO_PINS[];
+/** @brief Resolve a profile backend-local channel to its configured GPIO. */
+uint pwm_driver_get_gpio(pwm_profile_backend_t backend, uint backend_channel);
 
 /**
  * @brief Submit one cross-core logical channel update.

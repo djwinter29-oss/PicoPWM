@@ -48,6 +48,12 @@ typedef struct {
 /** @brief Return the active profile's logical channel table. */
 const pwm_profile_channel_t *pwm_profile_get_channel(uint channel);
 
+/** @brief Resolve a backend-local channel to its profile-assigned GPIO. */
+bool pwm_profile_get_gpio(pwm_profile_backend_t backend, uint backend_channel, uint *gpio_out);
+
+/** @brief Validate GPIO and backend-resource ownership for the selected profile. */
+bool pwm_profile_validate(void);
+
 /** @brief Return whether a profile channel accepts one requested frequency. */
 bool pwm_profile_frequency_supported(uint channel, uint32_t frequency_hz);
 

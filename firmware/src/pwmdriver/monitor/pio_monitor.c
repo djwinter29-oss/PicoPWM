@@ -202,7 +202,7 @@ static void pio_mon_reset_channel(pio_mon_channel_t *ctx) {
 /** @brief Publish a permanent-high or permanent-low level after prolonged inactivity. */
 static void pio_mon_publish_static_level(uint channel) {
     pio_mon_channel_t *ctx = &pio_mon_channels[channel];
-    bool high = gpio_get(PWM_PIO_GPIO_PINS[channel]);
+    bool high = gpio_get(pwm_driver_get_gpio(PWM_PROFILE_BACKEND_PIO_MONITOR, channel));
 
     pio_mon_publish_state(ctx, 0u, high ? 100u : 0u, true);
 }
@@ -336,7 +336,7 @@ void pio_mon_init(void) {
 
     for (uint channel = 0; channel < PIO_PWM_DRIVER_COUNT; channel++) {
         pio_mon_channel_t *ctx = &pio_mon_channels[channel];
-        uint pin = PWM_PIO_GPIO_PINS[channel];
+        uint pin = pwm_driver_get_gpio(PWM_PROFILE_BACKEND_PIO_MONITOR, channel);
         uint8_t program_offset;
 
         ctx->pio = pio_mon_pio_for_channel(channel);

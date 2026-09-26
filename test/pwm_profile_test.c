@@ -8,12 +8,7 @@ int main(void) {
 
     assert(profile != NULL);
     assert(pwm_profile_validate());
-#ifdef PICO_PWM_MIXED_PROFILE
-    assert(profile->gpio == 0u);
-    assert(profile->backend == PWM_PROFILE_BACKEND_PIO_GENERATOR);
-#else
     assert(profile->gpio == 1u);
-#endif
     assert(profile->backend_channel == 0u);
     assert(profile->min_frequency_hz > 0u);
     assert(profile->max_frequency_hz >= profile->min_frequency_hz);

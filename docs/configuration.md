@@ -6,21 +6,35 @@ of each channel; it does not change the host command syntax.
 
 ## Build Profiles
 
-The current profile selections are:
+The GPIO map is fixed into three 8-pin banks (see [Pinout](pinout.md)): the
+hardware PWM bank (slice-B pins), the PIO PWM bank (companion slice-A pins),
+and the software-only bank. Each bank independently acts as generator or
+monitor, giving `2^3 = 8` structurally sensible combinations. (The raw
+cartesian product of every backend choice per bank, including redundant
+software fallbacks on the hardware/PIO banks, is 32; only the 8 pure
+gen/mon-per-bank combinations are worth shipping as profiles.)
 
-- **Generator**: channels produce PWM output signals.
-- **Monitor**: channels sample PWM input signals and report measured state.
-- **Mixed**: 8 PIO generator channels, 8 software generator channels, and 8
-  software monitor channels.
+`PICO_PWM_PROFILE` selects one of these 8 profiles by a 3-digit code
+`[hw-bank][pio-bank][sw-bank]`, where each digit is `1` (generator) or `2`
+(monitor):
+
+| Code | HW bank (GPIO 1,3,5,7,9,11,13,15) | PIO bank (GPIO 0,2,4,6,8,10,12,14) | SW bank (GPIO 16,17,18,19,20,21,22,28) |
+| --- | --- | --- | --- |
+| `generator` (`111`) | generator | generator | generator |
+| `112` | generator | generator | monitor |
+| `121` | generator | monitor | generator |
+| `122` | generator | monitor | monitor |
+| `211` | monitor | generator | generator |
+| `212` | monitor | generator | monitor |
+| `221` | monitor | monitor | generator |
+| `monitor` (`222`) | monitor | monitor | monitor |
+
+`generator` and `monitor` keep their descriptive names since they are the
+all-generate and all-monitor extremes; the 6 mixed combinations use the plain
+digit code.
 
 Project-specific custom profiles are the extension point: add another profile
 table and CMake selection while preserving the same host control interfaces.
-
-The mixed profile uses logical channels `0..7` for PIO generation, `8..15`
-for software generation, and `16..23` for software monitoring. It requires a
-custom board map exposing GPIO `23` and `24`; GPIO24 is a board-internal VBUS
-sense-related pin on the standard Pico. The standard Pico build rejects this
-profile before SDK configuration completes.
 
 GPIO23/24 are optional software-only pins. Normal Pico profiles leave them
 unused; custom profiles may assign them only to software generator or software
@@ -37,6 +51,9 @@ cmake -S firmware -B build-generator \
 
 cmake -S firmware -B build-monitor \
   -DPICO_PWM_PROFILE=monitor
+
+cmake -S firmware -B build-121 \
+  -DPICO_PWM_PROFILE=121
 ```
 
 Separate build directories produce separate, reproducible firmware variants.

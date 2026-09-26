@@ -9,10 +9,21 @@ Profile tables live under:
 
 ```text
 firmware/src/profile/profiles/
-  generator.c
-  monitor.c
-  pio_sw_gen_sw_mon.c
+  profile_111.c (generator)
+  profile_112.c
+  profile_121.c
+  profile_122.c
+  profile_211.c
+  profile_212.c
+  profile_221.c
+  profile_222.c (monitor)
 ```
+
+The 8 `profile_XXX.c` tables are the 8 managed combinations of the fixed HW,
+PIO, and SW banks (each bank independently generator or monitor); see
+[Firmware Configuration](configuration.md#build-profiles) for the digit-code
+meaning and the full 32-combination space it was pruned from. `generator` and
+`monitor` are just aliases for codes `111` and `222`.
 
 CMake selects exactly one file through `PICO_PWM_PROFILE`:
 
@@ -94,7 +105,8 @@ available and the board policy permits them.
 
 ## Adding a Profile
 
-1. Add a new table under `firmware/src/profile/profiles/`.
+1. Assign one role (generator or monitor) per bank, name it with the 3-digit
+  `[hw][pio][sw]` code, and add it as `profile_XXX.c`.
 2. Add one `PICO_PWM_PROFILE` branch in `firmware/CMakeLists.txt`.
 3. Add or update backend resource requirements only if the common backend set
   cannot support the new table.
@@ -110,8 +122,3 @@ changes to `pwm_driver.c` or backend source files.
 The USB shell and I2C protocol must remain unchanged when adding a profile.
 Unsupported operations should return `PWM_DRIVER_RESULT_UNAVAILABLE` through
 `control_iface`.
-
-The built-in `mixed` profile is an example of a heterogeneous table: it uses
-PIO generation, software generation, and software monitoring in one image.
-Its GPIO map is board-specific and demonstrates why profile validation must
-reject unavailable or conflicting pins before Core 1 starts.

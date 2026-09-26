@@ -101,6 +101,7 @@ if(PICO_PWM_PROFILE STREQUAL "software_generator" OR PICO_PWM_PROFILE STREQUAL "
 endif()
 
 target_include_directories(pico_pwm PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/src
     ${CMAKE_CURRENT_LIST_DIR}/third_party/microrl
 )
 

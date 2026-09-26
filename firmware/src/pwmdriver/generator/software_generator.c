@@ -3,7 +3,7 @@
  * @brief Software PWM generator backend implementation for the logical `pwmdriver` layer.
  */
 
-#include "generator.h"
+#include "software_generator.h"
 
 #include "../pwm_driver.h"
 #include "../pwm_driver_internal.h"

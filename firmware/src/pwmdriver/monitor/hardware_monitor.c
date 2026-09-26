@@ -18,7 +18,7 @@
  *   edge-reconstructed cycles rather than hardware-captured edges.
  */
 
-#include "monitor.h"
+#include "hardware_monitor.h"
 
 #include "pico/time.h"
 

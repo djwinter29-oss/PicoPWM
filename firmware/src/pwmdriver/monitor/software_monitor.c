@@ -23,7 +23,7 @@
  * parallel, extract a private shared helper for the common edge-capture and idle-timeout logic.
  */
 
-#include "monitor.h"
+#include "software_monitor.h"
 
 #include "pico/time.h"
 

@@ -23,7 +23,7 @@
  *   supported by this one-state-machine design.
  */
 
-#include "generator.h"
+#include "pio_generator.h"
 
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
@@ -77,6 +77,8 @@ static uint32_t pio_gen_sys_clk_hz = 0u;
 static bool pio_program_loaded[2] = {false, false};
 /** @brief Cached program offsets per PIO block for the PIO generator program. */
 static uint8_t pio_program_offsets[2] = {0, 0};
+
+static bool gen_find_timing(uint32_t freq_hz, uint16_t *period_count_out, uint32_t *clkdiv_x256_out);
 
 /** @brief Publish the current realized state for one backend-local channel. */
 static void gen_publish_state(uint channel);

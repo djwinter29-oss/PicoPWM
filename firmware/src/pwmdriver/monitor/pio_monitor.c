@@ -30,7 +30,7 @@
  *   rather than as in-spec PWM measurements.
  */
 
-#include "monitor.h"
+#include "pio_monitor.h"
 
 #include "pico/time.h"
 

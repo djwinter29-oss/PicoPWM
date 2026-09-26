@@ -3,7 +3,7 @@
  * @brief Hardware PWM generator backend implementation for the logical `pwmdriver` layer.
  */
 
-#include "generator.h"
+#include "hardware_generator.h"
 
 #include "../pwm_driver.h"
 #include "../pwm_driver_internal.h"
@@ -23,6 +23,8 @@ static uint32_t hw_gen_sys_clk_hz = 0u;
 #define HW_GEN_MAX_PERIOD_COUNTS 65536u
 /** @brief Local seeded-search window size in sixteenth-step divider units. */
 #define HW_GEN_DIV_SEARCH_WINDOW_X16 128u
+
+static void hw_gen_publish_state(uint channel, uint32_t realized_freq_hz, uint8_t realized_duty);
 
 /**
  * @brief Convert a duty percent into the hardware compare level for one wrap value.

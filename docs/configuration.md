@@ -20,16 +20,20 @@ table and CMake selection while preserving the same host control interfaces.
 
 The mixed profile uses logical channels `0..7` for PIO generation, `8..15`
 for software generation, and `16..23` for software monitoring. It requires a
-board map exposing GPIO `23` and `24`; the standard Pico header does not expose
-those pins, so this profile is intended for a compatible custom board or pin
-map.
+custom board map exposing GPIO `23` and `24`; GPIO24 is a board-internal VBUS
+sense-related pin on the standard Pico. The standard Pico build rejects this
+profile before SDK configuration completes.
 
 The `software_generator` and `software_monitor` profiles assign all 24 logical
 channels to the software backend. Their dedicated default map uses GPIO
-`0..15`, `18..22`, and `26..28`; GPIO `16` and `17` remain reserved for I2C
-and GPIO `25` remains available for the board LED. These
-profiles therefore trade the hardware/PIO resource limits for a larger shared
-software scheduling and GPIO-ownership budget.
+`0..22` and `28`; GPIO `26` and `27` remain reserved for I2C1 and GPIO `25`
+remains available for the board LED. These profiles therefore trade the
+hardware/PIO resource limits for a larger shared software scheduling and
+GPIO-ownership budget.
+
+GPIO23/24 are optional software-only pins. Normal Pico profiles leave them
+unused; custom profiles may assign them only to software generator or software
+monitor channels on hardware that exposes them.
 
 A profile is selected at CMake configuration time and compiled into the
 firmware. It is not a runtime mode switch: the selected build determines which

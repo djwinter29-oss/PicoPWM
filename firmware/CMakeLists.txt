@@ -10,6 +10,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(PICO_PWM_FIRMWARE_VERSION "0.0.0-dev" CACHE STRING "Firmware version string exposed over CDC and I2C")
 set(PICO_PWM_PROFILE "generator" CACHE STRING "Firmware channel profile")
 set_property(CACHE PICO_PWM_PROFILE PROPERTY STRINGS generator monitor software_generator software_monitor mixed)
+set(PICO_PWM_I2C_CLOCK_SPEED 400000 CACHE STRING "I2C slave clock speed in Hz (100000 or 400000)")
+set(PICO_PWM_I2C_ADDR 0x40 CACHE STRING "I2C slave address (7-bit, 0x00..0x7F)")
 
 if(PICO_PWM_PROFILE STREQUAL "generator")
     set(PICO_PWM_PROFILE_SOURCE src/profile/profiles/generator.c)
@@ -81,6 +83,8 @@ target_link_libraries(pico_pwm hardware_dma)
 
 target_compile_definitions(pico_pwm PRIVATE
     PICO_PWM_FIRMWARE_VERSION_STR="${PICO_PWM_FIRMWARE_VERSION}"
+    PICO_PWM_I2C_CLOCK_SPEED=${PICO_PWM_I2C_CLOCK_SPEED}
+    PICO_PWM_I2C_ADDR=${PICO_PWM_I2C_ADDR}
 )
 
 target_include_directories(pico_pwm PRIVATE

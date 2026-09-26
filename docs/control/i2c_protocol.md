@@ -1,6 +1,6 @@
 # I2C Protocol
 
-The Pico acts as an I2C slave on **I2C0** at 7-bit address `0x40`. See
+The Pico acts as an I2C slave on **I2C1** at 7-bit address `0x40`. See
 [Pinout](../pinout.md) for SDA and SCL assignments.
 
 ### Electrical

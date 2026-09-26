@@ -1,6 +1,24 @@
 /**
  * @file i2c_control_map.c
  * @brief I2C register map and protocol helpers layered on top of the shared control interface.
+ *
+ * This module provides the protocol logic for the I2C slave, translating register
+ * numbers and payloads into control interface calls. It does not manage I2C transport;
+ * see i2c_slave.c for ISR and buffering logic.
+ *
+ * **Register Categories**:
+ * - **Read-only (0x00, 0x01, 0x02, 0x10..0x27)**: Device info, version, channel state.
+ * - **Write-only (0x30..0x47, 0x90, 0x91, 0x92)**: Channel frequency/duty, stop, LED, reboot.
+ *
+ * **Output Validation**:
+ * - Device name and firmware version strings are bounds-checked to prevent I2C response
+ *   buffer overflow (max 64 bytes).
+ * - If a string exceeds 64 bytes, the register read is rejected with false.
+ *
+ * **Input Validation**:
+ * - Payload lengths and register ranges are validated by i2c_slave.c before
+ *   calling execute_write().
+ * - This module performs additional semantic checks (e.g., channel ID, duty clamping).
  */
 
 #include "i2c/i2c_control_map.h"
@@ -52,6 +70,7 @@ uint8_t i2c_control_map_expected_write_length(uint8_t reg) {
 bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *response, uint8_t *response_len) {
     pwm_driver_state_t state = {0u, 50u, 0u};
     const char *text;
+    size_t text_len;
 
     if ((response == NULL) || (response_len == NULL)) {
         return false;
@@ -59,15 +78,23 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
 
     if (reg == I2C_CONTROL_MAP_REG_INFO) {
         text = control_iface_device_name();
-        *response_len = (uint8_t)(strlen(text) + 1u);
-        memcpy(response, text, *response_len);
+        text_len = strlen(text) + 1u;
+        if (text_len > 64u) {  // Prevent response buffer overflow
+            return false;
+        }
+        *response_len = (uint8_t)text_len;
+        memcpy(response, text, text_len);
         return true;
     }
 
     if (reg == I2C_CONTROL_MAP_REG_VERSION) {
         text = control_iface_firmware_version();
-        *response_len = (uint8_t)(strlen(text) + 1u);
-        memcpy(response, text, *response_len);
+        text_len = strlen(text) + 1u;
+        if (text_len > 64u) {  // Prevent response buffer overflow
+            return false;
+        }
+        *response_len = (uint8_t)text_len;
+        memcpy(response, text, text_len);
         return true;
     }
 

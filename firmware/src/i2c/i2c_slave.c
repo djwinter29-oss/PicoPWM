@@ -1,5 +1,6 @@
 #include "i2c/i2c_slave.h"
 
+#include "config/i2c_config.h"
 #include "control/control_iface.h"
 #include "i2c/i2c_control_map.h"
 #include "pwmdriver/pwm_driver.h"
@@ -9,18 +10,13 @@
 #include <stdbool.h>
 #include <string.h>
 
-// I2C0 slave on GPIO 16 (SDA) / 17 (SCL).
-#define I2C_SLAVE_INST    i2c0
-#define I2C_SLAVE_ADDR    0x40
-#define I2C_SDA_PIN       16
-#define I2C_SCL_PIN       17
-
 #define I2C_REQ_BUF_SIZE  9
 #define RESP_BUF_SIZE     64
 
 static uint8_t req_buf[I2C_REQ_BUF_SIZE];
 static uint8_t req_len = 0;
 static uint8_t req_expected_len = 0;
+static volatile bool req_in_error = false;
 static volatile bool req_pending = false;
 static volatile uint8_t req_pending_reg = 0;
 static uint8_t req_pending_payload[I2C_REQ_BUF_SIZE - 1u];
@@ -42,15 +38,22 @@ static void prepare_response(uint8_t reg) {
 static void reset_request_capture(void) {
     req_len = 0u;
     req_expected_len = 0u;
+    req_in_error = false;
 }
 
 static void capture_request_byte(uint8_t byte) {
+    // If a previous command was malformed, drop all bytes until bus reset.
+    if (req_in_error) {
+        return;
+    }
+
     if (req_len == 0u) {
         req_expected_len = i2c_control_map_expected_write_length(byte);
         resp_len = 0u;
         resp_idx = 0u;
         if ((req_expected_len == 0u) || (req_expected_len > I2C_REQ_BUF_SIZE)) {
             last_status = (uint8_t)PWM_DRIVER_RESULT_INVALID;
+            req_in_error = true;
             reset_request_capture();
             return;
         }
@@ -126,8 +129,11 @@ void i2c_slave_init(void) {
     gpio_pull_up(I2C_SDA_PIN);
     gpio_pull_up(I2C_SCL_PIN);
 
-    // Initialize I2C peripheral; speed is set by the master.
-    i2c_init(I2C_SLAVE_INST, 100000);
+    // Initialize I2C peripheral for slave mode.
+    // The clock speed parameter configures internal timing (filtering, edge detection);
+    // the actual bus speed is set by the I2C master. Ensure this matches the expected
+    // master clock to avoid timing violations.
+    i2c_init(I2C_SLAVE_INST, I2C_CLOCK_SPEED);
     i2c_set_slave_mode(I2C_SLAVE_INST, true, I2C_SLAVE_ADDR);
 
     i2c_hw_t *hw = i2c_get_hw(I2C_SLAVE_INST);
@@ -147,12 +153,16 @@ void i2c_slave_init(void) {
 
 void i2c_slave_poll(void) {
     if (req_pending) {
+        // Capture pending request state to locals before clearing pending flag.
+        // Safe on RP2040: Core 0 ISR and polling loop run on same IRQ,
+        // Cortex-M0+ is non-reentrant, and ISR cannot preempt polling loop.
         uint8_t reg = req_pending_reg;
         uint8_t payload[I2C_REQ_BUF_SIZE - 1u];
         uint8_t payload_len = req_pending_payload_len;
 
         memcpy(payload, (const void *)req_pending_payload, payload_len);
-        last_status = (uint8_t)i2c_control_map_execute_write(reg, payload, payload_len);
+        // Clear pending before execute so ISR can queue the next write immediately.
         req_pending = false;
+        last_status = (uint8_t)i2c_control_map_execute_write(reg, payload, payload_len);
     }
 }

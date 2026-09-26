@@ -6,8 +6,9 @@
  *   8..15  software generator outputs
  *   16..23 software monitor inputs
  *
- * This map requires a board exposing GPIO 23 and 24. GPIO 16/17 remain I2C
- * and GPIO 25 remains reserved for the onboard LED.
+ * This map requires a custom board policy exposing GPIO 23 and 24. GPIO 16/17
+ * remain I2C and GPIO 25 remains reserved for the onboard LED. On a standard
+ * Pico, CMake rejects this profile before the SDK is configured.
  */
 const pwm_profile_channel_t pwm_profile_channels[PWM_PROFILE_CHANNEL_COUNT] = {
     PWM_PROFILE_PIO_GENERATOR_CHANNEL(0u, 0u), PWM_PROFILE_PIO_GENERATOR_CHANNEL(1u, 1u),
@@ -21,5 +22,5 @@ const pwm_profile_channel_t pwm_profile_channels[PWM_PROFILE_CHANNEL_COUNT] = {
     PWM_PROFILE_SW_MONITOR_CHANNEL(18u, 0u), PWM_PROFILE_SW_MONITOR_CHANNEL(19u, 1u),
     PWM_PROFILE_SW_MONITOR_CHANNEL(20u, 2u), PWM_PROFILE_SW_MONITOR_CHANNEL(21u, 3u),
     PWM_PROFILE_SW_MONITOR_CHANNEL(22u, 4u), PWM_PROFILE_SW_MONITOR_CHANNEL(23u, 5u),
-    PWM_PROFILE_SW_MONITOR_CHANNEL(24u, 6u), PWM_PROFILE_SW_MONITOR_CHANNEL(26u, 7u),
+    PWM_PROFILE_SW_MONITOR_CHANNEL(24u, 6u), PWM_PROFILE_SW_MONITOR_CHANNEL(28u, 7u),
 };

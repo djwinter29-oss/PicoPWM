@@ -11,6 +11,15 @@ constraints. Software PWM has no fixed peripheral pin bank, but still requires
 valid unique GPIO ownership and must account for board functions such as the
 LED and ADC pins.
 
+On the standard Pico board, GPIO24 is the VBUS sense/input-related board pin
+and GPIO25 is the onboard LED. Neither is assigned to the default software
+channel map. A custom board profile may reclaim those numbers only when its
+board wiring and policy explicitly support that choice.
+
+GPIO23 and GPIO24 are optional software-only profile pins. They are not part
+of the normal Pico channel map and cannot be assigned to hardware PWM or PIO
+profiles.
+
 ## PWM Channels
 
 | Logical Channel | Backend | Backend-local Channel | GPIO | Notes |
@@ -31,13 +40,13 @@ LED and ADC pins.
 | 13 | PIO PWM | 5 | GPIO 10 | Companion pin to hardware channel 5 |
 | 14 | PIO PWM | 6 | GPIO 12 | Companion pin to hardware channel 6 |
 | 15 | PIO PWM | 7 | GPIO 14 | Companion pin to hardware channel 7 |
-| 16 | Software PWM | 0 | GPIO 18 | |
-| 17 | Software PWM | 1 | GPIO 19 | |
-| 18 | Software PWM | 2 | GPIO 20 | |
-| 19 | Software PWM | 3 | GPIO 21 | |
-| 20 | Software PWM | 4 | GPIO 22 | |
-| 21 | Software PWM | 5 | GPIO 26 | Shared with ADC0 |
-| 22 | Software PWM | 6 | GPIO 27 | Shared with ADC1 |
+| 16 | Software PWM | 0 | GPIO 16 | |
+| 17 | Software PWM | 1 | GPIO 17 | |
+| 18 | Software PWM | 2 | GPIO 18 | |
+| 19 | Software PWM | 3 | GPIO 19 | |
+| 20 | Software PWM | 4 | GPIO 20 | |
+| 21 | Software PWM | 5 | GPIO 21 | |
+| 22 | Software PWM | 6 | GPIO 22 | |
 | 23 | Software PWM | 7 | GPIO 28 | Shared with ADC2 |
 
 The current default generator profile uses PWM slice channel B pins
@@ -47,12 +56,12 @@ assignment.
 
 ## I2C
 
-The I2C control interface uses I2C0:
+The I2C control interface uses I2C1:
 
 | Signal | GPIO |
 |--------|------|
-| SDA | GPIO 16 |
-| SCL | GPIO 17 |
+| SDA | GPIO 26 |
+| SCL | GPIO 27 |
 
 The 7-bit I2C address is `0x40`. External pull-up resistors are recommended;
 typically use 4.7 kOhm pull-ups on SDA and SCL.
@@ -60,6 +69,7 @@ typically use 4.7 kOhm pull-ups on SDA and SCL.
 ## Shared Pins
 
 - GPIO 25 is reserved for the on-board LED and is not assigned to a default PWM channel.
-- GPIO 26 is software PWM channel 21 and ADC0.
-- GPIO 27 is software PWM channel 22 and ADC1.
+- GPIO 24 is reserved for the standard Pico board's VBUS sense function.
+- GPIO 26 is I2C1 SDA and ADC0.
+- GPIO 27 is I2C1 SCL and ADC1.
 - GPIO 28 is software PWM channel 23 and ADC2.

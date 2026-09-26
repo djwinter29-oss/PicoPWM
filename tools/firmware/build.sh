@@ -1,7 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-BUILD_DIR="${BUILD_DIR:-firmware/build}"
+BUILD_DIR="${BUILD_DIR:-}"
+PROFILE="${PROFILE:-}"
 BOARD="${PICO_BOARD:-}"
 GENERATOR="${GENERATOR:-}"
 PICO_SDK_PATH_VALUE="${PICO_SDK_PATH:-}"
@@ -11,6 +12,10 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         --build-dir)
             BUILD_DIR="$2"
+            shift 2
+            ;;
+        --profile)
+            PROFILE="$2"
             shift 2
             ;;
         --board)
@@ -36,6 +41,20 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
+# Determine build directory
+if [ -z "$BUILD_DIR" ]; then
+    if [ -n "$PROFILE" ]; then
+        # If profile is specified, use firmware/build/<profile>
+        BUILD_DIR="firmware/build/$PROFILE"
+    elif [ -n "$BOARD" ]; then
+        # If board is specified, use firmware/build/<board>
+        BUILD_DIR="firmware/build/$BOARD"
+    else
+        # Default: firmware/build
+        BUILD_DIR="firmware/build"
+    fi
+fi
+
 if [ -z "$PICO_SDK_PATH_VALUE" ]; then
     echo "PICO_SDK_PATH is not set." >&2
     exit 1
@@ -50,10 +69,6 @@ if [ -n "$BOARD" ]; then
             exit 1
             ;;
     esac
-
-    if [ "$BUILD_DIR" = "firmware/build" ]; then
-        BUILD_DIR="firmware/build-$BOARD"
-    fi
 fi
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)

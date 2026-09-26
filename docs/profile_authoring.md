@@ -52,6 +52,15 @@ Each entry must define:
 | `max_frequency_hz` | Maximum generated or measurable frequency. |
 | `accuracy_ppm` | Expected generation or measurement accuracy. |
 
+The common validator uses these board-policy compile definitions by default:
+
+- `PWM_PROFILE_GPIO_COUNT=30`
+- `PWM_PROFILE_RESERVED_GPIO_MASK` reserving I2C1 GPIO `26/27` and LED GPIO `25`
+- `PWM_PROFILE_REQUIRE_HW_CHANNEL_B=1`
+
+A custom board profile may override these definitions in its CMake branch when
+its GPIO count, reserved pins, or hardware PWM pin policy differs.
+
 The table must contain `PWM_PROFILE_CHANNEL_COUNT` entries. Logical IDs are
 the array indices and must remain stable for host software.
 
@@ -70,9 +79,16 @@ A profile must validate:
 - board-specific reserved pins and connector availability are respected by the
   selected profile and CMake board configuration.
 
-The default all-software profiles use GPIO `0..15`, `18..22`, and `26..28`,
-leaving GPIO `16` and `17` available for I2C and GPIO `25` available for the
-board LED. A different board or transport arrangement may use a different map.
+The default all-software profiles use GPIO `0..22` and `28`, leaving GPIO
+`26/27` for I2C1 and GPIO24 for the standard Pico VBUS sense function,
+and GPIO25 for the board LED. A different board or transport arrangement may
+use a different map.
+
+GPIO23 and GPIO24 are optional software-only pins in the profile model. They
+are not assigned by normal Pico profiles and must not be claimed by hardware
+PWM or PIO entries. A custom board/profile may assign them to software
+generator or software monitor channels when those pins are physically
+available and the board policy permits them.
 
 ## Adding a Profile
 

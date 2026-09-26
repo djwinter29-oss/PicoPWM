@@ -397,7 +397,10 @@ static void pwm_driver_process_mailbox(void) {
 
 /** @brief Core 1 main loop that owns backend initialization and mailbox processing. */
 static void pwm_driver_core_main(void) {
-    gpio_set_irq_callback(pwm_driver_monitor_gpio_irq);
+    if ((pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_HW_MONITOR) != 0u) ||
+        (pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_SW_MONITOR) != 0u)) {
+        gpio_set_irq_callback(pwm_driver_monitor_gpio_irq);
+    }
     for (uint i = 0u; i < count_of(pwm_driver_backends); ++i) {
         if (pwm_profile_backend_channel_count((pwm_profile_backend_t)i) != 0u &&
             pwm_driver_backends[i].init != NULL) {

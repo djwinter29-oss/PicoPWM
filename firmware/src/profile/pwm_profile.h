@@ -11,6 +11,18 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifndef PWM_PROFILE_GPIO_COUNT
+#define PWM_PROFILE_GPIO_COUNT 30u
+#endif
+
+#ifndef PWM_PROFILE_RESERVED_GPIO_MASK
+#define PWM_PROFILE_RESERVED_GPIO_MASK ((1u << 26) | (1u << 27) | (1u << 25))
+#endif
+
+#ifndef PWM_PROFILE_REQUIRE_HW_CHANNEL_B
+#define PWM_PROFILE_REQUIRE_HW_CHANNEL_B 1
+#endif
+
 typedef enum {
     PWM_PROFILE_BACKEND_HW_GENERATOR = 0,
     PWM_PROFILE_BACKEND_PIO_GENERATOR,
@@ -59,6 +71,9 @@ uint pwm_profile_backend_channel_count(pwm_profile_backend_t backend);
 
 /** @brief Validate GPIO and backend-resource ownership for the selected profile. */
 bool pwm_profile_validate(void);
+
+/** @brief Validate an arbitrary profile table for host-side/profile tests. */
+bool pwm_profile_validate_table(const pwm_profile_channel_t *channels, uint count);
 
 /** @brief Return whether a profile channel accepts one requested frequency. */
 bool pwm_profile_frequency_supported(uint channel, uint32_t frequency_hz);

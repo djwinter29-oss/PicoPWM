@@ -62,8 +62,12 @@ Use the architecture-related pages as follows:
 - [Firmware Configuration](configuration.md) — build profiles, channel tables, and capability rules
 - [Pinout](pinout.md) — physical PWM, I2C, and shared-pin mapping
 - [PWM Driver Design](detail/pwm_driver_design.md) — detailed `pwmdriver` and backend internals
-- [Hardware PWM Design](detail/hw_pwm_design.md) — hardware generator and monitor design, limits, and target range
-- [Software PWM Design](detail/sw_pwm_design.md) — software generator and monitor design, limits, and standalone monitor role
+- [Hardware PWM Generator](detail/generator/hardware_generator.md) — hardware output timing and slice constraints
+- [PIO PWM Generator](detail/generator/pio_generator.md) — PIO output timing and state-machine constraints
+- [Software PWM Generator](detail/generator/software_generator.md) — shared timer output generation
+- [Hardware PWM Monitor](detail/monitor/hardware_monitor.md) — GPIO interrupt measurement limits
+- [PIO PWM Monitor](detail/monitor/pio_monitor.md) — DMA-backed high/low measurement
+- [Software PWM Monitor](detail/monitor/software_monitor.md) — low-frequency polling/edge measurement
 
 ## System Model
 
@@ -74,9 +78,8 @@ supported channel backends.
 
 The host-visible channel IDs and command syntax remain stable across profiles.
 The channel table, not the CLI, defines each channel's backend, direction,
-GPIO, limits, and supported operations. The current firmware still uses the
-legacy 24-channel generator mapping internally; that mapping is the default
-profile to migrate into the configuration table.
+GPIO, limits, and supported operations. The current default profiles expose 24
+channels through this table.
 
 Each logical channel exposes the same readback model:
 
@@ -132,10 +135,9 @@ backend.
 
 Core 1 owns the backend implementations:
 
-- `pwmdriver/hw/generator.*` and `pwmdriver/hw/monitor.*`
-- `pwmdriver/pio/generator.*`
-- `pwmdriver/pio/monitor.*`
-- `pwmdriver/sw/generator.*` and `pwmdriver/sw/monitor.*`
+- `pwmdriver/generator/hardware_generator.*` and `pwmdriver/monitor/hardware_monitor.*`
+- `pwmdriver/generator/pio_generator.*` and `pwmdriver/monitor/pio_monitor.*`
+- `pwmdriver/generator/software_generator.*` and `pwmdriver/monitor/software_monitor.*`
 
 These modules own hardware configuration, IRQ or timer paths, and backend-local state.
 

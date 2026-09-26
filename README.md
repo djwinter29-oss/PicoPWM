@@ -1,24 +1,34 @@
 # PicoPWM
 
-PicoPWM is a Raspberry Pi Pico / Pico 2 project aimed at providing a low-cost PWM platform with two host control interfaces: USB CDC CLI and I2C.
+PicoPWM is a Raspberry Pi Pico / Pico 2 firmware framework for controlling 24
+logical PWM channels through two stable host interfaces: a USB CDC shell and an
+I2C register protocol.
 
 The project is intended for both:
 
 - **Raspberry Pi Pico** based on **RP2040**
 - **Raspberry Pi Pico 2** based on **RP2350**
 
-The project targets two firmware variants:
+Build profiles select whether each logical channel is a generator or monitor,
+and whether it uses the hardware PWM, PIO, or software backend. The host sees
+the same logical channel IDs and control commands regardless of profile.
 
-- **PWM generator** — drives 24 logical PWM outputs.
-- **PWM monitoring** — keeps the same external pin layout so the same board wiring can be reused for measurement-focused firmware.
+Each channel profile also defines its GPIO, direction, capabilities, frequency
+limits, and backend-local resource assignment.
 
-The generator-oriented channel plan is:
+The framework intentionally exposes backend tradeoffs rather than hiding them:
 
-- **8 hardware PWM channels** on the MCU PWM slice **channel B** pins for the highest accuracy and for pin compatibility with monitoring use cases.
-- **8 PIO PWM channels** for flexible timing across the intended **1 Hz to 1 MHz** operating range.
-- **8 software PWM channels** focused on about **1 Hz to 1 kHz** operation.
-
-Each logical channel exposes frequency, duty cycle, and a read-only 32-bit pulse counter through a unified control model.
+- **Hardware PWM** provides high timing accuracy but has pin/slice constraints
+	and a backend-specific minimum frequency.
+- **PIO PWM** provides flexible pin placement and a broad range, with finite
+	PIO state-machine resources and divider/period quantization.
+- **Software PWM** has no fixed PWM slice or PIO channel allocation and can use
+	ordinary GPIOs, but polling/timer and CPU overhead limit channel count,
+	maximum frequency, and timing accuracy.
+- **Monitor backends** have their own measurable frequency range and accuracy;
+	input channels are read-only through the control interfaces. Software
+	monitoring is intended for simple low-frequency measurements; high-
+	performance monitoring should use PIO or hardware capture.
 
 The current firmware exposes:
 
@@ -52,6 +62,32 @@ Use `pico2` instead of `pico` for Raspberry Pi Pico 2. The matching helpers
 under `tools/firmware/` handle loading, while `tools/test/` contains the CTest
 and syntax-check entry points. A direct CMake build is also possible from
 `firmware/` when a custom generator or build layout is needed.
+
+Select the channel profile when configuring the firmware. The profile is a
+build-time decision: it selects the compiled backend sources, PIO program,
+monitor/generator resources, and channel table. It is not changed at runtime.
+
+```sh
+cmake -S firmware -B build-generator \
+	-DPICO_PWM_PROFILE=generator
+
+cmake -S firmware -B build-monitor \
+	-DPICO_PWM_PROFILE=monitor
+
+cmake -S firmware -B build-software-generator \
+	-DPICO_PWM_PROFILE=software_generator
+
+cmake -S firmware -B build-software-monitor \
+	-DPICO_PWM_PROFILE=software_monitor
+```
+
+The current profiles use the default 24-channel pin arrangement. Project-specific
+profiles can later change backend, direction, GPIO, and capabilities while
+preserving the host-facing control model.
+
+The all-software profiles use 24 logical software channels on GPIO `0..15` and
+`18..25`; GPIO `16` and `17` remain reserved for I2C. This is a different
+physical arrangement from the mixed hardware/PIO/software default profile.
 
 Build outputs of interest:
 
@@ -97,13 +133,14 @@ Other flash options:
 
 See [docs/pinout.md](docs/pinout.md) for the complete PWM channel and host-interface pinout.
 
-### Target Frequency Ranges
+### Backend Characteristics
 
-| Backend | Target Range | Positioning |
+| Backend | Characteristics | Constraints |
 |---------|--------------|-------------|
-| Hardware PWM | about **10 Hz to 1 MHz** | Best accuracy and best fit for measurement-compatible channels |
-| PIO PWM | about **1 Hz to 1 MHz** | Flexible timing over the intended generator range; realized frequency is quantized by PIO divider and period search |
-| Software PWM | about **1 Hz to 1 kHz** | Lowest cost backend for slower signals |
+| Hardware PWM | High timing accuracy | Pin/slice assignment and minimum-frequency limits |
+| PIO PWM | Flexible placement and broad range | Finite state machines and divider/period quantization |
+| Software PWM | Simple polling/timer implementation | Lower maximum frequency and timing accuracy |
+| Monitor backends | Measure input signals | Backend-specific measurable range and accuracy |
 
 ---
 
@@ -112,7 +149,9 @@ See [docs/pinout.md](docs/pinout.md) for the complete PWM channel and host-inter
 - **USB CDC serial**: text commands at 115200 baud
 - **I2C slave**: binary register map at 7-bit address `0x40`; see [Pinout](docs/pinout.md) for physical connections
 
-Use the `stop` command to reset all channels to the power-up state: frequency = 0 Hz and duty = 0%. `pulse_count` is monotonic from power-on and is not reset by `stop`.
+Use the `stop` command to apply the selected profile's safe reset behavior.
+Generator profiles stop outputs; monitor profiles leave measured input channels
+unchanged. `pulse_count` is monotonic from power-on and is not reset by `stop`.
 
 ---
 
@@ -120,12 +159,13 @@ Use the `stop` command to reset all channels to the power-up state: frequency = 
 
 - [Architecture](docs/architecture.md)
 - [Firmware Configuration](docs/configuration.md)
+- [Profile Authoring](docs/profile_authoring.md)
 - [Control Interfaces](docs/control/README.md)
 - [I2C Protocol](docs/control/i2c_protocol.md)
 - [USB CDC CLI](docs/control/usb_cdc_cli.md)
 - [Pinout](docs/pinout.md)
 
-The USB CDC CLI uses the vendored [microrl](https://github.com/Helius/microrl)
+The USB CDC shell uses the vendored [microrl](https://github.com/Helius/microrl)
 line editor, pinned to commit `d044bf4`. Its Apache-2.0 license and source are
 included under `firmware/third_party/microrl/`.
 
@@ -147,9 +187,10 @@ dependency.
 
 ---
 
-## Default State
+## Default Generator State
 
-After power-up or reset, **all 24 channels are off**:
+In a generator profile, after power-up or reset, **all 24 output channels are
+off**:
 
 | Property | Value |
 |----------|-------|
@@ -157,7 +198,9 @@ After power-up or reset, **all 24 channels are off**:
 | Duty | 0% |
 | Pulse count | 0 |
 
-No demo channels are configured. Use CDC or I2C commands to set frequencies and duty cycles.
+No demo channels are configured. Use the USB CDC shell or I2C commands to set
+frequencies and duty cycles. Monitor profiles report input state instead of
+using this output-default state.
 
 Use the `stop` command to reset all channels back to this state at any time. `pulse_count` continues accumulating from power-on.
 

@@ -9,22 +9,34 @@ set(CMAKE_CXX_STANDARD 17)
 
 set(PICO_PWM_FIRMWARE_VERSION "0.0.0-dev" CACHE STRING "Firmware version string exposed over CDC and I2C")
 set(PICO_PWM_PROFILE "generator" CACHE STRING "Firmware channel profile (generator or monitor)")
-set_property(CACHE PICO_PWM_PROFILE PROPERTY STRINGS generator monitor)
+set_property(CACHE PICO_PWM_PROFILE PROPERTY STRINGS generator monitor software_generator software_monitor)
 
 if(PICO_PWM_PROFILE STREQUAL "generator")
+    set(PICO_PWM_PROFILE_SOURCE src/config/profiles/generator.c)
     set(PICO_PWM_BACKEND_SOURCES
-        src/pwmdriver/hw/generator.c
-        src/pwmdriver/pio/generator.c
-        src/pwmdriver/sw/generator.c
+        src/pwmdriver/generator/hardware_generator.c
+        src/pwmdriver/generator/pio_generator.c
+        src/pwmdriver/generator/software_generator.c
     )
 elseif(PICO_PWM_PROFILE STREQUAL "monitor")
+    set(PICO_PWM_PROFILE_SOURCE src/config/profiles/monitor.c)
     set(PICO_PWM_BACKEND_SOURCES
-        src/pwmdriver/hw/monitor.c
-        src/pwmdriver/pio/monitor.c
-        src/pwmdriver/sw/monitor.c
+        src/pwmdriver/monitor/hardware_monitor.c
+        src/pwmdriver/monitor/pio_monitor.c
+        src/pwmdriver/monitor/software_monitor.c
+    )
+elseif(PICO_PWM_PROFILE STREQUAL "software_generator")
+    set(PICO_PWM_PROFILE_SOURCE src/config/profiles/software_generator.c)
+    set(PICO_PWM_BACKEND_SOURCES
+        src/pwmdriver/generator/software_generator.c
+    )
+elseif(PICO_PWM_PROFILE STREQUAL "software_monitor")
+    set(PICO_PWM_PROFILE_SOURCE src/config/profiles/software_monitor.c)
+    set(PICO_PWM_BACKEND_SOURCES
+        src/pwmdriver/monitor/software_monitor.c
     )
 else()
-    message(FATAL_ERROR "PICO_PWM_PROFILE must be generator or monitor")
+    message(FATAL_ERROR "PICO_PWM_PROFILE must be generator, monitor, software_generator, or software_monitor")
 endif()
 
 pico_sdk_init()
@@ -33,6 +45,7 @@ add_executable(pico_pwm
     src/main.c
     src/control/control_iface.c
     src/config/pwm_profile.c
+    ${PICO_PWM_PROFILE_SOURCE}
     src/pwmdriver/pwm_driver.c
     ${PICO_PWM_BACKEND_SOURCES}
     src/cli/shell.c
@@ -48,11 +61,11 @@ add_executable(pico_pwm
 
 if(PICO_PWM_PROFILE STREQUAL "generator")
     pico_generate_pio_header(pico_pwm
-        ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/pio/generator.pio
+        ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/generator/pio_generator.pio
     )
-else()
+elseif(PICO_PWM_PROFILE STREQUAL "monitor")
     pico_generate_pio_header(pico_pwm
-        ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/pio/monitor.pio
+        ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/monitor/pio_monitor.pio
     )
 endif()
 
@@ -79,8 +92,12 @@ target_compile_definitions(pico_pwm PRIVATE
     PICO_PWM_FIRMWARE_VERSION_STR="${PICO_PWM_FIRMWARE_VERSION}"
 )
 
-if(PICO_PWM_PROFILE STREQUAL "monitor")
+if(PICO_PWM_PROFILE STREQUAL "monitor" OR PICO_PWM_PROFILE STREQUAL "software_monitor")
     target_compile_definitions(pico_pwm PRIVATE PICO_PWM_MONITOR_PROFILE=1)
+endif()
+
+if(PICO_PWM_PROFILE STREQUAL "software_generator" OR PICO_PWM_PROFILE STREQUAL "software_monitor")
+    target_compile_definitions(pico_pwm PRIVATE PICO_PWM_SOFTWARE_PROFILE=1)
 endif()
 
 target_include_directories(pico_pwm PRIVATE

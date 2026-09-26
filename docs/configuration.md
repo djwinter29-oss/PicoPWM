@@ -6,15 +6,26 @@ of each channel; it does not change the host command syntax.
 
 ## Build Profiles
 
-The planned profiles are:
+The current profile selections are:
 
 - **Generator**: channels produce PWM output signals.
 - **Monitor**: channels sample PWM input signals and report measured state.
-- **Custom**: a project-specific channel table may mix supported backends and
-  channel capabilities.
+- **Software generator**: all logical channels use the software output backend.
+- **Software monitor**: all logical channels use the software input backend.
 
-A profile should be selected at CMake configuration time and recorded in the
-firmware identity or `info` response. Example profile selection:
+Project-specific custom profiles are the extension point: add another profile
+table and CMake selection while preserving the same host control interfaces.
+
+The `software_generator` and `software_monitor` profiles assign all 24 logical
+channels to the software backend. Their dedicated default map uses GPIO
+`0..15` and `18..25`; GPIO `16` and `17` remain reserved for I2C. These
+profiles therefore trade the hardware/PIO resource limits for a larger shared
+software scheduling and GPIO-ownership budget.
+
+A profile is selected at CMake configuration time and compiled into the
+firmware. It is not a runtime mode switch: the selected build determines which
+backend sources, PIO programs, DMA resources, and channel table are linked.
+Build a separate firmware directory for each profile you need:
 
 ```sh
 cmake -S firmware -B build-generator \
@@ -22,27 +33,52 @@ cmake -S firmware -B build-generator \
 
 cmake -S firmware -B build-monitor \
   -DPICO_PWM_PROFILE=monitor
+
+cmake -S firmware -B build-software-generator \
+  -DPICO_PWM_PROFILE=software_generator
+
+cmake -S firmware -B build-software-monitor \
+  -DPICO_PWM_PROFILE=software_monitor
 ```
 
-The exact CMake option is part of the implementation work. The important
-contract is that separate build directories produce separate, reproducible
-firmware variants.
+Separate build directories produce separate, reproducible firmware variants.
 
 ## Channel Table
 
 Each logical channel is described by configuration rather than by a hard-coded
 range. A channel entry should define at least:
+
+| Field | Meaning |
+| --- | --- |
 | `id` | Stable host-visible logical channel number. |
 | `backend` | Hardware PWM, PIO, software, or monitor backend. |
 | `direction` | Input, output, or disabled. |
 | `gpio` | Physical GPIO assigned to the channel. |
 | `capabilities` | Operations supported by the channel. |
-| `frequency_limits` | Valid requested or measurable frequency range. |
+| `min_frequency_hz` | Minimum requested or measurable frequency. |
+| `max_frequency_hz` | Maximum requested or measurable frequency. |
+| `accuracy_ppm` | Expected generation or measurement accuracy. |
 
-The default profile currently exposes 24 logical channels. The driver now uses
-this table for logical-channel dispatch; the generator backend implementations
-still retain their backend-local channel arrays. Monitor backends and alternate
-profile selection remain follow-up work.
+Backend limits are part of the profile contract, not merely implementation
+notes. A profile should reject a channel assignment or requested frequency
+that exceeds the selected backend's pin, resource, range, or accuracy limits.
+
+## Backend Constraints
+
+| Backend | Channel/resource constraint | Pin constraint | Timing constraint |
+| --- | --- | --- | --- |
+| Hardware PWM | Limited by available PWM slices/channels; the default profile uses 8 channels. | Must use GPIOs that support the selected PWM slice/channel; the default uses channel-B pins. | High accuracy, but limited minimum frequency and backend timing envelope. |
+| PIO PWM | Limited by PIO blocks and state machines; the default profile uses 8 channels. | Pin must be routable to the selected PIO state machine and profile mapping. | Broad range, with divider/period quantization and finite PIO resources. |
+| Software PWM | No fixed PWM slice or PIO state-machine allocation; channel count is limited by CPU, timer, and interrupt budget. | Any valid, uniquely owned GPIO that the software backend can drive or sample. | Suitable for simple low-frequency generation/monitoring; polling/timer scheduling limits maximum frequency and accuracy. |
+
+Monitor channels use the corresponding backend constraints as measurement
+limits rather than output-generation limits. Use software monitoring for simple
+low-frequency measurements; use PIO or hardware monitoring when frequency,
+edge timing, or accuracy requirements are high.
+
+The default profiles expose 24 logical channels. The driver uses this table for
+logical-channel dispatch; generator and monitor backends retain their
+backend-local resources behind the profile mapping.
 
 ## Stable CLI Contract
 
@@ -74,4 +110,6 @@ A profile must validate these conditions at build time or startup:
   shared pin without an explicit ownership policy
 
 See [Architecture](architecture.md) for ownership boundaries and [USB CDC
-CLI](control/usb_cdc_cli.md) for the stable interactive interface.
+CLI](control/usb_cdc_cli.md) for the stable interactive interface. See
+[Profile Authoring](profile_authoring.md) for how to add a build-time profile
+file.

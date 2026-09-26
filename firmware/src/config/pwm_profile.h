@@ -8,6 +8,7 @@
 
 #include "pico/stdlib.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 
 typedef enum {
@@ -36,6 +37,9 @@ typedef struct {
     uint gpio;
     uint backend_channel;
     uint8_t capabilities;
+    uint32_t min_frequency_hz;
+    uint32_t max_frequency_hz;
+    uint32_t accuracy_ppm;
 } pwm_profile_channel_t;
 
 /** @brief Number of logical channels exposed by the selected profile. */
@@ -43,6 +47,9 @@ typedef struct {
 
 /** @brief Return the active profile's logical channel table. */
 const pwm_profile_channel_t *pwm_profile_get_channel(uint channel);
+
+/** @brief Return whether a profile channel accepts one requested frequency. */
+bool pwm_profile_frequency_supported(uint channel, uint32_t frequency_hz);
 
 /** @brief Return whether the selected profile is input-monitoring oriented. */
 bool pwm_profile_is_monitor(void);

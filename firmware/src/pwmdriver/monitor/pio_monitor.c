@@ -41,7 +41,7 @@
 #include "hardware/structs/dma.h"
 
 #include "../pwm_driver_internal.h"
-#include "monitor.pio.h"
+#include "pio_monitor.pio.h"
 
 /** @brief Dominant PIO instruction cost for one measured high or low loop iteration. */
 #define PIO_MON_LOOP_CYCLES 2u

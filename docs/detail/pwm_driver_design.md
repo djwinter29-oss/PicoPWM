@@ -55,12 +55,12 @@ The current implementation is split as follows:
 | `firmware/src/i2c/i2c_control_map.c` | I2C register encode/decode and deferred write translation into `control_iface` |
 | `firmware/src/pwmdriver/pwm_driver.h` | Public wrapper API and logical channel constants |
 | `firmware/src/pwmdriver/pwm_driver.c` | Core 1 launch, mailbox loop, channel routing, shared snapshot |
-| `firmware/src/pwmdriver/hw/generator.c` | Hardware PWM generator backend |
-| `firmware/src/pwmdriver/hw/monitor.c` | Standalone hardware PWM monitor prototype |
-| `firmware/src/pwmdriver/pio/generator.c` | PIO generator backend |
-| `firmware/src/pwmdriver/pio/generator.pio` | PIO assembly program used by the PIO generator backend |
-| `firmware/src/pwmdriver/sw/generator.c` | Software PWM generator backend |
-| `firmware/src/pwmdriver/sw/monitor.c` | Standalone software PWM monitor prototype |
+| `firmware/src/pwmdriver/generator/hardware_generator.c` | Hardware PWM generator backend |
+| `firmware/src/pwmdriver/monitor/hardware_monitor.c` | Hardware PWM monitor backend |
+| `firmware/src/pwmdriver/generator/pio_generator.c` | PIO generator backend |
+| `firmware/src/pwmdriver/generator/pio_generator.pio` | PIO assembly program used by the PIO generator backend |
+| `firmware/src/pwmdriver/generator/software_generator.c` | Software PWM generator backend |
+| `firmware/src/pwmdriver/monitor/software_monitor.c` | Software PWM monitor backend |
 
 ## External Interface
 
@@ -178,17 +178,11 @@ This layer is the architectural boundary between the shared Core 0 control plane
 
 ### 4. Backend Layer
 
-Owned by:
+Owned by the selected profile's generator or monitor modules:
 
-- `hw/generator.c`
-- `pio/generator.c`
-- `sw/generator.c`
-
-Standalone monitor prototypes currently live beside that integrated backend set under:
-
-- `hw/monitor.c`
-- `pio/monitor.c`
-- `sw/monitor.c`
+- `generator/hardware_generator.c` and `monitor/hardware_monitor.c`
+- `generator/pio_generator.c` and `monitor/pio_monitor.c`
+- `generator/software_generator.c` and `monitor/software_monitor.c`
 
 Responsibilities:
 
@@ -204,7 +198,7 @@ Owned by the Pico SDK and the MCU peripherals.
 Resources used:
 
 - PWM slices
-- GPIO edge IRQs for the standalone hardware monitor prototype
+- GPIO edge IRQs for hardware and software monitor channels
 - PIO programs, state machines, and IRQs
 - repeating timer callback for software PWM
 - multicore event signaling
@@ -289,7 +283,7 @@ sequenceDiagram
     participant C0 as Core 0 main
     participant WR as pwm_driver.c
     participant C1 as Core 1
-    participant HW as hw_generator or hw_monitor
+    participant HW as hardware_generator or hardware_monitor
     participant PIO as pio_generator or pio_monitor
     participant SW as sw_generator
 
@@ -464,8 +458,8 @@ This provides a lock-free coherent snapshot read on Core 0.
 
 The hardware PWM implementation is now split into:
 
-- `firmware/src/pwmdriver/hw/generator.c` for the integrated generator backend
-- `firmware/src/pwmdriver/hw/monitor.c` for the standalone monitor prototype
+- `firmware/src/pwmdriver/generator/hardware_generator.c` for the integrated generator backend
+- `firmware/src/pwmdriver/monitor/hardware_monitor.c` for the hardware monitor backend
 
 The integrated generator backend:
 
@@ -478,21 +472,21 @@ The integrated generator backend:
 
 The current hardware generator no longer uses a wrap IRQ for pulse counting.
 
-The standalone hardware monitor prototype:
+The hardware monitor backend:
 
 - observes the same GPIO bank with one edge interrupt per transition
 - reconstructs frequency and duty from microsecond timestamps
 - is intentionally low-frequency and best-effort only
 - increments `pulse_count` once per completed observed period
 
-For the current hardware timing equations, counter-width limits, divider limits, and the recommended operating range, see [Hardware PWM Design](hw_pwm_design.md).
+For the current hardware timing equations, counter-width limits, divider limits, and the recommended operating range, see [Hardware PWM Generator](generator/hardware_generator.md). For input measurement limits, see [Hardware PWM Monitor](monitor/hardware_monitor.md).
 
 ## Software PWM Summary
 
 The software PWM implementation is now split into:
 
-- `firmware/src/pwmdriver/sw/generator.c` for the integrated generator backend
-- `firmware/src/pwmdriver/sw/monitor.c` for the standalone monitor prototype
+- `firmware/src/pwmdriver/generator/software_generator.c` for the integrated generator backend
+- `firmware/src/pwmdriver/monitor/software_monitor.c` for the software monitor backend
 
 The integrated generator backend:
 
@@ -502,7 +496,7 @@ The integrated generator backend:
 - publishes realized `freq_hz`, `duty`, and generated `pulse_count`
 - owns the software-PWM maximum frequency policy directly in the backend
 
-The standalone software monitor prototype:
+The software monitor backend:
 
 - observes the same GPIO bank with one edge interrupt per transition
 - reconstructs frequency and duty from microsecond timestamps
@@ -510,7 +504,7 @@ The standalone software monitor prototype:
 - increments `pulse_count` once per completed observed period
 - is intentionally standalone and not yet integrated with the software generator ownership model
 
-For the current software timing model, target range, and standalone monitor role, see [Software PWM Design](sw_pwm_design.md).
+For the current software timing model, target range, and monitor role, see [Software PWM Generator](generator/software_generator.md) and [Software PWM Monitor](monitor/software_monitor.md).
 
 ## PIO Generator Detailed Design
 

@@ -30,7 +30,7 @@
 #include "hardware/pio.h"
 
 #include "../pwm_driver_internal.h"
-#include "generator.pio.h"
+#include "pio_generator.pio.h"
 
 /** @brief Intended upper frequency limit for the PIO generator backend. */
 #define PIO_GEN_MAX_FREQ_HZ 1000000u

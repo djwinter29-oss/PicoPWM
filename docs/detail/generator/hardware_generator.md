@@ -1,11 +1,9 @@
-# Hardware PWM Detailed Design
+# Hardware PWM Generator Design
 
-This document describes the current hardware PWM design under `firmware/src/pwmdriver/hw/`.
+This document describes the current hardware PWM design under `firmware/src/pwmdriver/generator/`.
 
-The scope of this page covers both current hardware-side modules:
-
-- the hardware PWM generator backend
-- the standalone hardware PWM monitor prototype
+This page covers the hardware PWM generator backend. The matching monitor
+design is documented in [Hardware PWM Monitor](../monitor/hardware_monitor.md).
 
 This page is implementation-oriented and reflects the current source tree.
 
@@ -13,10 +11,8 @@ This page is implementation-oriented and reflects the current source tree.
 
 | File | Responsibility |
 | ------ | ---------------- |
-| `firmware/src/pwmdriver/hw/generator.c` | Hardware PWM generator backend implementation |
-| `firmware/src/pwmdriver/hw/generator.h` | Hardware PWM generator backend interface |
-| `firmware/src/pwmdriver/hw/monitor.c` | Standalone hardware PWM monitor prototype |
-| `firmware/src/pwmdriver/hw/monitor.h` | Standalone hardware PWM monitor interface |
+| `firmware/src/pwmdriver/generator/hardware_generator.c` | Hardware PWM generator backend implementation |
+| `firmware/src/pwmdriver/generator/hardware_generator.h` | Hardware PWM generator backend interface |
 
 ## Channel Model
 
@@ -24,6 +20,22 @@ The hardware PWM bank uses logical channels `0..7` in the unified driver model.
 The physical GPIO and slice mapping is documented in [Pinout](../pinout.md).
 The design intentionally uses slice-B pins so the physical channel order stays
 aligned with the measurement-oriented wiring plan.
+
+### Resource and Pin Constraints
+
+The hardware backend is constrained by the MCU PWM peripheral:
+
+- one backend channel requires a valid PWM-capable GPIO and slice/channel
+    assignment
+- the default profile uses eight slice-B GPIOs: GPIO `1, 3, 5, 7, 9, 11, 13,
+    15`
+- the number of simultaneously configured hardware channels is limited by the
+    available compatible slice/channel mappings
+- the backend has a nonzero minimum frequency derived from its maximum divider
+    and 16-bit period counter
+
+These are profile constraints, not assumptions the host CLI should infer from
+the logical channel number.
 
 ## Generator Design
 
@@ -173,90 +185,3 @@ over:
 - pulse counting through wrap IRQs
 - squeezing every representable MHz into the recommended user range
 
-## Monitor Design
-
-### Intent
-
-The hardware monitor is a standalone prototype that observes the same hardware PWM pin bank and reports:
-
-- approximate `freq_hz`
-- approximate `duty`
-
-It is intentionally not integrated into `pwm_driver.c` yet.
-
-### Monitor Measurement Model
-
-The monitor uses:
-
-- one GPIO edge interrupt per transition
-- microsecond timestamps from `time_us_64()`
-- one latest-sample cache per channel
-
-One exported sample is reconstructed from:
-
-1. one high width captured from a rising edge to the next falling edge
-2. one full period captured from consecutive rising edges
-
-The monitor then publishes integer frequency and integer duty.
-
-### Monitor Measurement Flow
-
-```mermaid
-sequenceDiagram
-    participant Signal as PWM input
-    participant IRQ as GPIO edge IRQ
-    participant Monitor as Hardware monitor
-    participant State as Published state
-
-    Signal->>IRQ: Rising and falling edges
-    IRQ->>Monitor: Capture timestamp
-    Monitor->>Monitor: Pair high width with full period
-    alt Complete period
-        Monitor->>State: Publish frequency, duty, and pulse count
-    else No transition for one second
-        Monitor->>State: Publish static low or high
-    end
-```
-
-### Monitor Working Range
-
-The hardware monitor does not have a fixed, counter-derived MHz-class range like the generator.
-
-Its meaningful limit is architectural instead:
-
-- one software interrupt per edge
-- microsecond timestamp granularity
-- best-effort service latency on Core 1
-
-For that reason, the monitor should be treated as:
-
-- suitable for slow PWM signals only
-- not suitable for serious kHz-to-MHz measurement work
-
-If the use case needs higher-rate or more repeatable monitoring, use the PIO monitor design instead.
-
-### Monitor Static-Level Policy
-
-If a channel sees no transition for more than one second, the monitor treats the input as a static level and publishes:
-
-- `freq_hz = 0`
-- `duty = 0` for static low
-- `duty = 100` for static high
-
-### Monitor Pulse Count Policy
-
-The hardware monitor increments a monotonic observed-period counter whenever it reconstructs one
-full PWM cycle from a rising edge, the following falling edge, and the next rising edge.
-
-That means `pulse_count` reflects accepted edge-reconstructed cycles, not hardware-counted edges:
-
-- `pulse_count` increments once per completed observed period
-
-## Summary
-
-The current hardware PWM design deliberately separates two roles:
-
-- the generator backend uses the dedicated PWM slices for accurate output generation over a recommended range of about `10 Hz .. 1 MHz`
-- the standalone monitor prototype uses GPIO interrupts and microsecond timestamps for slow, best-effort observation only
-
-The 16-bit hardware counter and fractional divider define the raw generator envelope, but the recommended operating range is chosen from both representability and useful duty resolution.

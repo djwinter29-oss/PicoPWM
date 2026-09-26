@@ -24,7 +24,7 @@
 
 #include "hardware/gpio.h"
 
-#include "../monitor_gpio_common.h"
+#include "shared/monitor_gpio_common.h"
 #include "../pwm_driver_internal.h"
 
 /** @brief Inactivity threshold used to treat one channel as a permanent level. */

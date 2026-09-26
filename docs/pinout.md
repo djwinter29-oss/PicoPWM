@@ -6,6 +6,11 @@ different build profile may assign different backends, directions, or GPIOs.
 The selected profile must be treated as the source of truth for a particular
 firmware image.
 
+Hardware PWM and PIO assignments have peripheral-specific pin and resource
+constraints. Software PWM has no fixed peripheral pin bank, but still requires
+valid unique GPIO ownership and must account for board functions such as the
+LED and ADC pins.
+
 ## PWM Channels
 
 | Logical Channel | Backend | Backend-local Channel | GPIO | Notes |

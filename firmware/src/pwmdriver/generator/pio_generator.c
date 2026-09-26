@@ -271,7 +271,7 @@ static void gen_publish_state(uint channel) {
         .pulse_count = pio_channels[channel].pulse_count,
     };
 
-    pwm_driver_store_applied_state(PIO_PWM_CHANNEL_BASE + channel, &state);
+    pwm_driver_store_applied_state(pwm_driver_get_logical_channel(PWM_PROFILE_BACKEND_PIO_GENERATOR, channel), &state);
 }
 
 /**

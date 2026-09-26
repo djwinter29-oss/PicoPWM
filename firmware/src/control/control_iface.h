@@ -17,6 +17,9 @@ const char *control_iface_device_name(void);
 /** @brief Return the build-time firmware version exposed by control/status transports. */
 const char *control_iface_firmware_version(void);
 
+/** @brief Return the build-time channel profile name (e.g. "generator", "monitor") exposed by control/status transports. */
+const char *control_iface_profile_name(void);
+
 /** @brief Return the logical PWM channel count exposed by the firmware. */
 uint8_t control_iface_channel_count(void);
 

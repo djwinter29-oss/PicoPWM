@@ -14,8 +14,9 @@ period. Accuracy is affected by interrupt latency and timestamp granularity.
 It is not intended for serious kHz-to-MHz measurement.
 
 Use the PIO monitor for higher-rate measurement or when more repeatable timing
-is required. The default profile uses the same eight slice-B GPIOs as the
-hardware generator, but a profile owns the input direction and pin assignment.
+is required. The default profile uses the same fixed eight slice-B GPIOs as the
+hardware generator; this is one fixed pin set, not a free choice among
+compatible slice/channel pins. A profile owns the input direction assignment.
 
 ## Measurement Flow
 

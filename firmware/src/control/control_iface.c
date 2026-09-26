@@ -15,12 +15,21 @@
 #define PICO_PWM_FIRMWARE_VERSION_STR "0.0.0-dev"
 #endif
 
+#ifndef PICO_PWM_PROFILE_STR
+/** @brief Fallback profile name when the build does not inject one. */
+#define PICO_PWM_PROFILE_STR "generator"
+#endif
+
 const char *control_iface_device_name(void) {
     return CONTROL_IFACE_DEVICE_NAME;
 }
 
 const char *control_iface_firmware_version(void) {
     return PICO_PWM_FIRMWARE_VERSION_STR;
+}
+
+const char *control_iface_profile_name(void) {
+    return PICO_PWM_PROFILE_STR;
 }
 
 uint8_t control_iface_channel_count(void) {

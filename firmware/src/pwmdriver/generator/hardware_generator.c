@@ -84,7 +84,7 @@ static void hw_gen_publish_state(uint channel, uint32_t realized_freq_hz, uint8_
         .pulse_count = 0u,
     };
 
-    pwm_driver_store_applied_state(HW_PWM_CHANNEL_BASE + channel, &state);
+    pwm_driver_store_applied_state(pwm_driver_get_logical_channel(PWM_PROFILE_BACKEND_HW_GENERATOR, channel), &state);
 }
 
 /** @brief Return the smallest supported hardware PWM frequency in Hz for the current clock plan. */

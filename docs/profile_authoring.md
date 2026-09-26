@@ -11,8 +11,7 @@ Profile tables live under:
 firmware/src/profile/profiles/
   generator.c
   monitor.c
-  software_generator.c
-  software_monitor.c
+  pio_sw_gen_sw_mon.c
 ```
 
 CMake selects exactly one file through `PICO_PWM_PROFILE`:
@@ -70,19 +69,22 @@ A profile must validate:
 
 - GPIO ownership is unique.
 - Input and output direction matches the backend.
-- Hardware PWM channels use compatible PWM slice/channel pins.
-- PIO channels fit available PIO state machines and GPIO routing.
-- Software channels fit the Core 1 timer, CPU, and interrupt budget.
+- Hardware PWM channels are fixed to the 8 slice-B GPIOs; this is one fixed pin
+  set of 8, not a free choice among compatible slice/channel pins.
+- PIO channels are capped at 8 and fixed to the 8 companion slice-A GPIOs paired
+  with the hardware PWM slices.
+- Software channels may use any GPIO not claimed by hardware PWM or PIO, fit to
+  the Core 1 timer, CPU, and interrupt budget.
 - Generator requests stay within the profile frequency envelope.
 - Monitor limits describe the actual measurement capability.
 - I2C register ranges still cover the advertised logical channel count.
 - board-specific reserved pins and connector availability are respected by the
   selected profile and CMake board configuration.
 
-The default all-software profiles use GPIO `0..22` and `28`, leaving GPIO
-`26/27` for I2C1 and GPIO24 for the standard Pico VBUS sense function,
-and GPIO25 for the board LED. A different board or transport arrangement may
-use a different map.
+The default `generator`/`monitor` profiles use GPIO `0..22` and `28` across
+the hardware, PIO, and software banks, leaving GPIO `26/27` for I2C1 and
+GPIO24 for the standard Pico VBUS sense function, and GPIO25 for the board
+LED. A different board or transport arrangement may use a different map.
 
 GPIO23 and GPIO24 are optional software-only pins in the profile model. They
 are not assigned by normal Pico profiles and must not be claimed by hardware

@@ -74,12 +74,6 @@ cmake -S firmware -B build-generator \
 cmake -S firmware -B build-monitor \
 	-DPICO_PWM_PROFILE=monitor
 
-cmake -S firmware -B build-software-generator \
-	-DPICO_PWM_PROFILE=software_generator
-
-cmake -S firmware -B build-software-monitor \
-	-DPICO_PWM_PROFILE=software_monitor
-
 cmake -S firmware -B build-mixed \
 	-DPICO_PWM_PROFILE=mixed
 ```

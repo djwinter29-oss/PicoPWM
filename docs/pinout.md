@@ -7,9 +7,12 @@ The selected profile must be treated as the source of truth for a particular
 firmware image.
 
 Hardware PWM and PIO assignments have peripheral-specific pin and resource
-constraints. Software PWM has no fixed peripheral pin bank, but still requires
-valid unique GPIO ownership and must account for board functions such as the
-LED and ADC pins.
+constraints. Hardware PWM is fixed to one set of 8 slice-B GPIOs and PIO PWM is
+fixed to the 8 companion slice-A GPIOs on the same PWM slices; neither backend
+supports picking an arbitrary GPIO. Software PWM has no fixed peripheral pin
+bank and may use any remaining GPIO not claimed by hardware PWM or PIO, still
+subject to valid unique GPIO ownership and board functions such as the LED and
+ADC pins.
 
 On the standard Pico board, GPIO24 is the VBUS sense/input-related board pin
 and GPIO25 is the onboard LED. Neither is assigned to the default software

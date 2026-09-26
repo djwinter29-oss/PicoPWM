@@ -53,14 +53,17 @@ The current implementation is split as follows:
 | `firmware/src/control/control_iface.c` | Shared device info, channel reads, and channel write helpers above `pwmdriver` |
 | `firmware/src/i2c/i2c_control_map.h` | I2C register map definitions and protocol helpers |
 | `firmware/src/i2c/i2c_control_map.c` | I2C register encode/decode and deferred write translation into `control_iface` |
-| `firmware/src/pwmdriver/pwm_driver.h` | Public wrapper API and logical channel constants |
+| `firmware/src/pwmdriver/pwm_driver.h` | Public wrapper API and backend channel capacity constants |
 | `firmware/src/pwmdriver/pwm_driver.c` | Core 1 launch, mailbox loop, channel routing, shared snapshot |
 | `firmware/src/pwmdriver/generator/hardware_generator.c` | Hardware PWM generator backend |
 | `firmware/src/pwmdriver/monitor/hardware_monitor.c` | Hardware PWM monitor backend |
 | `firmware/src/pwmdriver/generator/pio_generator.c` | PIO generator backend |
 | `firmware/src/pwmdriver/generator/pio_generator.pio` | PIO assembly program used by the PIO generator backend |
+| `firmware/src/pwmdriver/monitor/pio_monitor.c` | PIO monitor backend |
+| `firmware/src/pwmdriver/monitor/pio_monitor.pio` | PIO assembly program used by the PIO monitor backend |
 | `firmware/src/pwmdriver/generator/software_generator.c` | Software PWM generator backend |
 | `firmware/src/pwmdriver/monitor/software_monitor.c` | Software PWM monitor backend |
+| `firmware/src/pwmdriver/shared/monitor_gpio_common.h` | Shared GPIO edge-timestamp monitor helpers used by the hardware and software monitor backends |
 
 ## External Interface
 

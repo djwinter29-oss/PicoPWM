@@ -16,6 +16,7 @@ typedef enum {
 	I2C_CONTROL_MAP_REG_INFO = 0x00u, /**< Read-only register returning the fixed device name string. */
 	I2C_CONTROL_MAP_REG_VERSION = 0x01u, /**< Read-only register returning the fixed firmware version string. */
 	I2C_CONTROL_MAP_REG_CHANNEL_COUNT = 0x02u, /**< Read-only register returning the logical channel count. */
+	I2C_CONTROL_MAP_REG_PROFILE = 0x03u, /**< Read-only register returning the build-time channel profile name string. */
 	I2C_CONTROL_MAP_REG_CH_BASE = 0x10u, /**< Base register for 24 channel snapshot reads, one 9-byte record per channel. */
 	I2C_CONTROL_MAP_REG_SET_BASE = 0x30u, /**< Base register for full channel write commands carrying freq and duty. */
 	I2C_CONTROL_MAP_REG_STOP_ALL = 0x90u, /**< Register used to request stop-all and to read the last command result. */

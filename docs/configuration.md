@@ -10,8 +10,6 @@ The current profile selections are:
 
 - **Generator**: channels produce PWM output signals.
 - **Monitor**: channels sample PWM input signals and report measured state.
-- **Software generator**: all logical channels use the software output backend.
-- **Software monitor**: all logical channels use the software input backend.
 - **Mixed**: 8 PIO generator channels, 8 software generator channels, and 8
   software monitor channels.
 
@@ -23,13 +21,6 @@ for software generation, and `16..23` for software monitoring. It requires a
 custom board map exposing GPIO `23` and `24`; GPIO24 is a board-internal VBUS
 sense-related pin on the standard Pico. The standard Pico build rejects this
 profile before SDK configuration completes.
-
-The `software_generator` and `software_monitor` profiles assign all 24 logical
-channels to the software backend. Their dedicated default map uses GPIO
-`0..22` and `28`; GPIO `26` and `27` remain reserved for I2C1 and GPIO `25`
-remains available for the board LED. These profiles therefore trade the
-hardware/PIO resource limits for a larger shared software scheduling and
-GPIO-ownership budget.
 
 GPIO23/24 are optional software-only pins. Normal Pico profiles leave them
 unused; custom profiles may assign them only to software generator or software
@@ -46,12 +37,6 @@ cmake -S firmware -B build-generator \
 
 cmake -S firmware -B build-monitor \
   -DPICO_PWM_PROFILE=monitor
-
-cmake -S firmware -B build-software-generator \
-  -DPICO_PWM_PROFILE=software_generator
-
-cmake -S firmware -B build-software-monitor \
-  -DPICO_PWM_PROFILE=software_monitor
 ```
 
 Separate build directories produce separate, reproducible firmware variants.
@@ -80,9 +65,9 @@ that exceeds the selected backend's pin, resource, range, or accuracy limits.
 
 | Backend | Channel/resource constraint | Pin constraint | Timing constraint |
 | --- | --- | --- | --- |
-| Hardware PWM | Limited by available PWM slices/channels; the default profile uses 8 channels. | Must use GPIOs that support the selected PWM slice/channel; the default uses channel-B pins. | High accuracy, but limited minimum frequency and backend timing envelope. |
-| PIO PWM | Limited by PIO blocks and state machines; the default profile uses 8 channels. | Pin must be routable to the selected PIO state machine and profile mapping. | Broad range, with divider/period quantization and finite PIO resources. |
-| Software PWM | No fixed PWM slice or PIO state-machine allocation; channel count is limited by CPU, timer, and interrupt budget. | Any valid, uniquely owned GPIO that the software backend can drive or sample. | Suitable for simple low-frequency generation/monitoring; polling/timer scheduling limits maximum frequency and accuracy. |
+| Hardware PWM | Fixed at 8 channels, one per RP2040 PWM slice; not expandable by picking a different GPIO. | Fixed to the 8 slice-B GPIOs (`1, 3, 5, 7, 9, 11, 13, 15`); this is one fixed pin set, not a range of compatible choices. | High accuracy, but limited minimum frequency and backend timing envelope. |
+| PIO PWM | Fixed at 8 channels (4 state machines per PIO block x 2 blocks); not expandable. | Fixed to the 8 companion slice-A GPIOs (`0, 2, 4, 6, 8, 10, 12, 14`), the other half of the same 8 PWM slice pairs used by hardware PWM. | Broad range, with divider/period quantization and finite PIO resources. |
+| Software PWM | No fixed PWM slice or PIO state-machine allocation; channel count is limited by CPU, timer, and interrupt budget. | Any remaining valid, uniquely owned GPIO not claimed by hardware PWM or PIO. | Suitable for simple low-frequency generation/monitoring; polling/timer scheduling limits maximum frequency and accuracy. |
 
 Monitor channels use the corresponding backend constraints as measurement
 limits rather than output-generation limits. Use software monitoring for simple

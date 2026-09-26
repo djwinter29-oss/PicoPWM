@@ -38,6 +38,7 @@ Implemented by `board_commands.*`.
 | --- | --- | --- |
 | `info` | Show the device type. | `info` |
 | `version` | Show the build-time firmware version. | `version` |
+| `profile` | Show the build-time channel profile. | `profile` |
 | `led <on\|off>` | Set the board LED state. | `led on` |
 | `stop` | Restore the profile's safe default behavior. | `stop` |
 | `reboot` | Reboot the board. | `reboot` |

@@ -17,6 +17,7 @@ static const shell_command_t pwm_commands[] = {
     {"help", "help                    Show this help", pwm_commands_help},
     {"info", "info                    Show device type", board_commands_info},
     {"version", "version              Show firmware version", board_commands_version},
+    {"profile", "profile              Show build-time channel profile", board_commands_profile},
     {"get", "get <ch>                 Read channel properties", pwm_channel_commands_get},
     {"set", "set <ch> <freq> [duty%]  Set freq, optional duty defaults to 50%", pwm_channel_commands_set},
     {"led", "led <on|off>             Set board LED state", board_commands_led},

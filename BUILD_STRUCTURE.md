@@ -10,8 +10,6 @@ PicoPWM/
 │   ├── build/                 # ← All builds here (git-ignored)
 │   │   ├── generator/
 │   │   ├── monitor/
-│   │   ├── software_generator/
-│   │   ├── software_monitor/
 │   │   ├── pico/              # Board-specific
 │   │   ├── pico2/             # Board-specific
 │   │   └── custom/            # Custom profiles
@@ -24,12 +22,12 @@ PicoPWM/
 
 ## Usage
 
-### Default (400 kHz I2C, creates `firmware/build/`)
+### Default (400 kHz I2C at address 0x40, creates `firmware/build/`)
 ```bash
 PICO_SDK_PATH=/path/to/pico-sdk ./tools/firmware/build.sh
 ```
 
-### Default with Profile (400 kHz I2C)
+### Default with Profile (400 kHz I2C at address 0x40)
 ```bash
 PICO_SDK_PATH=/path/to/pico-sdk ./tools/firmware/build.sh --profile generator
 PICO_SDK_PATH=/path/to/pico-sdk ./tools/firmware/build.sh --profile monitor
@@ -50,6 +48,29 @@ cmake --build firmware/build/gen-100k --parallel
 Supported speeds:
 - `100000` - Standard I2C (100 kHz)
 - `400000` - Fast I2C (400 kHz, default, backward-compatible with 100 kHz masters)
+
+### Custom I2C Address
+The default I2C slave address is **0x40**. To use a different address:
+
+```bash
+PICO_SDK_PATH=/path/to/pico-sdk cmake -S firmware -B firmware/build/gen-addr-0x50 \
+  -DPICO_PWM_PROFILE=generator \
+  -DPICO_PWM_I2C_ADDR=0x50
+
+cmake --build firmware/build/gen-addr-0x50 --parallel
+```
+
+Valid 7-bit addresses: 0x00 to 0x7F
+
+### Combining Clock Speed and Address
+```bash
+PICO_SDK_PATH=/path/to/pico-sdk cmake -S firmware -B firmware/build/gen-100k-addr-0x30 \
+  -DPICO_PWM_PROFILE=generator \
+  -DPICO_PWM_I2C_CLOCK_SPEED=100000 \
+  -DPICO_PWM_I2C_ADDR=0x30
+
+cmake --build firmware/build/gen-100k-addr-0x30 --parallel
+```
 
 ## Git Ignore Rules
 

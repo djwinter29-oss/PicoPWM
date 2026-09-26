@@ -50,6 +50,7 @@ uint8_t i2c_control_map_expected_write_length(uint8_t reg) {
     if ((reg == I2C_CONTROL_MAP_REG_INFO) ||
         (reg == I2C_CONTROL_MAP_REG_VERSION) ||
         (reg == I2C_CONTROL_MAP_REG_CHANNEL_COUNT) ||
+        (reg == I2C_CONTROL_MAP_REG_PROFILE) ||
         i2c_control_map_is_channel_read(reg) ||
         (reg == I2C_CONTROL_MAP_REG_STOP_ALL) ||
         (reg == I2C_CONTROL_MAP_REG_REBOOT)) {
@@ -89,6 +90,17 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
 
     if (reg == I2C_CONTROL_MAP_REG_VERSION) {
         text = control_iface_firmware_version();
+        text_len = strlen(text) + 1u;
+        if (text_len > 64u) {  // Prevent response buffer overflow
+            return false;
+        }
+        *response_len = (uint8_t)text_len;
+        memcpy(response, text, text_len);
+        return true;
+    }
+
+    if (reg == I2C_CONTROL_MAP_REG_PROFILE) {
+        text = control_iface_profile_name();
         text_len = strlen(text) + 1u;
         if (text_len > 64u) {  // Prevent response buffer overflow
             return false;

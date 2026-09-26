@@ -9,9 +9,11 @@ channel and DMA-backed high/low snapshots. Source files:
 
 ## Constraints
 
-PIO monitoring consumes finite PIO state machines and requires GPIO routing
-compatible with the monitor program. The default profile uses eight channels,
-four per PIO block. A custom profile must avoid resource and GPIO conflicts.
+PIO monitoring consumes finite PIO state machines and is capped at 8 channels
+total, four per PIO block. The default profile fixes these to the same 8
+companion slice-A GPIOs used by the PIO generator; this is one fixed pin set,
+not a free choice among routable GPIOs. A custom profile must avoid resource
+and GPIO conflicts.
 
 The monitor keeps only the latest two-word high/low pair. Intermediate periods
 can be discarded, reads use a best-effort stability check, and the finite DMA

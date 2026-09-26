@@ -27,10 +27,11 @@ The hardware backend is constrained by the MCU PWM peripheral:
 
 - one backend channel requires a valid PWM-capable GPIO and slice/channel
     assignment
-- the default profile uses eight slice-B GPIOs: GPIO `1, 3, 5, 7, 9, 11, 13,
-    15`
-- the number of simultaneously configured hardware channels is limited by the
-    available compatible slice/channel mappings
+- the default profile is fixed to eight slice-B GPIOs: GPIO `1, 3, 5, 7, 9, 11,
+    13, 15`; this is one fixed pin set, not a free choice among compatible
+    slice/channel pins
+- the hardware channel count is fixed at 8 (one per RP2040 PWM slice) and is
+    not expandable by selecting a different GPIO
 - the backend has a nonzero minimum frequency derived from its maximum divider
     and 16-bit period counter
 

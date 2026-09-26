@@ -28,6 +28,7 @@ below. Channel register ranges use the channel count advertised by
 | `REG_INFO` | `0x00` | 1 | variable | Device name string, including null terminator |
 | `REG_VERSION` | `0x01` | 1 | variable | Firmware version string, including null terminator |
 | `REG_CHANNELS` | `0x02` | 1 | 1 | Logical channel count |
+| `REG_PROFILE` | `0x03` | 1 | variable | Build-time channel profile name string, including null terminator |
 | `REG_GET_CHk` | `0x10 + k` | 1 | 9 | Channel state: `freq`, `duty`, `pulse_count` |
 | `REG_SET_CHk` | `0x30 + k` | 6 | 1 | Five-byte `freq`/`duty` payload; returns status |
 | `REG_STOP_ALL` | `0x90` | 1 | 1 | Profile reset request; returns status |

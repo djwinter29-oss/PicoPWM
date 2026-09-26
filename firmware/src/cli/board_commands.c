@@ -49,6 +49,16 @@ bool board_commands_version(void *context, int argc, const char *const *argv) {
     return shell_write_line(COMMAND_SHELL, control_iface_firmware_version());
 }
 
+bool board_commands_profile(void *context, int argc, const char *const *argv) {
+    (void)argv;
+
+    if (argc != 1) {
+        return shell_write_line(COMMAND_SHELL, "ERR usage: profile");
+    }
+
+    return shell_write_line(COMMAND_SHELL, control_iface_profile_name());
+}
+
 bool board_commands_led(void *context, int argc, const char *const *argv) {
     if (argc != 2) {
         return shell_write_line(COMMAND_SHELL, "ERR usage: led <on|off>");

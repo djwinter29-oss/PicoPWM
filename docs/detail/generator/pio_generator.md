@@ -9,10 +9,13 @@ per configured channel. Source files:
 
 ## Resource Constraints
 
-The PIO generator is limited by the two PIO blocks and their state machines.
-The default profile uses eight channels, four per PIO block. A custom profile
-must ensure that each channel has a valid PIO state machine and routable GPIO.
-Generator and monitor channels must not claim the same PIO resource.
+The PIO generator is capped at 8 channels total: two PIO blocks, four state
+machines each. The default profile fixes these 8 channels to the 8 companion
+slice-A GPIOs paired with the hardware PWM slices (`0, 2, 4, 6, 8, 10, 12,
+14`); this is one fixed pin set, not a free choice among routable GPIOs. A
+custom profile must still ensure that each channel has a valid PIO state
+machine and routable GPIO. Generator and monitor channels must not claim the
+same PIO resource.
 
 The PIO timing divider and period counter quantize the realized frequency, so
 the applied frequency may differ from the requested frequency. The profile's

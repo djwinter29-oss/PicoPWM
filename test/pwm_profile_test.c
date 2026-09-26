@@ -11,13 +11,6 @@ int main(void) {
 #ifdef PICO_PWM_MIXED_PROFILE
     assert(profile->gpio == 0u);
     assert(profile->backend == PWM_PROFILE_BACKEND_PIO_GENERATOR);
-#elif defined(PICO_PWM_SOFTWARE_PROFILE)
-    assert(profile->gpio == 0u);
-#ifdef PICO_PWM_MONITOR_PROFILE
-    assert(profile->backend == PWM_PROFILE_BACKEND_SW_MONITOR);
-#else
-    assert(profile->backend == PWM_PROFILE_BACKEND_SW_GENERATOR);
-#endif
 #else
     assert(profile->gpio == 1u);
 #endif

@@ -12,56 +12,20 @@ set(PICO_PWM_PROFILE "generator" CACHE STRING "Firmware channel profile")
 set_property(CACHE PICO_PWM_PROFILE PROPERTY STRINGS generator monitor software_generator software_monitor mixed)
 
 if(PICO_PWM_PROFILE STREQUAL "generator")
-    set(PICO_PWM_MONITOR_BUILD OFF)
-    set(PICO_PWM_SOFTWARE_BUILD OFF)
     set(PICO_PWM_PROFILE_SOURCE src/profile/profiles/generator.c)
-    set(PICO_PWM_BACKEND_SOURCES
-        src/pwmdriver/generator/hardware_generator.c
-        src/pwmdriver/generator/pio_generator.c
-        src/pwmdriver/generator/software_generator.c
-    )
 elseif(PICO_PWM_PROFILE STREQUAL "monitor")
-    set(PICO_PWM_MONITOR_BUILD ON)
-    set(PICO_PWM_SOFTWARE_BUILD OFF)
     set(PICO_PWM_PROFILE_SOURCE src/profile/profiles/monitor.c)
-    set(PICO_PWM_BACKEND_SOURCES
-        src/pwmdriver/monitor/hardware_monitor.c
-        src/pwmdriver/monitor/pio_monitor.c
-        src/pwmdriver/monitor/software_monitor.c
-    )
 elseif(PICO_PWM_PROFILE STREQUAL "software_generator")
-    set(PICO_PWM_MONITOR_BUILD OFF)
-    set(PICO_PWM_SOFTWARE_BUILD ON)
     set(PICO_PWM_PROFILE_SOURCE src/profile/profiles/software_generator.c)
-    set(PICO_PWM_BACKEND_SOURCES
-        src/pwmdriver/generator/software_generator.c
-    )
 elseif(PICO_PWM_PROFILE STREQUAL "software_monitor")
-    set(PICO_PWM_MONITOR_BUILD ON)
-    set(PICO_PWM_SOFTWARE_BUILD ON)
     set(PICO_PWM_PROFILE_SOURCE src/profile/profiles/software_monitor.c)
-    set(PICO_PWM_BACKEND_SOURCES
-        src/pwmdriver/monitor/software_monitor.c
-    )
 elseif(PICO_PWM_PROFILE STREQUAL "mixed")
     if(PICO_BOARD MATCHES "^(pico|pico2|rp2040|rp2350)$")
         message(FATAL_ERROR "PICO_PWM_PROFILE=mixed requires a board exposing GPIO 23 and GPIO 24")
     endif()
-    set(PICO_PWM_MONITOR_BUILD ON)
-    set(PICO_PWM_SOFTWARE_BUILD OFF)
-    set(PICO_PWM_MIXED_BUILD ON)
     set(PICO_PWM_PROFILE_SOURCE src/profile/profiles/pio_sw_gen_sw_mon.c)
-    set(PICO_PWM_BACKEND_SOURCES
-        src/pwmdriver/generator/pio_generator.c
-        src/pwmdriver/generator/software_generator.c
-        src/pwmdriver/monitor/software_monitor.c
-    )
 else()
     message(FATAL_ERROR "PICO_PWM_PROFILE must be generator, monitor, software_generator, software_monitor, or mixed")
-endif()
-
-if(NOT DEFINED PICO_PWM_MIXED_BUILD)
-    set(PICO_PWM_MIXED_BUILD OFF)
 endif()
 
 pico_sdk_init()
@@ -74,7 +38,12 @@ add_executable(pico_pwm
     src/driver/led.c
     src/driver/system.c
     src/pwmdriver/pwm_driver.c
-    ${PICO_PWM_BACKEND_SOURCES}
+    src/pwmdriver/generator/hardware_generator.c
+    src/pwmdriver/generator/pio_generator.c
+    src/pwmdriver/generator/software_generator.c
+    src/pwmdriver/monitor/hardware_monitor.c
+    src/pwmdriver/monitor/pio_monitor.c
+    src/pwmdriver/monitor/software_monitor.c
     src/cli/shell.c
     src/cli/pwm_commands.c
     src/cli/pwm_channel_commands.c
@@ -86,15 +55,12 @@ add_executable(pico_pwm
     src/i2c/i2c_slave.c
 )
 
-if(PICO_PWM_PROFILE STREQUAL "generator" OR PICO_PWM_PROFILE STREQUAL "mixed")
-    pico_generate_pio_header(pico_pwm
-        ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/generator/pio_generator.pio
-    )
-elseif(PICO_PWM_PROFILE STREQUAL "monitor")
-    pico_generate_pio_header(pico_pwm
-        ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/monitor/pio_monitor.pio
-    )
-endif()
+pico_generate_pio_header(pico_pwm
+    ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/generator/pio_generator.pio
+)
+pico_generate_pio_header(pico_pwm
+    ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/monitor/pio_monitor.pio
+)
 
 target_link_libraries(pico_pwm
     pico_stdlib
@@ -111,25 +77,11 @@ target_link_libraries(pico_pwm
     tinyusb_board
 )
 
-if(PICO_PWM_MONITOR_BUILD AND NOT PICO_PWM_SOFTWARE_BUILD)
-    target_link_libraries(pico_pwm hardware_dma)
-endif()
+target_link_libraries(pico_pwm hardware_dma)
 
 target_compile_definitions(pico_pwm PRIVATE
     PICO_PWM_FIRMWARE_VERSION_STR="${PICO_PWM_FIRMWARE_VERSION}"
 )
-
-if(PICO_PWM_MONITOR_BUILD AND NOT PICO_PWM_MIXED_BUILD)
-    target_compile_definitions(pico_pwm PRIVATE PICO_PWM_MONITOR_PROFILE=1)
-endif()
-
-if(PICO_PWM_SOFTWARE_BUILD)
-    target_compile_definitions(pico_pwm PRIVATE PICO_PWM_SOFTWARE_PROFILE=1)
-endif()
-
-if(PICO_PWM_MIXED_BUILD)
-    target_compile_definitions(pico_pwm PRIVATE PICO_PWM_MIXED_PROFILE=1)
-endif()
 
 target_include_directories(pico_pwm PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/src

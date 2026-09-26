@@ -16,22 +16,12 @@
 /** @brief Logical PIO PWM channel count. */
 #define PIO_PWM_DRIVER_COUNT 8
 /** @brief Logical software PWM channel count. */
-#ifdef PICO_PWM_SOFTWARE_PROFILE
 #define SW_PWM_COUNT PWM_PROFILE_CHANNEL_COUNT
-#else
-#define SW_PWM_COUNT 8
-#endif
 
 /** @brief Logical base index for hardware PWM channels. */
 #define HW_PWM_CHANNEL_BASE 0
 /** @brief Logical base index for PIO PWM channels. */
 #define PIO_PWM_CHANNEL_BASE (HW_PWM_CHANNEL_BASE + HW_PWM_COUNT)
-/** @brief Logical base index for software PWM channels. */
-#ifdef PICO_PWM_SOFTWARE_PROFILE
-#define SW_PWM_CHANNEL_BASE 0
-#else
-#define SW_PWM_CHANNEL_BASE (PIO_PWM_CHANNEL_BASE + PIO_PWM_DRIVER_COUNT)
-#endif
 /** @brief Total logical PWM channel count across all backends. */
 #define PWM_DRIVER_CHANNEL_COUNT PWM_PROFILE_CHANNEL_COUNT
 

@@ -207,7 +207,7 @@ static bool hw_gen_find_timing(uint32_t freq_hz, uint32_t *best_top, uint16_t *b
 void hw_gen_init(void) {
     hw_gen_sys_clk_hz = clock_get_hz(clk_sys);
 
-    for (int i = 0; i < HW_PWM_COUNT; i++) {
+    for (int i = 0; i < pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_HW_GENERATOR); i++) {
         uint gpio = pwm_driver_get_gpio(PWM_PROFILE_BACKEND_HW_GENERATOR, i);
         hw_gen_bind_pwm_pin(gpio);
 
@@ -232,7 +232,7 @@ bool hw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     uint32_t realized_freq_hz;
     uint8_t static_duty;
 
-    if (channel >= HW_PWM_COUNT) return false;
+    if (channel >= pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_HW_GENERATOR)) return false;
     if (duty > 100u) duty = 100u;
 
     uint gpio = pwm_driver_get_gpio(PWM_PROFILE_BACKEND_HW_GENERATOR, channel);
@@ -272,7 +272,7 @@ bool hw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
 
 /** @copydoc hw_gen_restore_defaults */
 bool hw_gen_restore_defaults(void) {
-    for (uint channel = 0; channel < HW_PWM_COUNT; channel++) {
+    for (uint channel = 0; channel < pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_HW_GENERATOR); channel++) {
         hw_gen_apply_static_state(channel, 0u);
     }
 

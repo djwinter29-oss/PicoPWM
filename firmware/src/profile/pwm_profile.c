@@ -35,6 +35,32 @@ bool pwm_profile_get_gpio(pwm_profile_backend_t backend, uint backend_channel, u
     return false;
 }
 
+bool pwm_profile_get_logical_channel(pwm_profile_backend_t backend, uint backend_channel, uint *channel_out) {
+    if (channel_out == NULL) {
+        return false;
+    }
+
+    for (uint channel = 0u; channel < PWM_PROFILE_CHANNEL_COUNT; ++channel) {
+        const pwm_profile_channel_t *profile = &pwm_profile_channels[channel];
+        if (profile->backend == backend && profile->backend_channel == backend_channel) {
+            *channel_out = channel;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+uint pwm_profile_backend_channel_count(pwm_profile_backend_t backend) {
+    uint count = 0u;
+
+    for (uint channel = 0u; channel < PWM_PROFILE_CHANNEL_COUNT; ++channel) {
+        count += pwm_profile_channels[channel].backend == backend ? 1u : 0u;
+    }
+
+    return count;
+}
+
 bool pwm_profile_validate(void) {
     for (uint channel = 0u; channel < PWM_PROFILE_CHANNEL_COUNT; ++channel) {
         const pwm_profile_channel_t *profile = &pwm_profile_channels[channel];
@@ -92,11 +118,9 @@ bool pwm_profile_frequency_supported(uint channel, uint32_t frequency_hz) {
 }
 
 bool pwm_profile_is_monitor(void) {
-#ifdef PICO_PWM_MONITOR_PROFILE
-    return true;
-#else
-    return false;
-#endif
+    return pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_HW_MONITOR) != 0u ||
+           pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_PIO_MONITOR) != 0u ||
+           pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_SW_MONITOR) != 0u;
 }
 
 const char *pwm_profile_backend_name(pwm_profile_backend_t backend) {

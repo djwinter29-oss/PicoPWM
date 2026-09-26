@@ -6,25 +6,12 @@
 #include "pwm_driver.h"
 #include "pwm_driver_internal.h"
 
-#ifdef PICO_PWM_MONITOR_PROFILE
-#ifdef PICO_PWM_SOFTWARE_PROFILE
 #include "monitor/software_monitor.h"
-#elif defined(PICO_PWM_MIXED_PROFILE)
 #include "generator/pio_generator.h"
 #include "generator/software_generator.h"
-#include "monitor/software_monitor.h"
-#else
 #include "monitor/hardware_monitor.h"
 #include "monitor/pio_monitor.h"
-#include "monitor/software_monitor.h"
-#endif
-#elif defined(PICO_PWM_SOFTWARE_PROFILE)
-#include "generator/software_generator.h"
-#else
 #include "generator/hardware_generator.h"
-#include "generator/pio_generator.h"
-#include "generator/software_generator.h"
-#endif
 
 #include "pico/critical_section.h"
 #include "pico/mutex.h"
@@ -33,9 +20,7 @@
 
 #include "hardware/sync.h"
 
-#ifdef PICO_PWM_MONITOR_PROFILE
 #include "hardware/gpio.h"
-#endif
 
 /** @brief Timeout for one admitted cross-core apply request in milliseconds. */
 #define PWM_DRIVER_APPLY_TIMEOUT_MS 1000
@@ -45,6 +30,13 @@ uint pwm_driver_get_gpio(pwm_profile_backend_t backend, uint backend_channel) {
 
     hard_assert(pwm_profile_get_gpio(backend, backend_channel, &gpio));
     return gpio;
+}
+
+uint pwm_driver_get_logical_channel(pwm_profile_backend_t backend, uint backend_channel) {
+    uint channel = 0u;
+
+    hard_assert(pwm_profile_get_logical_channel(backend, backend_channel, &channel));
+    return channel;
 }
 
 /** @brief Indicates whether Core 1 finished backend initialization. */
@@ -132,38 +124,6 @@ static pwm_driver_mailbox_t pwm_mailbox = {
 
 /** @brief Backend routing table in logical-channel order. */
 static const pwm_driver_backend_t pwm_driver_backends[PWM_PROFILE_BACKEND_SW_MONITOR + 1u] = {
-#ifdef PICO_PWM_MONITOR_PROFILE
-#ifdef PICO_PWM_SOFTWARE_PROFILE
-    [PWM_PROFILE_BACKEND_SW_MONITOR] = {
-        .init = sw_mon_init,
-        .set = NULL,
-        .restore_defaults = NULL,
-        .get = sw_mon_get,
-        .finalize_readback = NULL,
-    },
-#elif defined(PICO_PWM_MIXED_PROFILE)
-    [PWM_PROFILE_BACKEND_PIO_GENERATOR] = {
-        .init = pio_gen_init,
-        .set = pio_gen_set,
-        .restore_defaults = pio_gen_restore_defaults,
-        .get = NULL,
-        .finalize_readback = pio_gen_finalize_readback,
-    },
-    [PWM_PROFILE_BACKEND_SW_GENERATOR] = {
-        .init = sw_gen_init,
-        .set = sw_gen_set,
-        .restore_defaults = sw_gen_restore_defaults,
-        .get = NULL,
-        .finalize_readback = NULL,
-    },
-    [PWM_PROFILE_BACKEND_SW_MONITOR] = {
-        .init = sw_mon_init,
-        .set = NULL,
-        .restore_defaults = NULL,
-        .get = sw_mon_get,
-        .finalize_readback = NULL,
-    },
-#else
     [PWM_PROFILE_BACKEND_HW_MONITOR] = {
         .init = hw_mon_init,
         .set = NULL,
@@ -185,8 +145,6 @@ static const pwm_driver_backend_t pwm_driver_backends[PWM_PROFILE_BACKEND_SW_MON
         .get = sw_mon_get,
         .finalize_readback = NULL,
     },
-#endif
-#elif defined(PICO_PWM_SOFTWARE_PROFILE)
     [PWM_PROFILE_BACKEND_SW_GENERATOR] = {
         .init = sw_gen_init,
         .set = sw_gen_set,
@@ -194,7 +152,6 @@ static const pwm_driver_backend_t pwm_driver_backends[PWM_PROFILE_BACKEND_SW_MON
         .get = NULL,
         .finalize_readback = NULL,
     },
-#else
     [PWM_PROFILE_BACKEND_HW_GENERATOR] = {
         .init = hw_gen_init,
         .set = hw_gen_set,
@@ -216,18 +173,13 @@ static const pwm_driver_backend_t pwm_driver_backends[PWM_PROFILE_BACKEND_SW_MON
         .get = NULL,
         .finalize_readback = NULL,
     },
-#endif
 };
 
-#ifdef PICO_PWM_MONITOR_PROFILE
 /** @brief Dispatch the Pico SDK's single GPIO callback to all configured monitor banks. */
 static void pwm_driver_monitor_gpio_irq(uint gpio, uint32_t events) {
-#if !defined(PICO_PWM_SOFTWARE_PROFILE) && !defined(PICO_PWM_MIXED_PROFILE)
     hw_mon_handle_gpio_irq(gpio, events);
-#endif
     sw_mon_handle_gpio_irq(gpio, events);
 }
-#endif
 
 /** @brief Resolve one configured logical channel into its backend descriptor. */
 static const pwm_driver_backend_t *pwm_driver_get_backend(uint channel, uint *local_channel) {
@@ -361,6 +313,9 @@ static bool pwm_driver_backend_set(uint channel, uint32_t freq_hz, uint8_t duty)
 /** @brief Apply the logical power-on defaults to all channels on Core 1. */
 static bool pwm_driver_backend_restore_defaults(void) {
     for (uint i = 0; i < count_of(pwm_driver_backends); i++) {
+        if (pwm_profile_backend_channel_count((pwm_profile_backend_t)i) == 0u) {
+            continue;
+        }
         if ((pwm_driver_backends[i].restore_defaults != NULL) && !pwm_driver_backends[i].restore_defaults()) {
             return false;
         }
@@ -442,11 +397,10 @@ static void pwm_driver_process_mailbox(void) {
 
 /** @brief Core 1 main loop that owns backend initialization and mailbox processing. */
 static void pwm_driver_core_main(void) {
-#ifdef PICO_PWM_MONITOR_PROFILE
     gpio_set_irq_callback(pwm_driver_monitor_gpio_irq);
-#endif
     for (uint i = 0u; i < count_of(pwm_driver_backends); ++i) {
-        if (pwm_driver_backends[i].init != NULL) {
+        if (pwm_profile_backend_channel_count((pwm_profile_backend_t)i) != 0u &&
+            pwm_driver_backends[i].init != NULL) {
             pwm_driver_backends[i].init();
         }
     }
@@ -456,11 +410,11 @@ static void pwm_driver_core_main(void) {
     while (true) {
         pwm_driver_refresh_monitor_state();
         pwm_driver_process_mailbox();
-#ifdef PICO_PWM_MONITOR_PROFILE
-        sleep_us(1000u);
-#else
-        __wfe();
-#endif
+        if (pwm_profile_is_monitor()) {
+            sleep_us(1000u);
+        } else {
+            __wfe();
+        }
     }
 }
 

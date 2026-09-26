@@ -66,7 +66,7 @@ void hw_mon_init(void) {
         return;
     }
 
-    for (uint channel = 0; channel < HW_PWM_COUNT; channel++) {
+    for (uint channel = 0; channel < pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_HW_MONITOR); channel++) {
         uint pin = pwm_driver_get_gpio(PWM_PROFILE_BACKEND_HW_MONITOR, channel);
 
         pwm_gpio_mon_init_pin(pin);
@@ -82,7 +82,7 @@ void hw_mon_init(void) {
 
 /** @copydoc hw_mon_get */
 bool hw_mon_get(uint channel, pwm_driver_state_t *state) {
-    if (!hw_mon_initialized || channel >= HW_PWM_COUNT || state == NULL) {
+    if (!hw_mon_initialized || channel >= pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_HW_MONITOR) || state == NULL) {
         return false;
     }
 

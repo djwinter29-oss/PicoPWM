@@ -74,27 +74,20 @@ The default all-software profiles use GPIO `0..15`, `18..22`, and `26..28`,
 leaving GPIO `16` and `17` available for I2C and GPIO `25` available for the
 board LED. A different board or transport arrangement may use a different map.
 
-## Build Definitions
-
-CMake supplies definitions needed by shared source code:
-
-- `PICO_PWM_MONITOR_PROFILE` for monitor profiles
-- `PICO_PWM_SOFTWARE_PROFILE` for all-software profiles
-
-Use these only when the backend implementation or channel storage layout must
-change. The profile table itself should describe behavior; shared code should
-not inspect a profile name to route individual channels.
-
 ## Adding a Profile
 
 1. Add a new table under `firmware/src/profile/profiles/`.
 2. Add one `PICO_PWM_PROFILE` branch in `firmware/CMakeLists.txt`.
-3. Select the required backend sources and PIO program, if any.
-4. Add compile definitions only when shared storage or backend compilation
-   requires them.
-5. Add a profile metadata test to `tools/test/cli-shell-test.sh`.
-6. Document the GPIO map, backend limits, and expected accuracy.
-7. Build the profile in a separate build directory and run the host tests.
+3. Add or update backend resource requirements only if the common backend set
+  cannot support the new table.
+4. Add a profile metadata test to `tools/test/cli-shell-test.sh`.
+5. Document the GPIO map, backend limits, and expected accuracy.
+6. Build the profile in a separate build directory and run the host tests.
+
+All backend implementations are compiled once in the shared firmware target;
+the profile table selects which backend descriptors initialize and which
+logical channels they own. Adding an ordinary profile should not require
+changes to `pwm_driver.c` or backend source files.
 
 The USB shell and I2C protocol must remain unchanged when adding a profile.
 Unsupported operations should return `PWM_DRIVER_RESULT_UNAVAILABLE` through

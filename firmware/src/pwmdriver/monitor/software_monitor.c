@@ -44,7 +44,7 @@
 #define SW_MON_GPIO_COUNT 30u
 
 /** @brief Per-channel standalone software monitor runtime ownership table. */
-static pwm_gpio_mon_channel_t sw_mon_channels[SW_PWM_COUNT];
+static pwm_gpio_mon_channel_t sw_mon_channels[PWM_PROFILE_CHANNEL_COUNT];
 /** @brief Direct GPIO-to-channel lookup table; `-1` marks unrelated GPIOs. */
 static int8_t sw_mon_gpio_to_channel[SW_MON_GPIO_COUNT] = {
     [0 ... SW_MON_GPIO_COUNT - 1] = -1
@@ -68,7 +68,7 @@ void sw_mon_init(void) {
         return;
     }
 
-    for (uint channel = 0; channel < SW_PWM_COUNT; channel++) {
+    for (uint channel = 0; channel < pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_SW_MONITOR); channel++) {
         uint pin = pwm_driver_get_gpio(PWM_PROFILE_BACKEND_SW_MONITOR, channel);
 
         pwm_gpio_mon_init_pin(pin);
@@ -85,7 +85,7 @@ void sw_mon_init(void) {
 
 /** @copydoc sw_mon_get */
 bool sw_mon_get(uint channel, pwm_driver_state_t *state) {
-    if (!sw_mon_initialized || channel >= SW_PWM_COUNT || state == NULL) {
+    if (!sw_mon_initialized || channel >= pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_SW_MONITOR) || state == NULL) {
         return false;
     }
 

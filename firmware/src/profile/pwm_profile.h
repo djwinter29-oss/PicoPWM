@@ -51,6 +51,12 @@ const pwm_profile_channel_t *pwm_profile_get_channel(uint channel);
 /** @brief Resolve a backend-local channel to its profile-assigned GPIO. */
 bool pwm_profile_get_gpio(pwm_profile_backend_t backend, uint backend_channel, uint *gpio_out);
 
+/** @brief Return the logical channel for one backend-local channel. */
+bool pwm_profile_get_logical_channel(pwm_profile_backend_t backend, uint backend_channel, uint *channel_out);
+
+/** @brief Return the number of channels assigned to one backend. */
+uint pwm_profile_backend_channel_count(pwm_profile_backend_t backend);
+
 /** @brief Validate GPIO and backend-resource ownership for the selected profile. */
 bool pwm_profile_validate(void);
 

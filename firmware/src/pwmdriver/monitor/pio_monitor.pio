@@ -1,6 +1,6 @@
 ; Monitor one PWM input pin and push approximate high/low loop counts for each full period.
 ; The state machine waits until both segments are measured, then pushes `high` and `low`
-; back-to-back so DMA sees a compact two-word sample instead of a split stream.
+; back-to-back so the CPU can consume one compact two-word sample from the RX FIFO.
 ; This prototype favors a tiny program and simple C-side decode over exact edge timing.
 .pio_version 0
 
@@ -31,7 +31,8 @@ low_done:
     push block
     mov isr, ~x
     push block
-    jmp period_start
+capture_done:
+    jmp capture_done
 .wrap
 
 % c-sdk {

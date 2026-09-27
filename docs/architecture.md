@@ -66,7 +66,7 @@ Use the architecture-related pages as follows:
 - [PIO PWM Generator](detail/generator/pio_generator.md) — PIO output timing and state-machine constraints
 - [Software PWM Generator](detail/generator/software_generator.md) — shared timer output generation
 - [Hardware PWM Monitor](detail/monitor/hardware_monitor.md) — GPIO interrupt measurement limits
-- [PIO PWM Monitor](detail/monitor/pio_monitor.md) — DMA-backed high/low measurement
+- [PIO PWM Monitor](detail/monitor/pio_monitor.md) — one-period high/low measurement
 - [Software PWM Monitor](detail/monitor/software_monitor.md) — low-frequency polling/edge measurement
 
 ## System Model
@@ -85,6 +85,40 @@ Each logical channel exposes the same readback model:
 - `freq_hz`
 - `duty`
 - `pulse_count`
+
+### Monitor Measurement Strategy
+
+The monitor design is intentionally optimized for occasional latest-value
+measurements, not waveform history or trend analysis. A host read needs one
+usable frequency/duty result at a time; configuration changes and measured
+signal changes are not expected to arrive at a rate that requires continuous
+capture.
+
+The three monitor banks therefore use different mechanisms according to their
+hardware envelope:
+
+- The hardware and software banks use GPIO edge interrupts with software
+    timestamps. They are simple and suitable for their low-frequency ranges.
+- The PIO bank captures one complete high/low period in PIO, reads the two FIFO
+    words directly, and stops the state machine.
+
+Continuous PIO capture through DMA was considered, but rejected for this
+product. DMA would reduce CPU involvement while continuously draining the
+FIFO, but the firmware would still retain only one latest sample. It would add
+DMA-channel allocation, buffer-coherence handling, transfer-lifetime behavior,
+and recovery paths without providing history or a better user-visible result.
+
+CPU GPIO polling was rejected because it spends CPU time waiting and becomes
+less reliable as frequency increases. GPIO edge interrupts remain appropriate
+for the slower banks. PWM-slice input capture was rejected because it would
+couple measurement to PWM slice routing and complicate the fixed bank model.
+
+PIO one-period capture is the resulting compromise: PIO provides accurate
+high/low timing for a complete period, while direct FIFO reads keep resource
+ownership and runtime behavior small. If the product later requires continuous
+high-rate capture, trend analysis, or waveform history, DMA or a dedicated
+buffered capture design should be reconsidered as a new requirement rather than
+added preemptively.
 
 The hardware PWM bank intentionally uses PWM slice channel B pins so the external pin order stays aligned with the monitoring-oriented wiring plan. See [Pinout](pinout.md) for the physical mapping.
 

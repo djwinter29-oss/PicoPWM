@@ -22,6 +22,14 @@
 
 #include "hardware/gpio.h"
 
+static inline void pwm_driver_memory_barrier(void) {
+#if defined(__arm__) || defined(__thumb__)
+    __asm volatile("dmb ish" ::: "memory");
+#else
+    __sync_synchronize();
+#endif
+}
+
 /** @brief Timeout for one admitted cross-core apply request in milliseconds. */
 #define PWM_DRIVER_APPLY_TIMEOUT_MS 1000
 
@@ -173,13 +181,6 @@ static const pwm_driver_backend_t pwm_driver_backends[PWM_DRIVER_CONFIG_BACKEND_
         .get = NULL,
         .finalize_readback = pio_gen_finalize_readback,
     },
-    [PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR] = {
-        .init = sw_gen_init,
-        .set = sw_gen_set,
-        .restore_defaults = sw_gen_restore_defaults,
-        .get = NULL,
-        .finalize_readback = NULL,
-    },
 };
 
 /** @brief Dispatch the Pico SDK's single GPIO callback to all configured monitor banks. */
@@ -248,6 +249,7 @@ static void pwm_driver_cache_write_coherent(uint channel, const uint32_t *freq_h
     }
     pwm_state_cache[channel].pulse_count = pulse_count;
     pwm_readback[channel].pulse_ref_us = pulse_ref_us;
+    pwm_driver_memory_barrier();
     pwm_state_cache[channel].version++;
 }
 
@@ -427,8 +429,8 @@ static void pwm_driver_core_main(void) {
     pwm_lifecycle = PWM_DRIVER_LIFECYCLE_READY;
 
     while (true) {
-        pwm_driver_refresh_monitor_state();
         pwm_driver_process_mailbox();
+        pwm_driver_refresh_monitor_state();
         if (pwm_driver_config_is_monitor()) {
             sleep_us(1000u);
         } else {
@@ -598,10 +600,12 @@ bool pwm_driver_get(uint channel, pwm_driver_state_t *state) {
             continue;
         }
 
+        pwm_driver_memory_barrier();
         state->freq_hz = pwm_state_cache[channel].freq_hz;
         state->duty = pwm_state_cache[channel].duty;
         state->pulse_count = pwm_state_cache[channel].pulse_count;
         pulse_ref_us = pwm_readback[channel].pulse_ref_us;
+        pwm_driver_memory_barrier();
         version_after = pwm_state_cache[channel].version;
     } while ((version_before != version_after) || (version_after & 1u));
 

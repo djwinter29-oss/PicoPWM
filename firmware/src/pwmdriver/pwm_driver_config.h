@@ -29,7 +29,7 @@ typedef enum {
     PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR, /**< PIO state-machine output, fixed to the 8 companion slice-A GPIOs. */
     PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR, /**< Software timer-driven output on any unclaimed GPIO. */
     PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR, /**< Hardware-bank GPIO edge-timestamp input measurement. */
-    PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR, /**< PIO-bank GPIO edge/DMA input measurement. */
+    PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR, /**< PIO-bank one-period input measurement. */
     PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR, /**< Software GPIO edge-timestamp input measurement on any unclaimed GPIO. */
 } pwm_driver_config_backend_t;
 

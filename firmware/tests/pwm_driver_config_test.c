@@ -30,6 +30,25 @@ int main(void) {
 
     test_flash_reset();
 
+    {
+        pwm_driver_config_t running;
+        pwm_driver_config_t target;
+        pwm_driver_config_t snapshot;
+
+        pwm_driver_config_default(&running);
+        target = running;
+        target.i2c_address = 0x42u;
+        assert(pwm_driver_config_init_state(&running, &target));
+        assert(pwm_driver_config_get_running(&snapshot));
+        assert(snapshot.i2c_address == 0x40u);
+        assert(pwm_driver_config_get_target(&snapshot));
+        assert(snapshot.i2c_address == 0x42u);
+
+        target.i2c_address = 0x07u;
+        assert(!pwm_driver_config_init_state(&running, &target));
+        assert(!pwm_driver_config_set_i2c_address(0x78u));
+    }
+
     /* Startup roles populate the fixed channel table before the driver launches Core 1. */
 
     /* Configure all three banks at startup. */
@@ -71,6 +90,7 @@ int main(void) {
         assert(pwm_driver_config_frequency_supported(0u, profile->min_frequency_hz));
         assert(pwm_driver_config_frequency_supported(0u, profile->max_frequency_hz));
         assert(!pwm_driver_config_frequency_supported(0u, profile->max_frequency_hz + 1u));
+        assert(!pwm_driver_config_frequency_supported(0u, profile->min_frequency_hz - 1u));
 
         uint gpio = 0u;
         assert(pwm_driver_config_get_gpio(profile->backend, profile->backend_channel, &gpio));

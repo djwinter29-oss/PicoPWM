@@ -1,7 +1,7 @@
 #ifndef PWM_PROFILE_TABLE_H
 #define PWM_PROFILE_TABLE_H
 
-#include "profile/pwm_profile.h"
+#include "channel_config/pwm_profile.h"
 
 /** @brief Channel entry: hardware PWM output, 10 Hz-1 MHz, 100 ppm accuracy. */
 #define PWM_PROFILE_HW_GENERATOR_CHANNEL(gpio_value, local) \

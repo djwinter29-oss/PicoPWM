@@ -139,7 +139,7 @@ unchanged. `pulse_count` is monotonic from power-on and is not reset by `stop`.
 
 - [Architecture](docs/architecture.md)
 - [Firmware Configuration](docs/configuration.md)
-- [Profile Authoring](docs/profile_authoring.md)
+- [Channel Configuration](docs/channel_config.md)
 - [Control Interfaces](docs/control/README.md)
 - [I2C Protocol](docs/control/i2c_protocol.md)
 - [USB CDC CLI](docs/control/usb_cdc_cli.md)

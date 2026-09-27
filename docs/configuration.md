@@ -105,5 +105,5 @@ A profile must validate these conditions at build time or startup:
 
 See [Architecture](architecture.md) for ownership boundaries and [USB CDC
 CLI](control/usb_cdc_cli.md) for the stable interactive interface. See
-[Profile Authoring](profile_authoring.md) for the fixed per-bank GPIO map and
+[Channel Configuration](channel_config.md) for the fixed per-bank GPIO map and
 validation rules behind bank locking.

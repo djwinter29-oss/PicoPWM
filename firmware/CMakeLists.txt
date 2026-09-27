@@ -22,9 +22,9 @@ pico_sdk_init()
 add_executable(pico_pwm
     src/main.c
     src/device_api/device_api.c
-    src/profile/pwm_profile.c
-    src/driver/led.c
-    src/driver/system.c
+    src/channel_config/pwm_profile.c
+    src/board/led.c
+    src/board/system.c
     src/pwmdriver/pwm_driver.c
     src/pwmdriver/generator/hardware_generator.c
     src/pwmdriver/generator/pio_generator.c

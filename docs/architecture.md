@@ -72,12 +72,11 @@ Use the architecture-related pages as follows:
 ## System Model
 
 PicoPWM targets Raspberry Pi Pico (RP2040) and Pico 2 (RP2350) with one shared
-logical channel model. Build configuration selects whether those channels act
-as PWM generators, PWM monitors, or a project-specific combination of
-supported channel backends.
+logical channel model. Runtime bank locking selects whether the fixed hardware,
+PIO, and software banks act as PWM generators or PWM monitors.
 
 The host-visible channel IDs and command syntax remain stable across profiles.
-The channel table, not the CLI, defines each channel's backend, direction,
+The channel configuration, not the CLI, defines each channel's backend, direction,
 GPIO, limits, and supported operations. The current default profiles expose 24
 channels through this table.
 
@@ -107,7 +106,7 @@ Core 0 owns the host-facing transports:
 
 ### 2. Shared Control Layer
 
-`pwmdriver/device_api.*` is the transport-neutral Core 0 API shared by USB CDC and I2C.
+`device_api/device_api.*` is the transport-neutral Core 0 API shared by USB CDC and I2C.
 
 Responsibilities:
 
@@ -129,7 +128,7 @@ Responsibilities:
 
 ### 4. Configuration and Backend Layer
 
-The profile configuration owns the logical channel table and capability
+The channel configuration owns the logical channel table and capability
 validation. Core 1 then dispatches each configured channel to its selected
 backend.
 

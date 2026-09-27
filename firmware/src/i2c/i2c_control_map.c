@@ -24,8 +24,8 @@
 #include "i2c/i2c_control_map.h"
 
 #include "device_api/device_api.h"
-#include "driver/led.h"
-#include "driver/system.h"
+#include "board/led.h"
+#include "board/system.h"
 
 #include <string.h>
 

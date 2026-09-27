@@ -64,7 +64,7 @@ The current implementation is split as follows:
 | `firmware/src/pwmdriver/monitor/pio_monitor.pio` | PIO assembly program used by the PIO monitor backend |
 | `firmware/src/pwmdriver/generator/software_generator.c` | Software PWM generator backend |
 | `firmware/src/pwmdriver/monitor/software_monitor.c` | Software PWM monitor backend |
-| `firmware/src/pwmdriver/shared/monitor_gpio_common.h` | Shared GPIO edge-timestamp monitor helpers used by the hardware and software monitor backends |
+| `firmware/src/pwmdriver/monitor/monitor_gpio_common.h` | Shared GPIO edge-timestamp monitor helpers used by the hardware and software monitor backends |
 
 ## External Interface
 
@@ -439,7 +439,7 @@ are exposed through the versioned realized-state snapshot.
 
 ### Logical Routing
 
-Routing is performed by the selected profile table. Each logical channel maps
+Routing is performed by the runtime channel table. Each logical channel maps
 to a backend, direction, GPIO, backend-local index, and capability set. The
 default profile currently exposes 24 channels, but higher layers must not
 infer backend ownership from a channel-number range.
@@ -838,7 +838,7 @@ physical banks (HW, PIO, SW) starts unlocked; its logical channels report
 `PWM_DRIVER_OP_LOCK_BANK` is a mailbox op that lets Core 0 request one bank
 lock into `generator` or `monitor`. Core 1 claims it like any other mailbox
 command: it calls `pwm_profile_lock_bank()` to populate that bank's 8 logical
-channel slots in the profile table, then calls the matching backend's
+channel slots in the channel table, then calls the matching backend's
 `init()`. A bank lock request for an already-locked bank is rejected with
 `PWM_DRIVER_RESULT_INVALID` rather than re-initializing — locking is one-shot
 per boot cycle, and only a reboot clears bank locks back to unlocked.

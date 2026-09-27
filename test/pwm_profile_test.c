@@ -1,4 +1,4 @@
-#include "profile/pwm_profile.h"
+#include "channel_config/pwm_profile.h"
 
 #include <assert.h>
 #include <string.h>

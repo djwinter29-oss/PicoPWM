@@ -1,4 +1,5 @@
 /firmware/build/
+.pico-sdk/
 
 # Firmware build artifacts
 *.uf2

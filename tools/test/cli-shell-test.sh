@@ -45,7 +45,7 @@ CC_VALUE="${CC:-cc}"
     -I"$REPO_ROOT/test/stubs" \
     -I"$REPO_ROOT/firmware/src" \
     "$REPO_ROOT/test/pwm_profile_test.c" \
-    "$REPO_ROOT/firmware/src/profile/pwm_profile.c" \
+    "$REPO_ROOT/firmware/src/channel_config/pwm_profile.c" \
     -o "$BUILD_DIR/pwm_profile_test"
 
 "$BUILD_DIR/pwm_profile_test"

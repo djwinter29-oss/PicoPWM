@@ -3,7 +3,7 @@
  * @brief Board-level clock and reboot helpers for PicoPWM.
  */
 
-#include "driver/system.h"
+#include "board/system.h"
 
 #include "hardware/clocks.h"
 #include "hardware/watchdog.h"

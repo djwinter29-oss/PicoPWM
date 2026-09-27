@@ -1,7 +1,7 @@
-# Profile Authoring
+# Channel Configuration
 
 PicoPWM has one firmware image and one logical channel table, owned entirely
-by `firmware/src/profile/pwm_profile.c`. There is no per-profile source file
+by `firmware/src/channel_config/pwm_profile.c`. There is no per-profile source file
 and no `PICO_PWM_PROFILE` CMake option. Channel roles are chosen at runtime by
 locking each of 3 fixed physical banks into a `generator` or `monitor` role;
 see [Firmware Configuration](configuration.md#runtime-bank-locking) for the
@@ -16,7 +16,7 @@ host-facing model.
 - the fixed GPIO assignment for each bank (`pwm_profile_bank_gpio`)
 - `pwm_profile_lock_bank()`, which fills in one bank's 8 entries the first
   time that bank is locked, using the channel-entry macros in
-  `firmware/src/profile/profile_table.h`
+  `firmware/src/channel_config/profile_table.h`
 - `pwm_profile_get_bank_state()`, `pwm_profile_bank_backend()`, and the shared
   lookup/validation helpers (`pwm_profile_get_channel`, `pwm_profile_get_gpio`,
   `pwm_profile_validate`, etc.)

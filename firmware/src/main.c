@@ -7,7 +7,7 @@
 #include "hardware/clocks.h"
 #include "pico/multicore.h"
 #include "cli/pwm_commands.h"
-#include "driver/led.h"
+#include "board/led.h"
 #include "i2c/i2c_slave.h"
 #include "pwmdriver/pwm_driver.h"
 #include "usb/usb_cdc.h"
@@ -41,7 +41,7 @@ int main(void) {
     // Launch Core 1 to manage all PWM hardware.
     pwm_driver_launch();
 
-    // Wait for Core 1 to finish PWM init before accepting commands.
+    // Wait for Core 1 mailbox service before accepting commands.
     while (!pwm_driver_is_ready()) {
         tight_loop_contents();
     }

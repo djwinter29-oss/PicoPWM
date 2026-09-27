@@ -12,6 +12,9 @@
  */
 #define I2C_SLAVE_INST    i2c1
 
+/** @brief IRQ line paired with the selected I2C peripheral instance. */
+#define I2C_SLAVE_IRQ     I2C1_IRQ
+
 /**
  * I2C slave address (7-bit).
  * Default is 0x40. Can be overridden at build time with CMake:

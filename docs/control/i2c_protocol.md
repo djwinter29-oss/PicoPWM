@@ -38,8 +38,8 @@ below. Channel register ranges use the channel count advertised by
 
 `bank_id` is `0`=HW, `1`=PIO, `2`=SW. `role_id` is `0`=generator, `1`=monitor.
 Locking a bank is one-shot: `REG_BANK_LOCK` on an already-locked bank returns
-an invalid status, and a channel in an unlocked bank rejects `REG_GET_CHk`/
-`REG_SET_CHk` the same way an out-of-range channel would.
+an invalid status, and a channel in an unlocked bank returns
+`PWM_DRIVER_RESULT_UNAVAILABLE` for `REG_GET_CHk`/`REG_SET_CHk`.
 
 Here `n` is the channel count returned by `REG_CHANNELS` and `k` ranges from
 `0` through `n - 1`. The current default profile exposes 24 channels, so the

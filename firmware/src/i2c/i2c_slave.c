@@ -53,8 +53,8 @@ static void capture_request_byte(uint8_t byte) {
         resp_idx = 0u;
         if ((req_expected_len == 0u) || (req_expected_len > I2C_REQ_BUF_SIZE)) {
             last_status = (uint8_t)PWM_DRIVER_RESULT_INVALID;
-            req_in_error = true;
             reset_request_capture();
+            req_in_error = true;
             return;
         }
     }
@@ -117,6 +117,11 @@ static void i2c_slave_isr(void) {
         }
     }
 
+    if (status & I2C_IC_INTR_STAT_R_STOP_DET_BITS) {
+        (void)hw->clr_stop_det;
+        reset_request_capture();
+    }
+
     // Clear all interrupts.
     (void)hw->clr_intr;
 }
@@ -140,9 +145,10 @@ void i2c_slave_init(void) {
     // Enable RX_FULL, RD_REQ and TX_EMPTY interrupts.
     hw->intr_mask = I2C_IC_INTR_MASK_M_RX_FULL_BITS |
                     I2C_IC_INTR_MASK_M_RD_REQ_BITS |
-                    I2C_IC_INTR_MASK_M_TX_EMPTY_BITS;
+                    I2C_IC_INTR_MASK_M_TX_EMPTY_BITS |
+                    I2C_IC_INTR_MASK_M_STOP_DET_BITS;
 
-    int irq = I2C0_IRQ;
+    int irq = I2C_SLAVE_IRQ;
     irq_set_exclusive_handler(irq, i2c_slave_isr);
     irq_set_enabled(irq, true);
 

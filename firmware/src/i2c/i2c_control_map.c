@@ -120,7 +120,11 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
 
     if (i2c_control_map_is_channel_read(reg)) {
         uint channel = (uint)(reg - I2C_CONTROL_MAP_REG_CH_BASE);
-        device_api_get_channel(channel, &state);
+        if (!device_api_get_channel(channel, &state)) {
+            response[0] = (uint8_t)PWM_DRIVER_RESULT_UNAVAILABLE;
+            *response_len = 1u;
+            return true;
+        }
         memcpy(response + 0, &state.freq_hz, sizeof(uint32_t));
         memcpy(response + 4, &state.duty, sizeof(uint8_t));
         memcpy(response + 5, &state.pulse_count, sizeof(uint32_t));

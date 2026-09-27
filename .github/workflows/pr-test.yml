@@ -63,7 +63,7 @@ jobs:
         run: tools/test/coverage-firmware-c.sh --build-dir firmware/build/tests-coverage-pr --output-dir firmware/build/tests-coverage-pr/coverage
 
       - name: Upload host coverage report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: pico-pwm-pr-coverage
           path: firmware/build/tests-coverage-pr/coverage
@@ -108,7 +108,7 @@ jobs:
         run: python3 tools/release/check-usb-identity.py
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: pico-pwm-pr-${{ matrix.board }}
           path: |

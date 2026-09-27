@@ -1,45 +1,28 @@
 cmake_minimum_required(VERSION 3.13)
 
-# Set PICO_SDK_PATH environment variable or pass via -DPICO_SDK_PATH=...
-include(pico_sdk_import.cmake)
+# Set PICO_SDK_PATH in the environment or pass -DPICO_SDK_PATH=... to CMake.
+if(NOT DEFINED PICO_SDK_PATH AND DEFINED ENV{PICO_SDK_PATH})
+    set(PICO_SDK_PATH "$ENV{PICO_SDK_PATH}")
+endif()
+if(NOT DEFINED PICO_SDK_PATH OR PICO_SDK_PATH STREQUAL "")
+    message(FATAL_ERROR "PICO_SDK_PATH must point to an installed Pico SDK")
+endif()
+include("${PICO_SDK_PATH}/external/pico_sdk_import.cmake")
 
 project(PicoPWM C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
 set(PICO_PWM_FIRMWARE_VERSION "0.0.0-dev" CACHE STRING "Firmware version string exposed over CDC and I2C")
-set(PICO_PWM_PROFILE "generator" CACHE STRING "Firmware channel profile")
-set_property(CACHE PICO_PWM_PROFILE PROPERTY STRINGS generator monitor 112 121 122 211 212 221)
 set(PICO_PWM_I2C_CLOCK_SPEED 400000 CACHE STRING "I2C slave clock speed in Hz (100000 or 400000)")
 set(PICO_PWM_I2C_ADDR 0x40 CACHE STRING "I2C slave address (7-bit, 0x00..0x7F)")
-
-if(PICO_PWM_PROFILE STREQUAL "generator")
-    set(PICO_PWM_PROFILE_SOURCE src/profile/profiles/profile_111.c)
-elseif(PICO_PWM_PROFILE STREQUAL "monitor")
-    set(PICO_PWM_PROFILE_SOURCE src/profile/profiles/profile_222.c)
-elseif(PICO_PWM_PROFILE STREQUAL "112")
-    set(PICO_PWM_PROFILE_SOURCE src/profile/profiles/profile_112.c)
-elseif(PICO_PWM_PROFILE STREQUAL "121")
-    set(PICO_PWM_PROFILE_SOURCE src/profile/profiles/profile_121.c)
-elseif(PICO_PWM_PROFILE STREQUAL "122")
-    set(PICO_PWM_PROFILE_SOURCE src/profile/profiles/profile_122.c)
-elseif(PICO_PWM_PROFILE STREQUAL "211")
-    set(PICO_PWM_PROFILE_SOURCE src/profile/profiles/profile_211.c)
-elseif(PICO_PWM_PROFILE STREQUAL "212")
-    set(PICO_PWM_PROFILE_SOURCE src/profile/profiles/profile_212.c)
-elseif(PICO_PWM_PROFILE STREQUAL "221")
-    set(PICO_PWM_PROFILE_SOURCE src/profile/profiles/profile_221.c)
-else()
-    message(FATAL_ERROR "PICO_PWM_PROFILE must be one of: generator, monitor, 112, 121, 122, 211, 212, 221")
-endif()
 
 pico_sdk_init()
 
 add_executable(pico_pwm
     src/main.c
-    src/control/control_iface.c
+    src/device_api/device_api.c
     src/profile/pwm_profile.c
-    ${PICO_PWM_PROFILE_SOURCE}
     src/driver/led.c
     src/driver/system.c
     src/pwmdriver/pwm_driver.c
@@ -51,7 +34,7 @@ add_executable(pico_pwm
     src/pwmdriver/monitor/software_monitor.c
     src/cli/shell.c
     src/cli/pwm_commands.c
-    src/cli/pwm_channel_commands.c
+    src/cli/channel_commands.c
     src/cli/board_commands.c
     third_party/microrl/microrl.c
     src/i2c/i2c_control_map.c
@@ -86,7 +69,6 @@ target_link_libraries(pico_pwm hardware_dma)
 
 target_compile_definitions(pico_pwm PRIVATE
     PICO_PWM_FIRMWARE_VERSION_STR="${PICO_PWM_FIRMWARE_VERSION}"
-    PICO_PWM_PROFILE_STR="${PICO_PWM_PROFILE}"
     PICO_PWM_I2C_CLOCK_SPEED=${PICO_PWM_I2C_CLOCK_SPEED}
     PICO_PWM_I2C_ADDR=${PICO_PWM_I2C_ADDR}
 )

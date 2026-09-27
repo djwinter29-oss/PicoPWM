@@ -82,7 +82,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -eu
-          source_dir="firmware/build-${BOARD}"
+          source_dir="firmware/build/${BOARD}"
           output_dir="dist/${BOARD}"
           mkdir -p "$output_dir"
           for extension in uf2 elf bin hex dis; do

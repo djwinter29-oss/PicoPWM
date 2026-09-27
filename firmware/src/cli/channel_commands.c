@@ -1,7 +1,7 @@
-#include "cli/pwm_channel_commands.h"
+#include "cli/channel_commands.h"
 
 #include "profile/pwm_profile.h"
-#include "control/control_iface.h"
+#include "device_api/device_api.h"
 #include "pwmdriver/pwm_driver.h"
 
 #include <errno.h>
@@ -11,7 +11,7 @@
 
 #define COMMAND_SHELL ((shell_t *)context)
 
-static const char *pwm_channel_commands_result_text(pwm_driver_result_t result) {
+static const char *channel_commands_result_text(pwm_driver_result_t result) {
     switch (result) {
     case PWM_DRIVER_RESULT_BUSY:
         return "busy";
@@ -29,7 +29,7 @@ static const char *pwm_channel_commands_result_text(pwm_driver_result_t result) 
     }
 }
 
-static bool pwm_channel_commands_parse_int(const char *text, int *value_out) {
+static bool channel_commands_parse_int(const char *text, int *value_out) {
     char *end = NULL;
     long parsed;
 
@@ -48,7 +48,7 @@ static bool pwm_channel_commands_parse_int(const char *text, int *value_out) {
     return true;
 }
 
-static bool pwm_channel_commands_parse_u32(const char *text, uint32_t *value_out) {
+static bool channel_commands_parse_u32(const char *text, uint32_t *value_out) {
     char *end = NULL;
     unsigned long parsed;
 
@@ -66,7 +66,7 @@ static bool pwm_channel_commands_parse_u32(const char *text, uint32_t *value_out
     return true;
 }
 
-static bool pwm_channel_commands_parse_u8(const char *text, uint8_t *value_out) {
+static bool channel_commands_parse_u8(const char *text, uint8_t *value_out) {
     char *end = NULL;
     unsigned long parsed;
 
@@ -84,7 +84,7 @@ static bool pwm_channel_commands_parse_u8(const char *text, uint8_t *value_out) 
     return true;
 }
 
-static bool pwm_channel_commands_write_status_row(shell_t *shell, int channel, const pwm_driver_state_t *state) {
+static bool channel_commands_write_status_row(shell_t *shell, int channel, const pwm_driver_state_t *state) {
     char line[96];
     const pwm_profile_channel_t *profile = pwm_profile_get_channel((uint)channel);
     const char *type = (profile == NULL) ? "?" : pwm_profile_backend_name(profile->backend);
@@ -101,32 +101,32 @@ static bool pwm_channel_commands_write_status_row(shell_t *shell, int channel, c
     return shell_write_line(shell, line);
 }
 
-static uint8_t pwm_channel_commands_channel_count(void) {
-    return control_iface_channel_count();
+static uint8_t channel_commands_channel_count(void) {
+    return device_api_channel_count();
 }
 
-static void pwm_channel_commands_format_invalid_channel(char *line, size_t line_size, int channel) {
-    uint8_t channel_count = pwm_channel_commands_channel_count();
+static void channel_commands_format_invalid_channel(char *line, size_t line_size, int channel) {
+    uint8_t channel_count = channel_commands_channel_count();
     unsigned int last_channel = (channel_count > 0u) ? (unsigned int)channel_count - 1u : 0u;
 
     snprintf(line, line_size, "ERR channel %d invalid (0..%u)", channel, last_channel);
 }
 
-bool pwm_channel_commands_get(void *context, int argc, const char *const *argv) {
+bool channel_commands_get(void *context, int argc, const char *const *argv) {
     pwm_driver_state_t state = {0u, 50u, 0u};
     char line[96];
     int channel;
 
-    if ((argc != 2) || !pwm_channel_commands_parse_int(argv[1], &channel)) {
+    if ((argc != 2) || !channel_commands_parse_int(argv[1], &channel)) {
         return shell_write_line(COMMAND_SHELL, "ERR usage: get <ch>");
     }
 
-    if ((channel < 0) || (channel >= (int)pwm_channel_commands_channel_count())) {
-        pwm_channel_commands_format_invalid_channel(line, sizeof(line), channel);
+    if ((channel < 0) || (channel >= (int)channel_commands_channel_count())) {
+        channel_commands_format_invalid_channel(line, sizeof(line), channel);
         return shell_write_line(COMMAND_SHELL, line);
     }
 
-    if (!control_iface_get_channel((uint)channel, &state)) {
+    if (!device_api_get_channel((uint)channel, &state)) {
         return shell_write_line(COMMAND_SHELL, "ERR channel unavailable");
     }
     snprintf(line,
@@ -140,38 +140,38 @@ bool pwm_channel_commands_get(void *context, int argc, const char *const *argv) 
     return shell_write_line(COMMAND_SHELL, line);
 }
 
-bool pwm_channel_commands_set(void *context, int argc, const char *const *argv) {
+bool channel_commands_set(void *context, int argc, const char *const *argv) {
     char line[64];
     int channel;
     uint32_t frequency;
     uint8_t duty = 50u;
     pwm_driver_result_t result;
 
-    if (((argc != 3) && (argc != 4)) || !pwm_channel_commands_parse_int(argv[1], &channel) ||
-        !pwm_channel_commands_parse_u32(argv[2], &frequency)) {
+    if (((argc != 3) && (argc != 4)) || !channel_commands_parse_int(argv[1], &channel) ||
+        !channel_commands_parse_u32(argv[2], &frequency)) {
         return shell_write_line(COMMAND_SHELL, "ERR usage: set <ch> <freq> [duty%]");
     }
 
-    if ((channel < 0) || (channel >= (int)pwm_channel_commands_channel_count())) {
-        pwm_channel_commands_format_invalid_channel(line, sizeof(line), channel);
+    if ((channel < 0) || (channel >= (int)channel_commands_channel_count())) {
+        channel_commands_format_invalid_channel(line, sizeof(line), channel);
         return shell_write_line(COMMAND_SHELL, line);
     }
 
-    if ((argc == 4) && !pwm_channel_commands_parse_u8(argv[3], &duty)) {
+    if ((argc == 4) && !channel_commands_parse_u8(argv[3], &duty)) {
         return shell_write_line(COMMAND_SHELL, "ERR usage: set <ch> <freq> [duty%]");
     }
 
-    result = control_iface_set_channel((uint)channel, frequency, duty);
+    result = device_api_set_channel((uint)channel, frequency, duty);
     if (result == PWM_DRIVER_RESULT_OK) {
         snprintf(line, sizeof(line), "OK CH%d freq=%lu Hz duty=%u%%", channel, (unsigned long)frequency, (unsigned)duty);
     } else {
-        snprintf(line, sizeof(line), "ERR CH%d set %s", channel, pwm_channel_commands_result_text(result));
+        snprintf(line, sizeof(line), "ERR CH%d set %s", channel, channel_commands_result_text(result));
     }
 
     return shell_write_line(COMMAND_SHELL, line);
 }
 
-bool pwm_channel_commands_status(void *context, int argc, const char *const *argv) {
+bool channel_commands_status(void *context, int argc, const char *const *argv) {
     pwm_driver_state_t state;
     char line[64];
 
@@ -180,7 +180,7 @@ bool pwm_channel_commands_status(void *context, int argc, const char *const *arg
         return shell_write_line(COMMAND_SHELL, "ERR usage: status");
     }
 
-    uint8_t channel_count = pwm_channel_commands_channel_count();
+    uint8_t channel_count = channel_commands_channel_count();
     unsigned int last_channel = (channel_count > 0u) ? (unsigned int)channel_count - 1u : 0u;
 
     snprintf(line, sizeof(line), "=== All PWM channels (logical 0..%u) ===", last_channel);
@@ -188,12 +188,12 @@ bool pwm_channel_commands_status(void *context, int argc, const char *const *arg
     shell_write_line(COMMAND_SHELL, "Ch  Backend  State  Freq(Hz)   Duty(%)   Pulses");
     for (uint8_t channel = 0u; channel < channel_count; ++channel) {
         state = (pwm_driver_state_t){0u, 50u, 0u};
-        if (!control_iface_get_channel(channel, &state)) {
+        if (!device_api_get_channel(channel, &state)) {
             snprintf(line, sizeof(line), "ERR channel %d unavailable", channel);
             shell_write_line(COMMAND_SHELL, line);
             return false;
         }
-        pwm_channel_commands_write_status_row(COMMAND_SHELL, (int)channel, &state);
+        channel_commands_write_status_row(COMMAND_SHELL, (int)channel, &state);
     }
     return shell_write_line(COMMAND_SHELL, NULL);
 }

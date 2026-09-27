@@ -1,62 +1,39 @@
 # Profile Authoring
 
-A PicoPWM profile is a build-time channel table. The selected profile source is
-compiled into the firmware; profiles are not switched at runtime.
+PicoPWM has one firmware image and one logical channel table, owned entirely
+by `firmware/src/profile/pwm_profile.c`. There is no per-profile source file
+and no `PICO_PWM_PROFILE` CMake option. Channel roles are chosen at runtime by
+locking each of 3 fixed physical banks into a `generator` or `monitor` role;
+see [Firmware Configuration](configuration.md#runtime-bank-locking) for the
+host-facing model.
 
-## Profile Files
+## Channel Table Ownership
 
-Profile tables live under:
+`pwm_profile.c` owns:
 
-```text
-firmware/src/profile/profiles/
-  profile_111.c (generator)
-  profile_112.c
-  profile_121.c
-  profile_122.c
-  profile_211.c
-  profile_212.c
-  profile_221.c
-  profile_222.c (monitor)
-```
+- the runtime `pwm_profile_channels[PWM_PROFILE_CHANNEL_COUNT]` table, which
+  starts fully `DISABLED` at boot
+- the fixed GPIO assignment for each bank (`pwm_profile_bank_gpio`)
+- `pwm_profile_lock_bank()`, which fills in one bank's 8 entries the first
+  time that bank is locked, using the channel-entry macros in
+  `firmware/src/profile/profile_table.h`
+- `pwm_profile_get_bank_state()`, `pwm_profile_bank_backend()`, and the shared
+  lookup/validation helpers (`pwm_profile_get_channel`, `pwm_profile_get_gpio`,
+  `pwm_profile_validate`, etc.)
 
-The 8 `profile_XXX.c` tables are the 8 managed combinations of the fixed HW,
-PIO, and SW banks (each bank independently generator or monitor); see
-[Firmware Configuration](configuration.md#build-profiles) for the digit-code
-meaning and the full 32-combination space it was pruned from. `generator` and
-`monitor` are just aliases for codes `111` and `222`.
-
-CMake selects exactly one file through `PICO_PWM_PROFILE`:
-
-```sh
-cmake -S firmware -B build-generator \
-  -DPICO_PWM_PROFILE=generator
-```
-
-The common implementation remains in
-`firmware/src/profile/pwm_profile.c`. A profile file should only define the
-channel table:
-
-```c
-#include "profile/profile_table.h"
-
-const pwm_profile_channel_t pwm_profile_channels[PWM_PROFILE_CHANNEL_COUNT] = {
-    /* one entry per logical channel */
-};
-```
-
-Do not add profile-specific routing logic to `pwm_profile.c`; that file owns
-lookup, frequency validation, backend names, and shared profile helpers.
+Do not add profile-specific routing logic outside `pwm_profile.c`; that file
+is the single source of truth for the channel table.
 
 ## Channel Entry
 
-Each entry must define:
+Each entry (built by the macros in `profile_table.h`) defines:
 
 | Field | Requirement |
 | --- | --- |
 | `backend` | Generator or monitor backend implementation. |
 | `direction` | `OUTPUT`, `INPUT`, or `DISABLED`. |
-| `gpio` | A valid, uniquely owned GPIO for the selected board/profile. |
-| `backend_channel` | Local index accepted by the backend. |
+| `gpio` | Fixed per-bank GPIO (see below); ignored while `DISABLED`. |
+| `backend_channel` | Local index accepted by the backend (0..7 within a bank). |
 | `capabilities` | At least `READ` or `SET` as appropriate. |
 | `min_frequency_hz` | Minimum generated or measurable nonzero frequency. |
 | `max_frequency_hz` | Maximum generated or measurable frequency. |
@@ -68,57 +45,57 @@ The common validator uses these board-policy compile definitions by default:
 - `PWM_PROFILE_RESERVED_GPIO_MASK` reserving I2C1 GPIO `26/27` and LED GPIO `25`
 - `PWM_PROFILE_REQUIRE_HW_CHANNEL_B=1`
 
-A custom board profile may override these definitions in its CMake branch when
+A custom board target may override these definitions in its CMake branch when
 its GPIO count, reserved pins, or hardware PWM pin policy differs.
 
-The table must contain `PWM_PROFILE_CHANNEL_COUNT` entries. Logical IDs are
-the array indices and must remain stable for host software.
+## Fixed Bank GPIO Map
+
+| Bank | Logical channels | GPIOs |
+| --- | --- | --- |
+| HW | 0..7 | `1, 3, 5, 7, 9, 11, 13, 15` (slice-B) |
+| PIO | 8..15 | `0, 2, 4, 6, 8, 10, 12, 14` (companion slice-A) |
+| SW | 16..23 | `16, 17, 18, 19, 20, 21, 22, 28` |
+
+This map is fixed in `pwm_profile.c` and is not configurable per build; see
+[Pinout](pinout.md) for the physical rationale (hardware PWM and PIO are each
+restricted to one fixed set of 8 pins, not a free GPIO choice).
 
 ## Resource Rules
 
-A profile must validate:
+`pwm_profile_validate_table()` (and by extension every locked bank) enforces:
 
 - GPIO ownership is unique.
 - Input and output direction matches the backend.
-- Hardware PWM channels are fixed to the 8 slice-B GPIOs; this is one fixed pin
-  set of 8, not a free choice among compatible slice/channel pins.
-- PIO channels are capped at 8 and fixed to the 8 companion slice-A GPIOs paired
-  with the hardware PWM slices.
-- Software channels may use any GPIO not claimed by hardware PWM or PIO, fit to
-  the Core 1 timer, CPU, and interrupt budget.
+- Hardware PWM channels are fixed to the 8 slice-B GPIOs; PIO channels are
+  capped at 8 and fixed to the 8 companion slice-A GPIOs.
 - Generator requests stay within the profile frequency envelope.
 - Monitor limits describe the actual measurement capability.
 - I2C register ranges still cover the advertised logical channel count.
-- board-specific reserved pins and connector availability are respected by the
-  selected profile and CMake board configuration.
 
-The default `generator`/`monitor` profiles use GPIO `0..22` and `28` across
-the hardware, PIO, and software banks, leaving GPIO `26/27` for I2C1 and
-GPIO24 for the standard Pico VBUS sense function, and GPIO25 for the board
-LED. A different board or transport arrangement may use a different map.
+GPIO23 and GPIO24 are optional software-only pins reserved for custom boards.
+They are not part of the fixed SW bank above and must not be claimed by
+hardware PWM or PIO entries.
 
-GPIO23 and GPIO24 are optional software-only pins in the profile model. They
-are not assigned by normal Pico profiles and must not be claimed by hardware
-PWM or PIO entries. A custom board/profile may assign them to software
-generator or software monitor channels when those pins are physically
-available and the board policy permits them.
+## Adding a New Backend or Bank Layout
 
-## Adding a Profile
+The fixed 3-bank, 8-pins-each layout is not expected to change for the
+standard Pico board. If a custom board needs a different physical layout:
 
-1. Assign one role (generator or monitor) per bank, name it with the 3-digit
-  `[hw][pio][sw]` code, and add it as `profile_XXX.c`.
-2. Add one `PICO_PWM_PROFILE` branch in `firmware/CMakeLists.txt`.
-3. Add or update backend resource requirements only if the common backend set
-  cannot support the new table.
-4. Add a profile metadata test to `tools/test/cli-shell-test.sh`.
-5. Document the GPIO map, backend limits, and expected accuracy.
-6. Build the profile in a separate build directory and run the host tests.
+1. Add board-specific compile definitions (`PWM_PROFILE_GPIO_COUNT`,
+   `PWM_PROFILE_RESERVED_GPIO_MASK`, `PWM_PROFILE_REQUIRE_HW_CHANNEL_B`) in a
+   CMake branch, following the existing board-policy pattern.
+2. If the bank/GPIO layout itself needs to change, update
+   `pwm_profile_bank_gpio` and the bank-to-backend mapping in
+   `pwm_profile_bank_backend()`/`pwm_profile_lock_bank()` — both stay inside
+   `pwm_profile.c`.
+3. Add or update host-side tests in `test/pwm_profile_test.c` and
+   `tools/test/cli-shell-test.sh` for the new layout.
 
 All backend implementations are compiled once in the shared firmware target;
-the profile table selects which backend descriptors initialize and which
-logical channels they own. Adding an ordinary profile should not require
-changes to `pwm_driver.c` or backend source files.
+locking a bank selects which backend descriptor initializes and which logical
+channels it owns. This should not require changes to `pwm_driver.c` or backend
+source files unless the bank/backend mapping itself changes.
 
-The USB shell and I2C protocol must remain unchanged when adding a profile.
-Unsupported operations should return `PWM_DRIVER_RESULT_UNAVAILABLE` through
-`control_iface`.
+The USB shell and I2C protocol must remain unchanged when adding a bank
+layout. Unsupported operations should return `PWM_DRIVER_RESULT_UNAVAILABLE`
+through `device_api`.

@@ -63,23 +63,11 @@ under `tools/firmware/` handle loading, while `tools/test/` contains the CTest
 and syntax-check entry points. A direct CMake build is also possible from
 `firmware/` when a custom generator or build layout is needed.
 
-Select the channel profile when configuring the firmware. The profile is a
-build-time decision: it selects the compiled backend sources, PIO program,
-monitor/generator resources, and channel table. It is not changed at runtime.
-
-```sh
-cmake -S firmware -B build-generator \
-	-DPICO_PWM_PROFILE=generator
-
-cmake -S firmware -B build-monitor \
-	-DPICO_PWM_PROFILE=monitor
-```
-
-The current profiles use the default 24-channel pin arrangement. Project-specific
-profiles can later change backend, direction, GPIO, and capabilities while
-preserving the host-facing control model. See
-[Firmware Configuration](docs/configuration.md) for the full set of 8 managed
-profiles.
+Channel roles are chosen at runtime, not at build time: every logical channel
+starts disabled, and the host locks each of the 3 physical banks (hardware
+PWM, PIO, software) into a `generator` or `monitor` role over CDC or I2C. See
+[Firmware Configuration](docs/configuration.md#runtime-bank-locking) for the
+full model.
 
 Build outputs of interest:
 

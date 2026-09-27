@@ -21,7 +21,7 @@ The command registry is split into the same groups as the firmware source.
 
 ### PWM Channel Commands
 
-Implemented by `pwm_channel_commands.*`.
+Implemented by `channel_commands.*`.
 
 | Command | Description | Example |
 | --- | --- | --- |
@@ -38,7 +38,8 @@ Implemented by `board_commands.*`.
 | --- | --- | --- |
 | `info` | Show the device type. | `info` |
 | `version` | Show the build-time firmware version. | `version` |
-| `profile` | Show the build-time channel profile. | `profile` |
+| `bank` | Show each bank's lock state (unlocked/generator/monitor). | `bank` |
+| `bank <hw\|pio\|sw> <generator\|monitor>` | Lock one bank's role; one-shot until reboot. | `bank hw generator` |
 | `led <on\|off>` | Set the board LED state. | `led on` |
 | `stop` | Restore the profile's safe default behavior. | `stop` |
 | `reboot` | Reboot the board. | `reboot` |

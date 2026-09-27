@@ -1,6 +1,4 @@
 /firmware/build/
-/firmware/build-*/
-/firmware/build-coverage/
 
 # Firmware build artifacts
 *.uf2

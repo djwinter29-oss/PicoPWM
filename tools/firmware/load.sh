@@ -57,7 +57,7 @@ if [ -n "$BOARD" ]; then
     esac
 
     if [ "$BUILD_DIR" = "firmware/build" ]; then
-        BUILD_DIR="firmware/build-$BOARD"
+        BUILD_DIR="firmware/build/$BOARD"
     fi
 fi
 

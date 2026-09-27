@@ -27,11 +27,15 @@ PicoPWM/
 PICO_SDK_PATH=/path/to/pico-sdk ./tools/firmware/build.sh
 ```
 
-### Default with Profile (400 kHz I2C at address 0x40)
+### Default with Named Build Directory (400 kHz I2C at address 0x40)
 ```bash
-PICO_SDK_PATH=/path/to/pico-sdk ./tools/firmware/build.sh --profile generator
-PICO_SDK_PATH=/path/to/pico-sdk ./tools/firmware/build.sh --profile monitor
+PICO_SDK_PATH=/path/to/pico-sdk ./tools/firmware/build.sh --profile my-build
 ```
+
+Note: `--profile` here only names the output directory
+(`firmware/build/<name>`); channel roles (generator/monitor per bank) are no
+longer selected at build time, see
+[Firmware Configuration](docs/configuration.md#runtime-bank-locking).
 
 ### Custom I2C Clock Speed
 The I2C slave is configured for **400 kHz by default**, which is backward-compatible with 100 kHz masters.
@@ -39,7 +43,6 @@ The I2C slave is configured for **400 kHz by default**, which is backward-compat
 To use 100 kHz (Standard I2C):
 ```bash
 PICO_SDK_PATH=/path/to/pico-sdk cmake -S firmware -B firmware/build/gen-100k \
-  -DPICO_PWM_PROFILE=generator \
   -DPICO_PWM_I2C_CLOCK_SPEED=100000
 
 cmake --build firmware/build/gen-100k --parallel
@@ -54,7 +57,6 @@ The default I2C slave address is **0x40**. To use a different address:
 
 ```bash
 PICO_SDK_PATH=/path/to/pico-sdk cmake -S firmware -B firmware/build/gen-addr-0x50 \
-  -DPICO_PWM_PROFILE=generator \
   -DPICO_PWM_I2C_ADDR=0x50
 
 cmake --build firmware/build/gen-addr-0x50 --parallel
@@ -65,7 +67,6 @@ Valid 7-bit addresses: 0x00 to 0x7F
 ### Combining Clock Speed and Address
 ```bash
 PICO_SDK_PATH=/path/to/pico-sdk cmake -S firmware -B firmware/build/gen-100k-addr-0x30 \
-  -DPICO_PWM_PROFILE=generator \
   -DPICO_PWM_I2C_CLOCK_SPEED=100000 \
   -DPICO_PWM_I2C_ADDR=0x30
 

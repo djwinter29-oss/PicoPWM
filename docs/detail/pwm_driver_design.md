@@ -49,10 +49,11 @@ The current implementation is split as follows:
 
 | File | Responsibility |
 | ------ | ---------------- |
-| `firmware/src/control/control_iface.h` | Shared Core 0 control/status API used by CDC and I2C |
-| `firmware/src/control/control_iface.c` | Shared device info, channel reads, and channel write helpers above `pwmdriver` |
+| `firmware/src/device_api/device_api.h` | Shared Core 0 device API surface used by CDC and I2C |
+| `firmware/src/device_api/device_api.c` | Shared device info, channel reads, and channel write helpers above the Core 1 mailbox boundary |
+| `firmware/src/config/board_config.h` | Board identity and build-level firmware configuration consumed by `device_api` |
 | `firmware/src/i2c/i2c_control_map.h` | I2C register map definitions and protocol helpers |
-| `firmware/src/i2c/i2c_control_map.c` | I2C register encode/decode and deferred write translation into `control_iface` |
+| `firmware/src/i2c/i2c_control_map.c` | I2C register encode/decode and deferred write translation into `device_api` |
 | `firmware/src/pwmdriver/pwm_driver.h` | Public wrapper API and backend channel capacity constants |
 | `firmware/src/pwmdriver/pwm_driver.c` | Core 1 launch, mailbox loop, channel routing, shared snapshot |
 | `firmware/src/pwmdriver/generator/hardware_generator.c` | Hardware PWM generator backend |
@@ -70,15 +71,15 @@ The current implementation is split as follows:
 The transport-facing control/status layer is:
 
 ```c
-const char *control_iface_device_name(void);
-const char *control_iface_firmware_version(void);
-uint8_t control_iface_channel_count(void);
-bool control_iface_get_channel(uint channel, pwm_driver_state_t *state);
-pwm_driver_result_t control_iface_set_channel(uint channel, uint32_t freq_hz, uint8_t duty);
-pwm_driver_result_t control_iface_restore_defaults(void);
+const char *device_api_device_name(void);
+const char *device_api_firmware_version(void);
+uint8_t device_api_channel_count(void);
+bool device_api_get_channel(uint channel, pwm_driver_state_t *state);
+pwm_driver_result_t device_api_set_channel(uint channel, uint32_t freq_hz, uint8_t duty);
+pwm_driver_result_t device_api_restore_defaults(void);
 ```
 
-Below that, `pwmdriver` owns the internal cross-core mailbox boundary used by `control_iface`:
+Below that, `pwmdriver` owns the internal cross-core mailbox boundary used by `device_api`:
 
 ```c
 void pwm_driver_launch(void);
@@ -107,7 +108,7 @@ typedef struct {
 
 Architecturally, `pwm_driver_set()` is an internal command-ingress API.
 
-- Top-level command paths such as the CDC CLI and I2C register map should enter through `control_iface`.
+- Top-level command paths such as the CDC CLI and I2C register map should enter through `device_api`.
 - The I2C write path should continue to defer out of the ISR before it reaches this mailbox API.
 - It is not intended as a general-purpose helper for arbitrary internal call sites.
 - Core 1 callers must not use this API; it returns `PWM_DRIVER_RESULT_UNAVAILABLE` outside the Core 0 command path.
@@ -122,18 +123,18 @@ Architecturally, `pwm_driver_set()` is an internal command-ingress API.
 
 ## Current Default Mapping
 
-The default generator profile uses the following mapping. Other build profiles
-use their own standalone profile table.
+Every bank maps to the same fixed logical channel range regardless of which
+role (generator or monitor) it is locked into:
 
-| Logical Channel | Backend | Backend-local Channel |
+| Logical Channel | Backend when locked as generator | Backend when locked as monitor |
 | ----------------- | --------- | ----------------------- |
-| `0..7` | HW PWM | `0..7` |
-| `8..15` | PIO PWM | `0..7` |
-| `16..23` | SW PWM | `0..7` |
+| `0..7` | HW PWM | HW monitor |
+| `8..15` | PIO PWM | PIO monitor |
+| `16..23` | SW PWM | SW monitor |
 
-The current default physical mapping and slice assignments are documented in
-[Pinout](../pinout.md). Profile selection and the planned channel table are
-documented in [Firmware Configuration](../configuration.md).
+The physical mapping and slice assignments are documented in
+[Pinout](../pinout.md). Runtime bank locking is documented in
+[Firmware Configuration](../configuration.md#runtime-bank-locking).
 
 ## Internal Separation
 
@@ -153,7 +154,7 @@ For I2C specifically, the transport layer includes an ISR-facing slave module an
 
 ### 2. Shared Control Layer
 
-Owned by `firmware/src/control/control_iface.c`.
+Owned by `firmware/src/device_api/device_api.c`.
 
 Responsibilities:
 
@@ -286,32 +287,53 @@ sequenceDiagram
     participant C0 as Core 0 main
     participant WR as pwm_driver.c
     participant C1 as Core 1
-    participant HW as hardware_generator or hardware_monitor
-    participant PIO as pio_generator or pio_monitor
-    participant SW as sw_generator
 
     C0->>WR: pwm_driver_launch()
     WR->>WR: init pending mailbox slot
-    WR->>WR: init snapshot defaults
+    WR->>WR: init snapshot defaults (all banks unlocked)
     WR->>C1: multicore_launch_core1(core_main)
-    C1->>HW: initialize selected profile backend
-    C1->>PIO: initialize selected profile backend
-    C1->>SW: sw_gen_init()
+    C1->>C1: gpio_set_irq_callback(pwm_driver_monitor_gpio_irq)
     C1->>WR: pwm_ready = true
     C1->>C1: mailbox loop + __wfe()
 ```
 
-### `control_iface_set_channel()` to `pwm_driver_set()`
+No backend initializes at launch. Each backend's `init()` runs later, lazily,
+the first time its bank is locked; see
+[Runtime Bank Locking](#runtime-bank-locking) below.
+
+### `device_api_lock_bank()` to `pwm_driver_lock_bank()`
+
+```mermaid
+sequenceDiagram
+    participant CLI as CDC CLI / I2C command layer
+    participant CTL as device_api
+    participant WR as pwm_driver.c
+    participant C1 as Core 1 mailbox loop
+    participant PROFILE as pwm_profile.c
+    participant BE as resolved backend
+
+    CLI->>CTL: device_api_lock_bank(bank, role)
+    CTL->>WR: pwm_driver_lock_bank(bank, role)
+    WR->>C1: admitted mailbox command (PWM_DRIVER_OP_LOCK_BANK)
+    C1->>PROFILE: pwm_profile_lock_bank(bank, role)
+    PROFILE-->>C1: false if already locked
+    C1->>BE: backend init() (only if newly locked)
+    C1->>WR: publish apply result
+    WR-->>CTL: result
+    CTL-->>CLI: result
+```
+
+### `device_api_set_channel()` to `pwm_driver_set()`
 
 ```mermaid
 sequenceDiagram
     participant CLI as CDC CLI / command layer
-    participant CTL as control_iface
+    participant CTL as device_api
     participant WR as pwm_driver.c
     participant C1 as Core 1 mailbox loop
     participant BE as selected backend
 
-    CLI->>CTL: control_iface_set_channel(ch, freq, duty)
+    CLI->>CTL: device_api_set_channel(ch, freq, duty)
     CTL->>WR: pwm_driver_set(ch, freq, duty)
     WR->>WR: admit one in-flight mailbox command
     WR->>C1: __sev()
@@ -323,19 +345,19 @@ sequenceDiagram
     CTL-->>CLI: result
 ```
 
-### `control_iface_restore_defaults()` to `pwm_driver_restore_defaults()`
+### `device_api_restore_defaults()` to `pwm_driver_restore_defaults()`
 
 ```mermaid
 sequenceDiagram
     participant CLI as CDC CLI / command layer
-    participant CTL as control_iface
+    participant CTL as device_api
     participant WR as pwm_driver.c
     participant C1 as Core 1 mailbox loop
     participant HW as HW backend
     participant PIO as PIO backend
     participant SW as SW backend
 
-    CLI->>CTL: control_iface_restore_defaults()
+    CLI->>CTL: device_api_restore_defaults()
     CTL->>WR: pwm_driver_restore_defaults()
     WR->>C1: admitted mailbox command
     C1->>HW: hw_gen_restore_defaults()
@@ -351,11 +373,11 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant UI as CLI/I2C status path
-    participant CTL as control_iface
+    participant CTL as device_api
     participant WR as pwm_driver.c
     participant SS as shared snapshot
 
-    UI->>CTL: control_iface_get_channel(ch, &state)
+    UI->>CTL: device_api_get_channel(ch, &state)
     CTL->>WR: pwm_driver_get(ch, &state)
     WR->>SS: read versioned snapshot
     SS-->>WR: coherent state struct
@@ -363,7 +385,7 @@ sequenceDiagram
     CTL-->>UI: coherent state struct
 ```
 
-The coherent higher-layer read boundary is `control_iface_get_channel()`, which forwards one channel snapshot from `pwm_driver_get()`.
+The coherent higher-layer read boundary is `device_api_get_channel()`, which forwards one channel snapshot from `pwm_driver_get()`.
 
 ## Mailbox Command Structure
 
@@ -413,6 +435,7 @@ are exposed through the versioned realized-state snapshot.
 5. Reply publication for the active Core 0 command.
 6. Shared-state publication.
 7. Readback through a versioned snapshot.
+8. Lazy backend initialization triggered by bank-lock mailbox commands.
 
 ### Logical Routing
 
@@ -799,12 +822,32 @@ Restore-defaults uses the same mailbox path, but Core 1 now fans out through bac
 
 The current design assumes:
 
-1. Core 0 is the normal producer of `pwm_driver_set()` and `pwm_driver_restore_defaults()` requests through `control_iface`.
+1. Core 0 is the normal producer of `pwm_driver_set()` and `pwm_driver_restore_defaults()` requests through `device_api`.
 2. Backend drivers remain Core 1 implementation details.
 3. CDC CLI and I2C both use the same shared Core 0 control facade.
 4. The shared snapshot is the only read model exposed upward.
 
-I2C writes should continue to defer out of ISR context before they enter `control_iface` and the internal `pwmdriver` mailbox boundary.
+I2C writes should continue to defer out of ISR context before they enter `device_api` and the internal `pwmdriver` mailbox boundary.
+
+## Runtime Bank Locking
+
+Backends do not initialize eagerly during `pwm_driver_launch()`. Each of the 3
+physical banks (HW, PIO, SW) starts unlocked; its logical channels report
+`PWM_DRIVER_RESULT_UNAVAILABLE` until locked.
+
+`PWM_DRIVER_OP_LOCK_BANK` is a mailbox op that lets Core 0 request one bank
+lock into `generator` or `monitor`. Core 1 claims it like any other mailbox
+command: it calls `pwm_profile_lock_bank()` to populate that bank's 8 logical
+channel slots in the profile table, then calls the matching backend's
+`init()`. A bank lock request for an already-locked bank is rejected with
+`PWM_DRIVER_RESULT_INVALID` rather than re-initializing — locking is one-shot
+per boot cycle, and only a reboot clears bank locks back to unlocked.
+
+`pwm_profile_channels` is not a build-time `const` array; it is a runtime
+table owned by `pwm_profile.c` that starts fully `DISABLED` and is filled in
+per-bank as locks happen. There is no `PICO_PWM_PROFILE` CMake option and no
+per-profile source file — one firmware image reaches all 8 bank-role
+combinations at runtime. See [Firmware Configuration](../configuration.md#runtime-bank-locking).
 
 ## Summary
 

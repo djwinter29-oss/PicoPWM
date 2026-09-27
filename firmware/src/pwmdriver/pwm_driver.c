@@ -57,6 +57,7 @@ typedef void (*pwm_driver_backend_finalize_readback_fn_t)(uint channel, pwm_driv
 typedef enum {
     PWM_DRIVER_OP_SET_CHANNEL = 0, /**< Apply one logical channel update. */
     PWM_DRIVER_OP_RESTORE_DEFAULTS, /**< Restore all logical channels to their shared default state. */
+    PWM_DRIVER_OP_LOCK_BANK, /**< Lock one physical bank into a generator or monitor role. */
 } pwm_driver_op_t;
 
 /** @brief Mailbox lifecycle states for the one-slot Core 0/Core 1 command exchange. */
@@ -70,9 +71,9 @@ typedef enum {
 /** @brief One in-flight cross-core mailbox command record. */
 typedef struct {
     pwm_driver_op_t op; /**< Operation kind carried across the mailbox. */
-    uint8_t channel; /**< Logical channel index carried across the mailbox. */
+    uint8_t channel; /**< Logical channel index for `SET_CHANNEL`; bank id for `LOCK_BANK`. */
     uint32_t freq_hz; /**< Requested frequency in Hz. */
-    uint8_t duty; /**< Requested duty in percent in the range `[0, 100]`. */
+    uint8_t duty; /**< Requested duty for `SET_CHANNEL`; role id for `LOCK_BANK`. */
 } pwm_driver_cmd_t;
 
 /** @brief Reply record published by Core 1 after one mailbox apply attempt. */
@@ -324,6 +325,27 @@ static bool pwm_driver_backend_restore_defaults(void) {
     return true;
 }
 
+/**
+ * @brief Lock one physical bank into a role and run its backend init on Core 1.
+ * @param bank Physical bank to lock.
+ * @param role Requested role.
+ * @return `true` once the bank was newly locked and its backend initialized.
+ */
+static bool pwm_driver_lock_bank_core1(pwm_profile_bank_t bank, pwm_profile_bank_role_t role) {
+    pwm_profile_backend_t backend;
+
+    if (!pwm_profile_lock_bank(bank, role)) {
+        return false;
+    }
+
+    backend = pwm_profile_bank_backend(bank, role);
+    if (pwm_driver_backends[backend].init != NULL) {
+        pwm_driver_backends[backend].init();
+    }
+
+    return true;
+}
+
 /** @brief Publish fresh monitor samples from Core 1 into the shared state cache. */
 static void pwm_driver_refresh_monitor_state(void) {
     for (uint channel = 0u; channel < PWM_DRIVER_CHANNEL_COUNT; ++channel) {
@@ -385,6 +407,8 @@ static void pwm_driver_process_mailbox(void) {
             );
         } else if (cmd.op == PWM_DRIVER_OP_RESTORE_DEFAULTS) {
             ok = pwm_driver_backend_restore_defaults();
+        } else if (cmd.op == PWM_DRIVER_OP_LOCK_BANK) {
+            ok = pwm_driver_lock_bank_core1((pwm_profile_bank_t)cmd.channel, (pwm_profile_bank_role_t)cmd.duty);
         }
 
         critical_section_enter_blocking(&pwm_reply_lock);
@@ -397,16 +421,9 @@ static void pwm_driver_process_mailbox(void) {
 
 /** @brief Core 1 main loop that owns backend initialization and mailbox processing. */
 static void pwm_driver_core_main(void) {
-    if ((pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_HW_MONITOR) != 0u) ||
-        (pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_SW_MONITOR) != 0u)) {
-        gpio_set_irq_callback(pwm_driver_monitor_gpio_irq);
-    }
-    for (uint i = 0u; i < count_of(pwm_driver_backends); ++i) {
-        if (pwm_profile_backend_channel_count((pwm_profile_backend_t)i) != 0u &&
-            pwm_driver_backends[i].init != NULL) {
-            pwm_driver_backends[i].init();
-        }
-    }
+    /* Banks lock lazily via PWM_DRIVER_OP_LOCK_BANK; register the shared GPIO IRQ callback
+     * up front since it is harmless before any pin has its IRQ enabled. */
+    gpio_set_irq_callback(pwm_driver_monitor_gpio_irq);
 
     pwm_ready = true;
 
@@ -582,4 +599,27 @@ pwm_driver_result_t pwm_driver_restore_defaults(void) {
     mutex_exit(&control_api_lock);
 
     return status;
+}
+
+/** @copydoc pwm_driver_lock_bank */
+pwm_driver_result_t pwm_driver_lock_bank(pwm_profile_bank_t bank, pwm_profile_bank_role_t role) {
+    pwm_driver_result_t result;
+
+    if ((bank >= PWM_PROFILE_BANK_COUNT) ||
+        (role != PWM_PROFILE_BANK_ROLE_GENERATOR && role != PWM_PROFILE_BANK_ROLE_MONITOR)) {
+        return PWM_DRIVER_RESULT_INVALID;
+    }
+    if (pwm_profile_get_bank_state(bank) != PWM_PROFILE_BANK_STATE_UNLOCKED) {
+        return PWM_DRIVER_RESULT_INVALID;
+    }
+
+    mutex_enter_blocking(&control_api_lock);
+    result = pwm_driver_submit_locked(&(pwm_driver_cmd_t) {
+        .op = PWM_DRIVER_OP_LOCK_BANK,
+        .channel = (uint8_t)bank,
+        .duty = (uint8_t)role,
+    });
+    mutex_exit(&control_api_lock);
+
+    return result;
 }

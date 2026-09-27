@@ -22,7 +22,7 @@ flowchart LR
     subgraph Core0[Core 0: control and responses]
         CDC[USB CDC shell]
         I2C[I2C slave]
-        Control[control_iface]
+        Control[device_api]
         Response[Format response]
     end
 
@@ -59,7 +59,7 @@ rejects the request.
 Use the architecture-related pages as follows:
 
 - [Architecture](architecture.md) — system structure, layer boundaries, and request flow
-- [Firmware Configuration](configuration.md) — build profiles, channel tables, and capability rules
+- [Firmware Configuration](configuration.md) — runtime bank locking, channel tables, and capability rules
 - [Pinout](pinout.md) — physical PWM, I2C, and shared-pin mapping
 - [PWM Driver Design](detail/pwm_driver_design.md) — detailed `pwmdriver` and backend internals
 - [Hardware PWM Generator](detail/generator/hardware_generator.md) — hardware output timing and slice constraints
@@ -92,7 +92,7 @@ The hardware PWM bank intentionally uses PWM slice channel B pins so the externa
 ## Runtime Layers
 
 The current firmware is split into four practical layers. The important rule is
-that transport code reaches PWM hardware only through `control_iface` and
+that transport code reaches PWM hardware only through `device_api` and
 `pwm_driver`.
 
 ### 1. Transport Layer
@@ -107,7 +107,7 @@ Core 0 owns the host-facing transports:
 
 ### 2. Shared Control Layer
 
-`control/control_iface.*` is the transport-neutral Core 0 API shared by USB CDC and I2C.
+`pwmdriver/device_api.*` is the transport-neutral Core 0 API shared by USB CDC and I2C.
 
 Responsibilities:
 
@@ -175,7 +175,7 @@ from the published snapshot; mutations cross the mailbox boundary:
 sequenceDiagram
     participant Host
     participant Transport as USB CDC or I2C
-    participant Control as control_iface
+    participant Control as device_api
     participant Mailbox as Command mailbox
     participant Router as Core 1 profile router
     participant Backend as Generator or monitor
@@ -203,8 +203,8 @@ Transport-specific details:
 
 - I2C reads can be served directly from the published snapshot or last command status.
 - I2C writes are captured in the ISR, deferred into normal Core 0 polling, and then executed through the same shared control path used by USB CDC.
-- USB commands are parsed by `shell` and the CLI command handlers before they reach `control_iface`.
-- I2C commands are decoded by `i2c_slave` and `i2c_control_map` before they reach `control_iface`.
+- USB commands are parsed by `shell` and the CLI command handlers before they reach `device_api`.
+- I2C commands are decoded by `i2c_slave` and `i2c_control_map` before they reach `device_api`.
 
 This keeps the ISR transport-focused and avoids running backend-affecting logic in interrupt context.
 
@@ -233,10 +233,10 @@ sees coherent realized snapshots.
 
 ## Cross-Core Mutation Boundary
 
-`control_iface` is the only public Core 0 mutation facade.
+`device_api` is the only public Core 0 mutation facade.
 
-- Core 0 transport code enters through `control_iface`.
-- `control_iface` forwards writes into the internal `pwmdriver` mailbox API.
+- Core 0 transport code enters through `device_api`.
+- `device_api` forwards writes into the internal `pwmdriver` mailbox API.
 - Core 1 applies the write to the selected backend.
 - Core 1 publishes the realized state after successful apply.
 - Core 0 waits for the result and reports `ok`, `busy`, `invalid`, `timeout`, `unavailable`, or `apply failed` to the caller.
@@ -250,7 +250,7 @@ The single source of truth for channel state is the snapshot published by `pwmdr
 That means:
 
 - reads report realized backend state, not just the last requested values
-- `control_iface` does not keep a second cache
+- `device_api` does not keep a second cache
 - both USB CDC and I2C observe the same logical channel view
 
 `pulse_count` is monotonic from power-on. `stop` disables output by restoring `freq = 0 Hz` and `duty = 50%`, but it does not reset the counter. For PIO channels, the count is estimated from elapsed time and realized frequency rather than hardware-counted per pulse.

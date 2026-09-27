@@ -61,7 +61,7 @@ jobs:
         run: tools/firmware/build.sh --board "$BOARD"
 
       - name: Run configured CMake tests
-        run: tools/test/check.sh --build-dir "firmware/build-$BOARD" --skip-build
+        run: tools/test/check.sh --build-dir "firmware/build/$BOARD" --skip-build
 
       - name: Check USB identity
         run: python3 tools/release/check-usb-identity.py
@@ -71,9 +71,9 @@ jobs:
         with:
           name: pico-pwm-pr-${{ matrix.board }}
           path: |
-            firmware/build-${{ matrix.board }}/pico_pwm.uf2
-            firmware/build-${{ matrix.board }}/pico_pwm.elf
-            firmware/build-${{ matrix.board }}/pico_pwm.bin
-            firmware/build-${{ matrix.board }}/pico_pwm.hex
-            firmware/build-${{ matrix.board }}/pico_pwm.dis
+            firmware/build/${{ matrix.board }}/pico_pwm.uf2
+            firmware/build/${{ matrix.board }}/pico_pwm.elf
+            firmware/build/${{ matrix.board }}/pico_pwm.bin
+            firmware/build/${{ matrix.board }}/pico_pwm.hex
+            firmware/build/${{ matrix.board }}/pico_pwm.dis
           if-no-files-found: error

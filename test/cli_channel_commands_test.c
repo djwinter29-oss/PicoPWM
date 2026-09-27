@@ -1,7 +1,7 @@
-#include "cli/pwm_channel_commands.h"
+#include "cli/channel_commands.h"
 
 #include "profile/pwm_profile.h"
-#include "control/control_iface.h"
+#include "device_api/device_api.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -37,17 +37,17 @@ const char *pwm_profile_backend_name(pwm_profile_backend_t backend) {
     return "HW";
 }
 
-bool control_iface_get_channel(uint channel, pwm_driver_state_t *state) {
+bool device_api_get_channel(uint channel, pwm_driver_state_t *state) {
     (void)channel;
     (void)state;
     return false;
 }
 
-uint8_t control_iface_channel_count(void) {
+uint8_t device_api_channel_count(void) {
     return 24u;
 }
 
-pwm_driver_result_t control_iface_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
+pwm_driver_result_t device_api_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
     (void)channel;
     (void)freq_hz;
     (void)duty;
@@ -60,7 +60,7 @@ static void test_frequency_overflow(void) {
 
     output[0] = '\0';
     set_calls = 0u;
-    assert(pwm_channel_commands_set(NULL, 3, argv));
+    assert(channel_commands_set(NULL, 3, argv));
     assert(set_calls == 0u);
     assert(strstr(output, "usage") != NULL);
 }
@@ -69,7 +69,7 @@ static void test_read_failure_is_reported(void) {
     const char *argv[] = {"get", "0"};
 
     output[0] = '\0';
-    assert(pwm_channel_commands_get(NULL, 2, argv));
+    assert(channel_commands_get(NULL, 2, argv));
     assert(strcmp(output, "ERR channel unavailable") == 0);
 }
 
@@ -77,7 +77,7 @@ static void test_status_failure_is_reported(void) {
     const char *argv[] = {"status"};
 
     output[0] = '\0';
-    assert(!pwm_channel_commands_status(NULL, 1, argv));
+    assert(!channel_commands_status(NULL, 1, argv));
     assert(strstr(output, "ERR channel 0 unavailable") != NULL);
 }
 

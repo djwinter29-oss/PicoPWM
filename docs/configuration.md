@@ -1,62 +1,41 @@
 # Firmware Configuration
 
-PicoPWM is intended to produce multiple firmware builds from one stable logical
-channel interface. A build profile selects the role and physical implementation
-of each channel; it does not change the host command syntax.
+PicoPWM produces one firmware build from one stable logical channel interface.
+Channel roles are chosen at runtime, per physical bank, by the host; there is
+no build-time profile selection.
 
-## Build Profiles
+## Runtime Bank Locking
 
 The GPIO map is fixed into three 8-pin banks (see [Pinout](pinout.md)): the
 hardware PWM bank (slice-B pins), the PIO PWM bank (companion slice-A pins),
-and the software-only bank. Each bank independently acts as generator or
-monitor, giving `2^3 = 8` structurally sensible combinations. (The raw
-cartesian product of every backend choice per bank, including redundant
-software fallbacks on the hardware/PIO banks, is 32; only the 8 pure
-gen/mon-per-bank combinations are worth shipping as profiles.)
+and the software-only bank. All three banks start **unlocked** at boot: GPIOs
+are high-Z, no backend is running, and `get`/`set` on any channel in an
+unlocked bank returns `PWM_DRIVER_RESULT_UNAVAILABLE`.
 
-`PICO_PWM_PROFILE` selects one of these 8 profiles by a 3-digit code
-`[hw-bank][pio-bank][sw-bank]`, where each digit is `1` (generator) or `2`
-(monitor):
+The host locks one bank at a time into a `generator` or `monitor` role with
+the CDC `bank` command or the I2C `REG_BANK_LOCK` register (see
+[USB CDC CLI](control/usb_cdc_cli.md) and [I2C Protocol](control/i2c_protocol.md)).
+Locking is **one-shot per boot**: once a bank is locked it stays that way until
+the board reboots, which clears all three locks back to unlocked. This
+sidesteps the hazard of switching a GPIO's function while it may be actively
+driving or reading a signal.
 
-| Code | HW bank (GPIO 1,3,5,7,9,11,13,15) | PIO bank (GPIO 0,2,4,6,8,10,12,14) | SW bank (GPIO 16,17,18,19,20,21,22,28) |
-| --- | --- | --- | --- |
-| `generator` (`111`) | generator | generator | generator |
-| `112` | generator | generator | monitor |
-| `121` | generator | monitor | generator |
-| `122` | generator | monitor | monitor |
-| `211` | monitor | generator | generator |
-| `212` | monitor | generator | monitor |
-| `221` | monitor | monitor | generator |
-| `monitor` (`222`) | monitor | monitor | monitor |
+Each bank locks independently, so `2^3 = 8` combinations are reachable in one
+firmware image:
 
-`generator` and `monitor` keep their descriptive names since they are the
-all-generate and all-monitor extremes; the 6 mixed combinations use the plain
-digit code.
+| HW bank (GPIO 1,3,5,7,9,11,13,15) | PIO bank (GPIO 0,2,4,6,8,10,12,14) | SW bank (GPIO 16,17,18,19,20,21,22,28) |
+| --- | --- | --- |
+| generator | generator | generator |
+| generator | generator | monitor |
+| generator | monitor | generator |
+| generator | monitor | monitor |
+| monitor | generator | generator |
+| monitor | generator | monitor |
+| monitor | monitor | generator |
+| monitor | monitor | monitor |
 
-Project-specific custom profiles are the extension point: add another profile
-table and CMake selection while preserving the same host control interfaces.
-
-GPIO23/24 are optional software-only pins. Normal Pico profiles leave them
-unused; custom profiles may assign them only to software generator or software
-monitor channels on hardware that exposes them.
-
-A profile is selected at CMake configuration time and compiled into the
-firmware. It is not a runtime mode switch: the selected build determines which
-backend sources, PIO programs, DMA resources, and channel table are linked.
-Build a separate firmware directory for each profile you need:
-
-```sh
-cmake -S firmware -B build-generator \
-  -DPICO_PWM_PROFILE=generator
-
-cmake -S firmware -B build-monitor \
-  -DPICO_PWM_PROFILE=monitor
-
-cmake -S firmware -B build-121 \
-  -DPICO_PWM_PROFILE=121
-```
-
-Separate build directories produce separate, reproducible firmware variants.
+GPIO23/24 are optional software-only pins on custom boards; they are not part
+of the SW bank above and are not claimed by hardware PWM or PIO.
 
 ## Channel Table
 
@@ -97,14 +76,14 @@ backend-local resources behind the profile mapping.
 
 ## Stable CLI Contract
 
-The host-facing commands remain the same for every profile:
+The host-facing commands remain the same regardless of which banks are locked:
 
-- `info`, `version`, `get`, and `status` report the active profile and realized
+- `info`, `version`, `get`, and `status` report device identity and realized
   channel state.
+- `bank` locks one bank into a role, or reports all three banks' lock states.
 - `set` applies to output-capable channels and returns `ERR unavailable` for
-  monitor-only or disabled channels.
-- `stop` applies the profile's safe output reset behavior. For monitor-only
-  builds it may be a no-op with a successful response.
+  monitor-only, unlocked, or disabled channels.
+- `stop` applies the safe output reset behavior to all locked channels.
 - `led` and `reboot` remain board-level commands.
 
 The CLI must not require the host to know which backend owns a logical channel.
@@ -126,5 +105,5 @@ A profile must validate these conditions at build time or startup:
 
 See [Architecture](architecture.md) for ownership boundaries and [USB CDC
 CLI](control/usb_cdc_cli.md) for the stable interactive interface. See
-[Profile Authoring](profile_authoring.md) for how to add a build-time profile
-file.
+[Profile Authoring](profile_authoring.md) for the fixed per-bank GPIO map and
+validation rules behind bank locking.

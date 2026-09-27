@@ -1,7 +1,7 @@
 #include "i2c/i2c_slave.h"
 
 #include "config/i2c_config.h"
-#include "control/control_iface.h"
+#include "device_api/device_api.h"
 #include "i2c/i2c_control_map.h"
 #include "pwmdriver/pwm_driver.h"
 #include "hardware/i2c.h"

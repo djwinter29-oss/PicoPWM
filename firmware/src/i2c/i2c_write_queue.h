@@ -19,6 +19,7 @@
 typedef struct {
     uint8_t reg;                              /**< Register byte that selected the write. */
     uint8_t len;                              /**< Number of valid payload bytes. */
+    uint32_t epoch;                           /**< Register attempt counter captured when this write was queued. */
     uint8_t payload[I2C_WRITE_QUEUE_PAYLOAD]; /**< Register payload, excluding the register byte. */
 } i2c_write_slot_t;
 
@@ -30,8 +31,12 @@ typedef struct {
     uint8_t count;                                 /**< Number of queued writes. */
 } i2c_write_queue_t;
 
-/** @brief Queue one write. Returns false when the queue is already full. */
-static inline bool i2c_write_queue_push(i2c_write_queue_t *queue, uint8_t reg, const uint8_t *payload, uint8_t len) {
+/**
+ * @brief Queue one write. Returns false when the queue is already full.
+ * @param epoch Attempt counter for this register. Completion may publish only when it is still current.
+ */
+static inline bool i2c_write_queue_push(i2c_write_queue_t *queue, uint8_t reg, const uint8_t *payload, uint8_t len,
+                                        uint32_t epoch) {
     i2c_write_slot_t *slot;
 
     if (queue == NULL || queue->count >= I2C_WRITE_QUEUE_DEPTH || len > I2C_WRITE_QUEUE_PAYLOAD) {
@@ -44,12 +49,18 @@ static inline bool i2c_write_queue_push(i2c_write_queue_t *queue, uint8_t reg, c
     slot = &queue->slots[queue->head];
     slot->reg = reg;
     slot->len = len;
+    slot->epoch = epoch;
     if (len > 0u) {
         memcpy(slot->payload, payload, len);
     }
     queue->head = (uint8_t)((queue->head + 1u) % I2C_WRITE_QUEUE_DEPTH);
     queue->count++;
     return true;
+}
+
+/** @brief True when a finished write is still the newest attempt for its register. */
+static inline bool i2c_write_status_is_current(uint32_t slot_epoch, uint32_t current_epoch) {
+    return slot_epoch == current_epoch;
 }
 
 /** @brief Status byte while a queued write is still waiting. Matches `PWM_DRIVER_RESULT_BUSY`. */

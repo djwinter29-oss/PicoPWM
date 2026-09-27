@@ -246,7 +246,7 @@ sequenceDiagram
 Transport-specific details:
 
 - I2C reads can be served directly from the published snapshot or last command status.
-- I2C writes are captured in the ISR, queued, and executed from normal Core 0 polling through the same shared control path used by USB CDC. I2C read responses are also built on Core 0; the ISR holds SCL until that buffer is ready.
+- I2C writes are captured in the ISR, queued, and executed from normal Core 0 polling through the same shared control path used by USB CDC. I2C read responses are also built on Core 0. The ISR holds SCL while a requested response is still being built, and releases it when the read had no request pending.
 - USB commands are parsed by `shell` and the CLI command handlers before they reach `device_api`.
 - I2C commands are decoded by `i2c_slave` and `i2c_control_map` before they reach `device_api`.
 

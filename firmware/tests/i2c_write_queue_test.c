@@ -12,27 +12,32 @@ int main(void) {
 
     for (uint8_t index = 0u; index < I2C_WRITE_QUEUE_DEPTH; ++index) {
         payload[0] = index;
-        assert(i2c_write_queue_push(&queue, (uint8_t)(0x30u + index), payload, 1u));
+        assert(i2c_write_queue_push(&queue, (uint8_t)(0x30u + index), payload, 1u, index + 1u));
     }
-    assert(!i2c_write_queue_push(&queue, 0x90u, NULL, 0u));
+    assert(!i2c_write_queue_push(&queue, 0x90u, NULL, 0u, 1u));
 
     for (uint8_t index = 0u; index < I2C_WRITE_QUEUE_DEPTH; ++index) {
         assert(i2c_write_queue_pop(&queue, &slot));
         assert(slot.reg == (uint8_t)(0x30u + index));
         assert(slot.len == 1u);
         assert(slot.payload[0] == index);
+        assert(slot.epoch == index + 1u);
+        assert(i2c_write_status_is_current(slot.epoch, index + 1u));
+        assert(!i2c_write_status_is_current(slot.epoch, index + 2u));
     }
     assert(!i2c_write_queue_pop(&queue, &slot));
-    assert(i2c_write_queue_push(&queue, 0x90u, NULL, 0u));
+    assert(i2c_write_queue_push(&queue, 0x90u, NULL, 0u, 7u));
     assert(i2c_write_queue_pop(&queue, &slot));
     assert(slot.reg == 0x90u && slot.len == 0u);
-    assert(!i2c_write_queue_push(&queue, 0x30u, NULL, 1u));
-    assert(!i2c_write_queue_push(NULL, 0x30u, payload, 1u));
+    assert(slot.epoch == 7u);
+    assert(!i2c_write_queue_push(&queue, 0x30u, NULL, 1u, 1u));
+    assert(!i2c_write_queue_push(NULL, 0x30u, payload, 1u, 1u));
 
     memset(payload, 0x5a, sizeof(payload));
-    assert(i2c_write_queue_push(&queue, 0x30u, payload, I2C_WRITE_QUEUE_PAYLOAD));
+    assert(i2c_write_queue_push(&queue, 0x30u, payload, I2C_WRITE_QUEUE_PAYLOAD, 9u));
     assert(i2c_write_queue_pop(&queue, &slot));
     assert(slot.len == I2C_WRITE_QUEUE_PAYLOAD);
+    assert(slot.epoch == 9u);
     assert(memcmp(slot.payload, payload, sizeof(payload)) == 0);
 
     return 0;

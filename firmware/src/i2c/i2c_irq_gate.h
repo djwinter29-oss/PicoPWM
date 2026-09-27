@@ -58,18 +58,24 @@ static inline void i2c_irq_gate_on_stop(i2c_irq_gate_t *gate) {
 
 /**
  * @brief Decide how to answer RD_REQ.
+ * @param response_pending True when Core 0 has been asked to build a response.
  * @param index Next response byte index.
  * @param length Prepared response length.
  */
-static inline i2c_gate_action_t i2c_irq_gate_on_read_request(i2c_irq_gate_t *gate, bool response_ready, uint8_t index,
-                                                             uint8_t length) {
+static inline i2c_gate_action_t i2c_irq_gate_on_read_request(i2c_irq_gate_t *gate, bool response_ready,
+                                                             bool response_pending, uint8_t index, uint8_t length) {
     if (gate == NULL) {
         return I2C_GATE_NONE;
     }
     if (!response_ready) {
-        gate->irq_enabled = false;
         gate->tx_empty_unmasked = false;
-        return I2C_GATE_STRETCH;
+        if (response_pending) {
+            gate->irq_enabled = false;
+            return I2C_GATE_STRETCH;
+        }
+        /* Nothing was requested. Release SCL with a pad byte instead of holding the bus. */
+        gate->irq_enabled = true;
+        return I2C_GATE_PAD_BYTE;
     }
 
     gate->irq_enabled = true;

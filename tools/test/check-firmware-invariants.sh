@@ -43,6 +43,56 @@ if ! grep -q "multicore_lockout_start_blocking" "$CONFIG_FILE"; then
     exit 1
 fi
 
+# Flash helpers in SDK 2.3.0 do not mask IRQs. Interrupts must be off around erase and program.
+awk '
+    /save_and_disable_interrupts/ { disabled = 1 }
+    /multicore_lockout_start_blocking/ {
+        if (!disabled) {
+            print "pwm_driver_config.c: lock out Core 1 only while interrupts are disabled" > "/dev/stderr"
+            exit 1
+        }
+        locked = 1
+    }
+    /flash_range_erase/ {
+        if (!disabled || !locked) {
+            print "pwm_driver_config.c: erase flash only with interrupts disabled and Core 1 locked out" > "/dev/stderr"
+            exit 1
+        }
+        erased = 1
+    }
+    /flash_range_program/ {
+        if (!erased) {
+            print "pwm_driver_config.c: program flash only after erase, with interrupts still disabled" > "/dev/stderr"
+            exit 1
+        }
+        programmed = 1
+    }
+    /multicore_lockout_end_blocking/ {
+        if (!programmed) {
+            print "pwm_driver_config.c: end the Core 1 lockout after flash programming" > "/dev/stderr"
+            exit 1
+        }
+    }
+    /restore_interrupts/ {
+        if (!programmed) {
+            print "pwm_driver_config.c: restore interrupts after flash programming" > "/dev/stderr"
+            exit 1
+        }
+        restored = 1
+    }
+    END {
+        if (!restored) {
+            print "pwm_driver_config.c: config save must disable interrupts around flash programming" > "/dev/stderr"
+            exit 1
+        }
+    }
+' "$CONFIG_FILE"
+
+if ! grep -q "clr_tx_abrt" "$SLAVE_FILE"; then
+    echo "i2c_slave.c: ISR must clear TX_ABRT so a master NACK releases the FIFO" >&2
+    exit 1
+fi
+
 if ! grep -q "i2c_irq_gate_on_read_request" "$SLAVE_FILE"; then
     echo "i2c_slave.c: ISR must call i2c_irq_gate_on_read_request" >&2
     exit 1

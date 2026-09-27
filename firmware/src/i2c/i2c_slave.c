@@ -27,6 +27,7 @@ static uint8_t req_expected_len = 0;
 static volatile bool req_in_error = false;
 static i2c_write_queue_t write_queue;
 static volatile uint8_t last_status[UINT8_MAX + 1u];
+static volatile uint32_t status_epoch[UINT8_MAX + 1u];
 
 static uint8_t resp_buf[RESP_BUF_SIZE];
 static uint8_t resp_len = 0;
@@ -90,8 +91,10 @@ static void capture_request_byte(uint8_t byte) {
         uint8_t reg = req_buf[0];
         if (i2c_control_map_is_write_register(reg)) {
             uint8_t payload_len = (uint8_t)(req_expected_len - 1u);
-            bool queued = i2c_write_queue_push(&write_queue, reg, &req_buf[1], payload_len);
+            uint32_t epoch = ++status_epoch[reg];
+            bool queued = i2c_write_queue_push(&write_queue, reg, &req_buf[1], payload_len, epoch);
             // A full queue drops this payload and finishes as UNAVAILABLE so the status read does not wait.
+            // The epoch keeps an older completion from replacing this newer status.
             last_status[reg] = i2c_write_queue_status(queued);
         }
 
@@ -108,6 +111,13 @@ static uint32_t i2c_slave_intr_mask(void) {
 
 static void i2c_slave_apply_tx_mask(i2c_hw_t *hw) {
     hw->intr_mask = i2c_slave_intr_mask();
+}
+
+static void i2c_slave_clear_tx_abort(i2c_hw_t *hw) {
+    // A transmit abort flushes the FIFOs until IC_CLR_TX_ABRT is read. clr_intr does not release them.
+    if ((hw->raw_intr_stat & I2C_IC_RAW_INTR_STAT_TX_ABRT_BITS) != 0u) {
+        (void)hw->clr_tx_abrt;
+    }
 }
 
 static void i2c_slave_apply_action(i2c_hw_t *hw, i2c_gate_action_t action, bool read_request) {
@@ -133,6 +143,8 @@ static void i2c_slave_isr(void) {
     uint32_t status = hw->intr_stat;
     bool handled_read = false;
 
+    i2c_slave_clear_tx_abort(hw);
+
     // RX_FULL: received data from master (command byte).
     if (status & I2C_IC_INTR_STAT_R_RX_FULL_BITS) {
         uint8_t byte = (uint8_t)(hw->data_cmd & 0xFF);
@@ -151,7 +163,8 @@ static void i2c_slave_isr(void) {
     // stays masked unless this byte still has followers; it is level-triggered
     // and clr_intr does not clear it.
     if (status & I2C_IC_INTR_STAT_R_RD_REQ_BITS) {
-        i2c_gate_action_t action = i2c_irq_gate_on_read_request(&i2c_gate, response_ready, resp_idx, resp_len);
+        i2c_gate_action_t action =
+            i2c_irq_gate_on_read_request(&i2c_gate, response_ready, response_needed, resp_idx, resp_len);
         i2c_slave_apply_action(hw, action, true);
         handled_read = true;
         if (action == I2C_GATE_STRETCH) {
@@ -191,7 +204,7 @@ void i2c_slave_service_reads(void) {
         break;
     }
 
-    if (irq_deferred) {
+    if (irq_deferred && response_ready) {
         i2c_irq_gate_resume(&i2c_gate);
         irq_deferred = false;
         irq_set_enabled(i2c_irq_number, true);
@@ -231,6 +244,7 @@ void i2c_slave_init(uint8_t address) {
     irq_deferred = false;
     for (uint16_t reg = 0u; reg <= UINT8_MAX; ++reg) {
         last_status[reg] = (uint8_t)PWM_DRIVER_RESULT_OK;
+        status_epoch[reg] = 0u;
     }
     i2c_started = true;
 }
@@ -249,7 +263,13 @@ void i2c_slave_poll(void) {
     restore_interrupts(irq_state);
 
     if (has_write) {
-        last_status[slot.reg] = (uint8_t)i2c_control_map_execute_write(slot.reg, slot.payload, slot.len);
+        uint8_t result = (uint8_t)i2c_control_map_execute_write(slot.reg, slot.payload, slot.len);
+
+        irq_state = save_and_disable_interrupts();
+        if (i2c_write_status_is_current(slot.epoch, status_epoch[slot.reg])) {
+            last_status[slot.reg] = result;
+        }
+        restore_interrupts(irq_state);
     }
 
     i2c_slave_service_reads();

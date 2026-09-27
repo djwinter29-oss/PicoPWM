@@ -309,7 +309,7 @@ sequenceDiagram
     participant CTL as device_api
     participant WR as pwm_driver.c
     participant C1 as Core 1 mailbox loop
-    participant PROFILE as pwm_profile.c
+    participant PROFILE as channel_config.c
     participant BE as resolved backend
 
     CLI->>CTL: device_api_lock_bank(bank, role)
@@ -844,7 +844,7 @@ channel slots in the channel table, then calls the matching backend's
 per boot cycle, and only a reboot clears bank locks back to unlocked.
 
 `pwm_profile_channels` is not a build-time `const` array; it is a runtime
-table owned by `pwm_profile.c` that starts fully `DISABLED` and is filled in
+table owned by `channel_config.c` that starts fully `DISABLED` and is filled in
 per-bank as locks happen. There is no `PICO_PWM_PROFILE` CMake option and no
 per-profile source file — one firmware image reaches all 8 bank-role
 combinations at runtime. See [Firmware Configuration](../configuration.md#runtime-bank-locking).

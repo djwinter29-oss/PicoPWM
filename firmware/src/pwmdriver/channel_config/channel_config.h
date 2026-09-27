@@ -1,5 +1,5 @@
 /**
- * @file pwm_profile.h
+ * @file channel_config.h
  * @brief Build-selected logical channel configuration for PicoPWM.
  */
 

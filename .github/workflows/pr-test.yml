@@ -61,7 +61,7 @@ jobs:
         run: tools/firmware/build.sh --board "$BOARD"
 
       - name: Run configured CMake tests
-        run: tools/test/check.sh --build-dir "firmware/build/$BOARD" --skip-build
+        run: tools/test/check.sh
 
       - name: Check USB identity
         run: python3 tools/release/check-usb-identity.py

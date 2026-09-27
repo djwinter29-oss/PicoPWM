@@ -1,7 +1,7 @@
 # Channel Configuration
 
 PicoPWM has one firmware image and one logical channel table, owned entirely
-by `firmware/src/channel_config/pwm_profile.c`. There is no per-profile source file
+by `firmware/src/pwmdriver/channel_config/channel_config.c`. There is no per-profile source file
 and no `PICO_PWM_PROFILE` CMake option. Channel roles are chosen at runtime by
 locking each of 3 fixed physical banks into a `generator` or `monitor` role;
 see [Firmware Configuration](configuration.md#runtime-bank-locking) for the
@@ -9,24 +9,24 @@ host-facing model.
 
 ## Channel Table Ownership
 
-`pwm_profile.c` owns:
+`channel_config.c` owns:
 
 - the runtime `pwm_profile_channels[PWM_PROFILE_CHANNEL_COUNT]` table, which
   starts fully `DISABLED` at boot
 - the fixed GPIO assignment for each bank (`pwm_profile_bank_gpio`)
 - `pwm_profile_lock_bank()`, which fills in one bank's 8 entries the first
   time that bank is locked, using the channel-entry macros in
-  `firmware/src/channel_config/profile_table.h`
+  `firmware/src/pwmdriver/channel_config/channel_table.h`
 - `pwm_profile_get_bank_state()`, `pwm_profile_bank_backend()`, and the shared
   lookup/validation helpers (`pwm_profile_get_channel`, `pwm_profile_get_gpio`,
   `pwm_profile_validate`, etc.)
 
-Do not add profile-specific routing logic outside `pwm_profile.c`; that file
+Do not add channel-routing logic outside `channel_config.c`; that file
 is the single source of truth for the channel table.
 
 ## Channel Entry
 
-Each entry (built by the macros in `profile_table.h`) defines:
+Each entry (built by the macros in `channel_table.h`) defines:
 
 | Field | Requirement |
 | --- | --- |
@@ -56,7 +56,7 @@ its GPIO count, reserved pins, or hardware PWM pin policy differs.
 | PIO | 8..15 | `0, 2, 4, 6, 8, 10, 12, 14` (companion slice-A) |
 | SW | 16..23 | `16, 17, 18, 19, 20, 21, 22, 28` |
 
-This map is fixed in `pwm_profile.c` and is not configurable per build; see
+This map is fixed in `channel_config.c` and is not configurable per build; see
 [Pinout](pinout.md) for the physical rationale (hardware PWM and PIO are each
 restricted to one fixed set of 8 pins, not a free GPIO choice).
 
@@ -87,9 +87,10 @@ standard Pico board. If a custom board needs a different physical layout:
 2. If the bank/GPIO layout itself needs to change, update
    `pwm_profile_bank_gpio` and the bank-to-backend mapping in
    `pwm_profile_bank_backend()`/`pwm_profile_lock_bank()` — both stay inside
-   `pwm_profile.c`.
-3. Add or update host-side tests in `test/pwm_profile_test.c` and
-   `tools/test/cli-shell-test.sh` for the new layout.
+  `channel_config.c`.
+3. Add or update firmware host-side tests in `firmware/tests/channel_config_test.c`
+  and `firmware/tests/CMakeLists.txt`; run them through
+  `tools/test/test-firmware-c.sh`.
 
 All backend implementations are compiled once in the shared firmware target;
 locking a bank selects which backend descriptor initializes and which logical

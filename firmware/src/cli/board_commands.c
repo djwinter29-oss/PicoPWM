@@ -1,6 +1,6 @@
 #include "cli/board_commands.h"
 
-#include "channel_config/pwm_profile.h"
+#include "pwmdriver/channel_config/channel_config.h"
 #include "device_api/device_api.h"
 #include "board/led.h"
 #include "board/system.h"

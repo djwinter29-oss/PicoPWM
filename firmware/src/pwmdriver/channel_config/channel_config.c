@@ -1,10 +1,10 @@
 /**
- * @file pwm_profile.c
+ * @file channel_config.c
  * @brief Common profile lookup, validation, and runtime bank-locking helpers.
  */
 
-#include "channel_config/pwm_profile.h"
-#include "channel_config/profile_table.h"
+#include "channel_config.h"
+#include "channel_table.h"
 
 #include "hardware/pwm.h"
 

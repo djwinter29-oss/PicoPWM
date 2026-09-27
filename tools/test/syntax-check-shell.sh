@@ -8,6 +8,7 @@ for script in \
     tools/release/resolve-release-version.sh \
     tools/test/check.sh \
     tools/test/coverage-firmware-c.sh \
+    tools/test/test-firmware-c.sh \
     tools/test/syntax-check-python.sh \
     tools/test/syntax-check-shell.sh; do
     sh -n "$script"

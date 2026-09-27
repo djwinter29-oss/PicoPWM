@@ -1,4 +1,4 @@
-#include "channel_config/pwm_profile.h"
+#include "pwmdriver/channel_config/channel_config.h"
 
 #include <assert.h>
 #include <string.h>

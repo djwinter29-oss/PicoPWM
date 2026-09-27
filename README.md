@@ -63,6 +63,16 @@ under `tools/firmware/` handle loading, while `tools/test/` contains the CTest
 and syntax-check entry points. A direct CMake build is also possible from
 `firmware/` when a custom generator or build layout is needed.
 
+Run the firmware host-side C tests independently of the ARM firmware build:
+
+```sh
+tools/test/test-firmware-c.sh
+tools/test/coverage-firmware-c.sh
+```
+
+The root CMake project intentionally configures the firmware build only;
+`firmware/tests` uses the host compiler and is managed by these test helpers.
+
 Channel roles are chosen at runtime, not at build time: every logical channel
 starts disabled, and the host locks each of the 3 physical banks (hardware
 PWM, PIO, software) into a `generator` or `monitor` role over CDC or I2C. See

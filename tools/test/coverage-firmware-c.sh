@@ -82,7 +82,8 @@ gcovr \
     --gcov-ignore-errors=no_working_dir_found \
     --exclude-unreachable-branches \
     --exclude-throw-branches \
-    --print-summary
+    --print-summary \
+    --fail-under-line 60
 
 gcovr \
     --root "$REPO_ROOT" \

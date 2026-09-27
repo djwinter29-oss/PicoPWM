@@ -124,6 +124,10 @@ bool pwm_driver_config_save_target(const pwm_driver_config_t *config) {
 
     if ((config == NULL) || !pwm_driver_config_validate_target(config))
         return false;
+    /* Core 1 must already be the lockout victim. Starting the lockout without it blocks forever. */
+    if (!multicore_lockout_victim_is_initialized(1u)) {
+        return false;
+    }
     record.magic = PWM_DRIVER_CONFIG_MAGIC;
     record.version = PWM_DRIVER_CONFIG_VERSION;
     record.backends[PWM_DRIVER_CONFIG_BANK_A] = (uint8_t)config->bank_a_backend;
@@ -162,6 +166,14 @@ bool pwm_driver_config_save_target(const pwm_driver_config_t *config) {
     multicore_lockout_end_blocking();
     restore_interrupts(irq_state);
     return memcmp((const void *)(uintptr_t)(XIP_BASE + slot_offset), &record, sizeof(record)) == 0;
+}
+
+void pwm_driver_config_arm_lockout_victim(void) {
+    multicore_lockout_victim_init();
+}
+
+bool pwm_driver_config_lockout_victim_ready(void) {
+    return multicore_lockout_victim_is_initialized(1u);
 }
 
 bool pwm_driver_config_init_state(const pwm_driver_config_t *running, const pwm_driver_config_t *target) {

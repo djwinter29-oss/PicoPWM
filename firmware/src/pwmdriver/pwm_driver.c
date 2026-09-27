@@ -183,7 +183,7 @@ static const pwm_driver_backend_t pwm_driver_backends[PWM_DRIVER_CONFIG_BACKEND_
             .set = hw_gen_set,
             .restore_defaults = hw_gen_restore_defaults,
             .get = NULL,
-            .finalize_readback = NULL,
+            .finalize_readback = hw_gen_finalize_readback,
         },
     [PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR] =
         {
@@ -446,7 +446,7 @@ static bool pwm_driver_core1_heartbeat_ok(void) {
 /** @brief Core 1 main loop that owns backend initialization and mailbox processing. */
 static void pwm_driver_core_main(void) {
     /* Required before Core 0 may call multicore_lockout_start_blocking() from config save. */
-    multicore_lockout_victim_init();
+    pwm_driver_config_arm_lockout_victim();
 
     /* Register the shared GPIO callback before backend initialization arms monitor pins. */
     gpio_set_irq_callback(pwm_driver_monitor_gpio_irq);

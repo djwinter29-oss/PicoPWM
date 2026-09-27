@@ -43,7 +43,7 @@ Implemented by `board_commands.*`.
 | `config save` | Persist target settings; reboot to apply. | `config save` |
 | `config address <7-bit>` | Change the target I2C address. | `config address 0x42` |
 | `led <on\|off>` | Set the board LED state. | `led on` |
-| `stop` | Restore configured generator banks' safe defaults. | `stop` |
+| `stop` | Hold generator outputs low at 0 Hz and 0% duty. `pulse_count` is not cleared. | `stop` |
 | `reboot` | Reboot the board. | `reboot` |
 
 ### Shell Commands

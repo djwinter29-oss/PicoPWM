@@ -24,7 +24,7 @@
  *
  * Repeated calls are ignored after the first successful initialization.
  */
-void pio_mon_init(void);
+bool pio_mon_init(void);
 
 /**
  * @brief Read the latest exported monitor state for one backend-local channel.

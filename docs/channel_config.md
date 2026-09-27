@@ -14,11 +14,10 @@ host-facing model.
 - the runtime `pwm_profile_channels[PWM_PROFILE_CHANNEL_COUNT]` table, which
   starts fully `DISABLED` at boot
 - the fixed GPIO assignment for each bank (`pwm_profile_bank_gpio`)
-- `pwm_profile_lock_bank()`, which fills in one bank's 8 entries the first
-  time that bank is locked, using the channel-entry macros in
+- `pwm_profile_configure_roles()`, which fills in all bank entries from the
+  startup roles, using the channel-entry macros in
   `firmware/src/pwmdriver/channel_config/channel_table.h`
-- `pwm_profile_get_bank_state()`, `pwm_profile_bank_backend()`, and the shared
-  lookup/validation helpers (`pwm_profile_get_channel`, `pwm_profile_get_gpio`,
+- the shared lookup/validation helpers (`pwm_profile_get_channel`, `pwm_profile_get_gpio`,
   `pwm_profile_validate`, etc.)
 
 Do not add channel-routing logic outside `channel_config.c`; that file
@@ -85,8 +84,8 @@ standard Pico board. If a custom board needs a different physical layout:
    `PWM_PROFILE_RESERVED_GPIO_MASK`, `PWM_PROFILE_REQUIRE_HW_CHANNEL_B`) in a
    CMake branch, following the existing board-policy pattern.
 2. If the bank/GPIO layout itself needs to change, update
-   `pwm_profile_bank_gpio` and the bank-to-backend mapping in
-   `pwm_profile_bank_backend()`/`pwm_profile_lock_bank()` — both stay inside
+  `pwm_profile_bank_gpio` and the bank-to-backend mapping in
+  `pwm_profile_fill_bank()`/`pwm_profile_configure_roles()` — both stay inside
   `channel_config.c`.
 3. Add or update firmware host-side tests in `firmware/tests/channel_config_test.c`
   and `firmware/tests/CMakeLists.txt`; run them through

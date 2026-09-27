@@ -56,6 +56,9 @@ The current implementation is split as follows:
 | `firmware/src/i2c/i2c_control_map.c` | I2C register encode/decode and deferred write translation into `device_api` |
 | `firmware/src/pwmdriver/pwm_driver.h` | Public wrapper API and backend channel capacity constants |
 | `firmware/src/pwmdriver/pwm_driver.c` | Core 1 launch, mailbox loop, channel routing, shared snapshot |
+| `firmware/src/pwmdriver/channel_config/channel_config.h` | Startup bank/channel configuration API and validation types |
+| `firmware/src/pwmdriver/channel_config/channel_config.c` | Startup role configuration, fixed GPIO mapping, and channel lookup |
+| `firmware/src/pwmdriver/channel_config/channel_table.h` | Backend capability and timing descriptors used to populate channel entries |
 | `firmware/src/pwmdriver/generator/hardware_generator.c` | Hardware PWM generator backend |
 | `firmware/src/pwmdriver/monitor/hardware_monitor.c` | Hardware PWM monitor backend |
 | `firmware/src/pwmdriver/generator/pio_generator.c` | PIO generator backend |
@@ -133,8 +136,8 @@ role (generator or monitor) it is locked into:
 | `16..23` | SW PWM | SW monitor |
 
 The physical mapping and slice assignments are documented in
-[Pinout](../pinout.md). Runtime bank locking is documented in
-[Firmware Configuration](../configuration.md#runtime-bank-locking).
+[Pinout](../pinout.md). Startup bank configuration is documented in
+[Firmware Configuration](../configuration.md#startup-bank-configuration).
 
 ## Internal Separation
 
@@ -297,30 +300,25 @@ sequenceDiagram
     C1->>C1: mailbox loop + __wfe()
 ```
 
-No backend initializes at launch. Each backend's `init()` runs later, lazily,
-the first time its bank is locked; see
-[Runtime Bank Locking](#runtime-bank-locking) below.
+All selected backends initialize during startup from the supplied configuration.
 
-### `device_api_lock_bank()` to `pwm_driver_lock_bank()`
+### `pwm_driver_init()` startup configuration
 
 ```mermaid
 sequenceDiagram
-    participant CLI as CDC CLI / I2C command layer
-    participant CTL as device_api
+    participant Main as Core 0 main
     participant WR as pwm_driver.c
-    participant C1 as Core 1 mailbox loop
-    participant PROFILE as channel_config.c
-    participant BE as resolved backend
+    participant CFG as channel_config.c
+    participant C1 as Core 1
+    participant BE as selected backends
 
-    CLI->>CTL: device_api_lock_bank(bank, role)
-    CTL->>WR: pwm_driver_lock_bank(bank, role)
-    WR->>C1: admitted mailbox command (PWM_DRIVER_OP_LOCK_BANK)
-    C1->>PROFILE: pwm_profile_lock_bank(bank, role)
-    PROFILE-->>C1: false if already locked
-    C1->>BE: backend init() (only if newly locked)
-    C1->>WR: publish apply result
-    WR-->>CTL: result
-    CTL-->>CLI: result
+    Main->>WR: pwm_driver_init(config)
+    WR->>CFG: configure all three bank roles
+    CFG-->>WR: validated channel table
+    WR->>C1: multicore_launch_core1(core_main)
+    C1->>BE: initialize selected backends
+    BE-->>C1: success/failure
+    C1->>WR: publish ready state
 ```
 
 ### `device_api_set_channel()` to `pwm_driver_set()`
@@ -829,25 +827,12 @@ The current design assumes:
 
 I2C writes should continue to defer out of ISR context before they enter `device_api` and the internal `pwmdriver` mailbox boundary.
 
-## Runtime Bank Locking
+## Startup Bank Configuration
 
-Backends do not initialize eagerly during `pwm_driver_launch()`. Each of the 3
-physical banks (HW, PIO, SW) starts unlocked; its logical channels report
-`PWM_DRIVER_RESULT_UNAVAILABLE` until locked.
-
-`PWM_DRIVER_OP_LOCK_BANK` is a mailbox op that lets Core 0 request one bank
-lock into `generator` or `monitor`. Core 1 claims it like any other mailbox
-command: it calls `pwm_profile_lock_bank()` to populate that bank's 8 logical
-channel slots in the channel table, then calls the matching backend's
-`init()`. A bank lock request for an already-locked bank is rejected with
-`PWM_DRIVER_RESULT_INVALID` rather than re-initializing — locking is one-shot
-per boot cycle, and only a reboot clears bank locks back to unlocked.
-
-`pwm_profile_channels` is not a build-time `const` array; it is a runtime
-table owned by `channel_config.c` that starts fully `DISABLED` and is filled in
-per-bank as locks happen. There is no `PICO_PWM_PROFILE` CMake option and no
-per-profile source file — one firmware image reaches all 8 bank-role
-combinations at runtime. See [Firmware Configuration](../configuration.md#runtime-bank-locking).
+`pwm_profile_channels` is a runtime table owned by `channel_config.c` and is
+fully populated from `pwm_driver_config_t` before Core 1 starts. There is no
+bank-lock mailbox operation; one firmware image reaches all 8 bank-role
+combinations by selecting roles in the startup configuration.
 
 ## Summary
 

@@ -17,18 +17,6 @@ const char *device_api_device_name(void);
 /** @brief Return the build-time firmware version exposed by control/status transports. */
 const char *device_api_firmware_version(void);
 
-/**
- * @brief Lock one physical bank into a generator or monitor role at runtime.
- * @param bank Physical bank to lock.
- * @param role Requested role.
- * @return Result code from the shared PWM control plane; `PWM_DRIVER_RESULT_INVALID` if the
- *         bank is already locked (locking is one-shot until reboot).
- */
-pwm_driver_result_t device_api_lock_bank(pwm_profile_bank_t bank, pwm_profile_bank_role_t role);
-
-/** @brief Return one physical bank's current runtime lock state. */
-pwm_profile_bank_state_t device_api_get_bank_state(pwm_profile_bank_t bank);
-
 /** @brief Return the logical PWM channel count exposed by the firmware. */
 uint8_t device_api_channel_count(void);
 

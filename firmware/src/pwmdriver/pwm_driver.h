@@ -19,6 +19,24 @@
 /** @brief Total logical PWM channel count across all backends. */
 #define PWM_DRIVER_CHANNEL_COUNT PWM_PROFILE_CHANNEL_COUNT
 
+/** @brief Role selected for one fixed PWM bank at startup. */
+typedef pwm_profile_bank_role_t pwm_driver_bank_role_t;
+
+/** @brief Optional backend-specific startup options reserved for future tuning. */
+typedef struct {
+    const void *options; /**< Backend-owned immutable option block, or `NULL` for defaults. */
+} pwm_driver_bank_config_t;
+
+/** @brief Complete startup configuration for the three fixed PWM banks. */
+typedef struct {
+    pwm_driver_bank_config_t hw; /**< Hardware PWM bank configuration. */
+    pwm_driver_bank_config_t pio; /**< PIO PWM bank configuration. */
+    pwm_driver_bank_config_t sw; /**< Software PWM bank configuration. */
+    pwm_driver_bank_role_t hw_role; /**< Hardware bank role. */
+    pwm_driver_bank_role_t pio_role; /**< PIO bank role. */
+    pwm_driver_bank_role_t sw_role; /**< Software bank role. */
+} pwm_driver_config_t;
+
 /** @brief Result codes returned by shared PWM control operations. */
 typedef enum {
     PWM_DRIVER_RESULT_OK = 0, /**< The request completed successfully. */
@@ -37,14 +55,23 @@ typedef struct {
 } pwm_driver_state_t;
 
 /**
- * @brief Launch Core 1 backend ownership and start the PWM driver runtime.
+ * @brief Configure all banks, launch Core 1 backend ownership, and start the PWM runtime.
+ * @param config Immutable startup configuration for all three banks.
+ * @return `true` when the configuration was accepted and Core 1 was launched.
  */
+bool pwm_driver_init(const pwm_driver_config_t *config);
+
+/** @brief Legacy launch entry point; use pwm_driver_init() for new code. */
 void pwm_driver_launch(void);
 
 /**
- * @brief Return whether Core 1 finished backend initialization.
- * @return `true` once the PWM driver runtime is ready to accept commands.
+ * @brief Return whether Core 1 started the PWM mailbox runtime.
+ * @return `true` once the driver can accept bank-lock and channel commands;
+ *         individual backends initialize lazily when their bank is locked.
  */
 bool pwm_driver_is_ready(void);
+
+/** @brief Return whether Core 1 startup failed while initializing a selected backend. */
+bool pwm_driver_startup_failed(void);
 
 #endif

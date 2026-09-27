@@ -43,15 +43,13 @@ bool i2c_control_map_is_write_register(uint8_t reg) {
     return i2c_control_map_is_full_write(reg) ||
            (reg == I2C_CONTROL_MAP_REG_STOP_ALL) ||
            (reg == I2C_CONTROL_MAP_REG_LED) ||
-           (reg == I2C_CONTROL_MAP_REG_REBOOT) ||
-           (reg == I2C_CONTROL_MAP_REG_BANK_LOCK);
+           (reg == I2C_CONTROL_MAP_REG_REBOOT);
 }
 
 uint8_t i2c_control_map_expected_write_length(uint8_t reg) {
     if ((reg == I2C_CONTROL_MAP_REG_INFO) ||
         (reg == I2C_CONTROL_MAP_REG_VERSION) ||
         (reg == I2C_CONTROL_MAP_REG_CHANNEL_COUNT) ||
-        (reg == I2C_CONTROL_MAP_REG_BANK_STATE) ||
         i2c_control_map_is_channel_read(reg) ||
         (reg == I2C_CONTROL_MAP_REG_STOP_ALL) ||
         (reg == I2C_CONTROL_MAP_REG_REBOOT)) {
@@ -60,10 +58,6 @@ uint8_t i2c_control_map_expected_write_length(uint8_t reg) {
 
     if (reg == I2C_CONTROL_MAP_REG_LED) {
         return 2u;
-    }
-
-    if (reg == I2C_CONTROL_MAP_REG_BANK_LOCK) {
-        return 3u;
     }
 
     if (i2c_control_map_is_full_write(reg)) {
@@ -101,14 +95,6 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
         }
         *response_len = (uint8_t)text_len;
         memcpy(response, text, text_len);
-        return true;
-    }
-
-    if (reg == I2C_CONTROL_MAP_REG_BANK_STATE) {
-        response[0] = (uint8_t)device_api_get_bank_state(PWM_PROFILE_BANK_HW);
-        response[1] = (uint8_t)device_api_get_bank_state(PWM_PROFILE_BANK_PIO);
-        response[2] = (uint8_t)device_api_get_bank_state(PWM_PROFILE_BANK_SW);
-        *response_len = 3u;
         return true;
     }
 
@@ -171,15 +157,6 @@ pwm_driver_result_t i2c_control_map_execute_write(uint8_t reg, const uint8_t *pa
 
         system_reboot();
         return PWM_DRIVER_RESULT_OK;
-    }
-
-    if (reg == I2C_CONTROL_MAP_REG_BANK_LOCK) {
-        if ((payload == NULL) || (payload_len != 2u) || (payload[0] >= PWM_PROFILE_BANK_COUNT) ||
-            (payload[1] > (uint8_t)PWM_PROFILE_BANK_ROLE_MONITOR)) {
-            return PWM_DRIVER_RESULT_INVALID;
-        }
-
-        return device_api_lock_bank((pwm_profile_bank_t)payload[0], (pwm_profile_bank_role_t)payload[1]);
     }
 
     if (i2c_control_map_is_full_write(reg)) {

@@ -467,7 +467,7 @@ static void gen_enable_channel(uint channel, uint16_t period_count, uint32_t clk
 }
 
 /** @copydoc pio_gen_init */
-void pio_gen_init(void) {
+bool pio_gen_init(void) {
     pio_gen_sys_clk_hz = clock_get_hz(clk_sys);
 
     if (!pio_program_loaded[0]) {
@@ -501,6 +501,8 @@ void pio_gen_init(void) {
         );
         gen_drive_level(i, false);
     }
+
+    return true;
 }
 
 /** @copydoc pio_gen_set */

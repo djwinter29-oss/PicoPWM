@@ -204,7 +204,7 @@ static bool hw_gen_find_timing(uint32_t freq_hz, uint32_t *best_top, uint16_t *b
 }
 
 /** @copydoc hw_gen_init */
-void hw_gen_init(void) {
+bool hw_gen_init(void) {
     hw_gen_sys_clk_hz = clock_get_hz(clk_sys);
 
     for (int i = 0; i < pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_HW_GENERATOR); i++) {
@@ -223,6 +223,8 @@ void hw_gen_init(void) {
         pwm_set_enabled(slice, false);
 
     }
+
+    return true;
 }
 
 /** @copydoc hw_gen_set */

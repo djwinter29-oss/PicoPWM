@@ -9,7 +9,7 @@
 #include "../pwm_driver.h"
 
 /** @brief Initialize the PIO generator backend and its PIO programs. */
-void pio_gen_init(void);
+bool pio_gen_init(void);
 
 /**
  * @brief Apply one logical PIO generator channel update.

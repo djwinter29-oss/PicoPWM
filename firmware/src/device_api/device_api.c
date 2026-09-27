@@ -16,14 +16,6 @@ const char *device_api_firmware_version(void) {
     return PICO_PWM_FIRMWARE_VERSION_STR;
 }
 
-pwm_driver_result_t device_api_lock_bank(pwm_profile_bank_t bank, pwm_profile_bank_role_t role) {
-    return pwm_driver_lock_bank(bank, role);
-}
-
-pwm_profile_bank_state_t device_api_get_bank_state(pwm_profile_bank_t bank) {
-    return pwm_profile_get_bank_state(bank);
-}
-
 uint8_t device_api_channel_count(void) {
     return (uint8_t)PWM_DRIVER_CHANNEL_COUNT;
 }

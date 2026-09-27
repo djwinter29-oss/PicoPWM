@@ -4,20 +4,15 @@
 #include <string.h>
 
 int main(void) {
-    /* Boot state: every bank starts unlocked and the table is trivially valid. */
-    assert(pwm_profile_validate());
-    assert(pwm_profile_get_bank_state(PWM_PROFILE_BANK_HW) == PWM_PROFILE_BANK_STATE_UNLOCKED);
-    assert(pwm_profile_get_bank_state(PWM_PROFILE_BANK_PIO) == PWM_PROFILE_BANK_STATE_UNLOCKED);
-    assert(pwm_profile_get_bank_state(PWM_PROFILE_BANK_SW) == PWM_PROFILE_BANK_STATE_UNLOCKED);
-    assert(pwm_profile_get_channel(0u)->direction == PWM_PROFILE_DIRECTION_DISABLED);
+    /* Startup roles populate the fixed channel table before the driver launches Core 1. */
 
-    /* Invalid lock requests are rejected without changing anything. */
-    assert(!pwm_profile_lock_bank((pwm_profile_bank_t)99u, PWM_PROFILE_BANK_ROLE_GENERATOR));
-    assert(pwm_profile_get_bank_state(PWM_PROFILE_BANK_HW) == PWM_PROFILE_BANK_STATE_UNLOCKED);
-
-    /* Lock HW bank as generator: fixed slice-B GPIOs, channels 0..7. */
-    assert(pwm_profile_lock_bank(PWM_PROFILE_BANK_HW, PWM_PROFILE_BANK_ROLE_GENERATOR));
-    assert(pwm_profile_get_bank_state(PWM_PROFILE_BANK_HW) == PWM_PROFILE_BANK_STATE_GENERATOR);
+    /* Configure all three banks at startup. */
+    const pwm_profile_bank_role_t roles[PWM_PROFILE_BANK_COUNT] = {
+        PWM_PROFILE_BANK_ROLE_GENERATOR,
+        PWM_PROFILE_BANK_ROLE_MONITOR,
+        PWM_PROFILE_BANK_ROLE_GENERATOR,
+    };
+    assert(pwm_profile_configure_roles(roles));
     {
         const pwm_profile_channel_t *profile = pwm_profile_get_channel(0u);
         assert(profile->gpio == 1u);
@@ -39,12 +34,7 @@ int main(void) {
         assert(pwm_profile_get_logical_channel(profile->backend, profile->backend_channel, &channel));
         assert(channel == 0u);
     }
-    /* Locking is one-shot: a second attempt on the same bank is rejected. */
-    assert(!pwm_profile_lock_bank(PWM_PROFILE_BANK_HW, PWM_PROFILE_BANK_ROLE_MONITOR));
-
-    /* Lock PIO bank as monitor: fixed companion slice-A GPIOs, channels 8..15. */
-    assert(pwm_profile_lock_bank(PWM_PROFILE_BANK_PIO, PWM_PROFILE_BANK_ROLE_MONITOR));
-    assert(pwm_profile_get_bank_state(PWM_PROFILE_BANK_PIO) == PWM_PROFILE_BANK_STATE_MONITOR);
+    /* PIO bank is configured as monitor: fixed companion slice-A GPIOs, channels 8..15. */
     {
         const pwm_profile_channel_t *profile = pwm_profile_get_channel(8u);
         assert(profile->gpio == 0u);
@@ -52,9 +42,7 @@ int main(void) {
         assert(profile->direction == PWM_PROFILE_DIRECTION_INPUT);
     }
 
-    /* Lock SW bank as generator: any remaining GPIO, channels 16..23. */
-    assert(pwm_profile_lock_bank(PWM_PROFILE_BANK_SW, PWM_PROFILE_BANK_ROLE_GENERATOR));
-    assert(pwm_profile_get_bank_state(PWM_PROFILE_BANK_SW) == PWM_PROFILE_BANK_STATE_GENERATOR);
+    /* SW bank is configured as generator: remaining GPIOs, channels 16..23. */
     {
         const pwm_profile_channel_t *profile = pwm_profile_get_channel(16u);
         assert(profile->gpio == 16u);

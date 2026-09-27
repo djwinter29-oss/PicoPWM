@@ -1,6 +1,6 @@
 /**
  * @file channel_config.c
- * @brief Common profile lookup, validation, and runtime bank-locking helpers.
+ * @brief Startup channel configuration, lookup, and validation helpers.
  */
 
 #include "channel_config.h"
@@ -14,8 +14,7 @@
  * @brief Runtime logical channel table.
  *
  * All channels start `DISABLED` at boot. Each bank's 8 channels are filled in
- * exactly once, by `pwm_profile_lock_bank()`, when the host first requests
- * that bank's role.
+ * once by `pwm_profile_configure_roles()` before Core 1 starts.
  */
 static pwm_profile_channel_t pwm_profile_channels[PWM_PROFILE_CHANNEL_COUNT] = {
     [0 ... PWM_PROFILE_CHANNEL_COUNT - 1] = {.direction = PWM_PROFILE_DIRECTION_DISABLED},
@@ -181,37 +180,6 @@ const char *pwm_profile_backend_name(pwm_profile_backend_t backend) {
     }
 }
 
-pwm_profile_backend_t pwm_profile_bank_backend(pwm_profile_bank_t bank, pwm_profile_bank_role_t role) {
-    bool generator = (role == PWM_PROFILE_BANK_ROLE_GENERATOR);
-
-    switch (bank) {
-    case PWM_PROFILE_BANK_HW:
-        return generator ? PWM_PROFILE_BACKEND_HW_GENERATOR : PWM_PROFILE_BACKEND_HW_MONITOR;
-    case PWM_PROFILE_BANK_PIO:
-        return generator ? PWM_PROFILE_BACKEND_PIO_GENERATOR : PWM_PROFILE_BACKEND_PIO_MONITOR;
-    case PWM_PROFILE_BANK_SW:
-    default:
-        return generator ? PWM_PROFILE_BACKEND_SW_GENERATOR : PWM_PROFILE_BACKEND_SW_MONITOR;
-    }
-}
-
-pwm_profile_bank_state_t pwm_profile_get_bank_state(pwm_profile_bank_t bank) {
-    uint base;
-
-    if (bank >= PWM_PROFILE_BANK_COUNT) {
-        return PWM_PROFILE_BANK_STATE_UNLOCKED;
-    }
-
-    base = (uint)bank * PWM_PROFILE_BANK_SIZE;
-    if (pwm_profile_channels[base].direction == PWM_PROFILE_DIRECTION_DISABLED) {
-        return PWM_PROFILE_BANK_STATE_UNLOCKED;
-    }
-
-    return (pwm_profile_channels[base].backend == pwm_profile_bank_backend(bank, PWM_PROFILE_BANK_ROLE_GENERATOR))
-               ? PWM_PROFILE_BANK_STATE_GENERATOR
-               : PWM_PROFILE_BANK_STATE_MONITOR;
-}
-
 /** @brief Fixed GPIO assignment for each bank's 8 logical channels; see docs/pinout.md. */
 static const uint pwm_profile_bank_gpio[PWM_PROFILE_BANK_COUNT][PWM_PROFILE_BANK_SIZE] = {
     [PWM_PROFILE_BANK_HW] = {1u, 3u, 5u, 7u, 9u, 11u, 13u, 15u},
@@ -245,22 +213,18 @@ static void pwm_profile_fill_bank(pwm_profile_bank_t bank, pwm_profile_bank_role
     }
 }
 
-bool pwm_profile_lock_bank(pwm_profile_bank_t bank, pwm_profile_bank_role_t role) {
-    if ((bank >= PWM_PROFILE_BANK_COUNT) ||
-        (role != PWM_PROFILE_BANK_ROLE_GENERATOR && role != PWM_PROFILE_BANK_ROLE_MONITOR)) {
+bool pwm_profile_configure_roles(const pwm_profile_bank_role_t roles[PWM_PROFILE_BANK_COUNT]) {
+    if (roles == NULL) {
         return false;
     }
 
-    if (pwm_profile_get_bank_state(bank) != PWM_PROFILE_BANK_STATE_UNLOCKED) {
-        return false;
+    for (pwm_profile_bank_t bank = PWM_PROFILE_BANK_HW; bank < PWM_PROFILE_BANK_COUNT; ++bank) {
+        if ((roles[bank] != PWM_PROFILE_BANK_ROLE_GENERATOR) &&
+            (roles[bank] != PWM_PROFILE_BANK_ROLE_MONITOR)) {
+            return false;
+        }
+        pwm_profile_fill_bank(bank, roles[bank]);
     }
 
-    /* ponytail: this 8-entry fill is not synchronized against a concurrent Core 0 reader of
-     * this same bank's channels. Acceptable because entries only ever move once, monotonically,
-     * from all-disabled to fully valid (never live-reconfigured); a reader observing a
-     * mid-fill state sees either the safe disabled behavior or the final valid one. If banks
-     * ever become re-lockable without a reboot, add a critical section here. */
-    pwm_profile_fill_bank(bank, role);
-
-    return true;
+    return pwm_profile_validate();
 }

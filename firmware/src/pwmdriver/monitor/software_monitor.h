@@ -34,7 +34,7 @@
  *
  * Repeated calls are ignored after the first successful initialization.
  */
-void sw_mon_init(void);
+bool sw_mon_init(void);
 
 /** @brief Forward one shared GPIO edge event to the software monitor bank. */
 void sw_mon_handle_gpio_irq(uint gpio, uint32_t events);

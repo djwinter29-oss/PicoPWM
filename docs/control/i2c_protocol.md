@@ -28,18 +28,11 @@ below. Channel register ranges use the channel count advertised by
 | `REG_INFO` | `0x00` | 1 | variable | Device name string, including null terminator |
 | `REG_VERSION` | `0x01` | 1 | variable | Firmware version string, including null terminator |
 | `REG_CHANNELS` | `0x02` | 1 | 1 | Logical channel count |
-| `REG_BANK_STATE` | `0x03` | 1 | 3 | Per-bank lock state, one byte each for HW/PIO/SW: `0`=unlocked, `1`=generator, `2`=monitor |
-| `REG_BANK_LOCK` | `0x04` | 3 | 1 | Two-byte `bank_id`/`role_id` payload; locks one bank, returns status |
 | `REG_GET_CHk` | `0x10 + k` | 1 | 9 | Channel state: `freq`, `duty`, `pulse_count` |
 | `REG_SET_CHk` | `0x30 + k` | 6 | 1 | Five-byte `freq`/`duty` payload; returns status |
 | `REG_STOP_ALL` | `0x90` | 1 | 1 | Profile reset request; returns status |
 | `REG_LED` | `0x91` | 2 | 1 | One-byte LED value; returns status |
 | `REG_REBOOT` | `0x92` | 1 | 1 | Reboot request; returns status |
-
-`bank_id` is `0`=HW, `1`=PIO, `2`=SW. `role_id` is `0`=generator, `1`=monitor.
-Locking a bank is one-shot: `REG_BANK_LOCK` on an already-locked bank returns
-an invalid status, and a channel in an unlocked bank returns
-`PWM_DRIVER_RESULT_UNAVAILABLE` for `REG_GET_CHk`/`REG_SET_CHk`.
 
 Here `n` is the channel count returned by `REG_CHANNELS` and `k` ranges from
 `0` through `n - 1`. The current default profile exposes 24 channels, so the

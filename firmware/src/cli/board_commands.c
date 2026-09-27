@@ -49,62 +49,6 @@ bool board_commands_version(void *context, int argc, const char *const *argv) {
     return shell_write_line(COMMAND_SHELL, device_api_firmware_version());
 }
 
-static const char *board_commands_bank_state_text(pwm_profile_bank_state_t state) {
-    switch (state) {
-    case PWM_PROFILE_BANK_STATE_GENERATOR:
-        return "generator";
-    case PWM_PROFILE_BANK_STATE_MONITOR:
-        return "monitor";
-    case PWM_PROFILE_BANK_STATE_UNLOCKED:
-    default:
-        return "unlocked";
-    }
-}
-
-bool board_commands_bank(void *context, int argc, const char *const *argv) {
-    if (argc == 1) {
-        char line[64];
-        snprintf(line, sizeof(line), "hw=%s pio=%s sw=%s",
-            board_commands_bank_state_text(device_api_get_bank_state(PWM_PROFILE_BANK_HW)),
-            board_commands_bank_state_text(device_api_get_bank_state(PWM_PROFILE_BANK_PIO)),
-            board_commands_bank_state_text(device_api_get_bank_state(PWM_PROFILE_BANK_SW)));
-        return shell_write_line(COMMAND_SHELL, line);
-    }
-
-    if (argc != 3) {
-        return shell_write_line(COMMAND_SHELL, "ERR usage: bank <hw|pio|sw> <generator|monitor>");
-    }
-
-    pwm_profile_bank_t bank;
-    if (strcmp(argv[1], "hw") == 0) {
-        bank = PWM_PROFILE_BANK_HW;
-    } else if (strcmp(argv[1], "pio") == 0) {
-        bank = PWM_PROFILE_BANK_PIO;
-    } else if (strcmp(argv[1], "sw") == 0) {
-        bank = PWM_PROFILE_BANK_SW;
-    } else {
-        return shell_write_line(COMMAND_SHELL, "ERR usage: bank <hw|pio|sw> <generator|monitor>");
-    }
-
-    pwm_profile_bank_role_t role;
-    if (strcmp(argv[2], "generator") == 0) {
-        role = PWM_PROFILE_BANK_ROLE_GENERATOR;
-    } else if (strcmp(argv[2], "monitor") == 0) {
-        role = PWM_PROFILE_BANK_ROLE_MONITOR;
-    } else {
-        return shell_write_line(COMMAND_SHELL, "ERR usage: bank <hw|pio|sw> <generator|monitor>");
-    }
-
-    pwm_driver_result_t result = device_api_lock_bank(bank, role);
-    if (result != PWM_DRIVER_RESULT_OK) {
-        char line[48];
-        snprintf(line, sizeof(line), "ERR %s", board_commands_result_text(result));
-        return shell_write_line(COMMAND_SHELL, line);
-    }
-
-    return shell_write_line(COMMAND_SHELL, "OK bank locked");
-}
-
 bool board_commands_led(void *context, int argc, const char *const *argv) {
     if (argc != 2) {
         return shell_write_line(COMMAND_SHELL, "ERR usage: led <on|off>");

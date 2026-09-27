@@ -16,8 +16,6 @@ typedef enum {
 	I2C_CONTROL_MAP_REG_INFO = 0x00u, /**< Read-only register returning the fixed device name string. */
 	I2C_CONTROL_MAP_REG_VERSION = 0x01u, /**< Read-only register returning the fixed firmware version string. */
 	I2C_CONTROL_MAP_REG_CHANNEL_COUNT = 0x02u, /**< Read-only register returning the logical channel count. */
-	I2C_CONTROL_MAP_REG_BANK_STATE = 0x03u, /**< Read-only register returning 3 bytes: HW/PIO/SW bank lock state (0=unlocked, 1=generator, 2=monitor). */
-	I2C_CONTROL_MAP_REG_BANK_LOCK = 0x04u, /**< Write register locking one bank (payload: bank id, role id); reads the last command result. */
 	I2C_CONTROL_MAP_REG_CH_BASE = 0x10u, /**< Base register for 24 channel snapshot reads, one 9-byte record per channel. */
 	I2C_CONTROL_MAP_REG_SET_BASE = 0x30u, /**< Base register for full channel write commands carrying freq and duty. */
 	I2C_CONTROL_MAP_REG_STOP_ALL = 0x90u, /**< Register used to request stop-all and to read the last command result. */

@@ -63,9 +63,9 @@ static bool sw_mon_read_channel(uint channel, pwm_driver_state_t *state) {
 }
 
 /** @copydoc sw_mon_init */
-void sw_mon_init(void) {
+bool sw_mon_init(void) {
     if (sw_mon_initialized) {
-        return;
+        return true;
     }
 
     for (uint channel = 0; channel < pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_SW_MONITOR); channel++) {
@@ -75,12 +75,11 @@ void sw_mon_init(void) {
         sw_mon_gpio_to_channel[pin] = (int8_t)channel;
         pwm_gpio_mon_reset_channel(&sw_mon_channels[channel]);
 
-        if (channel != 0u) {
-            gpio_set_irq_enabled(pin, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
-        }
+        gpio_set_irq_enabled(pin, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
     }
 
     sw_mon_initialized = true;
+    return true;
 }
 
 /** @copydoc sw_mon_get */

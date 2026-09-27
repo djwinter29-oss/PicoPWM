@@ -319,9 +319,9 @@ static void pio_mon_refresh_channel(uint channel) {
 }
 
 /** @copydoc pio_mon_init */
-void pio_mon_init(void) {
+bool pio_mon_init(void) {
     if (pio_mon_initialized) {
-        return;
+        return true;
     }
 
     pio_mon_sys_clk_hz = clock_get_hz(clk_sys);
@@ -340,7 +340,11 @@ void pio_mon_init(void) {
         uint8_t program_offset;
 
         ctx->pio = pio_mon_pio_for_channel(channel);
-        ctx->dma_channel = dma_claim_unused_channel(true);
+        int dma_channel = dma_claim_unused_channel(false);
+        if (dma_channel < 0) {
+            return false;
+        }
+        ctx->dma_channel = (uint)dma_channel;
         ctx->sm = pio_mon_sm_for_channel(channel);
         pio_mon_reset_channel(ctx);
         program_offset = pio_mon_program_offsets[pio_mon_index(ctx->pio)];
@@ -354,6 +358,7 @@ void pio_mon_init(void) {
     }
 
     pio_mon_initialized = true;
+    return true;
 }
 
 /** @copydoc pio_mon_get */

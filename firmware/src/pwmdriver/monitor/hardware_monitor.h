@@ -28,7 +28,7 @@
  *
  * Repeated calls are ignored after the first successful initialization.
  */
-void hw_mon_init(void);
+bool hw_mon_init(void);
 
 /** @brief Forward one shared GPIO edge event to the hardware monitor bank. */
 void hw_mon_handle_gpio_irq(uint gpio, uint32_t events);

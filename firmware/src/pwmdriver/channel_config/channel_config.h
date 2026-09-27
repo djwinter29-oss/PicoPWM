@@ -78,13 +78,6 @@ typedef enum {
     PWM_PROFILE_BANK_ROLE_MONITOR, /**< Bank channels become PWM inputs. */
 } pwm_profile_bank_role_t;
 
-/** @brief Current runtime lock state of one physical bank. */
-typedef enum {
-    PWM_PROFILE_BANK_STATE_UNLOCKED = 0, /**< Bank channels are disabled; no role chosen yet. */
-    PWM_PROFILE_BANK_STATE_GENERATOR, /**< Bank is locked as a PWM output bank. */
-    PWM_PROFILE_BANK_STATE_MONITOR, /**< Bank is locked as a PWM input bank. */
-} pwm_profile_bank_state_t;
-
 /** @brief Return the active profile's logical channel table. */
 const pwm_profile_channel_t *pwm_profile_get_channel(uint channel);
 
@@ -112,25 +105,8 @@ bool pwm_profile_is_monitor(void);
 /** @brief Return a short name for one configured backend. */
 const char *pwm_profile_backend_name(pwm_profile_backend_t backend);
 
-/**
- * @brief Return the backend that would own one bank if locked with one role.
- * @param bank Physical bank.
- * @param role Requested role.
- * @return Backend enum value, or `PWM_PROFILE_BACKEND_SW_MONITOR` for an invalid @p bank.
- */
-pwm_profile_backend_t pwm_profile_bank_backend(pwm_profile_bank_t bank, pwm_profile_bank_role_t role);
-
-/**
- * @brief Lock one bank's 8 logical channels into a generator or monitor role.
- * @param bank Physical bank to lock.
- * @param role Requested role.
- * @return `true` once, the first time this bank is locked this boot; `false` if already locked or @p bank is invalid.
- * @note One-shot per boot: locking is permanent until reboot, by design, to avoid live GPIO function switching.
- */
-bool pwm_profile_lock_bank(pwm_profile_bank_t bank, pwm_profile_bank_role_t role);
-
-/** @brief Return one bank's current runtime lock state. */
-pwm_profile_bank_state_t pwm_profile_get_bank_state(pwm_profile_bank_t bank);
+/** @brief Populate all fixed banks from startup roles before Core 1 launches. */
+bool pwm_profile_configure_roles(const pwm_profile_bank_role_t roles[PWM_PROFILE_BANK_COUNT]);
 
 
 #endif

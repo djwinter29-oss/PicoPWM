@@ -59,7 +59,7 @@ rejects the request.
 Use the architecture-related pages as follows:
 
 - [Architecture](architecture.md) — system structure, layer boundaries, and request flow
-- [Firmware Configuration](configuration.md) — runtime bank locking, channel tables, and capability rules
+- [Firmware Configuration](configuration.md) — startup bank configuration, channel tables, and capability rules
 - [Pinout](pinout.md) — physical PWM, I2C, and shared-pin mapping
 - [PWM Driver Design](detail/pwm_driver_design.md) — detailed `pwmdriver` and backend internals
 - [Hardware PWM Generator](detail/generator/hardware_generator.md) — hardware output timing and slice constraints
@@ -72,7 +72,7 @@ Use the architecture-related pages as follows:
 ## System Model
 
 PicoPWM targets Raspberry Pi Pico (RP2040) and Pico 2 (RP2350) with one shared
-logical channel model. Runtime bank locking selects whether the fixed hardware,
+logical channel model. Startup bank configuration selects whether the fixed hardware,
 PIO, and software banks act as PWM generators or PWM monitors.
 
 The host-visible channel IDs and command syntax remain stable across profiles.

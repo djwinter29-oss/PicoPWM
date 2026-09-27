@@ -8,6 +8,7 @@
 #include "pico/multicore.h"
 #include "cli/pwm_commands.h"
 #include "board/led.h"
+#include "board/system.h"
 #include "i2c/i2c_slave.h"
 #include "pwmdriver/pwm_driver.h"
 #include "usb/usb_cdc.h"
@@ -38,11 +39,21 @@ int main(void) {
     usb_cdc_init();
     pwm_commands_init(&pwm_command_session, &shell_transport);
 
-    // Launch Core 1 to manage all PWM hardware.
-    pwm_driver_launch();
+    // Configure and launch all three PWM banks before starting Core 1.
+    static const pwm_driver_config_t pwm_config = {
+        .hw_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
+        .pio_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
+        .sw_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
+    };
+    if (!pwm_driver_init(&pwm_config)) {
+        system_reboot();
+    }
 
     // Wait for Core 1 mailbox service before accepting commands.
     while (!pwm_driver_is_ready()) {
+        if (pwm_driver_startup_failed()) {
+            system_reboot();
+        }
         tight_loop_contents();
     }
 

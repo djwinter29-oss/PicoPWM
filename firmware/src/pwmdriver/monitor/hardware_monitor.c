@@ -61,9 +61,9 @@ static bool hw_mon_read_channel(uint channel, pwm_driver_state_t *state) {
 }
 
 /** @copydoc hw_mon_init */
-void hw_mon_init(void) {
+bool hw_mon_init(void) {
     if (hw_mon_initialized) {
-        return;
+        return true;
     }
 
     for (uint channel = 0; channel < pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_HW_MONITOR); channel++) {
@@ -78,6 +78,7 @@ void hw_mon_init(void) {
     }
 
     hw_mon_initialized = true;
+    return true;
 }
 
 /** @copydoc hw_mon_get */

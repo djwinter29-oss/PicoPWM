@@ -63,16 +63,6 @@ bool pwm_driver_get(uint channel, pwm_driver_state_t *state);
 pwm_driver_result_t pwm_driver_restore_defaults(void);
 
 /**
- * @brief Lock one physical bank into a generator or monitor role and initialize its backend.
- * @param bank Physical bank to lock.
- * @param role Requested role.
- * @return Result code for the admitted command attempt; `PWM_DRIVER_RESULT_INVALID` if @p bank
- *         is already locked or the arguments are out of range.
- * @note This is the internal Core 0 command-ingress API underneath `device_api`.
- */
-pwm_driver_result_t pwm_driver_lock_bank(pwm_profile_bank_t bank, pwm_profile_bank_role_t role);
-
-/**
  * @brief Publish one newly applied logical channel snapshot.
  * @param channel Logical channel index.
  * @param state Caller-owned realized state snapshot.

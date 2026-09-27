@@ -139,7 +139,7 @@ static bool sw_pwm_tick_callback(repeating_timer_t *rt) {
 }
 
 /** @copydoc sw_gen_init */
-void sw_gen_init(void) {
+bool sw_gen_init(void) {
     sw_pwm_active_mask = 0u;
 
     for (int i = 0; i < pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_SW_GENERATOR); i++) {
@@ -158,7 +158,7 @@ void sw_gen_init(void) {
         gpio_put(gpio, 0);
     }
 
-    add_repeating_timer_us(-SW_PWM_TICK_US, sw_pwm_tick_callback, NULL, &sw_pwm_timer);
+    return add_repeating_timer_us(-SW_PWM_TICK_US, sw_pwm_tick_callback, NULL, &sw_pwm_timer);
 }
 
 /** @copydoc sw_gen_set */

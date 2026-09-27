@@ -45,6 +45,15 @@ bool i2c_control_map_is_write_register(uint8_t reg);
 uint8_t i2c_control_map_expected_write_length(uint8_t reg);
 
 /**
+ * @brief A one-byte write to a longer command selects that register for a status read.
+ * @param received_len Bytes captured in the current write, including the register byte.
+ * @param expected_len Full write length required to execute the command.
+ */
+static inline bool i2c_control_map_is_status_select(uint8_t received_len, uint8_t expected_len) {
+    return received_len == 1u && expected_len > 1u;
+}
+
+/**
  * @brief Build the current I2C read response for one register.
  * @param reg I2C register or command byte.
  * @param last_status Last completed write status tracked by the transport.

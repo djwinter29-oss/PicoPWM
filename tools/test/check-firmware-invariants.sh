@@ -93,6 +93,16 @@ if ! grep -q "clr_tx_abrt" "$SLAVE_FILE"; then
     exit 1
 fi
 
+if ! grep -q "i2c_control_map_is_status_select" "$SLAVE_FILE"; then
+    echo "i2c_slave.c: a one-byte write to a longer command must select status instead of queueing" >&2
+    exit 1
+fi
+
+if ! grep -q "i2c_irq_gate_should_refresh" "$SLAVE_FILE"; then
+    echo "i2c_slave.c: a new read must refresh a consumed status buffer" >&2
+    exit 1
+fi
+
 if ! grep -q "i2c_irq_gate_on_read_request" "$SLAVE_FILE"; then
     echo "i2c_slave.c: ISR must call i2c_irq_gate_on_read_request" >&2
     exit 1

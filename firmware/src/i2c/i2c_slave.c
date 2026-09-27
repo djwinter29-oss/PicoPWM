@@ -38,6 +38,7 @@ static volatile bool response_ready = false;
 static volatile bool irq_deferred = false;
 static int i2c_irq_number = -1;
 static bool i2c_started = false;
+static bool i2c_read_open = false;
 static i2c_irq_gate_t i2c_gate;
 
 static void prepare_response(uint8_t reg) {
@@ -152,8 +153,13 @@ static void i2c_slave_isr(void) {
     }
 
     if (status & I2C_IC_INTR_STAT_R_STOP_DET_BITS) {
+        // A lone register byte of a longer command is a status select, not a new write.
+        if (i2c_control_map_is_status_select(req_len, req_expected_len)) {
+            request_response(req_buf[0]);
+        }
         (void)hw->clr_stop_det;
         reset_request_capture();
+        i2c_read_open = false;
         i2c_irq_gate_on_stop(&i2c_gate);
         i2c_slave_apply_tx_mask(hw);
     }
@@ -163,8 +169,18 @@ static void i2c_slave_isr(void) {
     // stays masked unless this byte still has followers; it is level-triggered
     // and clr_intr does not clear it.
     if (status & I2C_IC_INTR_STAT_R_RD_REQ_BITS) {
-        i2c_gate_action_t action =
-            i2c_irq_gate_on_read_request(&i2c_gate, response_ready, response_needed, resp_idx, resp_len);
+        i2c_gate_action_t action;
+
+        // Repeated-start read after only the register byte: publish status, do not queue.
+        if (i2c_control_map_is_status_select(req_len, req_expected_len)) {
+            request_response(req_buf[0]);
+            reset_request_capture();
+        } else if (i2c_irq_gate_should_refresh(i2c_read_open, response_ready, response_needed, resp_idx, resp_len)) {
+            // A later pure read must see the newest status, not a consumed buffer's pad byte.
+            request_response(response_reg);
+        }
+        i2c_read_open = true;
+        action = i2c_irq_gate_on_read_request(&i2c_gate, response_ready, response_needed, resp_idx, resp_len);
         i2c_slave_apply_action(hw, action, true);
         handled_read = true;
         if (action == I2C_GATE_STRETCH) {
@@ -242,6 +258,7 @@ void i2c_slave_init(uint8_t address) {
     response_needed = false;
     response_ready = false;
     irq_deferred = false;
+    i2c_read_open = false;
     for (uint16_t reg = 0u; reg <= UINT8_MAX; ++reg) {
         last_status[reg] = (uint8_t)PWM_DRIVER_RESULT_OK;
         status_epoch[reg] = 0u;

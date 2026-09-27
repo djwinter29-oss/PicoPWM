@@ -54,14 +54,14 @@ public sealed class I2cBackend : IPicoPwmBackend
         BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(1, 4), frequencyHz);
         payload[5] = dutyPercent;
         WriteAll(payload);
-        WaitForStatus(register);
+        WaitForStatus();
         return GetChannel(channel);
     }
 
     public void StopAll()
     {
         WriteAll([RegStopAll]);
-        WaitForStatus(RegStopAll);
+        WaitForStatus();
     }
 
     public void Dispose()
@@ -78,12 +78,21 @@ public sealed class I2cBackend : IPicoPwmBackend
         return response;
     }
 
-    private void WaitForStatus(byte register)
+    private byte ReadStatus()
+    {
+        // A pure read. Writing the register again would run a one-byte command
+        // such as stop or reboot, and would not complete a six-byte channel set.
+        var response = new byte[1];
+        ReadAll(response);
+        return response[0];
+    }
+
+    private void WaitForStatus()
     {
         var deadline = DateTime.UtcNow.AddSeconds(2);
         while (true)
         {
-            var status = ReadRegister(register, 1)[0];
+            var status = ReadStatus();
             if (status != StatusBusy)
             {
                 if (status != StatusOk)

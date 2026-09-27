@@ -48,6 +48,15 @@ static inline void i2c_irq_gate_resume(i2c_irq_gate_t *gate) {
     gate->irq_enabled = true;
 }
 
+/**
+ * @brief A new read transaction should rebuild a response that was already consumed.
+ * @param read_already_open True after this transaction has already taken one RD_REQ.
+ */
+static inline bool i2c_irq_gate_should_refresh(bool read_already_open, bool response_ready, bool response_pending,
+                                               uint8_t index, uint8_t length) {
+    return !read_already_open && response_ready && !response_pending && length > 0u && index >= length;
+}
+
 /** @brief Mask TX_EMPTY when the master ends the transaction. */
 static inline void i2c_irq_gate_on_stop(i2c_irq_gate_t *gate) {
     if (gate == NULL) {

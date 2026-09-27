@@ -74,6 +74,10 @@ class FakeI2cBus:
             return list(struct.pack("<IBI", 1200, 35, 9))
         return [I2cTransport.STATUS_OK]
 
+    def read_byte(self, address):
+        self.writes.append(("read", address))
+        return I2cTransport.STATUS_OK
+
     def close(self):
         pass
 
@@ -115,6 +119,10 @@ def test_i2c_transport_uses_protocol_layout():
     assert transport.get_channel(3) == ChannelState(3, 1200, 35, 9)
     transport.set_channel(3, 800, 25)
     assert ("block", 0x40, 0x33, list(struct.pack("<IB", 800, 25))) in transport._bus.writes
+    assert ("byte", 0x40, 0x33) not in transport._bus.writes
+    assert ("read", 0x40) in transport._bus.writes
+    transport.stop_all()
+    assert transport._bus.writes.count(("byte", 0x40, I2cTransport.REG_STOP_ALL)) == 1
 
 
 def test_flask_dashboard_updates_channel_and_stops():

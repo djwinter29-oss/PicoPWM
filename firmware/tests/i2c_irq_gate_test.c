@@ -64,6 +64,14 @@ static void test_multibyte_read_masks_tx_empty_after_last_byte(void) {
     assert(!gate.tx_empty_unmasked);
 }
 
+static void test_consumed_status_refreshes_on_a_new_read(void) {
+    assert(i2c_irq_gate_should_refresh(false, true, false, 1u, 1u));
+    assert(!i2c_irq_gate_should_refresh(true, true, false, 1u, 1u));
+    assert(!i2c_irq_gate_should_refresh(false, true, false, 0u, 1u));
+    assert(!i2c_irq_gate_should_refresh(false, true, true, 1u, 1u));
+    assert(!i2c_irq_gate_should_refresh(false, false, false, 1u, 1u));
+}
+
 static void test_unsolicited_read_releases_the_clock(void) {
     i2c_irq_gate_t gate;
     i2c_gate_action_t action;
@@ -93,6 +101,7 @@ int main(void) {
     test_queue_reject_is_finished();
     test_idle_keeps_tx_empty_masked();
     test_unread_response_stretches_without_tx_empty();
+    test_consumed_status_refreshes_on_a_new_read();
     test_unsolicited_read_releases_the_clock();
     test_multibyte_read_masks_tx_empty_after_last_byte();
     test_one_byte_read_never_unmasks_tx_empty();

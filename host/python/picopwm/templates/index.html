@@ -49,11 +49,11 @@
               <span class="state">{% if channel.enabled %}RUNNING{% else %}IDLE{% endif %}</span>
             </div>
             <div class="readout">
-              <strong>{{ "%,d"|format(channel.frequency_hz) }}</strong>
+              <strong>{{ "{:,}".format(channel.frequency_hz) }}</strong>
               <span>Hz</span>
             </div>
             <div class="bar"><span style="width: {{ channel.duty_percent }}%"></span></div>
-            <div class="metrics"><span>{{ channel.duty_percent }}% duty</span><span>{{ "%,d"|format(channel.pulse_count) }} pulses</span></div>
+            <div class="metrics"><span>{{ channel.duty_percent }}% duty</span><span>{{ "{:,}".format(channel.pulse_count) }} pulses</span></div>
             <form method="post" action="{{ url_for('update_channel', channel=channel.channel) }}" class="controls">
               <label>Frequency <input name="frequency_hz" type="number" min="0" max="4294967295" value="{{ channel.frequency_hz }}" required></label>
               <label>Duty <input name="duty_percent" type="number" min="0" max="100" value="{{ channel.duty_percent }}" required></label>

@@ -7,8 +7,10 @@
 #include "pwm_driver_table.h"
 #include "pwm_driver.h"
 
+#include "board/system.h"
 #include "hardware/pwm.h"
 #include "hardware/flash.h"
+#include "hardware/sync.h"
 #include "pico/multicore.h"
 
 #include <stddef.h>
@@ -146,10 +148,19 @@ bool pwm_driver_config_save_target(const pwm_driver_config_t *config) {
     slot_offset = first_is_newer ? PWM_DRIVER_CONFIG_FLASH_OFFSET + FLASH_SECTOR_SIZE : PWM_DRIVER_CONFIG_FLASH_OFFSET;
     memset(sector, 0xff, sizeof(sector));
     memcpy(sector, &record, sizeof(record));
+    /*
+     * Pico SDK 2.3.0 flash_range_* does not disable interrupts or pause the other core.
+     * The vector table and IRQ handlers live in flash, so Core 0 interrupts stay off and
+     * Core 1 stays locked out for the whole erase and program. Lockout is not recursive.
+     * Core 1 must already have called multicore_lockout_victim_init().
+     */
+    system_watchdog_kick();
+    uint32_t irq_state = save_and_disable_interrupts();
     multicore_lockout_start_blocking();
     flash_range_erase(slot_offset, FLASH_SECTOR_SIZE);
     flash_range_program(slot_offset, sector, FLASH_SECTOR_SIZE);
     multicore_lockout_end_blocking();
+    restore_interrupts(irq_state);
     return memcmp((const void *)(uintptr_t)(XIP_BASE + slot_offset), &record, sizeof(record)) == 0;
 }
 

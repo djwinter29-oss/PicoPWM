@@ -4,6 +4,8 @@
 #include <assert.h>
 #include <string.h>
 
+void system_watchdog_kick(void) {}
+
 int main(void) {
     pwm_driver_config_t config;
 

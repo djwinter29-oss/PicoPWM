@@ -84,6 +84,11 @@ static void test_expected_lengths(void) {
     assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_LED) == 2u);
     assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_SET_BASE) == 6u);
     assert(i2c_control_map_expected_write_length(0xffu) == 0u);
+    assert(i2c_control_map_is_status_select(1u, 6u));
+    assert(i2c_control_map_is_status_select(1u, 2u));
+    assert(!i2c_control_map_is_status_select(1u, 1u));
+    assert(!i2c_control_map_is_status_select(6u, 6u));
+    assert(!i2c_control_map_is_status_select(0u, 6u));
 }
 
 static void test_read_responses(void) {

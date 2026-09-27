@@ -31,13 +31,21 @@ static const char *board_commands_result_text(pwm_driver_result_t result) {
 }
 
 bool board_commands_info(void *context, int argc, const char *const *argv) {
+    char line[64];
+
     (void)argv;
 
     if (argc != 1) {
         return shell_write_line(COMMAND_SHELL, "ERR usage: info");
     }
 
-    return shell_write_line(COMMAND_SHELL, device_api_device_name());
+    if (!shell_write_line(COMMAND_SHELL, device_api_device_name())) {
+        return false;
+    }
+
+    snprintf(line, sizeof(line), "clock=%lu Hz target=%s", (unsigned long)system_clock_hz(),
+             system_clock_is_at_target() ? "met" : "fallback");
+    return shell_write_line(COMMAND_SHELL, line);
 }
 
 bool board_commands_version(void *context, int argc, const char *const *argv) {

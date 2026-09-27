@@ -2,9 +2,9 @@
 
 PicoPWM has one firmware image and one logical channel table, owned entirely
 by `firmware/src/pwmdriver/pwm_driver_config.c`. There is no per-profile source file
-and no `PICO_PWM_PROFILE` CMake option. Channel roles are chosen at runtime by
-locking each of 3 fixed physical banks into a `generator` or `monitor` role;
-see [Firmware Configuration](configuration.md#startup-bank-configuration) for the
+and no `PICO_PWM_PROFILE` CMake option. Channel roles are stored in the startup
+configuration. The host edits that target, saves it, and applies it by rebooting.
+See [Firmware Configuration](configuration.md#startup-bank-configuration) for the
 host-facing model.
 
 ## Channel Table Ownership
@@ -85,13 +85,13 @@ standard Pico board. If a custom board needs a different physical layout:
 2. If the bank/GPIO layout itself needs to change, update
   `pwm_driver_config_bank_gpio` and the bank-to-backend mapping in
   `pwm_driver_config_fill_bank()`/`pwm_driver_config_configure()` — both stay inside
-  `channel_config.c`.
+  `pwm_driver_config.c`.
 3. Add or update firmware host-side tests in `firmware/tests/pwm_driver_config_test.c`
   and `firmware/tests/CMakeLists.txt`; run them through
   `tools/test/test-firmware-c.sh`.
 
-All backend implementations are compiled once in the shared firmware target;
-locking a bank selects which backend descriptor initializes and which logical
+All backend implementations are compiled once in the shared firmware target.
+The startup configuration selects which backend descriptor initializes and which logical
 channels it owns. This should not require changes to `pwm_driver.c` or backend
 source files unless the bank/backend mapping itself changes.
 

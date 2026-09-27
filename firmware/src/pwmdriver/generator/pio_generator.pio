@@ -1,4 +1,9 @@
-; Side-set pin 0 is used for PWM output.
+; Side-set pin 0 is the PWM output.
+; FIFO word 0 is the match threshold (X). FIFO word 1 is the period (ISR).
+; Y counts down from the period through 0. The pin is forced low at the start
+; of each period, goes high on the single iteration where X == Y, and stays
+; high until the next period. The low path must not side-set, or the output
+; collapses to a one-tick pulse. C programs X = high_iterations - 1.
 .pio_version 0
 
 .program generator
@@ -14,7 +19,7 @@ countloop:
     jmp x!=y noset
     jmp skip        side 1
 noset:
-    nop             side 0
+    nop
 skip:
     jmp y-- countloop
     jmp restart     side 0

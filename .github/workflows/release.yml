@@ -39,6 +39,9 @@ jobs:
       - name: Syntax-check shell tools
         run: tools/test/syntax-check-shell.sh
 
+      - name: Check firmware invariants
+        run: tools/test/check-firmware-invariants.sh
+
       - name: Check C formatting
         env:
           FORMAT_BASE: ${{ github.event.before }}
@@ -63,12 +66,43 @@ jobs:
       - name: Generate host coverage report
         run: tools/test/coverage-firmware-c.sh --build-dir firmware/build/tests-coverage-release --output-dir firmware/build/tests-coverage-release/coverage
 
+      - name: Check firmware invariants
+        run: tools/test/check-firmware-invariants.sh
+
       - name: Upload host coverage report
         uses: actions/upload-artifact@v6
         with:
           name: pico-pwm-release-coverage
           path: firmware/build/tests-coverage-release/coverage
           if-no-files-found: error
+
+  host-tools:
+    name: Python and .NET host tests
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Test Python host
+        working-directory: host/python
+        run: |
+          python -m pip install -e '.[test]'
+          python -m pytest -q
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Test .NET host
+        working-directory: host/dotnet
+        run: dotnet test PicoPwm.sln --configuration Release
 
   build:
     name: Build (${{ matrix.board }})
@@ -144,7 +178,7 @@ jobs:
 
   publish:
     name: Publish GitHub Release
-    needs: [build, format, unit-tests]
+    needs: [build, format, unit-tests, host-tools]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

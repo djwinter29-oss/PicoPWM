@@ -19,6 +19,12 @@
 /** @brief Local transmit queue capacity in bytes. */
 #define USB_CDC_TX_QUEUE_SIZE 256u
 
+/**
+ * Receive and transmit queues are touched only on Core 0. TinyUSB callbacks run
+ * inside tud_task() from usb_cdc_poll(), the same context as usb_cdc_read() and
+ * usb_cdc_write(). Do not move TinyUSB onto the USB IRQ without making these
+ * indexes interrupt-safe.
+ */
 /** @brief Circular receive queue storage. */
 static uint8_t usb_cdc_rx_queue[USB_CDC_RX_QUEUE_SIZE];
 /** @brief Head index for the receive queue. */

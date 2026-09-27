@@ -123,13 +123,18 @@ class I2cTransport:
         self._bus.write_byte(self._address, register)
         return list(self._bus.read_i2c_block_data(self._address, register, length))
 
+    def _read_status(self) -> int:
+        # A pure read. Rewriting the register would execute a one-byte command again
+        # and, for a channel set, would be only the first byte of a six-byte write.
+        return int(self._bus.read_byte(self._address))
+
     def _wait_for_status(self, register: int) -> None:
         deadline = time.monotonic() + 2.0
         while True:
-            status = self._read(register, 1)[0]
+            status = self._read_status()
             if status != self.STATUS_BUSY:
                 if status != self.STATUS_OK:
-                    raise RuntimeError(f"I2C command failed with status {status}")
+                    raise RuntimeError(f"I2C command 0x{register:02x} failed with status {status}")
                 return
             if time.monotonic() >= deadline:
                 raise TimeoutError("timed out waiting for PicoPWM I2C command")

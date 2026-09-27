@@ -137,6 +137,7 @@ Master read:  [status]
 - String responses include a null terminator. Allocate enough space for the full version string plus the terminator.
 - The I2C ISR only captures request bytes and serves prepared response bytes. Write commands are executed later from normal Core 0 polling.
 - A write command can therefore report `busy` if read back immediately. The master should allow a small delay and then re-read the same command register to fetch the final result.
+- The slave admits one deferred write at a time; additional writes are rejected with `PWM_DRIVER_RESULT_BUSY` and are not queued. The master must retry them.
 - `REG_REBOOT` follows the same deferred path, but the device may reset before a later status re-read is possible.
 - `pulse_count` is read-only over I2C. It cannot be set or reset via this interface.
 - `freq` and `duty` returned over I2C are the realized values published by the PWM driver layer.

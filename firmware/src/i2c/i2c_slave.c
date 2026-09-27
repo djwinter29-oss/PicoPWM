@@ -21,7 +21,7 @@ static volatile bool req_pending = false;
 static volatile uint8_t req_pending_reg = 0;
 static uint8_t req_pending_payload[I2C_REQ_BUF_SIZE - 1u];
 static volatile uint8_t req_pending_payload_len = 0;
-static volatile uint8_t last_status = (uint8_t)PWM_DRIVER_RESULT_OK;
+static volatile uint8_t last_status[UINT8_MAX + 1u];
 
 static uint8_t resp_buf[RESP_BUF_SIZE];
 static uint8_t resp_len = 0;
@@ -29,7 +29,7 @@ static uint8_t resp_idx = 0;
 
 static void prepare_response(uint8_t reg) {
     resp_idx = 0;
-    if (!i2c_control_map_read_register(reg, last_status, resp_buf, &resp_len)) {
+    if (!i2c_control_map_read_register(reg, last_status[reg], resp_buf, &resp_len)) {
         resp_buf[0] = (uint8_t)PWM_DRIVER_RESULT_INVALID;
         resp_len = 1u;
     }
@@ -52,7 +52,7 @@ static void capture_request_byte(uint8_t byte) {
         resp_len = 0u;
         resp_idx = 0u;
         if ((req_expected_len == 0u) || (req_expected_len > I2C_REQ_BUF_SIZE)) {
-            last_status = (uint8_t)PWM_DRIVER_RESULT_INVALID;
+            last_status[byte] = (uint8_t)PWM_DRIVER_RESULT_INVALID;
             reset_request_capture();
             req_in_error = true;
             return;
@@ -60,7 +60,7 @@ static void capture_request_byte(uint8_t byte) {
     }
 
     if (req_len >= I2C_REQ_BUF_SIZE) {
-        last_status = (uint8_t)PWM_DRIVER_RESULT_INVALID;
+        last_status[req_buf[0]] = (uint8_t)PWM_DRIVER_RESULT_INVALID;
         reset_request_capture();
         return;
     }
@@ -74,9 +74,9 @@ static void capture_request_byte(uint8_t byte) {
                 req_pending_payload_len = (uint8_t)(req_expected_len - 1u);
                 memcpy((void *)req_pending_payload, &req_buf[1], req_pending_payload_len);
                 req_pending = true;
-                last_status = (uint8_t)PWM_DRIVER_RESULT_BUSY;
+                last_status[req_buf[0]] = (uint8_t)PWM_DRIVER_RESULT_BUSY;
             } else {
-                last_status = (uint8_t)PWM_DRIVER_RESULT_BUSY;
+                last_status[req_buf[0]] = (uint8_t)PWM_DRIVER_RESULT_BUSY;
             }
         }
 
@@ -155,6 +155,9 @@ void i2c_slave_init(void) {
     reset_request_capture();
     resp_len = 0u;
     resp_idx = 0u;
+    for (uint16_t reg = 0u; reg <= UINT8_MAX; ++reg) {
+        last_status[reg] = (uint8_t)PWM_DRIVER_RESULT_OK;
+    }
 }
 
 void i2c_slave_poll(void) {
@@ -169,6 +172,6 @@ void i2c_slave_poll(void) {
         memcpy(payload, (const void *)req_pending_payload, payload_len);
         // Clear pending before execute so ISR can queue the next write immediately.
         req_pending = false;
-        last_status = (uint8_t)i2c_control_map_execute_write(reg, payload, payload_len);
+        last_status[reg] = (uint8_t)i2c_control_map_execute_write(reg, payload, payload_len);
     }
 }

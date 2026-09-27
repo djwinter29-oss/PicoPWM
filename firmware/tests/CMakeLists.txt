@@ -52,3 +52,14 @@ target_include_directories(channel_config_test PRIVATE
 )
 pico_pwm_test_warnings(channel_config_test)
 add_test(NAME channel_config COMMAND channel_config_test)
+
+add_executable(i2c_control_map_test
+    i2c_control_map_test.c
+    ${SOURCE_ROOT}/i2c/i2c_control_map.c
+)
+target_include_directories(i2c_control_map_test PRIVATE
+    ${TEST_STUB_ROOT}
+    ${SOURCE_ROOT}
+)
+pico_pwm_test_warnings(i2c_control_map_test)
+add_test(NAME i2c_control_map COMMAND i2c_control_map_test)

@@ -80,7 +80,8 @@ uint8_t i2c_control_map_expected_write_length(uint8_t reg) {
     return 0u;
 }
 
-bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *response, uint8_t *response_len) {
+bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *response,
+                                   uint8_t response_capacity, uint8_t *response_len) {
     pwm_driver_state_t state = {0u, 50u, 0u};
     const char *text;
     size_t text_len;
@@ -92,7 +93,7 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
     if (reg == I2C_CONTROL_MAP_REG_INFO) {
         text = device_api_device_name();
         text_len = strlen(text) + 1u;
-        if (text_len > 64u) {  // Prevent response buffer overflow
+        if (text_len > response_capacity) {
             return false;
         }
         *response_len = (uint8_t)text_len;
@@ -103,7 +104,7 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
     if (reg == I2C_CONTROL_MAP_REG_VERSION) {
         text = device_api_firmware_version();
         text_len = strlen(text) + 1u;
-        if (text_len > 64u) {  // Prevent response buffer overflow
+        if (text_len > response_capacity) {
             return false;
         }
         *response_len = (uint8_t)text_len;
@@ -114,6 +115,9 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
     if (reg == I2C_CONTROL_MAP_REG_CONFIG) {
         pwm_driver_config_t running;
         pwm_driver_config_t target;
+        if (response_capacity < 14u) {
+            return false;
+        }
         if (!device_api_config_get_running(&running) || !device_api_config_get_target(&target)) {
             return false;
         }
@@ -136,12 +140,18 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
     }
 
     if (reg == I2C_CONTROL_MAP_REG_CHANNEL_COUNT) {
+        if (response_capacity < 1u) {
+            return false;
+        }
         response[0] = device_api_channel_count();
         *response_len = 1u;
         return true;
     }
 
     if (i2c_control_map_is_channel_read(reg)) {
+        if (response_capacity < 9u) {
+            return false;
+        }
         uint channel = (uint)(reg - I2C_CONTROL_MAP_REG_CH_BASE);
         if (!device_api_get_channel(channel, &state)) {
             response[0] = (uint8_t)PWM_DRIVER_RESULT_UNAVAILABLE;
@@ -156,11 +166,17 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
     }
 
     if (i2c_control_map_is_write_register(reg)) {
+        if (response_capacity < 1u) {
+            return false;
+        }
         response[0] = last_status;
         *response_len = 1u;
         return true;
     }
 
+    if (response_capacity < 1u) {
+        return false;
+    }
     response[0] = (uint8_t)PWM_DRIVER_RESULT_INVALID;
     *response_len = 1u;
     return false;

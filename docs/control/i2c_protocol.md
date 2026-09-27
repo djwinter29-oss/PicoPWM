@@ -1,6 +1,6 @@
 # I2C Protocol
 
-The Pico acts as an I2C slave on **I2C1** at 7-bit address `0x40`. See
+The Pico acts as an I2C slave on **I2C1**, using GPIO26 for SDA and GPIO27 for
 [Pinout](../pinout.md) for SDA and SCL assignments.
 
 ### Electrical
@@ -16,6 +16,12 @@ All transactions are initiated by an I2C master. The protocol is **write-then-re
 
 Read commands are answered from the realized channel snapshot published by the PWM driver layer. Write commands are captured in the I2C ISR, deferred into normal Core 0 polling, and then applied through the same shared control path used by the USB CDC CLI.
 
+Only one write command is pending at a time. If another complete write arrives
+before the pending command has been executed, it is rejected with
+`PWM_DRIVER_RESULT_BUSY` and is not queued. The master must retry the command
+after reading its status or after a short delay. This bounded single-slot policy
+prevents the ISR from overwriting an in-flight payload or consuming unbounded
+memory.
 ## Global Register Map
 
 Every transaction starts with one register byte. A write transaction may add

@@ -29,7 +29,7 @@ static uint8_t resp_idx = 0;
 
 static void prepare_response(uint8_t reg) {
     resp_idx = 0;
-    if (!i2c_control_map_read_register(reg, last_status[reg], resp_buf, &resp_len)) {
+    if (!i2c_control_map_read_register(reg, last_status[reg], resp_buf, RESP_BUF_SIZE, &resp_len)) {
         resp_buf[0] = (uint8_t)PWM_DRIVER_RESULT_INVALID;
         resp_len = 1u;
     }
@@ -163,8 +163,9 @@ void i2c_slave_init(uint8_t address) {
 void i2c_slave_poll(void) {
     if (req_pending) {
         // Capture pending request state to locals before clearing pending flag.
-        // Safe on RP2040: Core 0 ISR and polling loop run on same IRQ,
-        // Cortex-M0+ is non-reentrant, and ISR cannot preempt polling loop.
+        // Safe on RP2040 and RP2350: copy the volatile slot to locals before
+        // clearing the pending flag, so the ISR and poller never share mutable
+        // payload storage while the deferred command executes.
         uint8_t reg = req_pending_reg;
         uint8_t payload[I2C_REQ_BUF_SIZE - 1u];
         uint8_t payload_len = req_pending_payload_len;

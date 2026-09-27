@@ -10,7 +10,9 @@
 
 /** @copydoc system_init_clock */
 void system_init_clock(void) {
-    hard_assert(set_sys_clock_khz(200000u, true));
+    if (!set_sys_clock_khz(SYSTEM_CLOCK, true)) {
+        /* Keep the SDK-selected clock when the requested overclock is unavailable. */
+    }
 }
 
 /** @copydoc system_reboot */

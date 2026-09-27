@@ -143,6 +143,12 @@ Core 0 owns the host-facing transports:
 - `i2c/i2c_slave.*` for the I2C slave ISR and deferred write scheduling
 - `i2c/i2c_control_map.*` for the I2C register map and payload translation
 
+USB CDC uses bounded 128-byte receive and 256-byte transmit queues. When a
+queue is full, additional received bytes or transmit responses are dropped and
+the transport reports failure where the API permits it. This fixed-resource
+policy prevents unbounded memory growth; applications requiring reliable bulk
+transfer must provide host-side pacing and retry at the command level.
+
 ### 2. Shared Control Layer
 
 `device_api/device_api.*` is the transport-neutral Core 0 API shared by USB CDC and I2C.

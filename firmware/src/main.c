@@ -4,7 +4,6 @@
  */
 
 #include "pico/stdlib.h"
-#include "hardware/clocks.h"
 #include "pico/multicore.h"
 #include "cli/pwm_commands.h"
 #include "board/led.h"
@@ -27,12 +26,8 @@ int main(void) {
     };
     bool usb_was_connected = false;
 
-    // Overclock to 150 MHz for more CPU headroom and higher HW PWM max frequency.
-    // Falls back to the existing clock if this fails (e.g., silicon limits).
-    if (!set_sys_clock_khz(150000, true)) {
-        // If 150 MHz fails, it usually remains at the previous frequency (125 MHz default).
-        // We continue anyway because the firmware works at both speeds.
-    }
+    // Overclock before any PWM backend caches the system clock for timing calculations.
+    system_init_clock();
 
     led_init();
 

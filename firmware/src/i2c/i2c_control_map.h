@@ -46,10 +46,12 @@ uint8_t i2c_control_map_expected_write_length(uint8_t reg);
  * @param reg I2C register or command byte.
  * @param last_status Last completed write status tracked by the transport.
  * @param response Caller-owned destination buffer.
+ * @param response_capacity Capacity of @p response in bytes.
  * @param response_len Caller-owned destination for the response byte count.
  * @return `true` when the register is supported and the response was built.
  */
-bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *response, uint8_t *response_len);
+bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *response,
+								   uint8_t response_capacity, uint8_t *response_len);
 
 /**
  * @brief Execute one I2C write command payload on Core 0.

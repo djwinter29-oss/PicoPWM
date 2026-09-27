@@ -1,27 +1,42 @@
 cmake_minimum_required(VERSION 3.13)
 
-# Set PICO_SDK_PATH environment variable or pass via -DPICO_SDK_PATH=...
-include(pico_sdk_import.cmake)
+# Set PICO_SDK_PATH in the environment or pass -DPICO_SDK_PATH=... to CMake.
+if(NOT DEFINED PICO_SDK_PATH AND DEFINED ENV{PICO_SDK_PATH})
+    set(PICO_SDK_PATH "$ENV{PICO_SDK_PATH}")
+endif()
+if(NOT DEFINED PICO_SDK_PATH OR PICO_SDK_PATH STREQUAL "")
+    message(FATAL_ERROR "PICO_SDK_PATH must point to an installed Pico SDK")
+endif()
+include("${PICO_SDK_PATH}/external/pico_sdk_import.cmake")
 
 project(PicoPWM C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
 set(PICO_PWM_FIRMWARE_VERSION "0.0.0-dev" CACHE STRING "Firmware version string exposed over CDC and I2C")
+set(PICO_PWM_I2C_CLOCK_SPEED 400000 CACHE STRING "I2C slave clock speed in Hz (100000 or 400000)")
+set(PICO_PWM_I2C_ADDR 0x40 CACHE STRING "I2C slave address (7-bit, 0x00..0x7F)")
 
 pico_sdk_init()
 
 add_executable(pico_pwm
     src/main.c
-    src/control/control_iface.c
+    src/device_api/device_api.c
+    src/pwmdriver/channel_config/channel_config.c
+    src/board/led.c
+    src/board/system.c
     src/pwmdriver/pwm_driver.c
-    src/pwmdriver/hw/generator.c
-    src/pwmdriver/hw/monitor.c
-    src/pwmdriver/sw/generator.c
-    src/pwmdriver/sw/monitor.c
-    src/pwmdriver/pio/generator.c
-    src/cli/cli_shell.c
-    src/cli/device_cli.c
+    src/pwmdriver/generator/hardware_generator.c
+    src/pwmdriver/generator/pio_generator.c
+    src/pwmdriver/generator/software_generator.c
+    src/pwmdriver/monitor/hardware_monitor.c
+    src/pwmdriver/monitor/pio_monitor.c
+    src/pwmdriver/monitor/software_monitor.c
+    src/cli/shell.c
+    src/cli/pwm_commands.c
+    src/cli/channel_commands.c
+    src/cli/board_commands.c
+    third_party/microrl/microrl.c
     src/i2c/i2c_control_map.c
     src/usb/usb_cdc.c
     src/usb/usb_descriptors.c
@@ -29,7 +44,10 @@ add_executable(pico_pwm
 )
 
 pico_generate_pio_header(pico_pwm
-    ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/pio/generator.pio
+    ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/generator/pio_generator.pio
+)
+pico_generate_pio_header(pico_pwm
+    ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/monitor/pio_monitor.pio
 )
 
 target_link_libraries(pico_pwm
@@ -47,8 +65,18 @@ target_link_libraries(pico_pwm
     tinyusb_board
 )
 
+target_link_libraries(pico_pwm hardware_dma)
+
 target_compile_definitions(pico_pwm PRIVATE
     PICO_PWM_FIRMWARE_VERSION_STR="${PICO_PWM_FIRMWARE_VERSION}"
+    PICO_PWM_I2C_CLOCK_SPEED=${PICO_PWM_I2C_CLOCK_SPEED}
+    PICO_PWM_I2C_ADDR=${PICO_PWM_I2C_ADDR}
+)
+
+target_include_directories(pico_pwm PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/src
+    ${CMAKE_CURRENT_LIST_DIR}/src/config
+    ${CMAKE_CURRENT_LIST_DIR}/third_party/microrl
 )
 
 # USB CDC is handled directly through TinyUSB; UART is disabled.

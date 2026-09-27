@@ -5,71 +5,123 @@ on:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: Release version without leading v
+        required: true
+        type: string
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  PICO_SDK_VERSION: "2.3.0"
+  PICO_SDK_REVISION: "98a542c1a62fb549ffb5d66a3e5892b06276b670"
+  PICO_SDK_PATH: ${{ github.workspace }}/.pico-sdk
 
 jobs:
-  build-release:
-    runs-on: ubuntu-latest
-    env:
-      PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
-      PICO_SDK_REF: master
+  build:
+    name: Build (${{ matrix.board }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [pico, pico2]
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Checkout Pico SDK
-        uses: actions/checkout@v4
-        with:
-          repository: raspberrypi/pico-sdk
-          ref: ${{ env.PICO_SDK_REF }}
-          path: pico-sdk
-          submodules: recursive
+      - name: Resolve version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -eu
+          VERSION=$(tools/release/resolve-release-version.sh "$EVENT_NAME" "$INPUT_VERSION" "$REF_NAME")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved firmware version: $VERSION"
 
-      - name: Install toolchain
+      - name: Install host build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            cmake \
-            ninja-build \
-            gcc-arm-none-eabi \
-            libnewlib-arm-none-eabi
+          sudo apt-get install -y --no-install-recommends cmake ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-dev libstdc++-arm-none-eabi-newlib
 
-      - name: Derive firmware version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Cache Pico SDK
+        uses: actions/cache@v4
+        with:
+          path: .pico-sdk
+          key: pico-sdk-${{ env.PICO_SDK_VERSION }}-${{ env.PICO_SDK_REVISION }}-${{ runner.os }}
+
+      - name: Setup Pico SDK
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Expected tag format vx.y.z, got ${GITHUB_REF_NAME}" >&2
-            exit 1
-          fi
-          echo "PICO_PWM_FIRMWARE_VERSION=$VERSION" >> "$GITHUB_ENV"
+          tools/firmware/setup-sdk-env.sh \
+            --sdk-version "$PICO_SDK_VERSION" \
+            --sdk-revision "$PICO_SDK_REVISION"
+
+      - name: Syntax-check Python tools
+        run: tools/test/syntax-check-python.sh
+
+      - name: Syntax-check shell tools
+        run: tools/test/syntax-check-shell.sh
 
       - name: Build firmware
-        run: ./tools/linux/build.sh
+        env:
+          BOARD: ${{ matrix.board }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: tools/firmware/build.sh --board "$BOARD" --firmware-version "$VERSION"
+
+      - name: Check USB identity
+        run: python3 tools/release/check-usb-identity.py
+
+      - name: Package board artifacts
+        env:
+          BOARD: ${{ matrix.board }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -eu
+          source_dir="firmware/build/${BOARD}"
+          output_dir="dist/${BOARD}"
+          mkdir -p "$output_dir"
+          for extension in uf2 elf bin hex dis; do
+            cp "$source_dir/pico_pwm.${extension}" "$output_dir/pico_pwm-v${VERSION}-${BOARD}.${extension}"
+          done
+          (cd "$output_dir" && sha256sum pico_pwm-v${VERSION}-${BOARD}.* > "SHA256SUMS-${BOARD}.txt")
+          ls -la "$output_dir"
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: pico-pwm-release-build
-          path: |
-            firmware/build/pico_pwm.uf2
-            firmware/build/pico_pwm.elf
-            firmware/build/pico_pwm.bin
-            firmware/build/pico_pwm.hex
-            firmware/build/pico_pwm.dis
+          name: release-${{ matrix.board }}
+          path: dist/${{ matrix.board }}/*
           if-no-files-found: error
 
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Download all board artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
       - name: Publish GitHub release assets
-        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_name }}
+          name: PicoPWM ${{ github.ref_name }}
+          draft: true
           files: |
-            firmware/build/pico_pwm.uf2
-            firmware/build/pico_pwm.elf
-            firmware/build/pico_pwm.bin
-            firmware/build/pico_pwm.hex
-            firmware/build/pico_pwm.dis
+            dist/**
           generate_release_notes: true

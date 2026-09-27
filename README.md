@@ -1,24 +1,34 @@
 # PicoPWM
 
-PicoPWM is a Raspberry Pi Pico / Pico 2 project aimed at providing a low-cost PWM platform with two host control interfaces: USB CDC CLI and I2C.
+PicoPWM is a Raspberry Pi Pico / Pico 2 firmware framework for controlling 24
+logical PWM channels through two stable host interfaces: a USB CDC shell and an
+I2C register protocol.
 
 The project is intended for both:
 
 - **Raspberry Pi Pico** based on **RP2040**
 - **Raspberry Pi Pico 2** based on **RP2350**
 
-The project targets two firmware variants:
+Build profiles select whether each logical channel is a generator or monitor,
+and whether it uses the hardware PWM, PIO, or software backend. The host sees
+the same logical channel IDs and control commands regardless of profile.
 
-- **PWM generator** — drives 24 logical PWM outputs.
-- **PWM monitoring** — keeps the same external pin layout so the same board wiring can be reused for measurement-focused firmware.
+Each channel profile also defines its GPIO, direction, capabilities, frequency
+limits, and backend-local resource assignment.
 
-The generator-oriented channel plan is:
+The framework intentionally exposes backend tradeoffs rather than hiding them:
 
-- **8 hardware PWM channels** on the MCU PWM slice **channel B** pins for the highest accuracy and for pin compatibility with monitoring use cases.
-- **8 PIO PWM channels** for flexible timing across the intended **1 Hz to 1 MHz** operating range.
-- **8 software PWM channels** focused on about **1 Hz to 1 kHz** operation.
-
-Each logical channel exposes frequency, duty cycle, and a read-only 32-bit pulse counter through a unified control model.
+- **Hardware PWM** provides high timing accuracy but has pin/slice constraints
+	and a backend-specific minimum frequency.
+- **PIO PWM** provides flexible pin placement and a broad range, with finite
+	PIO state-machine resources and divider/period quantization.
+- **Software PWM** has no fixed PWM slice or PIO channel allocation and can use
+	ordinary GPIOs, but polling/timer and CPU overhead limit channel count,
+	maximum frequency, and timing accuracy.
+- **Monitor backends** have their own measurable frequency range and accuracy;
+	input channels are read-only through the control interfaces. Software
+	monitoring is intended for simple low-frequency measurements; high-
+	performance monitoring should use PIO or hardware capture.
 
 The current firmware exposes:
 
@@ -32,74 +42,47 @@ The current firmware exposes:
 
 ### Prerequisites
 
-- Install the [Raspberry Pi Pico SDK](https://github.com/raspberrypi/pico-sdk).
+- Install `git` and the [Raspberry Pi Pico SDK prerequisites](https://datasheets.raspberrypi.com/pico/getting-started-with-pico.pdf).
 - Put `cmake`, a supported build tool, and `arm-none-eabi-gcc` on your `PATH`.
-- Set `PICO_SDK_PATH`.
+- The setup helper downloads the pinned Pico SDK into `.pico-sdk`.
 
 ### Build
 
-Build the firmware from the repository `firmware/` directory:
+The Linux helper scripts select a suitable CMake generator and keep Pico and
+Pico 2 build directories separate. From the repository root:
 
-```bash
-cd firmware
-mkdir build && cd build
-cmake -DPICO_SDK_PATH=%PICO_SDK_PATH% -G "MinGW Makefiles" ..
-make -j4
+On Linux or macOS:
+
+```sh
+. tools/firmware/setup-sdk-env.sh
+./tools/firmware/build.sh --board pico
 ```
 
-On Linux or macOS, use the same flow but point CMake at `$PICO_SDK_PATH`.
+Use `pico2` instead of `pico` for Raspberry Pi Pico 2. The matching helpers
+under `tools/firmware/` handle loading, while `tools/test/` contains the CTest
+and syntax-check entry points. A direct CMake build is also possible from
+`firmware/` when a custom generator or build layout is needed.
 
-If `make` is not the right backend on your machine, use a generator that matches your toolchain. For example, on Windows with Ninja:
+Run the firmware host-side C tests independently of the ARM firmware build:
 
-```bash
-cd firmware
-mkdir build && cd build
-cmake -DPICO_SDK_PATH=%PICO_SDK_PATH% -G Ninja ..
-ninja
+```sh
+tools/test/test-firmware-c.sh
+tools/test/coverage-firmware-c.sh
 ```
+
+The root CMake project intentionally configures the firmware build only;
+`firmware/tests` uses the host compiler and is managed by these test helpers.
+
+Channel roles are chosen at runtime, not at build time: every logical channel
+starts disabled, and the host locks each of the 3 physical banks (hardware
+PWM, PIO, software) into a `generator` or `monitor` role over CDC or I2C. See
+[Firmware Configuration](docs/configuration.md#runtime-bank-locking) for the
+full model.
 
 Build outputs of interest:
 
 - `pico_pwm.uf2` for USB flashing
 - `pico_pwm.elf` for debug tools
-
-Helper scripts are provided under:
-
-- `tools/windows/` for PowerShell build, test, and load helpers
-- `tools/linux/` for POSIX shell build, test, and load helpers
-
-Examples:
-
-```powershell
-tools\windows\build.ps1
-tools\windows\build.ps1 -Board pico2
-tools\windows\test.ps1
-tools\windows\load.ps1
-tools\windows\load.ps1 -Board pico2
-tools\windows\coverage.ps1
-```
-
-```sh
-./tools/linux/build.sh
-./tools/linux/build.sh --board pico2
-./tools/linux/test.sh
-./tools/linux/load.sh
-./tools/linux/load.sh --board pico2
-./tools/linux/coverage.sh
-```
-
-Board selection:
-
-- `pico` builds for Raspberry Pi Pico on RP2040
-- `pico2` builds for Raspberry Pi Pico 2 on RP2350 through Pico SDK `PICO_BOARD=pico2`
-- when `pico` or `pico2` is selected and no custom build directory is provided, the scripts use `firmware/build-pico` or `firmware/build-pico2` to avoid mixing board-specific CMake caches
-
-Coverage helpers expect:
-
-- `gcovr` on `PATH`
-- CMake tests configured in the active build tree
-
-The current repository does not define any CMake tests yet, so the coverage scripts stop with a clear error until tests are added.
 
 Firmware versioning:
 
@@ -124,7 +107,7 @@ Other flash options:
 ### Connect
 
 - USB CDC serial at **115200 baud**
-- I2C slave at address `0x40` on GPIO 16/17
+- I2C slave at address `0x40`; see [Pinout](docs/pinout.md) for physical connections.
 
 ### Troubleshooting
 
@@ -132,77 +115,72 @@ Other flash options:
 - Confirm `arm-none-eabi-gcc` is on your `PATH`.
 - If the Pico SDK checkout is incomplete, run `git submodule update --init --recursive` inside the SDK.
 - If USB CDC does not enumerate, reconnect the cable and confirm it supports data.
-- If I2C does not respond, confirm 4.7 kΩ pull-ups on GPIO 16/17 and start at 100 kHz.
-
-If you are documenting or preparing the monitoring build, keep the same physical channel order and pinout shown below so generator and monitoring firmware stay interchangeable at the harness level.
+- If I2C does not respond, confirm external pull-ups on SDA/SCL and start at 100 kHz; see [Pinout](docs/pinout.md).
 
 ---
 
-## Channel Map
+## Pinout
 
-| Logical Channel | Type | GPIO | Notes |
-|-----------------|------|------|-------|
-| 0 | Hardware PWM | GPIO 1 | Slice 0, channel B |
-| 1 | Hardware PWM | GPIO 3 | Slice 1, channel B |
-| 2 | Hardware PWM | GPIO 5 | Slice 2, channel B |
-| 3 | Hardware PWM | GPIO 7 | Slice 3, channel B |
-| 4 | Hardware PWM | GPIO 9 | Slice 4, channel B |
-| 5 | Hardware PWM | GPIO 11 | Slice 5, channel B |
-| 6 | Hardware PWM | GPIO 13 | Slice 6, channel B |
-| 7 | Hardware PWM | GPIO 15 | Slice 7, channel B |
-| 8 | PIO PWM | GPIO 0 | Companion pin to HW channel 0 |
-| 9 | PIO PWM | GPIO 2 | Companion pin to HW channel 1 |
-| 10 | PIO PWM | GPIO 4 | Companion pin to HW channel 2 |
-| 11 | PIO PWM | GPIO 6 | Companion pin to HW channel 3 |
-| 12 | PIO PWM | GPIO 8 | Companion pin to HW channel 4 |
-| 13 | PIO PWM | GPIO 10 | Companion pin to HW channel 5 |
-| 14 | PIO PWM | GPIO 12 | Companion pin to HW channel 6 |
-| 15 | PIO PWM | GPIO 14 | Companion pin to HW channel 7 |
-| 16 | Software PWM | GPIO 18 | |
-| 17 | Software PWM | GPIO 19 | |
-| 18 | Software PWM | GPIO 20 | |
-| 19 | Software PWM | GPIO 21 | |
-| 20 | Software PWM | GPIO 22 | |
-| 21 | Software PWM | GPIO 25 | On-board LED, optional |
-| 22 | Software PWM | GPIO 26 | Shared with ADC0 |
-| 23 | Software PWM | GPIO 27 | Shared with ADC1 |
+See [docs/pinout.md](docs/pinout.md) for the complete PWM channel and host-interface pinout.
 
-### Target Frequency Ranges
+### Backend Characteristics
 
-| Backend | Target Range | Positioning |
+| Backend | Characteristics | Constraints |
 |---------|--------------|-------------|
-| Hardware PWM | about **10 Hz to 1 MHz** | Best accuracy and best fit for measurement-compatible channels |
-| PIO PWM | about **1 Hz to 1 MHz** | Flexible timing over the intended generator range; realized frequency is quantized by PIO divider and period search |
-| Software PWM | about **1 Hz to 1 kHz** | Lowest cost backend for slower signals |
+| Hardware PWM | High timing accuracy | Pin/slice assignment and minimum-frequency limits |
+| PIO PWM | Flexible placement and broad range | Finite state machines and divider/period quantization |
+| Software PWM | Simple polling/timer implementation | Lower maximum frequency and timing accuracy |
+| Monitor backends | Measure input signals | Backend-specific measurable range and accuracy |
 
 ---
 
 ## Command Interfaces
 
 - **USB CDC serial**: text commands at 115200 baud
-- **I2C slave**: binary register map at 7-bit address `0x40` on GPIO 16 (SDA) / GPIO 17 (SCL)
+- **I2C slave**: binary register map at 7-bit address `0x40`; see [Pinout](docs/pinout.md) for physical connections
 
-Use the `stop` command to reset all channels to the power-up state: frequency = 0 Hz and duty = 0%. `pulse_count` is monotonic from power-on and is not reset by `stop`.
+Use the `stop` command to apply the selected profile's safe reset behavior.
+Generator profiles stop outputs; monitor profiles leave measured input channels
+unchanged. `pulse_count` is monotonic from power-on and is not reset by `stop`.
 
 ---
 
 ## Documentation
 
 - [Architecture](docs/architecture.md)
-- [Control Protocol](docs/protocol.md)
-- [Firmware Interfaces](docs/firmware_interfaces.md)
+- [Firmware Configuration](docs/configuration.md)
+- [Channel Configuration](docs/channel_config.md)
+- [Control Interfaces](docs/control/README.md)
+- [I2C Protocol](docs/control/i2c_protocol.md)
+- [USB CDC CLI](docs/control/usb_cdc_cli.md)
+- [Pinout](docs/pinout.md)
+
+The USB CDC shell uses the vendored [microrl](https://github.com/Helius/microrl)
+line editor, pinned to commit `d044bf4`. Its Apache-2.0 license and source are
+included under `firmware/third_party/microrl/`.
+
+## Related Project
+
+[PicoUART](https://github.com/djwinter29-oss/PicoUART) is the companion
+Raspberry Pi Pico project for UART-oriented host communication. PicoPWM is a
+separate firmware and keeps its host interfaces focused on USB CDC and I2C;
+the projects can be used as related building blocks without sharing a runtime
+dependency.
 
 ## Repository Layout
 
 - `firmware/` — CMake project, Pico SDK import, and all firmware source code
 - `docs/` — user and design documentation
+- `tools/firmware/` — Linux firmware build and flashing helpers
+- `tools/test/` — Linux CTest and coverage helpers
 - `README.md` — top-level project overview
 
 ---
 
-## Default State
+## Default Generator State
 
-After power-up or reset, **all 24 channels are off**:
+In a generator profile, after power-up or reset, **all 24 output channels are
+off**:
 
 | Property | Value |
 |----------|-------|
@@ -210,7 +188,9 @@ After power-up or reset, **all 24 channels are off**:
 | Duty | 0% |
 | Pulse count | 0 |
 
-No demo channels are configured. Use CDC or I2C commands to set frequencies and duty cycles.
+No demo channels are configured. Use the USB CDC shell or I2C commands to set
+frequencies and duty cycles. Monitor profiles report input state instead of
+using this output-default state.
 
 Use the `stop` command to reset all channels back to this state at any time. `pulse_count` continues accumulating from power-on.
 

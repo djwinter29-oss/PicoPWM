@@ -7,24 +7,17 @@
 #define PWMDRIVER_PWM_DRIVER_H
 
 #include "pico/stdlib.h"
+#include "pwmdriver/channel_config/channel_config.h"
 
 #include <stdint.h>
 
-/** @brief Logical hardware PWM channel count. */
+/** @brief Hardware PWM backend channel capacity. */
 #define HW_PWM_COUNT 8
-/** @brief Logical PIO PWM channel count. */
+/** @brief PIO PWM backend channel capacity. */
 #define PIO_PWM_DRIVER_COUNT 8
-/** @brief Logical software PWM channel count. */
-#define SW_PWM_COUNT 8
 
-/** @brief Logical base index for hardware PWM channels. */
-#define HW_PWM_CHANNEL_BASE 0
-/** @brief Logical base index for PIO PWM channels. */
-#define PIO_PWM_CHANNEL_BASE (HW_PWM_CHANNEL_BASE + HW_PWM_COUNT)
-/** @brief Logical base index for software PWM channels. */
-#define SW_PWM_CHANNEL_BASE (PIO_PWM_CHANNEL_BASE + PIO_PWM_DRIVER_COUNT)
 /** @brief Total logical PWM channel count across all backends. */
-#define PWM_DRIVER_CHANNEL_COUNT (HW_PWM_COUNT + PIO_PWM_DRIVER_COUNT + SW_PWM_COUNT)
+#define PWM_DRIVER_CHANNEL_COUNT PWM_PROFILE_CHANNEL_COUNT
 
 /** @brief Result codes returned by shared PWM control operations. */
 typedef enum {

@@ -6,8 +6,8 @@
 #include "pico/stdlib.h"
 #include "hardware/clocks.h"
 #include "pico/multicore.h"
-#include "cli/device_cli.h"
-#include "driver/led.h"
+#include "cli/pwm_commands.h"
+#include "board/led.h"
 #include "i2c/i2c_slave.h"
 #include "pwmdriver/pwm_driver.h"
 #include "usb/usb_cdc.h"
@@ -17,7 +17,8 @@
  * @return Never returns during normal firmware operation.
  */
 int main(void) {
-    static const cli_shell_transport_t usb_cli_transport = {
+    static pwm_commands_t pwm_command_session;
+    static const shell_transport_t shell_transport = {
         .read = usb_cdc_read,
         .write = usb_cdc_write,
         .context = NULL,
@@ -35,12 +36,12 @@ int main(void) {
 
     // USB CDC command interface.
     usb_cdc_init();
-    device_cli_init(&usb_cli_transport);
+    pwm_commands_init(&pwm_command_session, &shell_transport);
 
     // Launch Core 1 to manage all PWM hardware.
     pwm_driver_launch();
 
-    // Wait for Core 1 to finish PWM init before accepting commands.
+    // Wait for Core 1 mailbox service before accepting commands.
     while (!pwm_driver_is_ready()) {
         tight_loop_contents();
     }
@@ -56,10 +57,10 @@ int main(void) {
         // Detect USB connection events and print the initial CLI help.
         usb_connected = usb_cdc_is_connected();
         if (usb_connected && !usb_was_connected) {
-            device_cli_on_connected();
+            pwm_commands_on_connected(&pwm_command_session);
         }
         usb_was_connected = usb_connected;
-        device_cli_poll();
+        pwm_commands_poll(&pwm_command_session);
         i2c_slave_poll();
         sleep_us(100);
     }

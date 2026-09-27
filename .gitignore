@@ -1,5 +1,5 @@
 /firmware/build/
-/firmware/build-coverage/
+.pico-sdk/
 
 # Firmware build artifacts
 *.uf2
@@ -7,3 +7,7 @@
 *.bin
 *.hex
 *.map
+
+# Python bytecode and cache directories
+__pycache__/
+*.py[cod]

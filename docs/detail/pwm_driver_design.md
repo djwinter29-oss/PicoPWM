@@ -462,7 +462,7 @@ Per-channel readback metadata lives beside that common snapshot cache rather tha
 - `pulse_ref_us` for each logical channel
 
 Backends may optionally finalize readback from that metadata after the coherent snapshot copy. The
-current PIO generator uses this hook to extrapolate its running `pulse_count` on Core 0 without
+hardware and PIO generators use this hook to extrapolate a running `pulse_count` on Core 0 without
 teaching the wrapper which backend owns that policy.
 
 The writer increments `version` before and after update.
@@ -489,11 +489,10 @@ The integrated generator backend:
 - accepts integer `freq_hz` and integer duty percent
 - uses one PWM slice per logical hardware channel
 - treats `freq_hz = 0` as a static-output policy case
-- publishes realized `freq_hz` and `duty`
-- always publishes `pulse_count = 0`
-- does not keep a separate backend-local realized-state cache now that the shared snapshot is the only external read model
+- publishes realized `freq_hz`, `duty`, and an elapsed-time `pulse_count`
+- keeps the pulse-estimate base locally and publishes the shared snapshot as the external read model
 
-The current hardware generator no longer uses a wrap IRQ for pulse counting.
+The hardware generator does not use a wrap IRQ for pulse counting. It estimates completed periods from elapsed time and the realized frequency, and that estimate stops while the output is static.
 
 The hardware monitor backend:
 

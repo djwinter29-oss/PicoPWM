@@ -98,6 +98,21 @@ if ! grep -q "clr_tx_abrt" "$SLAVE_FILE"; then
     exit 1
 fi
 
+if ! grep -q "I2C_IC_INTR_MASK_M_TX_ABRT_BITS" "$SLAVE_FILE"; then
+    echo "i2c_slave.c: TX_ABRT must be unmasked so a master NACK enters the ISR" >&2
+    exit 1
+fi
+
+if grep -q "hw->clr_intr" "$SLAVE_FILE"; then
+    echo "i2c_slave.c: clr_intr drops STOP_DET and RD_REQ that arrive after the status sample" >&2
+    exit 1
+fi
+
+if ! grep -q "rxflr" "$SLAVE_FILE"; then
+    echo "i2c_slave.c: ISR must drain every queued RX byte before handling STOP" >&2
+    exit 1
+fi
+
 if ! grep -q "i2c_control_map_is_status_select" "$SLAVE_FILE"; then
     echo "i2c_slave.c: a one-byte write to a longer command must select status instead of queueing" >&2
     exit 1

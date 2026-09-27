@@ -48,7 +48,9 @@ The public logical state uses:
 
 - `freq_hz` as `uint32_t`
 - `duty` as integer percent `0..100`
-- `pulse_count` fixed at `0`
+- `pulse_count` as an elapsed-time estimate of generated periods
+
+`pulse_count` is not a wrap-IRQ edge count. The backend freezes the count when the realized frequency changes, and Core 0 adds periods from the elapsed time and that frequency on read. A static output (`freq_hz = 0`) stops the estimate. `stop` drives the pin low and does not clear the count.
 
 The generator treats `freq_hz = 0` as a static-output policy case:
 
@@ -169,7 +171,7 @@ The current generator workflow is:
 3. resolve static outputs first for `freq_hz = 0` and endpoint duties
 4. otherwise search a local divider window for the best valid `TOP` and divider pair
 5. program wrap, divider, and compare level into the slice
-6. publish the realized frequency and duty through the backend state
+6. publish the realized frequency, duty, and elapsed-time pulse count through the backend state
 
 ### Generator Tradeoffs
 
@@ -178,7 +180,7 @@ The generator path intentionally prefers:
 - integer-only timing search
 - realized-state publication in C
 - static GPIO drive for `freq_hz = 0`
-- no per-period IRQ bookkeeping
+- an elapsed-time pulse estimate instead of per-period IRQ bookkeeping
 
 over:
 

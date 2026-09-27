@@ -34,6 +34,7 @@ int main(void) {
             uint32_t simulated;
             uint32_t rounded_percent;
 
+            pwm_pio_program_duty(periods[period_index], duties[duty_index], NULL);
             pwm_pio_program_duty(periods[period_index], duties[duty_index], &program);
             simulated = pwm_pio_simulate_high_iterations(periods[period_index], program.match);
             assert(simulated == program.high_iterations);

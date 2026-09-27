@@ -83,7 +83,7 @@ gcovr \
     --exclude-unreachable-branches \
     --exclude-throw-branches \
     --print-summary \
-    --fail-under-line 60
+    --fail-under-line 90
 
 gcovr \
     --root "$REPO_ROOT" \

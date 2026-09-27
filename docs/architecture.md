@@ -86,10 +86,13 @@ Each logical channel exposes the same readback model:
 - `duty`
 - `pulse_count`
 
-The field has backend-specific semantics: GPIO monitors count accepted
-edge-reconstructed periods, the PIO monitor reports `0` because it captures one
-period per sample without accumulating periods, and PIO generator readback may
-estimate elapsed periods from its last published reference timestamp.
+The field has backend-specific semantics. GPIO monitors count accepted
+edge-reconstructed periods. The PIO monitor reports `0` because it captures one
+period per sample. Hardware and PIO generators publish the period count implied
+by elapsed time at the realized frequency. Those backends do not take a wrap or
+period interrupt; that elapsed-time count is the `pulse_count` the control
+interfaces provide. It is monotonic from power-on, saturates at the counter
+maximum, and does not advance while the output is static.
 
 ### Monitor Measurement Strategy
 
@@ -297,7 +300,7 @@ That means:
 - `device_api` does not keep a second cache
 - both USB CDC and I2C observe the same logical channel view
 
-`pulse_count` is monotonic from power-on. `stop` disables generator outputs by driving them low (`freq = 0 Hz`, `duty = 0%`) and does not reset the counter. Hardware and PIO generators estimate that count from elapsed time and the realized frequency. Software generators count completed periods. PIO monitor channels report `0` because they capture one period per sample.
+`pulse_count` is monotonic from power-on. `stop` disables generator outputs by driving them low (`freq = 0 Hz`, `duty = 0%`) and does not reset the counter. Hardware and PIO generators publish the elapsed-time period count described above; that is the count those backends can provide without a per-period interrupt. Software generators count completed periods. PIO monitor channels report `0` because they capture one period per sample.
 
 ## Channel Layout
 

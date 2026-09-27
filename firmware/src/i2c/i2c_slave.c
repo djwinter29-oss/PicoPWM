@@ -105,7 +105,8 @@ static void capture_request_byte(uint8_t byte) {
 }
 
 static uint32_t i2c_slave_intr_mask(void) {
-    uint32_t mask = I2C_IC_INTR_MASK_M_RX_FULL_BITS | I2C_IC_INTR_MASK_M_RD_REQ_BITS | I2C_IC_INTR_MASK_M_STOP_DET_BITS;
+    uint32_t mask = I2C_IC_INTR_MASK_M_RX_FULL_BITS | I2C_IC_INTR_MASK_M_RD_REQ_BITS |
+                    I2C_IC_INTR_MASK_M_STOP_DET_BITS | I2C_IC_INTR_MASK_M_TX_ABRT_BITS;
     mask |= i2c_gate.tx_empty_unmasked ? I2C_IC_INTR_MASK_M_TX_EMPTY_BITS : 0u;
     return mask;
 }
@@ -115,7 +116,7 @@ static void i2c_slave_apply_tx_mask(i2c_hw_t *hw) {
 }
 
 static void i2c_slave_clear_tx_abort(i2c_hw_t *hw) {
-    // A transmit abort flushes the FIFOs until IC_CLR_TX_ABRT is read. clr_intr does not release them.
+    // A transmit abort flushes the FIFOs until IC_CLR_TX_ABRT is read.
     if ((hw->raw_intr_stat & I2C_IC_RAW_INTR_STAT_TX_ABRT_BITS) != 0u) {
         (void)hw->clr_tx_abrt;
     }
@@ -139,64 +140,85 @@ static void i2c_slave_apply_action(i2c_hw_t *hw, i2c_gate_action_t action, bool 
     }
 }
 
+static void i2c_slave_handle_stop(i2c_hw_t *hw) {
+    // A lone register byte of a longer command is a status select, not a new write.
+    if (i2c_control_map_is_status_select(req_len, req_expected_len)) {
+        request_response(req_buf[0]);
+    }
+    (void)hw->clr_stop_det;
+    reset_request_capture();
+    i2c_read_open = false;
+    i2c_irq_gate_on_stop(&i2c_gate);
+    i2c_slave_apply_tx_mask(hw);
+}
+
+static void i2c_slave_handle_read_request(i2c_hw_t *hw) {
+    i2c_gate_action_t action;
+
+    // Repeated-start read after only the register byte: publish status, do not queue.
+    if (i2c_control_map_is_status_select(req_len, req_expected_len)) {
+        request_response(req_buf[0]);
+        reset_request_capture();
+    } else if (i2c_irq_gate_should_refresh(i2c_read_open, response_ready, response_needed, resp_idx, resp_len)) {
+        // A later pure read must see the newest status, not a consumed buffer's pad byte.
+        request_response(response_reg);
+    }
+    i2c_read_open = true;
+    action = i2c_irq_gate_on_read_request(&i2c_gate, response_ready, response_needed, resp_idx, resp_len);
+    i2c_slave_apply_action(hw, action, true);
+    if (action == I2C_GATE_STRETCH) {
+        // Leave RD_REQ pending and the IRQ masked until Core 0 fills the response.
+        return;
+    }
+}
+
 static void i2c_slave_isr(void) {
     i2c_hw_t *hw = i2c_get_hw(I2C_SLAVE_INST);
-    uint32_t status = hw->intr_stat;
-    bool handled_read = false;
 
-    i2c_slave_clear_tx_abort(hw);
+    /*
+     * IC_CLR_INTR clears every software-clearable source, including STOP_DET and
+     * RD_REQ that assert after the status sample. Those bits stay set until the
+     * handler for that event reads its own clear register. RX_FULL is drained
+     * from the FIFO. TX_EMPTY is level-triggered, so it stays masked unless a
+     * read still has bytes to send.
+     *
+     * ponytail: eight passes cover one command FIFO plus a STOP that lands while
+     * this handler is already running. A master that keeps the FIFO non-empty
+     * past that window leaves RX_FULL asserted, and the ISR re-enters. If that
+     * bound ever drops bytes, drain until rxflr is zero with no pass cap.
+     */
+    for (uint32_t pass = 0u; pass < 8u; ++pass) {
+        uint32_t status;
 
-    // RX_FULL: received data from master (command byte).
-    if (status & I2C_IC_INTR_STAT_R_RX_FULL_BITS) {
-        uint8_t byte = (uint8_t)(hw->data_cmd & 0xFF);
-        capture_request_byte(byte);
-    }
-
-    if (status & I2C_IC_INTR_STAT_R_STOP_DET_BITS) {
-        // A lone register byte of a longer command is a status select, not a new write.
-        if (i2c_control_map_is_status_select(req_len, req_expected_len)) {
-            request_response(req_buf[0]);
+        i2c_slave_clear_tx_abort(hw);
+        // The RX FIFO is 16 bytes. Stop if the level does not fall, instead of spinning in the ISR.
+        for (uint32_t byte_index = 0u; byte_index < 16u && hw->rxflr != 0u; ++byte_index) {
+            uint8_t byte = (uint8_t)(hw->data_cmd & 0xFFu);
+            capture_request_byte(byte);
         }
-        (void)hw->clr_stop_det;
-        reset_request_capture();
-        i2c_read_open = false;
-        i2c_irq_gate_on_stop(&i2c_gate);
-        i2c_slave_apply_tx_mask(hw);
-    }
 
-    // RD_REQ: master is clocking out a response. Leave RD_REQ pending when the
-    // buffer is not ready so SCL stretches until Core 0 prepares it. TX_EMPTY
-    // stays masked unless this byte still has followers; it is level-triggered
-    // and clr_intr does not clear it.
-    if (status & I2C_IC_INTR_STAT_R_RD_REQ_BITS) {
-        i2c_gate_action_t action;
-
-        // Repeated-start read after only the register byte: publish status, do not queue.
-        if (i2c_control_map_is_status_select(req_len, req_expected_len)) {
-            request_response(req_buf[0]);
-            reset_request_capture();
-        } else if (i2c_irq_gate_should_refresh(i2c_read_open, response_ready, response_needed, resp_idx, resp_len)) {
-            // A later pure read must see the newest status, not a consumed buffer's pad byte.
-            request_response(response_reg);
+        status = hw->intr_stat;
+        if ((status & (I2C_IC_INTR_STAT_R_STOP_DET_BITS | I2C_IC_INTR_STAT_R_RD_REQ_BITS |
+                       I2C_IC_INTR_STAT_R_TX_EMPTY_BITS | I2C_IC_INTR_STAT_R_RX_FULL_BITS)) == 0u) {
+            break;
         }
-        i2c_read_open = true;
-        action = i2c_irq_gate_on_read_request(&i2c_gate, response_ready, response_needed, resp_idx, resp_len);
-        i2c_slave_apply_action(hw, action, true);
-        handled_read = true;
-        if (action == I2C_GATE_STRETCH) {
-            return;
+
+        if (status & I2C_IC_INTR_STAT_R_STOP_DET_BITS) {
+            i2c_slave_handle_stop(hw);
+        }
+
+        if (status & I2C_IC_INTR_STAT_R_RD_REQ_BITS) {
+            i2c_slave_handle_read_request(hw);
+            if (!i2c_gate.irq_enabled) {
+                return;
+            }
+        } else if ((status & I2C_IC_INTR_STAT_R_TX_EMPTY_BITS) != 0u && i2c_gate.tx_empty_unmasked) {
+            i2c_gate_action_t action = i2c_irq_gate_on_tx_empty(&i2c_gate, response_ready, resp_idx, resp_len);
+            i2c_slave_apply_action(hw, action, false);
+        } else if ((status & I2C_IC_INTR_STAT_R_TX_EMPTY_BITS) != 0u) {
+            i2c_slave_apply_tx_mask(hw);
         }
     }
-
-    if ((status & I2C_IC_INTR_STAT_R_TX_EMPTY_BITS) != 0u && i2c_gate.tx_empty_unmasked && !handled_read) {
-        i2c_gate_action_t action = i2c_irq_gate_on_tx_empty(&i2c_gate, response_ready, resp_idx, resp_len);
-        i2c_slave_apply_action(hw, action, false);
-    } else if ((status & I2C_IC_INTR_STAT_R_TX_EMPTY_BITS) != 0u && !i2c_gate.tx_empty_unmasked) {
-        i2c_slave_apply_tx_mask(hw);
-    }
-
-    // Clear interrupts that are not level-triggered.
-    (void)hw->clr_intr;
 }
 
 void i2c_slave_service_reads(void) {
@@ -244,7 +266,7 @@ void i2c_slave_init(uint8_t address) {
 
     i2c_hw_t *hw = i2c_get_hw(I2C_SLAVE_INST);
     i2c_irq_gate_init(&i2c_gate);
-    // RX_FULL, RD_REQ, and STOP only. TX_EMPTY is unmasked while a read still needs bytes.
+    // RX_FULL, RD_REQ, STOP, and TX_ABRT. TX_EMPTY is unmasked while a read still needs bytes.
     i2c_slave_apply_tx_mask(hw);
 
     i2c_irq_number = I2C_SLAVE_IRQ;

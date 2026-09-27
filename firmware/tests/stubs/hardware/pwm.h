@@ -4,8 +4,7 @@
 enum { PWM_CHAN_A = 0u, PWM_CHAN_B = 1u };
 
 static inline unsigned int pwm_gpio_to_channel(unsigned int gpio) {
-    (void)gpio;
-    return PWM_CHAN_B;
+    return gpio & 1u;
 }
 
 #endif

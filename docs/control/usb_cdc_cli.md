@@ -72,7 +72,9 @@ CH0: freq=1000 Hz, duty=50%, pulses=12, enabled=yes
 ```
 
 `pulse_count` is read-only, monotonic from power-on, and is not reset by
-`stop`. The returned frequency and duty values are the realized channel state.
+`stop`. Hardware and PIO generators report the period count implied by elapsed
+time at the realized frequency. That is the count those backends provide.
+The returned frequency and duty values are the realized channel state.
 For generator banks, `stop` disables outputs and restores configured defaults.
 For monitor banks, `stop` leaves measured input channels unchanged.
 

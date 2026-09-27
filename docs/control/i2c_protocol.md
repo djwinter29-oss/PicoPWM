@@ -159,6 +159,6 @@ Master read:  [status]
 - The slave queues up to four writes. A write that arrives while the queue is full is dropped and the register status becomes `PWM_DRIVER_RESULT_UNAVAILABLE` immediately. The master can send that write again. The status byte always tracks the newest attempt for that register.
 - A read with no requested response returns `0x00` and releases SCL. The slave stretches SCL only while a requested response is still being built.
 - `REG_REBOOT` follows the same deferred path, but the device may reset before a later status re-read is possible.
-- `pulse_count` is read-only over I2C. It cannot be set or reset via this interface.
+- `pulse_count` is read-only over I2C. It cannot be set or reset via this interface. Hardware and PIO generators report the period count implied by elapsed time at the realized frequency. That is the count those backends provide.
 - `freq` and `duty` returned over I2C are the realized values published by the PWM driver layer.
 - The public control API now uses integer Hz and integer duty percent rather than float inputs.

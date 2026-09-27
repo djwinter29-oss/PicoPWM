@@ -47,7 +47,7 @@ jobs:
       - name: Install host build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends cmake ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-dev libstdc++-arm-none-eabi-newlib
+          sudo apt-get install -y --no-install-recommends clang-format cmake gcovr ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-dev libstdc++-arm-none-eabi-newlib
 
       - name: Cache Pico SDK
         uses: actions/cache@v4
@@ -66,6 +66,26 @@ jobs:
 
       - name: Syntax-check shell tools
         run: tools/test/syntax-check-shell.sh
+
+      - name: Check C formatting
+        env:
+          FORMAT_BASE: ${{ github.event.before }}
+        run: tools/test/check-clang-format.sh --base "$FORMAT_BASE" --head "${{ github.sha }}"
+
+      - name: Run host unit tests
+        run: tools/test/test-firmware-c.sh --build-dir firmware/build/tests-release
+
+      - name: Generate host coverage report
+        if: matrix.board == 'pico'
+        run: tools/test/coverage-firmware-c.sh --build-dir firmware/build/tests-coverage-release --output-dir firmware/build/tests-coverage-release/coverage
+
+      - name: Upload host coverage report
+        if: matrix.board == 'pico'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pico-pwm-release-coverage
+          path: firmware/build/tests-coverage-release/coverage
+          if-no-files-found: error
 
       - name: Build firmware
         env:

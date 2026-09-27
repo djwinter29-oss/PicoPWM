@@ -21,6 +21,12 @@ Core 1 reads the pair and stops the state machine. Intermediate periods and
 waveform history are discarded. This backend reports approximate frequency and
 duty without allocating DMA channels.
 
+Core 1 refreshes monitor channels approximately every 1 ms while a monitor bank
+is active. The PIO timing measurement can handle faster PWM periods, but the
+published value is a sampled result with up to roughly 1 ms of update latency.
+This backend is intended for current-value observation, not tracking every
+rapid signal change.
+
 This is deliberate. The product needs an occasional latest reading rather than
 continuous high-rate change tracking or a measurement history. Continuous DMA
 capture would preserve no additional user-visible information because the
@@ -34,6 +40,9 @@ software monitor banks. CPU polling was not selected because it wastes Core 1
 time, while PWM-slice capture would tie measurement to the fixed PWM slice
 routing. A buffered DMA design can be introduced later if continuous capture
 or trend analysis becomes a real requirement.
+
+The PIO monitor always reports `pulse_count = 0`; it measures one period for a
+current frequency/duty result but does not count or accumulate observed periods.
 
 ## Measurement Flow
 

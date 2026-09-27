@@ -12,9 +12,9 @@
 
 #include "../pwm_driver.h"
 
-/** @brief Sentinel frequency returned when repeated reads do not settle to a close sample. */
+/** @brief Sentinel frequency returned when a captured pair is invalid. */
 #define PIO_MON_UNSTABLE_FREQ_HZ 0x0fffffffu
-/** @brief Sentinel duty returned when repeated reads do not settle to a close sample. */
+/** @brief Sentinel duty returned when a captured pair is invalid. */
 #define PIO_MON_UNSTABLE_DUTY 0u
 /** @brief Return whether one exported monitor state represents the unstable-read sentinel. */
 #define PIO_MON_IS_UNSTABLE(state_value) \

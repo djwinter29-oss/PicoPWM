@@ -32,10 +32,9 @@
 #include "hardware/pio.h"
 
 #include "../pwm_driver_internal.h"
+#include "pio_monitor_decode.h"
 #include "pio_monitor.pio.h"
 
-/** @brief Dominant PIO instruction cost for one measured high or low loop iteration. */
-#define PIO_MON_LOOP_CYCLES 2u
 /** @brief Inactivity threshold used to treat a channel as a permanent level. */
 #define PIO_MON_STATIC_TIMEOUT_US 1000000u
 
@@ -101,45 +100,6 @@ static void pio_mon_publish_unstable(pio_mon_channel_t *ctx) {
     pio_mon_publish_state(ctx, PIO_MON_UNSTABLE_FREQ_HZ, PIO_MON_UNSTABLE_DUTY, false);
 }
 
-/** @brief Convert one raw high/low sample pair into approximate exported frequency and duty values. */
-static bool pio_mon_decode_pair(uint32_t high_ticks, uint32_t low_ticks, uint32_t *freq_hz, uint8_t *duty) {
-    uint64_t total_ticks;
-    uint64_t decode_denominator;
-    uint64_t scaled_freq_hz;
-    uint32_t duty_percent;
-
-    total_ticks = (uint64_t)high_ticks + (uint64_t)low_ticks;
-    if (total_ticks == 0u) {
-        return false;
-    }
-
-    /* ponytail: This first monitor revision converts only the dominant two-cycle loop body.
-     * The fixed edge-detect and push overhead is intentionally ignored to keep the PIO program
-     * and decode path small for now. If high-frequency accuracy matters later, upgrade this to
-     * a compensated timing model or edge timestamp design.
-     */
-    /* ponytail: The decode caches clk_sys at init time. The ceiling is runtime reclocking:
-     * if firmware changes the system clock after pio_mon_init(), the exported frequency will
-     * drift until the monitor is reinitialized. That tradeoff is acceptable now because the
-     * current firmware sets the clock once at startup. If runtime reclocking is added later,
-     * refresh this cached value or query the live clock here.
-     */
-    decode_denominator = (uint64_t)PIO_MON_LOOP_CYCLES * total_ticks;
-    scaled_freq_hz = ((uint64_t)pio_mon_sys_clk_hz + (decode_denominator / 2u)) / decode_denominator;
-    if (scaled_freq_hz > UINT32_MAX) {
-        scaled_freq_hz = UINT32_MAX;
-    }
-
-    duty_percent = (uint32_t)(((uint64_t)high_ticks * 100u + (total_ticks / 2u)) / total_ticks);
-    if (duty_percent > 100u) {
-        duty_percent = 100u;
-    }
-
-    *freq_hz = (uint32_t)scaled_freq_hz;
-    *duty = (uint8_t)duty_percent;
-    return true;
-}
-
 /** @brief Start one non-DMA PIO capture for a complete high/low period. */
 static void pio_mon_start_capture(pio_mon_channel_t *ctx) {
     pio_sm_set_enabled(ctx->pio, ctx->sm, false);
@@ -157,7 +117,7 @@ static bool pio_mon_read_pair(pio_mon_channel_t *ctx, uint32_t *freq_hz, uint8_t
 
     pio_sm_set_enabled(ctx->pio, ctx->sm, false);
     ctx->capture_active = false;
-    return pio_mon_decode_pair(high_ticks, low_ticks, freq_hz, duty);
+    return pio_monitor_decode_pair(high_ticks, low_ticks, pio_mon_sys_clk_hz, freq_hz, duty);
 }
 
 /** @brief Poll one one-period capture and refresh the backend-local monitor state. */

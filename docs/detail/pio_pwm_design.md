@@ -228,6 +228,11 @@ The monitor uses a one-period, read-driven model:
 - intermediate periods and waveform history are intentionally discarded
 - a capture that does not complete within one second is reported as a static level
 
+Core 1 polls monitor channels approximately every 1 ms while monitor mode is
+active. This bounds publication latency, not the PIO timing resolution: a fast
+PWM period can be measured, but rapidly changing signals are sampled rather than
+continuously tracked.
+
 This is not a continuous stream, history buffer, or trend decoder. It also avoids allocating a
 DMA channel for each PIO monitor channel.
 

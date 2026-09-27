@@ -55,6 +55,24 @@ pico_pwm_test_warnings(pwm_driver_config_test)
 target_compile_definitions(pwm_driver_config_test PRIVATE PICO_PWM_CONFIG_FLASH_OFFSET=0)
 add_test(NAME pwm_driver_config COMMAND pwm_driver_config_test)
 
+add_executable(pio_monitor_decode_test
+    pio_monitor_decode_test.c
+)
+target_include_directories(pio_monitor_decode_test PRIVATE
+    ${SOURCE_ROOT}
+)
+pico_pwm_test_warnings(pio_monitor_decode_test)
+add_test(NAME pio_monitor_decode COMMAND pio_monitor_decode_test)
+
+add_executable(generator_math_test
+    generator_math_test.c
+)
+target_include_directories(generator_math_test PRIVATE
+    ${SOURCE_ROOT}
+)
+pico_pwm_test_warnings(generator_math_test)
+add_test(NAME generator_math COMMAND generator_math_test)
+
 add_executable(i2c_control_map_test
     i2c_control_map_test.c
     ${SOURCE_ROOT}/i2c/i2c_control_map.c

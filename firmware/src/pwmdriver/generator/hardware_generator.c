@@ -11,6 +11,7 @@
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
 #include "hardware/pwm.h"
+#include "generator_math.h"
 
 /** @brief Cached system clock used by the hardware generator timing search. */
 static uint32_t hw_gen_sys_clk_hz = 0u;
@@ -33,18 +34,7 @@ static void hw_gen_publish_state(uint channel, uint32_t realized_freq_hz, uint8_
  * @return Compare level accepted by the Pico SDK PWM API.
  */
 static uint32_t hw_pwm_level_from_duty(uint32_t top, uint8_t duty_percent) {
-    if (duty_percent == 0u) {
-        return 0;
-    }
-    if (duty_percent >= 100u) {
-        return top + 1u;
-    }
-
-    uint32_t level = (uint32_t)(((uint64_t)(top + 1u) * duty_percent + 50u) / 100u);
-    if (level > top + 1u) {
-        level = top + 1u;
-    }
-    return level;
+    return pwm_generator_level_from_duty(top + 1u, duty_percent);
 }
 
 /** @brief Bind one hardware generator pin back to PWM mode. */

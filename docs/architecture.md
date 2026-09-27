@@ -86,6 +86,11 @@ Each logical channel exposes the same readback model:
 - `duty`
 - `pulse_count`
 
+The field has backend-specific semantics: GPIO monitors count accepted
+edge-reconstructed periods, the PIO monitor reports `0` because it captures one
+period per sample without accumulating periods, and PIO generator readback may
+estimate elapsed periods from its last published reference timestamp.
+
 ### Monitor Measurement Strategy
 
 The monitor design is intentionally optimized for occasional latest-value

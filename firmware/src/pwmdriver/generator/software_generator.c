@@ -11,6 +11,7 @@
 #include "hardware/gpio.h"
 #include "hardware/sync.h"
 #include "hardware/timer.h"
+#include "generator_math.h"
 
 /** @brief Software PWM scheduler tick period in microseconds. */
 #define SW_PWM_TICK_US 10
@@ -68,16 +69,9 @@ static void sw_gen_publish_state_coherent(uint channel) {
 
 /** @brief Resolve whether one software-PWM request should be handled as a static-output mode. */
 static bool sw_gen_resolve_static_target(uint32_t freq_hz, uint8_t duty, sw_gen_static_target_t *target) {
-    if (target == NULL) {
+    if (target == NULL || !pwm_generator_resolve_static(freq_hz, duty, &target->high, &target->realized_duty)) {
         return false;
     }
-
-    if (freq_hz != 0u && duty != 0u && duty < 100u) {
-        return false;
-    }
-
-    target->high = duty >= 100u;
-    target->realized_duty = target->high ? 100u : 0u;
     return true;
 }
 

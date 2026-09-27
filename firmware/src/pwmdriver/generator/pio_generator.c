@@ -31,6 +31,7 @@
 
 #include "../pwm_driver_internal.h"
 #include "pio_generator.pio.h"
+#include "generator_math.h"
 
 /** @brief Intended upper frequency limit for the PIO generator backend. */
 #define PIO_GEN_MAX_FREQ_HZ 1000000u
@@ -151,13 +152,7 @@ static uint32_t gen_realized_freq_hz_for_timing(uint16_t period_count, uint32_t 
  * @return Threshold value written into the generator state machine FIFO.
  */
 static uint32_t gen_level_from_duty(uint16_t period_count, uint8_t duty_percent) {
-    uint32_t level = (((uint32_t)(period_count + 1u) * (uint32_t)duty_percent) + 50u) / 100u;
-
-    if (level > period_count + 1u) {
-        level = period_count + 1u;
-    }
-
-    return level;
+    return pwm_generator_level_from_duty(period_count + 1u, duty_percent);
 }
 
 /**

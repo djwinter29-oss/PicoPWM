@@ -34,9 +34,9 @@ static inline uint32_t pwm_driver_accumulate_pulse_count(uint32_t pulse_count, u
 }
 
 /** @brief Resolve a profile backend-local channel to its configured GPIO. */
-uint pwm_driver_get_gpio(pwm_profile_backend_t backend, uint backend_channel);
+uint pwm_driver_get_gpio(pwm_driver_config_backend_t backend, uint backend_channel);
 /** @brief Resolve a backend-local channel to its logical profile channel. */
-uint pwm_driver_get_logical_channel(pwm_profile_backend_t backend, uint backend_channel);
+uint pwm_driver_get_logical_channel(pwm_driver_config_backend_t backend, uint backend_channel);
 
 /**
  * @brief Submit one cross-core logical channel update.

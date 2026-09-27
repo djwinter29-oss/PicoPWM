@@ -149,7 +149,7 @@ unchanged. `pulse_count` is monotonic from power-on and is not reset by `stop`.
 
 - [Architecture](docs/architecture.md)
 - [Firmware Configuration](docs/configuration.md)
-- [Channel Configuration](docs/channel_config.md)
+- [PWM Driver Configuration](docs/pwm_driver_config.md)
 - [Control Interfaces](docs/control/README.md)
 - [I2C Protocol](docs/control/i2c_protocol.md)
 - [USB CDC CLI](docs/control/usb_cdc_cli.md)
@@ -179,8 +179,9 @@ dependency.
 
 ## Default Generator State
 
-After power-up or reset, configured generator banks start with their outputs
-off:
+After power-up or reset, the default configuration is monitor-only, so no PWM
+outputs are actively driven. If generator banks are configured, they start
+with their outputs off:
 
 | Property | Value |
 |----------|-------|

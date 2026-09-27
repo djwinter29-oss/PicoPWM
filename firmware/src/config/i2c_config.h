@@ -16,14 +16,6 @@
 #define I2C_SLAVE_IRQ     I2C1_IRQ
 
 /**
- * I2C slave address (7-bit).
- * Default is 0x40. Can be overridden at build time with CMake:
- * -DPICO_PWM_I2C_ADDR=0x50
- * Valid range: 0x00 to 0x7F (7-bit addresses only).
- */
-#define I2C_SLAVE_ADDR PICO_PWM_I2C_ADDR
-
-/**
  * SDA pin (GPIO 26).
  */
 #define I2C_SDA_PIN       26

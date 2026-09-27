@@ -44,7 +44,7 @@
 #define SW_MON_GPIO_COUNT 30u
 
 /** @brief Per-channel standalone software monitor runtime ownership table. */
-static pwm_gpio_mon_channel_t sw_mon_channels[PWM_PROFILE_CHANNEL_COUNT];
+static pwm_gpio_mon_channel_t sw_mon_channels[PWM_DRIVER_CONFIG_CHANNEL_COUNT];
 /** @brief Direct GPIO-to-channel lookup table; `-1` marks unrelated GPIOs. */
 static int8_t sw_mon_gpio_to_channel[SW_MON_GPIO_COUNT] = {
     [0 ... SW_MON_GPIO_COUNT - 1] = -1
@@ -59,7 +59,7 @@ void sw_mon_handle_gpio_irq(uint gpio, uint32_t events) {
 
 /** @brief Read one channel state under interrupt exclusion and apply static-level fallback when idle. */
 static bool sw_mon_read_channel(uint channel, pwm_driver_state_t *state) {
-    return pwm_gpio_mon_read_channel(channel, state, sw_mon_channels, SW_MON_STATIC_TIMEOUT_US, PWM_PROFILE_BACKEND_SW_MONITOR);
+    return pwm_gpio_mon_read_channel(channel, state, sw_mon_channels, SW_MON_STATIC_TIMEOUT_US, PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR);
 }
 
 /** @copydoc sw_mon_init */
@@ -68,8 +68,8 @@ bool sw_mon_init(void) {
         return true;
     }
 
-    for (uint channel = 0; channel < pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_SW_MONITOR); channel++) {
-        uint pin = pwm_driver_get_gpio(PWM_PROFILE_BACKEND_SW_MONITOR, channel);
+    for (uint channel = 0; channel < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR); channel++) {
+        uint pin = pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR, channel);
 
         pwm_gpio_mon_init_pin(pin);
         sw_mon_gpio_to_channel[pin] = (int8_t)channel;
@@ -84,7 +84,7 @@ bool sw_mon_init(void) {
 
 /** @copydoc sw_mon_get */
 bool sw_mon_get(uint channel, pwm_driver_state_t *state) {
-    if (!sw_mon_initialized || channel >= pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_SW_MONITOR) || state == NULL) {
+    if (!sw_mon_initialized || channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR) || state == NULL) {
         return false;
     }
 

@@ -126,7 +126,7 @@ static void i2c_slave_isr(void) {
     (void)hw->clr_intr;
 }
 
-void i2c_slave_init(void) {
+void i2c_slave_init(uint8_t address) {
     gpio_init(I2C_SDA_PIN);
     gpio_init(I2C_SCL_PIN);
     gpio_set_function(I2C_SDA_PIN, GPIO_FUNC_I2C);
@@ -139,7 +139,7 @@ void i2c_slave_init(void) {
     // the actual bus speed is set by the I2C master. Ensure this matches the expected
     // master clock to avoid timing violations.
     i2c_init(I2C_SLAVE_INST, I2C_CLOCK_SPEED);
-    i2c_set_slave_mode(I2C_SLAVE_INST, true, I2C_SLAVE_ADDR);
+    i2c_set_slave_mode(I2C_SLAVE_INST, true, address);
 
     i2c_hw_t *hw = i2c_get_hw(I2C_SLAVE_INST);
     // Enable RX_FULL, RD_REQ and TX_EMPTY interrupts.

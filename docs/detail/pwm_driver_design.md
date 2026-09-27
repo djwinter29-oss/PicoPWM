@@ -56,9 +56,9 @@ The current implementation is split as follows:
 | `firmware/src/i2c/i2c_control_map.c` | I2C register encode/decode and deferred write translation into `device_api` |
 | `firmware/src/pwmdriver/pwm_driver.h` | Public wrapper API and backend channel capacity constants |
 | `firmware/src/pwmdriver/pwm_driver.c` | Core 1 launch, mailbox loop, channel routing, shared snapshot |
-| `firmware/src/pwmdriver/channel_config/channel_config.h` | Startup bank/channel configuration API and validation types |
-| `firmware/src/pwmdriver/channel_config/channel_config.c` | Startup role configuration, fixed GPIO mapping, and channel lookup |
-| `firmware/src/pwmdriver/channel_config/channel_table.h` | Backend capability and timing descriptors used to populate channel entries |
+| `firmware/src/pwmdriver/pwm_driver_config.h` | Startup configuration, validation, persistence, and channel types |
+| `firmware/src/pwmdriver/pwm_driver_config.c` | Fixed channel mapping and versioned CRC-protected flash storage |
+| `firmware/src/pwmdriver/pwm_driver_table.h` | Backend capability and timing descriptors used to populate channel entries |
 | `firmware/src/pwmdriver/generator/hardware_generator.c` | Hardware PWM generator backend |
 | `firmware/src/pwmdriver/monitor/hardware_monitor.c` | Hardware PWM monitor backend |
 | `firmware/src/pwmdriver/generator/pio_generator.c` | PIO generator backend |
@@ -829,7 +829,7 @@ I2C writes should continue to defer out of ISR context before they enter `device
 
 ## Startup Bank Configuration
 
-`pwm_profile_channels` is a runtime table owned by `channel_config.c` and is
+`pwm_driver_config_channels` is a runtime table owned by `channel_config.c` and is
 fully populated from `pwm_driver_config_t` before Core 1 starts. There is no
 bank-lock mailbox operation; one firmware image reaches all 8 bank-role
 combinations by selecting roles in the startup configuration.

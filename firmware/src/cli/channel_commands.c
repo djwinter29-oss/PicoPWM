@@ -1,6 +1,6 @@
 #include "cli/channel_commands.h"
 
-#include "pwmdriver/channel_config/channel_config.h"
+#include "pwmdriver/pwm_driver_config.h"
 #include "device_api/device_api.h"
 #include "pwmdriver/pwm_driver.h"
 
@@ -86,8 +86,8 @@ static bool channel_commands_parse_u8(const char *text, uint8_t *value_out) {
 
 static bool channel_commands_write_status_row(shell_t *shell, int channel, const pwm_driver_state_t *state) {
     char line[96];
-    const pwm_profile_channel_t *profile = pwm_profile_get_channel((uint)channel);
-    const char *type = (profile == NULL) ? "?" : pwm_profile_backend_name(profile->backend);
+    const pwm_driver_config_channel_t *profile = pwm_driver_config_get_channel((uint)channel);
+    const char *type = (profile == NULL) ? "?" : pwm_driver_config_backend_name(profile->backend);
 
     snprintf(line,
              sizeof(line),

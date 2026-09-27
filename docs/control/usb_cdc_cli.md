@@ -38,6 +38,10 @@ Implemented by `board_commands.*`.
 | --- | --- | --- |
 | `info` | Show the device type. | `info` |
 | `version` | Show the build-time firmware version. | `version` |
+| `config` | Show running and target Bank A/B/C settings. | `config` |
+| `config set <a|b|c> <hw|pio|sw> <gen|mon>` | Change one target bank. | `config set a hw gen` |
+| `config save` | Persist target settings; reboot to apply. | `config save` |
+| `config address <7-bit>` | Change the target I2C address. | `config address 0x42` |
 | `bank` | Show each bank's lock state (unlocked/generator/monitor). | `bank` |
 | `bank <hw\|pio\|sw> <generator\|monitor>` | Lock one bank's role; one-shot until reboot. | `bank hw generator` |
 | `led <on\|off>` | Set the board LED state. | `led on` |
@@ -73,5 +77,9 @@ CH0: freq=1000 Hz, duty=50%, pulses=12, enabled=yes
 `stop`. The returned frequency and duty values are the realized channel state.
 For generator banks, `stop` disables outputs and restores configured defaults.
 For monitor banks, `stop` leaves measured input channels unchanged.
+
+`config` prints both `running` and `target` Bank A/B/C settings. `config set`
+changes only the target configuration. `config save` writes the validated target
+to flash; use `reboot` to apply it.
 See [Control Interfaces](README.md) for shared semantics and [I2C Protocol](i2c_protocol.md)
 for the binary register protocol.

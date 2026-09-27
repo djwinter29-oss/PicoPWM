@@ -76,7 +76,7 @@ logical channel model. Startup bank configuration selects whether the fixed hard
 PIO, and software banks act as PWM generators or PWM monitors.
 
 The host-visible channel IDs and command syntax remain stable across profiles.
-The channel configuration, not the CLI, defines each channel's backend, direction,
+The PWM driver configuration, not the CLI, defines each channel's backend, direction,
 GPIO, limits, and supported operations. The current default profiles expose 24
 channels through this table.
 
@@ -128,7 +128,7 @@ Responsibilities:
 
 ### 4. Configuration and Backend Layer
 
-The channel configuration owns the logical channel table and capability
+The PWM driver configuration owns the logical channel table and capability
 validation. Core 1 then dispatches each configured channel to its selected
 backend.
 

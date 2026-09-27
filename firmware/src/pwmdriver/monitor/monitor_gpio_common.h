@@ -124,7 +124,7 @@ static inline void pwm_gpio_mon_handle_irq(uint gpio, uint32_t events, uint gpio
 }
 
 /** @brief Read one GPIO monitor channel and apply static-level fallback when idle. */
-static inline bool pwm_gpio_mon_read_channel(uint channel, pwm_driver_state_t *state, pwm_gpio_mon_channel_t *channels, uint32_t static_timeout_us, pwm_profile_backend_t backend) {
+static inline bool pwm_gpio_mon_read_channel(uint channel, pwm_driver_state_t *state, pwm_gpio_mon_channel_t *channels, uint32_t static_timeout_us, pwm_driver_config_backend_t backend) {
     uint32_t irq_state;
     uint64_t last_edge_us;
     uint32_t pulse_count;

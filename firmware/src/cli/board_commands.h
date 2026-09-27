@@ -5,6 +5,7 @@
 
 bool board_commands_info(void *context, int argc, const char *const *argv);
 bool board_commands_version(void *context, int argc, const char *const *argv);
+bool board_commands_config(void *context, int argc, const char *const *argv);
 bool board_commands_led(void *context, int argc, const char *const *argv);
 bool board_commands_reboot(void *context, int argc, const char *const *argv);
 bool board_commands_stop(void *context, int argc, const char *const *argv);

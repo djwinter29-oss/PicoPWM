@@ -15,6 +15,35 @@ const char *device_api_firmware_version(void) {
     return "test";
 }
 
+bool device_api_config_get_running(pwm_driver_config_t *config) {
+    if (config == NULL) return false;
+    *config = (pwm_driver_config_t){
+        .bank_a_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_HW,
+        .bank_b_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_PIO,
+        .bank_c_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_SW,
+        .bank_a_role = PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
+        .bank_b_role = PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
+        .bank_c_role = PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
+    };
+    return true;
+}
+
+bool device_api_config_get_target(pwm_driver_config_t *config) {
+    return device_api_config_get_running(config);
+}
+
+bool device_api_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_backend_t backend,
+                                pwm_driver_config_bank_role_t role) {
+    (void)bank;
+    (void)backend;
+    (void)role;
+    return true;
+}
+
+bool device_api_config_save_target(void) {
+    return true;
+}
+
 uint8_t device_api_channel_count(void) {
     return PWM_DRIVER_CHANNEL_COUNT;
 }

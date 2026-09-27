@@ -1,6 +1,6 @@
 #include "cli/channel_commands.h"
 
-#include "pwmdriver/channel_config/channel_config.h"
+#include "pwmdriver/pwm_driver_config.h"
 #include "device_api/device_api.h"
 
 #include <assert.h>
@@ -20,19 +20,19 @@ bool shell_write_line(shell_t *shell, const char *text) {
     return true;
 }
 
-const pwm_profile_channel_t *pwm_profile_get_channel(uint channel) {
-    static const pwm_profile_channel_t profile = {
-        .backend = PWM_PROFILE_BACKEND_HW_GENERATOR,
-        .direction = PWM_PROFILE_DIRECTION_OUTPUT,
+const pwm_driver_config_channel_t *pwm_driver_config_get_channel(uint channel) {
+    static const pwm_driver_config_channel_t profile = {
+        .backend = PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR,
+        .direction = PWM_DRIVER_CONFIG_DIRECTION_OUTPUT,
         .gpio = 1u,
         .backend_channel = 0u,
-        .capabilities = PWM_PROFILE_CAP_READ | PWM_PROFILE_CAP_SET,
+        .capabilities = PWM_DRIVER_CONFIG_CAP_READ | PWM_DRIVER_CONFIG_CAP_SET,
     };
 
-    return (channel < PWM_PROFILE_CHANNEL_COUNT) ? &profile : NULL;
+    return (channel < PWM_DRIVER_CONFIG_CHANNEL_COUNT) ? &profile : NULL;
 }
 
-const char *pwm_profile_backend_name(pwm_profile_backend_t backend) {
+const char *pwm_driver_config_backend_name(pwm_driver_config_backend_t backend) {
     (void)backend;
     return "HW";
 }

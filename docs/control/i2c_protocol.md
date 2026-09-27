@@ -28,6 +28,10 @@ below. Channel register ranges use the channel count advertised by
 | `REG_INFO` | `0x00` | 1 | variable | Device name string, including null terminator |
 | `REG_VERSION` | `0x01` | 1 | variable | Firmware version string, including null terminator |
 | `REG_CHANNELS` | `0x02` | 1 | 1 | Logical channel count |
+| `REG_CONFIG` | `0x03` | 1 | 14 | Running then target backend/role pairs and I2C addresses |
+| `REG_CONFIG_SET` | `0x04` | 4 | 1 | Payload: bank, backend, role; updates target only |
+| `REG_CONFIG_SAVE` | `0x05` | 1 | 1 | Persists target; reboot applies it |
+| `REG_CONFIG_ADDRESS` | `0x06` | 2 | 1 | One-byte target 7-bit I2C address; reboot applies it |
 | `REG_GET_CHk` | `0x10 + k` | 1 | 9 | Channel state: `freq`, `duty`, `pulse_count` |
 | `REG_SET_CHk` | `0x30 + k` | 6 | 1 | Five-byte `freq`/`duty` payload; returns status |
 | `REG_STOP_ALL` | `0x90` | 1 | 1 | Profile reset request; returns status |
@@ -37,6 +41,17 @@ below. Channel register ranges use the channel count advertised by
 Here `n` is the channel count returned by `REG_CHANNELS` and `k` ranges from
 `0` through `n - 1`. The fixed Bank A/B/C allocation exposes 24 channels, so the
 ranges are `0x10..0x27` and `0x30..0x47`.
+
+`REG_CONFIG` returns 14 bytes: six bytes for the running configuration followed
+by six bytes for the target configuration, then the running and target I2C
+addresses. Each configuration uses one
+backend/role pair per bank in A, B, C order. Backend values are `0`=HW,
+`1`=PIO, `2`=SW; role values are `0`=generator and `1`=monitor.
+
+`REG_CONFIG_SET` accepts three payload bytes: `bank`, `backend`, `role`. It
+updates the target only. `REG_CONFIG_ADDRESS` accepts one 7-bit address byte
+and updates the target only. `REG_CONFIG_SAVE` validates and persists the
+target; the host must issue `REG_REBOOT` before the target becomes running.
 
 ## Channel Property Layout
 

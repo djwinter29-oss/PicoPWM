@@ -17,6 +17,25 @@ const char *device_api_device_name(void);
 /** @brief Return the build-time firmware version exposed by control/status transports. */
 const char *device_api_firmware_version(void);
 
+/** @brief Publish the running and target startup configurations to the device facade. */
+void device_api_config_init(const pwm_driver_config_t *running, const pwm_driver_config_t *target);
+
+/** @brief Return the target startup configuration. */
+bool device_api_config_get_target(pwm_driver_config_t *config);
+
+/** @brief Return the immutable running startup configuration. */
+bool device_api_config_get_running(pwm_driver_config_t *config);
+
+/** @brief Change one target bank without affecting the running configuration. */
+bool device_api_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_backend_t backend,
+								pwm_driver_config_bank_role_t role);
+
+/** @brief Change only the target I2C address; it applies after save and reboot. */
+bool device_api_config_set_i2c_address(uint8_t address);
+
+/** @brief Persist the target configuration for the next reboot. */
+bool device_api_config_save_target(void);
+
 /** @brief Return the logical PWM channel count exposed by the firmware. */
 uint8_t device_api_channel_count(void);
 

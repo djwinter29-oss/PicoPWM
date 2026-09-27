@@ -53,22 +53,20 @@ Supported speeds:
 - `400000` - Fast I2C (400 kHz, default, backward-compatible with 100 kHz masters)
 
 ### Custom I2C Address
-The default I2C slave address is **0x40**. To use a different address:
+The default I2C slave address is **0x40**. Change it through CDC or I2C:
 
-```bash
-PICO_SDK_PATH=/path/to/pico-sdk cmake -S firmware -B firmware/build/gen-addr-0x50 \
-  -DPICO_PWM_I2C_ADDR=0x50
-
-cmake --build firmware/build/gen-addr-0x50 --parallel
+```text
+config address 0x50
+config save
+reboot
 ```
 
-Valid 7-bit addresses: 0x00 to 0x7F
+Valid 7-bit addresses: `0x00` to `0x7F`.
 
 ### Combining Clock Speed and Address
 ```bash
 PICO_SDK_PATH=/path/to/pico-sdk cmake -S firmware -B firmware/build/gen-100k-addr-0x30 \
   -DPICO_PWM_I2C_CLOCK_SPEED=100000 \
-  -DPICO_PWM_I2C_ADDR=0x30
 
 cmake --build firmware/build/gen-100k-addr-0x30 --parallel
 ```

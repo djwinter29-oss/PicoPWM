@@ -7,7 +7,7 @@
 #define PWMDRIVER_PWM_DRIVER_H
 
 #include "pico/stdlib.h"
-#include "pwmdriver/channel_config/channel_config.h"
+#include "pwmdriver/pwm_driver_config.h"
 
 #include <stdint.h>
 
@@ -17,10 +17,10 @@
 #define PIO_PWM_DRIVER_COUNT 8
 
 /** @brief Total logical PWM channel count across all backends. */
-#define PWM_DRIVER_CHANNEL_COUNT PWM_PROFILE_CHANNEL_COUNT
+#define PWM_DRIVER_CHANNEL_COUNT PWM_DRIVER_CONFIG_CHANNEL_COUNT
 
 /** @brief Role selected for one fixed PWM bank at startup. */
-typedef pwm_profile_bank_role_t pwm_driver_bank_role_t;
+typedef pwm_driver_config_bank_role_t pwm_driver_bank_role_t;
 
 /** @brief Optional backend-specific startup options reserved for future tuning. */
 typedef struct {
@@ -32,13 +32,23 @@ typedef struct {
     pwm_driver_bank_config_t bank_a; /**< Bank A configuration. */
     pwm_driver_bank_config_t bank_b; /**< Bank B configuration. */
     pwm_driver_bank_config_t bank_c; /**< Bank C configuration. */
-    pwm_profile_bank_backend_t bank_a_backend; /**< Bank A backend family: HW or SW. */
-    pwm_profile_bank_backend_t bank_b_backend; /**< Bank B backend family: PIO or SW. */
-    pwm_profile_bank_backend_t bank_c_backend; /**< Bank C backend family: SW only. */
+    pwm_driver_config_bank_backend_t bank_a_backend; /**< Bank A backend family: HW or SW. */
+    pwm_driver_config_bank_backend_t bank_b_backend; /**< Bank B backend family: PIO or SW. */
+    pwm_driver_config_bank_backend_t bank_c_backend; /**< Bank C backend family: SW only. */
     pwm_driver_bank_role_t bank_a_role; /**< Bank A role. */
     pwm_driver_bank_role_t bank_b_role; /**< Bank B role. */
     pwm_driver_bank_role_t bank_c_role; /**< Bank C role. */
+    uint8_t i2c_address; /**< Running/target 7-bit I2C address. */
 } pwm_driver_config_t;
+
+/** @brief Return the safe default startup configuration. */
+void pwm_driver_config_default(pwm_driver_config_t *config);
+/** @brief Validate backend and role combinations for the fixed A/B/C map. */
+bool pwm_driver_config_validate_target(const pwm_driver_config_t *config);
+/** @brief Load the persisted target; returns the default when storage is invalid. */
+bool pwm_driver_config_load_target(pwm_driver_config_t *config);
+/** @brief Persist a validated target configuration in flash. */
+bool pwm_driver_config_save_target(const pwm_driver_config_t *config);
 
 /** @brief Result codes returned by shared PWM control operations. */
 typedef enum {

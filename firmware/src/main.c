@@ -9,6 +9,7 @@
 #include "cli/pwm_commands.h"
 #include "board/led.h"
 #include "board/system.h"
+#include "device_api/device_api.h"
 #include "i2c/i2c_slave.h"
 #include "pwmdriver/pwm_driver.h"
 #include "usb/usb_cdc.h"
@@ -40,14 +41,9 @@ int main(void) {
     pwm_commands_init(&pwm_command_session, &shell_transport);
 
     // Configure and launch all three PWM banks before starting Core 1.
-    static const pwm_driver_config_t pwm_config = {
-        .bank_a_backend = PWM_PROFILE_BANK_BACKEND_HW,
-        .bank_b_backend = PWM_PROFILE_BANK_BACKEND_PIO,
-        .bank_c_backend = PWM_PROFILE_BANK_BACKEND_SW,
-        .bank_a_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
-        .bank_b_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
-        .bank_c_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
-    };
+    pwm_driver_config_t pwm_config;
+    pwm_driver_config_load_target(&pwm_config);
+    device_api_config_init(&pwm_config, &pwm_config);
     if (!pwm_driver_init(&pwm_config)) {
         system_reboot();
     }
@@ -61,7 +57,7 @@ int main(void) {
     }
 
     // Core 0: start communication interfaces.
-    i2c_slave_init();
+    i2c_slave_init(pwm_config.i2c_address);
 
     // Core 0 main loop: service USB CDC and I2C.
     while (true) {

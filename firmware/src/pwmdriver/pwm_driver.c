@@ -25,17 +25,17 @@
 /** @brief Timeout for one admitted cross-core apply request in milliseconds. */
 #define PWM_DRIVER_APPLY_TIMEOUT_MS 1000
 
-uint pwm_driver_get_gpio(pwm_profile_backend_t backend, uint backend_channel) {
+uint pwm_driver_get_gpio(pwm_driver_config_backend_t backend, uint backend_channel) {
     uint gpio = 0u;
 
-    hard_assert(pwm_profile_get_gpio(backend, backend_channel, &gpio));
+    hard_assert(pwm_driver_config_get_gpio(backend, backend_channel, &gpio));
     return gpio;
 }
 
-uint pwm_driver_get_logical_channel(pwm_profile_backend_t backend, uint backend_channel) {
+uint pwm_driver_get_logical_channel(pwm_driver_config_backend_t backend, uint backend_channel) {
     uint channel = 0u;
 
-    hard_assert(pwm_profile_get_logical_channel(backend, backend_channel, &channel));
+    hard_assert(pwm_driver_config_get_logical_channel(backend, backend_channel, &channel));
     return channel;
 }
 
@@ -124,50 +124,50 @@ static pwm_driver_mailbox_t pwm_mailbox = {
 };
 
 /** @brief Backend routing table in logical-channel order. */
-static const pwm_driver_backend_t pwm_driver_backends[PWM_PROFILE_BACKEND_SW_MONITOR + 1u] = {
-    [PWM_PROFILE_BACKEND_HW_MONITOR] = {
+static const pwm_driver_backend_t pwm_driver_backends[PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR + 1u] = {
+    [PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR] = {
         .init = hw_mon_init,
         .set = NULL,
         .restore_defaults = NULL,
         .get = hw_mon_get,
         .finalize_readback = NULL,
     },
-    [PWM_PROFILE_BACKEND_PIO_MONITOR] = {
+    [PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR] = {
         .init = pio_mon_init,
         .set = NULL,
         .restore_defaults = NULL,
         .get = pio_mon_get,
         .finalize_readback = NULL,
     },
-    [PWM_PROFILE_BACKEND_SW_MONITOR] = {
+    [PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR] = {
         .init = sw_mon_init,
         .set = NULL,
         .restore_defaults = NULL,
         .get = sw_mon_get,
         .finalize_readback = NULL,
     },
-    [PWM_PROFILE_BACKEND_SW_GENERATOR] = {
+    [PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR] = {
         .init = sw_gen_init,
         .set = sw_gen_set,
         .restore_defaults = sw_gen_restore_defaults,
         .get = NULL,
         .finalize_readback = NULL,
     },
-    [PWM_PROFILE_BACKEND_HW_GENERATOR] = {
+    [PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR] = {
         .init = hw_gen_init,
         .set = hw_gen_set,
         .restore_defaults = hw_gen_restore_defaults,
         .get = NULL,
         .finalize_readback = NULL,
     },
-    [PWM_PROFILE_BACKEND_PIO_GENERATOR] = {
+    [PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR] = {
         .init = pio_gen_init,
         .set = pio_gen_set,
         .restore_defaults = pio_gen_restore_defaults,
         .get = NULL,
         .finalize_readback = pio_gen_finalize_readback,
     },
-    [PWM_PROFILE_BACKEND_SW_GENERATOR] = {
+    [PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR] = {
         .init = sw_gen_init,
         .set = sw_gen_set,
         .restore_defaults = sw_gen_restore_defaults,
@@ -184,10 +184,10 @@ static void pwm_driver_monitor_gpio_irq(uint gpio, uint32_t events) {
 
 /** @brief Resolve one configured logical channel into its backend descriptor. */
 static const pwm_driver_backend_t *pwm_driver_get_backend(uint channel, uint *local_channel) {
-    const pwm_profile_channel_t *profile;
+    const pwm_driver_config_channel_t *profile;
     const pwm_driver_backend_t *backend;
 
-    profile = pwm_profile_get_channel(channel);
+    profile = pwm_driver_config_get_channel(channel);
     if (profile == NULL) {
         return NULL;
     }
@@ -196,7 +196,7 @@ static const pwm_driver_backend_t *pwm_driver_get_backend(uint channel, uint *lo
         *local_channel = profile->backend_channel;
     }
 
-    if (profile->backend > PWM_PROFILE_BACKEND_SW_MONITOR) {
+    if (profile->backend > PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR) {
         return NULL;
     }
 
@@ -207,10 +207,10 @@ static const pwm_driver_backend_t *pwm_driver_get_backend(uint channel, uint *lo
 
 /** @brief Resolve one configured output channel for a write operation. */
 static const pwm_driver_backend_t *pwm_driver_classify_channel(uint channel, uint *local_channel) {
-    const pwm_profile_channel_t *profile = pwm_profile_get_channel(channel);
+    const pwm_driver_config_channel_t *profile = pwm_driver_config_get_channel(channel);
 
-    if ((profile == NULL) || ((profile->capabilities & PWM_PROFILE_CAP_SET) == 0u) ||
-        profile->direction != PWM_PROFILE_DIRECTION_OUTPUT) {
+    if ((profile == NULL) || ((profile->capabilities & PWM_DRIVER_CONFIG_CAP_SET) == 0u) ||
+        profile->direction != PWM_DRIVER_CONFIG_DIRECTION_OUTPUT) {
         return NULL;
     }
 
@@ -314,7 +314,7 @@ static bool pwm_driver_backend_set(uint channel, uint32_t freq_hz, uint8_t duty)
 /** @brief Apply the logical power-on defaults to all channels on Core 1. */
 static bool pwm_driver_backend_restore_defaults(void) {
     for (uint i = 0; i < count_of(pwm_driver_backends); i++) {
-        if (pwm_profile_backend_channel_count((pwm_profile_backend_t)i) == 0u) {
+        if (pwm_driver_config_backend_channel_count((pwm_driver_config_backend_t)i) == 0u) {
             continue;
         }
         if ((pwm_driver_backends[i].restore_defaults != NULL) && !pwm_driver_backends[i].restore_defaults()) {
@@ -328,7 +328,7 @@ static bool pwm_driver_backend_restore_defaults(void) {
 /** @brief Initialize every backend selected by the already-populated startup table. */
 static bool pwm_driver_initialize_backends(void) {
     for (uint i = 0u; i < count_of(pwm_driver_backends); ++i) {
-        if ((pwm_profile_backend_channel_count((pwm_profile_backend_t)i) != 0u) &&
+        if ((pwm_driver_config_backend_channel_count((pwm_driver_config_backend_t)i) != 0u) &&
             ((pwm_driver_backends[i].init == NULL) || !pwm_driver_backends[i].init())) {
             return false;
         }
@@ -340,13 +340,13 @@ static bool pwm_driver_initialize_backends(void) {
 /** @brief Publish fresh monitor samples from Core 1 into the shared state cache. */
 static void pwm_driver_refresh_monitor_state(void) {
     for (uint channel = 0u; channel < PWM_DRIVER_CHANNEL_COUNT; ++channel) {
-        const pwm_profile_channel_t *profile = pwm_profile_get_channel(channel);
+        const pwm_driver_config_channel_t *profile = pwm_driver_config_get_channel(channel);
         const pwm_driver_backend_t *backend;
         pwm_driver_state_t state;
         uint local_channel;
 
-        if ((profile == NULL) || ((profile->capabilities & PWM_PROFILE_CAP_READ) == 0u) ||
-            profile->direction != PWM_PROFILE_DIRECTION_INPUT) {
+        if ((profile == NULL) || ((profile->capabilities & PWM_DRIVER_CONFIG_CAP_READ) == 0u) ||
+            profile->direction != PWM_DRIVER_CONFIG_DIRECTION_INPUT) {
             continue;
         }
 
@@ -424,7 +424,7 @@ static void pwm_driver_core_main(void) {
     while (true) {
         pwm_driver_refresh_monitor_state();
         pwm_driver_process_mailbox();
-        if (pwm_profile_is_monitor()) {
+        if (pwm_driver_config_is_monitor()) {
             sleep_us(1000u);
         } else {
             __wfe();
@@ -433,20 +433,20 @@ static void pwm_driver_core_main(void) {
 }
 
 bool pwm_driver_init(const pwm_driver_config_t *config) {
-    pwm_profile_bank_role_t roles[PWM_PROFILE_BANK_COUNT];
-    pwm_profile_bank_backend_t backends[PWM_PROFILE_BANK_COUNT];
+    pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT];
+    pwm_driver_config_bank_backend_t backends[PWM_DRIVER_CONFIG_BANK_COUNT];
 
     if (config == NULL) {
         return false;
     }
 
-    backends[PWM_PROFILE_BANK_A] = config->bank_a_backend;
-    backends[PWM_PROFILE_BANK_B] = config->bank_b_backend;
-    backends[PWM_PROFILE_BANK_C] = config->bank_c_backend;
-    roles[PWM_PROFILE_BANK_A] = config->bank_a_role;
-    roles[PWM_PROFILE_BANK_B] = config->bank_b_role;
-    roles[PWM_PROFILE_BANK_C] = config->bank_c_role;
-    if (!pwm_profile_configure(backends, roles)) {
+    backends[PWM_DRIVER_CONFIG_BANK_A] = config->bank_a_backend;
+    backends[PWM_DRIVER_CONFIG_BANK_B] = config->bank_b_backend;
+    backends[PWM_DRIVER_CONFIG_BANK_C] = config->bank_c_backend;
+    roles[PWM_DRIVER_CONFIG_BANK_A] = config->bank_a_role;
+    roles[PWM_DRIVER_CONFIG_BANK_B] = config->bank_b_role;
+    roles[PWM_DRIVER_CONFIG_BANK_C] = config->bank_c_role;
+    if (!pwm_driver_config_configure(backends, roles)) {
         return false;
     }
 
@@ -465,12 +465,12 @@ bool pwm_driver_init(const pwm_driver_config_t *config) {
 /** @copydoc pwm_driver_launch */
 void pwm_driver_launch(void) {
     static const pwm_driver_config_t default_config = {
-        .bank_a_backend = PWM_PROFILE_BANK_BACKEND_HW,
-        .bank_b_backend = PWM_PROFILE_BANK_BACKEND_PIO,
-        .bank_c_backend = PWM_PROFILE_BANK_BACKEND_SW,
-        .bank_a_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
-        .bank_b_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
-        .bank_c_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
+        .bank_a_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_HW,
+        .bank_b_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_PIO,
+        .bank_c_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_SW,
+        .bank_a_role = PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR,
+        .bank_b_role = PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR,
+        .bank_c_role = PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR,
     };
 
     hard_assert(pwm_driver_init(&default_config));
@@ -548,18 +548,18 @@ pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd) {
 
 /** @copydoc pwm_driver_set */
 pwm_driver_result_t pwm_driver_set(uint channel, uint32_t freq_hz, uint8_t duty) {
-    const pwm_profile_channel_t *profile;
+    const pwm_driver_config_channel_t *profile;
     pwm_driver_result_t result;
 
-    profile = pwm_profile_get_channel(channel);
+    profile = pwm_driver_config_get_channel(channel);
     if (profile == NULL) {
         return PWM_DRIVER_RESULT_INVALID;
     }
-    if ((profile->capabilities & PWM_PROFILE_CAP_SET) == 0u ||
-        profile->direction != PWM_PROFILE_DIRECTION_OUTPUT) {
+    if ((profile->capabilities & PWM_DRIVER_CONFIG_CAP_SET) == 0u ||
+        profile->direction != PWM_DRIVER_CONFIG_DIRECTION_OUTPUT) {
         return PWM_DRIVER_RESULT_UNAVAILABLE;
     }
-    if (!pwm_profile_frequency_supported(channel, freq_hz)) {
+    if (!pwm_driver_config_frequency_supported(channel, freq_hz)) {
         return PWM_DRIVER_RESULT_INVALID;
     }
     if (duty > 100u) {
@@ -580,16 +580,16 @@ pwm_driver_result_t pwm_driver_set(uint channel, uint32_t freq_hz, uint8_t duty)
 
 /** @copydoc pwm_driver_get */
 bool pwm_driver_get(uint channel, pwm_driver_state_t *state) {
-    const pwm_profile_channel_t *profile;
+    const pwm_driver_config_channel_t *profile;
     const pwm_driver_backend_t *backend;
     uint local_channel;
     uint32_t version_before;
     uint32_t version_after;
     uint64_t pulse_ref_us;
 
-    profile = pwm_profile_get_channel(channel);
+    profile = pwm_driver_config_get_channel(channel);
     if ((profile == NULL) || (state == NULL) ||
-        ((profile->capabilities & PWM_PROFILE_CAP_READ) == 0u)) {
+        ((profile->capabilities & PWM_DRIVER_CONFIG_CAP_READ) == 0u)) {
         return false;
     }
 

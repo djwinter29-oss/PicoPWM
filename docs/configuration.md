@@ -17,6 +17,17 @@ switching a GPIO's function while it may be actively driving or reading a
 signal. Optional backend-specific settings are supplied through the startup
 configuration structure.
 
+The running configuration is immutable until reboot. CDC and I2C may change a
+separate target configuration, inspect both target and running settings, and
+save the target to flash. A reboot then validates and applies the saved target;
+invalid or missing flash data falls back to the electrically conservative
+default `A=HW/monitor`, `B=PIO/monitor`, `C=SW/monitor` configuration.
+
+The target record contains a magic value, format version, backend/role values,
+and CRC. It is stored in the final flash sector. Configuration changes are not
+active until reboot, so a failed or interrupted write cannot reconfigure live
+PWM hardware.
+
 Each bank is configured independently, so `2^3 = 8` role combinations are
 reachable in one firmware image. Backend-family choices are constrained:
 Bank A allows HW or SW, Bank B allows PIO or SW, and Bank C allows SW only.
@@ -103,5 +114,5 @@ A profile must validate these conditions at build time or startup:
 
 See [Architecture](architecture.md) for ownership boundaries and [USB CDC
 CLI](control/usb_cdc_cli.md) for the stable interactive interface. See
-[Channel Configuration](channel_config.md) for the fixed per-bank GPIO map and
-validation rules behind bank locking.
+[PWM Driver Configuration](pwm_driver_config.md) for the fixed Bank A/B/C GPIO map
+and startup configuration validation rules.

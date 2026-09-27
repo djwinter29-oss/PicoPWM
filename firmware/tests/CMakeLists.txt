@@ -110,3 +110,13 @@ target_include_directories(i2c_control_map_test PRIVATE
 )
 pico_pwm_test_warnings(i2c_control_map_test)
 add_test(NAME i2c_control_map COMMAND i2c_control_map_test)
+
+add_executable(stop_contract_test
+    stop_contract_test.c
+)
+target_include_directories(stop_contract_test PRIVATE
+    ${TEST_STUB_ROOT}
+    ${SOURCE_ROOT}
+)
+pico_pwm_test_warnings(stop_contract_test)
+add_test(NAME stop_contract COMMAND stop_contract_test)

@@ -456,8 +456,8 @@ bool pio_gen_init(void) {
         pio_channels[i].mode = PIO_GEN_MODE_DISABLED;
         pio_channels[i].period_count = 0;
         pio_channels[i].clkdiv_x256 = 256u;
-        pio_channels[i].realized_freq_hz = 0u;
-        pio_channels[i].duty_percent = 50u;
+        pio_channels[i].realized_freq_hz = PWM_DRIVER_STOPPED_FREQ_HZ;
+        pio_channels[i].duty_percent = PWM_DRIVER_STOPPED_DUTY_PERCENT;
         pio_channels[i].pulse_count = 0;
         pio_channels[i].pulse_ref_us = time_us_64();
 

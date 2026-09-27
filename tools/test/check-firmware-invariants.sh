@@ -33,8 +33,13 @@ if ! grep -q "jmp skip        side 1" "$PIO_FILE"; then
     exit 1
 fi
 
-if ! grep -q "multicore_lockout_victim_init" "$DRIVER_FILE"; then
-    echo "pwm_driver.c: Core 1 must call multicore_lockout_victim_init" >&2
+if ! grep -q "pwm_driver_config_arm_lockout_victim" "$DRIVER_FILE"; then
+    echo "pwm_driver.c: Core 1 must arm the flash lockout victim before reporting ready" >&2
+    exit 1
+fi
+
+if ! grep -q "multicore_lockout_victim_init" "$CONFIG_FILE"; then
+    echo "pwm_driver_config.c: lockout arm must call multicore_lockout_victim_init" >&2
     exit 1
 fi
 

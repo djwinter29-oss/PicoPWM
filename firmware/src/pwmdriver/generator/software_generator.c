@@ -147,8 +147,8 @@ bool sw_gen_init(void) {
         sw_pwm_channels[i].period_ticks = 0u;
         sw_pwm_channels[i].duty_ticks = 0u;
         sw_pwm_channels[i].counter = 0u;
-        sw_pwm_channels[i].realized_freq_hz = 0u;
-        sw_pwm_channels[i].realized_duty = 50u;
+        sw_pwm_channels[i].realized_freq_hz = PWM_DRIVER_STOPPED_FREQ_HZ;
+        sw_pwm_channels[i].realized_duty = PWM_DRIVER_STOPPED_DUTY_PERCENT;
         sw_pwm_channels[i].pulse_count = 0;
 
         gpio_init(gpio);
@@ -207,8 +207,8 @@ bool sw_gen_restore_defaults(void) {
         ch->period_ticks = 0u;
         ch->duty_ticks = 0u;
         ch->counter = 0u;
-        ch->realized_freq_hz = 0u;
-        ch->realized_duty = 50u;
+        ch->realized_freq_hz = PWM_DRIVER_STOPPED_FREQ_HZ;
+        ch->realized_duty = PWM_DRIVER_STOPPED_DUTY_PERCENT;
     }
     restore_interrupts(save);
 

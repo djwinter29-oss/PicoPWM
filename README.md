@@ -109,6 +109,16 @@ Other flash options:
 - USB CDC serial at **115200 baud**
 - I2C slave at address `0x40`; see [Pinout](docs/pinout.md) for physical connections.
 
+### Host Management Interface
+
+The optional Python host tool provides a Flask dashboard for reading and
+controlling all 24 logical channels through either USB CDC or I2C. See
+[host/python/README.md](host/python/README.md) for installation and connection
+examples.
+
+The matching C# ASP.NET Core host is available under
+[host/dotnet](host/dotnet/README.md) for .NET 8 environments.
+
 ### Troubleshooting
 
 - Confirm `PICO_SDK_PATH` is visible to the shell running CMake.
@@ -170,6 +180,8 @@ dependency.
 ## Repository Layout
 
 - `firmware/` — CMake project, Pico SDK import, and all firmware source code
+- `host/python/` — Python client, CDC/I2C backends, and Flask management UI
+- `host/dotnet/` — C# ASP.NET Core client, CDC/I2C backends, and web UI
 - `docs/` — user and design documentation
 - `tools/firmware/` — Linux firmware build and flashing helpers
 - `tools/test/` — Linux CTest and coverage helpers

@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "picopwm-host"
+version = "0.1.0"
+description = "Python host tools and Flask management interface for PicoPWM"
+requires-python = ">=3.10"
+dependencies = [
+    "Flask>=3.0,<4",
+]
+
+[project.optional-dependencies]
+cdc = ["pyserial>=3.5"]
+i2c = ["smbus2>=0.5"]
+test = ["pytest>=8"]
+all = ["pyserial>=3.5", "smbus2>=0.5", "pytest>=8"]
+
+[project.scripts]
+picopwm-web = "picopwm.app:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-data]
+picopwm = ["templates/*.html", "static/*.css"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

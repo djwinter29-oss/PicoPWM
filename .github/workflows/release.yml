@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install formatting dependencies
         run: |
@@ -50,7 +50,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install test dependencies
         run: |
@@ -64,7 +64,7 @@ jobs:
         run: tools/test/coverage-firmware-c.sh --build-dir firmware/build/tests-coverage-release --output-dir firmware/build/tests-coverage-release/coverage
 
       - name: Upload host coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: pico-pwm-release-coverage
           path: firmware/build/tests-coverage-release/coverage
@@ -80,7 +80,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Resolve version
         id: version
@@ -100,7 +100,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends cmake ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-dev libstdc++-arm-none-eabi-newlib
 
       - name: Cache Pico SDK
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .pico-sdk
           key: pico-sdk-${{ env.PICO_SDK_VERSION }}-${{ env.PICO_SDK_REVISION }}-${{ runner.os }}
@@ -136,7 +136,7 @@ jobs:
           ls -la "$output_dir"
 
       - name: Upload workflow artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-${{ matrix.board }}
           path: dist/${{ matrix.board }}/*

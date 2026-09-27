@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PicoPWM Control</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">PicoPWM / host control</p>
+        <h1>Channel desk</h1>
+        <p class="subhead">Tune the 24 logical channels through {{ transport }}.</p>
+      </div>
+      <form method="post" action="{{ url_for('stop_all') }}">
+        <button class="stop" type="submit">Stop all</button>
+      </form>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="messages" aria-live="polite">
+          {% for category, message in messages %}
+            <div class="message {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% if error %}
+      <section class="connection-error">
+        <strong>Device unavailable</strong>
+        <span>{{ error }}</span>
+        <small>Set PICOPWM_TRANSPORT and its connection variables, then refresh.</small>
+      </section>
+    {% else %}
+      <section class="summary">
+        <div><span class="summary-value">{{ channels|length }}</span><span>channels</span></div>
+        <div><span class="summary-value">{{ channels|selectattr('enabled')|list|length }}</span><span>running</span></div>
+        <div><span class="summary-value">{{ channels|sum(attribute='pulse_count') }}</span><span>pulses observed</span></div>
+      </section>
+      <section class="channel-grid" aria-label="PWM channels">
+        {% for channel in channels %}
+          <article class="channel {% if channel.enabled %}active{% endif %}">
+            <div class="channel-heading">
+              <span class="channel-number">{{ "%02d"|format(channel.channel) }}</span>
+              <span class="state">{% if channel.enabled %}RUNNING{% else %}IDLE{% endif %}</span>
+            </div>
+            <div class="readout">
+              <strong>{{ "%,d"|format(channel.frequency_hz) }}</strong>
+              <span>Hz</span>
+            </div>
+            <div class="bar"><span style="width: {{ channel.duty_percent }}%"></span></div>
+            <div class="metrics"><span>{{ channel.duty_percent }}% duty</span><span>{{ "%,d"|format(channel.pulse_count) }} pulses</span></div>
+            <form method="post" action="{{ url_for('update_channel', channel=channel.channel) }}" class="controls">
+              <label>Frequency <input name="frequency_hz" type="number" min="0" max="4294967295" value="{{ channel.frequency_hz }}" required></label>
+              <label>Duty <input name="duty_percent" type="number" min="0" max="100" value="{{ channel.duty_percent }}" required></label>
+              <button type="submit">Apply</button>
+            </form>
+          </article>
+        {% endfor %}
+      </section>
+    {% endif %}
+  </main>
+</body>
+</html>

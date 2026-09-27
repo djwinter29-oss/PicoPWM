@@ -14,7 +14,7 @@
  * @brief Runtime logical channel table.
  *
  * All channels start `DISABLED` at boot. Each bank's 8 channels are filled in
- * once by `pwm_profile_configure_roles()` before Core 1 starts.
+ * once by `pwm_profile_configure()` before Core 1 starts.
  */
 static pwm_profile_channel_t pwm_profile_channels[PWM_PROFILE_CHANNEL_COUNT] = {
     [0 ... PWM_PROFILE_CHANNEL_COUNT - 1] = {.direction = PWM_PROFILE_DIRECTION_DISABLED},
@@ -182,29 +182,30 @@ const char *pwm_profile_backend_name(pwm_profile_backend_t backend) {
 
 /** @brief Fixed GPIO assignment for each bank's 8 logical channels; see docs/pinout.md. */
 static const uint pwm_profile_bank_gpio[PWM_PROFILE_BANK_COUNT][PWM_PROFILE_BANK_SIZE] = {
-    [PWM_PROFILE_BANK_HW] = {1u, 3u, 5u, 7u, 9u, 11u, 13u, 15u},
-    [PWM_PROFILE_BANK_PIO] = {0u, 2u, 4u, 6u, 8u, 10u, 12u, 14u},
-    [PWM_PROFILE_BANK_SW] = {16u, 17u, 18u, 19u, 20u, 21u, 22u, 28u},
+    [PWM_PROFILE_BANK_A] = {1u, 3u, 5u, 7u, 9u, 11u, 13u, 15u},
+    [PWM_PROFILE_BANK_B] = {0u, 2u, 4u, 6u, 8u, 10u, 12u, 14u},
+    [PWM_PROFILE_BANK_C] = {16u, 17u, 18u, 19u, 20u, 21u, 22u, 28u},
 };
 
 /** @brief Fill one bank's 8 channel entries for the resolved backend and role. */
-static void pwm_profile_fill_bank(pwm_profile_bank_t bank, pwm_profile_bank_role_t role) {
+static void pwm_profile_fill_bank(pwm_profile_bank_t bank, pwm_profile_bank_backend_t backend,
+                                  pwm_profile_bank_role_t role) {
     uint base = (uint)bank * PWM_PROFILE_BANK_SIZE;
     bool generator = (role == PWM_PROFILE_BANK_ROLE_GENERATOR);
 
     for (uint i = 0u; i < PWM_PROFILE_BANK_SIZE; ++i) {
         uint gpio = pwm_profile_bank_gpio[bank][i];
 
-        switch (bank) {
-        case PWM_PROFILE_BANK_HW:
+        switch (backend) {
+        case PWM_PROFILE_BANK_BACKEND_HW:
             pwm_profile_channels[base + i] = generator ? (pwm_profile_channel_t)PWM_PROFILE_HW_GENERATOR_CHANNEL(gpio, i)
                                                         : (pwm_profile_channel_t)PWM_PROFILE_HW_MONITOR_CHANNEL(gpio, i);
             break;
-        case PWM_PROFILE_BANK_PIO:
+        case PWM_PROFILE_BANK_BACKEND_PIO:
             pwm_profile_channels[base + i] = generator ? (pwm_profile_channel_t)PWM_PROFILE_PIO_GENERATOR_CHANNEL(gpio, i)
                                                         : (pwm_profile_channel_t)PWM_PROFILE_PIO_MONITOR_CHANNEL(gpio, i);
             break;
-        case PWM_PROFILE_BANK_SW:
+        case PWM_PROFILE_BANK_BACKEND_SW:
         default:
             pwm_profile_channels[base + i] = generator ? (pwm_profile_channel_t)PWM_PROFILE_SW_GENERATOR_CHANNEL(gpio, i)
                                                         : (pwm_profile_channel_t)PWM_PROFILE_SW_MONITOR_CHANNEL(gpio, i);
@@ -213,17 +214,27 @@ static void pwm_profile_fill_bank(pwm_profile_bank_t bank, pwm_profile_bank_role
     }
 }
 
-bool pwm_profile_configure_roles(const pwm_profile_bank_role_t roles[PWM_PROFILE_BANK_COUNT]) {
-    if (roles == NULL) {
+bool pwm_profile_configure(const pwm_profile_bank_backend_t backends[PWM_PROFILE_BANK_COUNT],
+                           const pwm_profile_bank_role_t roles[PWM_PROFILE_BANK_COUNT]) {
+    if ((backends == NULL) || (roles == NULL)) {
         return false;
     }
 
-    for (pwm_profile_bank_t bank = PWM_PROFILE_BANK_HW; bank < PWM_PROFILE_BANK_COUNT; ++bank) {
+    for (pwm_profile_bank_t bank = PWM_PROFILE_BANK_A; bank < PWM_PROFILE_BANK_COUNT; ++bank) {
         if ((roles[bank] != PWM_PROFILE_BANK_ROLE_GENERATOR) &&
             (roles[bank] != PWM_PROFILE_BANK_ROLE_MONITOR)) {
             return false;
         }
-        pwm_profile_fill_bank(bank, roles[bank]);
+        if ((backends[bank] > PWM_PROFILE_BANK_BACKEND_SW) ||
+            (bank == PWM_PROFILE_BANK_A && backends[bank] == PWM_PROFILE_BANK_BACKEND_PIO) ||
+            (bank == PWM_PROFILE_BANK_B && backends[bank] == PWM_PROFILE_BANK_BACKEND_HW) ||
+            (bank == PWM_PROFILE_BANK_C && backends[bank] != PWM_PROFILE_BANK_BACKEND_SW)) {
+            return false;
+        }
+    }
+
+    for (pwm_profile_bank_t bank = PWM_PROFILE_BANK_A; bank < PWM_PROFILE_BANK_COUNT; ++bank) {
+        pwm_profile_fill_bank(bank, backends[bank], roles[bank]);
     }
 
     return pwm_profile_validate();

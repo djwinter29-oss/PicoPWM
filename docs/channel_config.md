@@ -14,7 +14,7 @@ host-facing model.
 - the runtime `pwm_profile_channels[PWM_PROFILE_CHANNEL_COUNT]` table, which
   starts fully `DISABLED` at boot
 - the fixed GPIO assignment for each bank (`pwm_profile_bank_gpio`)
-- `pwm_profile_configure_roles()`, which fills in all bank entries from the
+- `pwm_profile_configure()`, which fills in all bank entries from the
   startup roles, using the channel-entry macros in
   `firmware/src/pwmdriver/channel_config/channel_table.h`
 - the shared lookup/validation helpers (`pwm_profile_get_channel`, `pwm_profile_get_gpio`,
@@ -47,17 +47,16 @@ The common validator uses these board-policy compile definitions by default:
 A custom board target may override these definitions in its CMake branch when
 its GPIO count, reserved pins, or hardware PWM pin policy differs.
 
-## Fixed Bank GPIO Map
+## Fixed Bank GPIO Map and Backend Rules
 
 | Bank | Logical channels | GPIOs |
 | --- | --- | --- |
-| HW | 0..7 | `1, 3, 5, 7, 9, 11, 13, 15` (slice-B) |
-| PIO | 8..15 | `0, 2, 4, 6, 8, 10, 12, 14` (companion slice-A) |
-| SW | 16..23 | `16, 17, 18, 19, 20, 21, 22, 28` |
+| Bank A | 0..7 | `1, 3, 5, 7, 9, 11, 13, 15` (slice-B); HW or SW backend |
+| Bank B | 8..15 | `0, 2, 4, 6, 8, 10, 12, 14` (companion slice-A); PIO or SW backend |
+| Bank C | 16..23 | `16, 17, 18, 19, 20, 21, 22, 28`; SW backend only |
 
-This map is fixed in `channel_config.c` and is not configurable per build; see
-[Pinout](pinout.md) for the physical rationale (hardware PWM and PIO are each
-restricted to one fixed set of 8 pins, not a free GPIO choice).
+This map is fixed in `channel_config.c` and is not configurable at runtime; see
+[Pinout](pinout.md) for the physical rationale.
 
 ## Resource Rules
 
@@ -85,7 +84,7 @@ standard Pico board. If a custom board needs a different physical layout:
    CMake branch, following the existing board-policy pattern.
 2. If the bank/GPIO layout itself needs to change, update
   `pwm_profile_bank_gpio` and the bank-to-backend mapping in
-  `pwm_profile_fill_bank()`/`pwm_profile_configure_roles()` — both stay inside
+  `pwm_profile_fill_bank()`/`pwm_profile_configure()` — both stay inside
   `channel_config.c`.
 3. Add or update firmware host-side tests in `firmware/tests/channel_config_test.c`
   and `firmware/tests/CMakeLists.txt`; run them through

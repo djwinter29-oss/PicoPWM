@@ -41,7 +41,7 @@ Implemented by `board_commands.*`.
 | `bank` | Show each bank's lock state (unlocked/generator/monitor). | `bank` |
 | `bank <hw\|pio\|sw> <generator\|monitor>` | Lock one bank's role; one-shot until reboot. | `bank hw generator` |
 | `led <on\|off>` | Set the board LED state. | `led on` |
-| `stop` | Restore the profile's safe default behavior. | `stop` |
+| `stop` | Restore configured generator banks' safe defaults. | `stop` |
 | `reboot` | Reboot the board. | `reboot` |
 
 ### Shell Commands
@@ -71,7 +71,7 @@ CH0: freq=1000 Hz, duty=50%, pulses=12, enabled=yes
 
 `pulse_count` is read-only, monotonic from power-on, and is not reset by
 `stop`. The returned frequency and duty values are the realized channel state.
-For generator profiles, `stop` disables outputs and restores the configured
-defaults. For monitor profiles, `stop` leaves measured input channels unchanged.
+For generator banks, `stop` disables outputs and restores configured defaults.
+For monitor banks, `stop` leaves measured input channels unchanged.
 See [Control Interfaces](README.md) for shared semantics and [I2C Protocol](i2c_protocol.md)
 for the binary register protocol.

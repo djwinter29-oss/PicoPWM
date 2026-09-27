@@ -126,14 +126,14 @@ Architecturally, `pwm_driver_set()` is an internal command-ingress API.
 
 ## Current Default Mapping
 
-Every bank maps to the same fixed logical channel range regardless of which
-role (generator or monitor) it is locked into:
+Every bank maps to the same fixed logical channel range. Startup configuration
+selects its backend family and role:
 
 | Logical Channel | Backend when locked as generator | Backend when locked as monitor |
 | ----------------- | --------- | ----------------------- |
-| `0..7` | HW PWM | HW monitor |
-| `8..15` | PIO PWM | PIO monitor |
-| `16..23` | SW PWM | SW monitor |
+| `0..7` (Bank A) | HW or SW generator | HW or SW monitor |
+| `8..15` (Bank B) | PIO or SW generator | PIO or SW monitor |
+| `16..23` (Bank C) | SW generator only | SW monitor only |
 
 The physical mapping and slice assignments are documented in
 [Pinout](../pinout.md). Startup bank configuration is documented in

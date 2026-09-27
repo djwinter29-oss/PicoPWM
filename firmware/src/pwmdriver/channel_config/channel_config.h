@@ -64,11 +64,11 @@ typedef struct {
 /** @brief Number of logical channels owned by one physical bank. */
 #define PWM_PROFILE_BANK_SIZE 8u
 
-/** @brief Physical GPIO bank; each bank is a fixed set of 8 GPIOs (see docs/pinout.md). */
+/** @brief Fixed physical bank; each bank owns 8 stable logical channels. */
 typedef enum {
-    PWM_PROFILE_BANK_HW = 0, /**< Hardware PWM slice-B GPIOs, logical channels 0..7. */
-    PWM_PROFILE_BANK_PIO, /**< PIO companion slice-A GPIOs, logical channels 8..15. */
-    PWM_PROFILE_BANK_SW, /**< Software-only GPIOs, logical channels 16..23. */
+    PWM_PROFILE_BANK_A = 0, /**< HW-capable GPIOs, logical channels 0..7. */
+    PWM_PROFILE_BANK_B, /**< PIO-capable GPIOs, logical channels 8..15. */
+    PWM_PROFILE_BANK_C, /**< Software-only GPIOs, logical channels 16..23. */
     PWM_PROFILE_BANK_COUNT, /**< Number of physical banks. */
 } pwm_profile_bank_t;
 
@@ -77,6 +77,13 @@ typedef enum {
     PWM_PROFILE_BANK_ROLE_GENERATOR = 0, /**< Bank channels become PWM outputs. */
     PWM_PROFILE_BANK_ROLE_MONITOR, /**< Bank channels become PWM inputs. */
 } pwm_profile_bank_role_t;
+
+/** @brief Backend family selected for one fixed bank. */
+typedef enum {
+    PWM_PROFILE_BANK_BACKEND_HW = 0, /**< Bank A hardware PWM backend. */
+    PWM_PROFILE_BANK_BACKEND_PIO, /**< Bank B PIO backend. */
+    PWM_PROFILE_BANK_BACKEND_SW, /**< Software backend; valid for all banks, required for Bank C. */
+} pwm_profile_bank_backend_t;
 
 /** @brief Return the active profile's logical channel table. */
 const pwm_profile_channel_t *pwm_profile_get_channel(uint channel);
@@ -105,8 +112,9 @@ bool pwm_profile_is_monitor(void);
 /** @brief Return a short name for one configured backend. */
 const char *pwm_profile_backend_name(pwm_profile_backend_t backend);
 
-/** @brief Populate all fixed banks from startup roles before Core 1 launches. */
-bool pwm_profile_configure_roles(const pwm_profile_bank_role_t roles[PWM_PROFILE_BANK_COUNT]);
+/** @brief Populate all fixed banks from startup backend/role selections before Core 1 launches. */
+bool pwm_profile_configure(const pwm_profile_bank_backend_t backends[PWM_PROFILE_BANK_COUNT],
+                           const pwm_profile_bank_role_t roles[PWM_PROFILE_BANK_COUNT]);
 
 
 #endif

@@ -434,15 +434,19 @@ static void pwm_driver_core_main(void) {
 
 bool pwm_driver_init(const pwm_driver_config_t *config) {
     pwm_profile_bank_role_t roles[PWM_PROFILE_BANK_COUNT];
+    pwm_profile_bank_backend_t backends[PWM_PROFILE_BANK_COUNT];
 
     if (config == NULL) {
         return false;
     }
 
-    roles[PWM_PROFILE_BANK_HW] = config->hw_role;
-    roles[PWM_PROFILE_BANK_PIO] = config->pio_role;
-    roles[PWM_PROFILE_BANK_SW] = config->sw_role;
-    if (!pwm_profile_configure_roles(roles)) {
+    backends[PWM_PROFILE_BANK_A] = config->bank_a_backend;
+    backends[PWM_PROFILE_BANK_B] = config->bank_b_backend;
+    backends[PWM_PROFILE_BANK_C] = config->bank_c_backend;
+    roles[PWM_PROFILE_BANK_A] = config->bank_a_role;
+    roles[PWM_PROFILE_BANK_B] = config->bank_b_role;
+    roles[PWM_PROFILE_BANK_C] = config->bank_c_role;
+    if (!pwm_profile_configure(backends, roles)) {
         return false;
     }
 
@@ -461,9 +465,12 @@ bool pwm_driver_init(const pwm_driver_config_t *config) {
 /** @copydoc pwm_driver_launch */
 void pwm_driver_launch(void) {
     static const pwm_driver_config_t default_config = {
-        .hw_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
-        .pio_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
-        .sw_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
+        .bank_a_backend = PWM_PROFILE_BANK_BACKEND_HW,
+        .bank_b_backend = PWM_PROFILE_BANK_BACKEND_PIO,
+        .bank_c_backend = PWM_PROFILE_BANK_BACKEND_SW,
+        .bank_a_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
+        .bank_b_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
+        .bank_c_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
     };
 
     hard_assert(pwm_driver_init(&default_config));

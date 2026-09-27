@@ -35,7 +35,7 @@ below. Channel register ranges use the channel count advertised by
 | `REG_REBOOT` | `0x92` | 1 | 1 | Reboot request; returns status |
 
 Here `n` is the channel count returned by `REG_CHANNELS` and `k` ranges from
-`0` through `n - 1`. The current default profile exposes 24 channels, so the
+`0` through `n - 1`. The fixed Bank A/B/C allocation exposes 24 channels, so the
 ranges are `0x10..0x27` and `0x30..0x47`.
 
 ## Channel Property Layout

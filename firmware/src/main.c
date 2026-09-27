@@ -41,9 +41,12 @@ int main(void) {
 
     // Configure and launch all three PWM banks before starting Core 1.
     static const pwm_driver_config_t pwm_config = {
-        .hw_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
-        .pio_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
-        .sw_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
+        .bank_a_backend = PWM_PROFILE_BANK_BACKEND_HW,
+        .bank_b_backend = PWM_PROFILE_BANK_BACKEND_PIO,
+        .bank_c_backend = PWM_PROFILE_BANK_BACKEND_SW,
+        .bank_a_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
+        .bank_b_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
+        .bank_c_role = PWM_PROFILE_BANK_ROLE_GENERATOR,
     };
     if (!pwm_driver_init(&pwm_config)) {
         system_reboot();

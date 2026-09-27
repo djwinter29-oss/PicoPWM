@@ -6,10 +6,10 @@ build-time profile selection or runtime role switching.
 
 ## Startup Bank Configuration
 
-The GPIO map is fixed into three 8-pin banks (see [Pinout](pinout.md)): the
-hardware PWM bank (slice-B pins), the PIO PWM bank (companion slice-A pins),
-and the software-only bank. All three banks are configured before Core 1
-starts, so every logical channel has a valid backend and role during runtime.
+The GPIO map is fixed into three 8-pin banks (see [Pinout](pinout.md)):
+Bank A is HW-capable, Bank B is PIO-capable, and Bank C is software-only. All
+three banks are configured before Core 1 starts, so every logical channel has a
+valid backend and role during runtime.
 
 The three bank roles are selected by `pwm_driver_init()` before Core 1 starts.
 They remain fixed for the lifetime of the firmware process, which avoids
@@ -17,8 +17,9 @@ switching a GPIO's function while it may be actively driving or reading a
 signal. Optional backend-specific settings are supplied through the startup
 configuration structure.
 
-Each bank is configured independently, so `2^3 = 8` combinations are reachable
-in one firmware image:
+Each bank is configured independently, so `2^3 = 8` role combinations are
+reachable in one firmware image. Backend-family choices are constrained:
+Bank A allows HW or SW, Bank B allows PIO or SW, and Bank C allows SW only.
 
 | HW bank (GPIO 1,3,5,7,9,11,13,15) | PIO bank (GPIO 0,2,4,6,8,10,12,14) | SW bank (GPIO 16,17,18,19,20,21,22,28) |
 | --- | --- | --- |

@@ -29,12 +29,15 @@ typedef struct {
 
 /** @brief Complete startup configuration for the three fixed PWM banks. */
 typedef struct {
-    pwm_driver_bank_config_t hw; /**< Hardware PWM bank configuration. */
-    pwm_driver_bank_config_t pio; /**< PIO PWM bank configuration. */
-    pwm_driver_bank_config_t sw; /**< Software PWM bank configuration. */
-    pwm_driver_bank_role_t hw_role; /**< Hardware bank role. */
-    pwm_driver_bank_role_t pio_role; /**< PIO bank role. */
-    pwm_driver_bank_role_t sw_role; /**< Software bank role. */
+    pwm_driver_bank_config_t bank_a; /**< Bank A configuration. */
+    pwm_driver_bank_config_t bank_b; /**< Bank B configuration. */
+    pwm_driver_bank_config_t bank_c; /**< Bank C configuration. */
+    pwm_profile_bank_backend_t bank_a_backend; /**< Bank A backend family: HW or SW. */
+    pwm_profile_bank_backend_t bank_b_backend; /**< Bank B backend family: PIO or SW. */
+    pwm_profile_bank_backend_t bank_c_backend; /**< Bank C backend family: SW only. */
+    pwm_driver_bank_role_t bank_a_role; /**< Bank A role. */
+    pwm_driver_bank_role_t bank_b_role; /**< Bank B role. */
+    pwm_driver_bank_role_t bank_c_role; /**< Bank C role. */
 } pwm_driver_config_t;
 
 /** @brief Result codes returned by shared PWM control operations. */
@@ -66,8 +69,8 @@ void pwm_driver_launch(void);
 
 /**
  * @brief Return whether Core 1 started the PWM mailbox runtime.
- * @return `true` once the driver can accept bank-lock and channel commands;
- *         individual backends initialize lazily when their bank is locked.
+ * @return `true` once the driver has initialized the configured backends and
+ *         can accept channel commands.
  */
 bool pwm_driver_is_ready(void);
 

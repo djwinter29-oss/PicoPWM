@@ -12,7 +12,27 @@ int main(void) {
         PWM_PROFILE_BANK_ROLE_MONITOR,
         PWM_PROFILE_BANK_ROLE_GENERATOR,
     };
-    assert(pwm_profile_configure_roles(roles));
+    const pwm_profile_bank_backend_t backends[PWM_PROFILE_BANK_COUNT] = {
+        PWM_PROFILE_BANK_BACKEND_HW,
+        PWM_PROFILE_BANK_BACKEND_PIO,
+        PWM_PROFILE_BANK_BACKEND_SW,
+    };
+    assert(pwm_profile_configure(backends, roles));
+
+    {
+        pwm_profile_bank_backend_t invalid_backends[PWM_PROFILE_BANK_COUNT] = {
+            PWM_PROFILE_BANK_BACKEND_PIO,
+            PWM_PROFILE_BANK_BACKEND_PIO,
+            PWM_PROFILE_BANK_BACKEND_SW,
+        };
+        assert(!pwm_profile_configure(invalid_backends, roles));
+        invalid_backends[0] = PWM_PROFILE_BANK_BACKEND_HW;
+        invalid_backends[1] = PWM_PROFILE_BANK_BACKEND_HW;
+        assert(!pwm_profile_configure(invalid_backends, roles));
+        invalid_backends[1] = PWM_PROFILE_BANK_BACKEND_PIO;
+        invalid_backends[2] = PWM_PROFILE_BANK_BACKEND_HW;
+        assert(!pwm_profile_configure(invalid_backends, roles));
+    }
     {
         const pwm_profile_channel_t *profile = pwm_profile_get_channel(0u);
         assert(profile->gpio == 1u);

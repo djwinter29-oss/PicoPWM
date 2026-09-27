@@ -271,7 +271,7 @@ flowchart TD
     Reset[Power-on or reset] --> Clock[Set system clock target]
     Clock --> LED[Initialize board LED helper]
     LED --> USB[Initialize TinyUSB CDC and CLI binding]
-    USB --> Launch[Launch Core 1 with pwm_driver_launch]
+    USB --> Launch[Initialize Core 1 with pwm_driver_init]
     Launch --> Ready{pwm_driver_is_ready?}
     Ready -- No --> Ready
     Ready -- Yes --> I2C[Initialize I2C slave]
@@ -287,7 +287,7 @@ In ordered form:
 1. Core 0 raises the system clock target to 150 MHz when possible.
 2. Core 0 initializes the board LED helper.
 3. Core 0 initializes TinyUSB CDC and the CLI transport binding.
-4. Core 0 launches Core 1 with `pwm_driver_launch()`.
+4. Core 0 initializes and launches Core 1 with `pwm_driver_init(config)`.
 5. Core 0 waits for `pwm_driver_is_ready()`.
 6. Core 0 initializes the I2C slave transport.
 7. The main loop services `usb_cdc_poll()`, `pwm_commands_poll()`, and `i2c_slave_poll()`.

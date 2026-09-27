@@ -51,6 +51,7 @@ target_include_directories(pwm_driver_config_test PRIVATE
     ${SOURCE_ROOT}
 )
 pico_pwm_test_warnings(pwm_driver_config_test)
+target_compile_definitions(pwm_driver_config_test PRIVATE PICO_PWM_CONFIG_FLASH_OFFSET=0)
 add_test(NAME pwm_driver_config COMMAND pwm_driver_config_test)
 
 add_executable(i2c_control_map_test

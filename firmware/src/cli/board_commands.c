@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #define COMMAND_SHELL ((shell_t *)context)
 
@@ -90,7 +91,7 @@ bool board_commands_config(void *context, int argc, const char *const *argv) {
         char *end = NULL;
         unsigned long value = strtoul(argv[2], &end, 0);
         return shell_write_line(COMMAND_SHELL,
-            (end != argv[2] && *end == '\0' && value <= 0x7fu && device_api_config_set_i2c_address((uint8_t)value))
+            (end != argv[2] && *end == '\0' && value <= 0x77u && value >= 0x08u && device_api_config_set_i2c_address((uint8_t)value))
                 ? "OK target address updated; save then reboot" : "ERR invalid I2C address");
     }
 

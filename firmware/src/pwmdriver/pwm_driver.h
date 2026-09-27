@@ -22,16 +22,8 @@
 /** @brief Role selected for one fixed PWM bank at startup. */
 typedef pwm_driver_config_bank_role_t pwm_driver_bank_role_t;
 
-/** @brief Optional backend-specific startup options reserved for future tuning. */
-typedef struct {
-    const void *options; /**< Backend-owned immutable option block, or `NULL` for defaults. */
-} pwm_driver_bank_config_t;
-
 /** @brief Complete startup configuration for the three fixed PWM banks. */
 typedef struct {
-    pwm_driver_bank_config_t bank_a; /**< Bank A configuration. */
-    pwm_driver_bank_config_t bank_b; /**< Bank B configuration. */
-    pwm_driver_bank_config_t bank_c; /**< Bank C configuration. */
     pwm_driver_config_bank_backend_t bank_a_backend; /**< Bank A backend family: HW or SW. */
     pwm_driver_config_bank_backend_t bank_b_backend; /**< Bank B backend family: PIO or SW. */
     pwm_driver_config_bank_backend_t bank_c_backend; /**< Bank C backend family: SW only. */
@@ -49,6 +41,17 @@ bool pwm_driver_config_validate_target(const pwm_driver_config_t *config);
 bool pwm_driver_config_load_target(pwm_driver_config_t *config);
 /** @brief Persist a validated target configuration in flash. */
 bool pwm_driver_config_save_target(const pwm_driver_config_t *config);
+/** @brief Publish running and target configuration snapshots for transport status. */
+void pwm_driver_config_init_state(const pwm_driver_config_t *running, const pwm_driver_config_t *target);
+/** @brief Copy the target configuration snapshot. */
+bool pwm_driver_config_get_target(pwm_driver_config_t *config);
+/** @brief Copy the immutable running configuration snapshot. */
+bool pwm_driver_config_get_running(pwm_driver_config_t *config);
+/** @brief Update one target bank without changing running hardware. */
+bool pwm_driver_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_backend_t backend,
+                                pwm_driver_config_bank_role_t role);
+/** @brief Update the target I2C address without changing the running address. */
+bool pwm_driver_config_set_i2c_address(uint8_t address);
 
 /** @brief Result codes returned by shared PWM control operations. */
 typedef enum {
@@ -73,9 +76,6 @@ typedef struct {
  * @return `true` when the configuration was accepted and Core 1 was launched.
  */
 bool pwm_driver_init(const pwm_driver_config_t *config);
-
-/** @brief Legacy launch entry point; use pwm_driver_init() for new code. */
-void pwm_driver_launch(void);
 
 /**
  * @brief Return whether Core 1 started the PWM mailbox runtime.

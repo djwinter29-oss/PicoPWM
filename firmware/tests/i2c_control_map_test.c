@@ -44,6 +44,10 @@ bool device_api_config_save_target(void) {
     return true;
 }
 
+bool device_api_config_set_i2c_address(uint8_t address) {
+    return address <= 0x7fu;
+}
+
 uint8_t device_api_channel_count(void) {
     return PWM_DRIVER_CHANNEL_COUNT;
 }

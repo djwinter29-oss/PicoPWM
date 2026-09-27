@@ -206,7 +206,7 @@ pwm_driver_result_t i2c_control_map_execute_write(uint8_t reg, const uint8_t *pa
     }
 
     if (reg == I2C_CONTROL_MAP_REG_CONFIG_ADDRESS) {
-        if ((payload == NULL) || (payload_len != 1u) || (payload[0] > 0x7fu)) {
+        if ((payload == NULL) || (payload_len != 1u) || (payload[0] < 0x08u) || (payload[0] > 0x77u)) {
             return PWM_DRIVER_RESULT_INVALID;
         }
         return device_api_config_set_i2c_address(payload[0])

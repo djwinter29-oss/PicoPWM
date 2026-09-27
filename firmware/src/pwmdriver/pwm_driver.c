@@ -440,6 +440,10 @@ bool pwm_driver_init(const pwm_driver_config_t *config) {
         return false;
     }
 
+    if (!pwm_driver_config_validate_target(config)) {
+        return false;
+    }
+
     backends[PWM_DRIVER_CONFIG_BANK_A] = config->bank_a_backend;
     backends[PWM_DRIVER_CONFIG_BANK_B] = config->bank_b_backend;
     backends[PWM_DRIVER_CONFIG_BANK_C] = config->bank_c_backend;
@@ -460,20 +464,6 @@ bool pwm_driver_init(const pwm_driver_config_t *config) {
     pwm_mailbox.reply.ok = false;
     multicore_launch_core1(pwm_driver_core_main);
     return true;
-}
-
-/** @copydoc pwm_driver_launch */
-void pwm_driver_launch(void) {
-    static const pwm_driver_config_t default_config = {
-        .bank_a_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_HW,
-        .bank_b_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_PIO,
-        .bank_c_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_SW,
-        .bank_a_role = PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR,
-        .bank_b_role = PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR,
-        .bank_c_role = PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR,
-    };
-
-    hard_assert(pwm_driver_init(&default_config));
 }
 
 /** @copydoc pwm_driver_is_ready */

@@ -49,7 +49,8 @@ backend/role pair per bank in A, B, C order. Backend values are `0`=HW,
 `1`=PIO, `2`=SW; role values are `0`=generator and `1`=monitor.
 
 `REG_CONFIG_SET` accepts three payload bytes: `bank`, `backend`, `role`. It
-updates the target only. `REG_CONFIG_ADDRESS` accepts one 7-bit address byte
+updates the target only. `REG_CONFIG_ADDRESS` accepts one usable 7-bit address byte
+(`0x08..0x77`)
 and updates the target only. `REG_CONFIG_SAVE` validates and persists the
 target; the host must issue `REG_REBOOT` before the target becomes running.
 

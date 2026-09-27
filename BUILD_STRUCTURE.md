@@ -61,7 +61,8 @@ config save
 reboot
 ```
 
-Valid 7-bit addresses: `0x00` to `0x7F`.
+Valid user-configurable 7-bit addresses: `0x08` to `0x77`; reserved I2C
+addresses are rejected.
 
 ### Combining Clock Speed and Address
 ```bash

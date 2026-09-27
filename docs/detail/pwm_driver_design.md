@@ -85,7 +85,7 @@ pwm_driver_result_t device_api_restore_defaults(void);
 Below that, `pwmdriver` owns the internal cross-core mailbox boundary used by `device_api`:
 
 ```c
-void pwm_driver_launch(void);
+bool pwm_driver_init(const pwm_driver_config_t *config);
 bool pwm_driver_is_ready(void);
 ```
 
@@ -243,7 +243,7 @@ The `pwmdriver` wrapper has a small lifecycle state machine.
 ```mermaid
 stateDiagram-v2
     [*] --> Reset
-    Reset --> LaunchRequested: pwm_driver_launch()
+    Reset --> LaunchRequested: pwm_driver_init(config)
     LaunchRequested --> InitializingCore1: multicore_launch_core1()
     InitializingCore1 --> BackendInit: Core1 entry
     BackendInit --> Ready: hw init + pio init + sw init complete
@@ -283,7 +283,7 @@ This is a logical model. Backend-specific internal state differs by driver.
 
 ## API Sequence Diagrams
 
-### `pwm_driver_launch()`
+### `pwm_driver_init()`
 
 ```mermaid
 sequenceDiagram
@@ -291,7 +291,7 @@ sequenceDiagram
     participant WR as pwm_driver.c
     participant C1 as Core 1
 
-    C0->>WR: pwm_driver_launch()
+    C0->>WR: pwm_driver_init(config)
     WR->>WR: init pending mailbox slot
     WR->>WR: init snapshot defaults (all banks unlocked)
     WR->>C1: multicore_launch_core1(core_main)

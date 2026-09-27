@@ -23,10 +23,11 @@ save the target to flash. A reboot then validates and applies the saved target;
 invalid or missing flash data falls back to the electrically conservative
 default `A=HW/monitor`, `B=PIO/monitor`, `C=SW/monitor` configuration.
 
-The target record contains a magic value, format version, backend/role values,
-and CRC. It is stored in the final flash sector. Configuration changes are not
-active until reboot, so a failed or interrupted write cannot reconfigure live
-PWM hardware.
+The target record contains a magic value, format version, generation number,
+backend/role/address values, and checksum. Two records occupy the final 8 KiB
+as alternating slots. The firmware link step rejects images that overlap this
+reserved area. A new record is written to the inactive slot, so power loss
+during a save preserves the previous valid target.
 
 Each bank is configured independently, so `2^3 = 8` role combinations are
 reachable in one firmware image. Backend-family choices are constrained:

@@ -48,9 +48,9 @@ The public logical state uses:
 
 - `freq_hz` as `uint32_t`
 - `duty` as integer percent `0..100`
-- `pulse_count` as an elapsed-time estimate of generated periods
+- `pulse_count` as the elapsed-time period count
 
-`pulse_count` is not a wrap-IRQ edge count. The backend freezes the count when the realized frequency changes, and Core 0 adds periods from the elapsed time and that frequency on read. A static output (`freq_hz = 0`) stops the estimate. `stop` drives the pin low and does not clear the count.
+`pulse_count` is the period count this backend publishes. The hardware PWM slice does not keep a host-readable edge counter, and the generator does not take a wrap interrupt: one interrupt per period would spend Core 1 time at the frequencies this backend is meant to run. The backend freezes the count when the realized frequency changes, and Core 0 adds whole periods from the elapsed time and that frequency on read. A static output (`freq_hz = 0`) stops the count. `stop` drives the pin low and does not clear it. The count is monotonic and saturates at `UINT32_MAX`.
 
 The generator treats `freq_hz = 0` as a static-output policy case:
 

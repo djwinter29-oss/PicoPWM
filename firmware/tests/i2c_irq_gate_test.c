@@ -97,6 +97,14 @@ static void test_one_byte_read_never_unmasks_tx_empty(void) {
     assert(!gate.tx_empty_unmasked);
 }
 
+static void test_null_gate_is_ignored(void) {
+    assert(i2c_irq_gate_on_read_request(NULL, true, true, 0u, 1u) == I2C_GATE_NONE);
+    assert(i2c_irq_gate_on_tx_empty(NULL, true, 0u, 1u) == I2C_GATE_NONE);
+    i2c_irq_gate_init(NULL);
+    i2c_irq_gate_resume(NULL);
+    i2c_irq_gate_on_stop(NULL);
+}
+
 int main(void) {
     test_queue_reject_is_finished();
     test_idle_keeps_tx_empty_masked();
@@ -105,5 +113,6 @@ int main(void) {
     test_unsolicited_read_releases_the_clock();
     test_multibyte_read_masks_tx_empty_after_last_byte();
     test_one_byte_read_never_unmasks_tx_empty();
+    test_null_gate_is_ignored();
     return 0;
 }

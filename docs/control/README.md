@@ -6,7 +6,7 @@ identity, and board-control operations.
 
 ## Shared Semantics
 
-- `pulse_count` is read-only and monotonic from power-on.
+- `pulse_count` is read-only and monotonic from power-on. Hardware and PIO generators publish the period count implied by elapsed time at the realized frequency. That is the count those backends provide; they do not take a per-period interrupt. Software generators count completed periods. The PIO monitor reports `0`.
 - `get` and `status` report realized channel state.
 - `set` applies only to output-capable channels in the configured banks.
 - Monitor-only or disabled channels report an unavailable operation.

@@ -63,7 +63,7 @@ static shell_config_t test_config(test_context_t *context, const shell_transport
         {"help", "help", test_command},
     };
 
-    return (shell_config_t) {
+    return (shell_config_t){
         .transport = transport,
         .commands = commands,
         .command_count = 1u,
@@ -136,9 +136,114 @@ static void test_interleaved_escape_sequences(void) {
     assert(context_b.command_calls == 1u);
 }
 
+static bool reject_write(void *context, const uint8_t *data, uint32_t length) {
+    (void)context;
+    (void)data;
+    (void)length;
+    return false;
+}
+
+static bool test_command_fails(void *context, int argc, const char *const *argv) {
+    (void)context;
+    (void)argc;
+    (void)argv;
+    return false;
+}
+
+static bool test_unknown_handled(void *context, const char *name) {
+    (void)context;
+    (void)name;
+    return true;
+}
+
+static bool test_reenter(void *context, int argc, const char *const *argv) {
+    test_context_t *test = context;
+
+    (void)argc;
+    (void)argv;
+    shell_poll(test->shell);
+    shell_prompt(test->shell);
+    return true;
+}
+
+static void test_rejected_inputs(void) {
+    shell_t shell;
+    test_transport_t transport = {.input = "nope\r"};
+    test_context_t context = {.shell = &shell};
+    shell_transport_t binding = {.read = test_read, .write = test_write, .context = &transport};
+    shell_transport_t rejecting = {.read = test_read, .write = reject_write, .context = &transport};
+    shell_transport_t unread = {.read = NULL, .write = test_write, .context = &transport};
+    shell_config_t config = test_config(&context, &binding);
+    const shell_command_t nameless[] = {{NULL, "help", test_command}};
+    const shell_command_t failing[] = {{"fail", "fail", test_command_fails}};
+    const shell_command_t reenter[] = {{"re", "re", test_reenter}};
+
+    memset(&shell, 0, sizeof(shell));
+    shell_init(NULL, &config);
+    shell_init(&shell, NULL);
+    shell_poll(NULL);
+    shell_poll(&shell);
+    shell_prompt(NULL);
+    shell_prompt(&shell);
+    assert(!shell_write(NULL, "x"));
+    assert(!shell_write(&shell, NULL));
+
+    config.transport = &rejecting;
+    shell_init(&shell, &config);
+    assert(!shell_write(&shell, "x"));
+    assert(!shell_write_line(&shell, "x"));
+    assert(shell_write(&shell, ""));
+
+    config = test_config(&context, &binding);
+    config.transport = &unread;
+    shell_init(&shell, &config);
+    assert(!shell.initialized);
+
+    config = test_config(&context, &binding);
+    config.commands = NULL;
+    shell_init(&shell, &config);
+    assert(!shell.initialized);
+
+    config = test_config(&context, &binding);
+    config.commands = nameless;
+    shell_init(&shell, &config);
+    assert(!shell.initialized);
+
+    config = test_config(&context, &binding);
+    shell_init(&shell, &config);
+    shell_poll(&shell);
+    assert(strstr(transport.output, "unknown") != NULL);
+    assert(shell_write_line(&shell, NULL));
+
+    config.unknown_handler = test_unknown_handled;
+    config.completion_handler = NULL;
+    transport.input = "nope\r";
+    transport.input_offset = 0u;
+    transport.output_length = 0u;
+    transport.output[0] = '\0';
+    shell_init(&shell, &config);
+    shell_prompt(&shell);
+    shell_poll(&shell);
+    assert(strstr(transport.output, "unknown") == NULL);
+
+    config = test_config(&context, &binding);
+    config.commands = failing;
+    transport.input = "fail\r";
+    transport.input_offset = 0u;
+    shell_init(&shell, &config);
+    shell_poll(&shell);
+
+    config.commands = reenter;
+    transport.input = "re\r";
+    transport.input_offset = 0u;
+    shell_init(&shell, &config);
+    shell_poll(&shell);
+}
+
 int main(void) {
     test_independent_sessions_and_line_endings();
     test_completion();
     test_interleaved_escape_sequences();
+    test_rejected_inputs();
     return 0;
 }

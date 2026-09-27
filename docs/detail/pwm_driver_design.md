@@ -492,7 +492,7 @@ The integrated generator backend:
 - publishes realized `freq_hz`, `duty`, and an elapsed-time `pulse_count`
 - keeps the pulse-estimate base locally and publishes the shared snapshot as the external read model
 
-The hardware generator does not use a wrap IRQ for pulse counting. It estimates completed periods from elapsed time and the realized frequency, and that estimate stops while the output is static.
+The hardware generator does not use a wrap IRQ for pulse counting. The slice has no host-readable edge counter, so the published `pulse_count` is the number of whole periods implied by elapsed time at the realized frequency. That is the count this backend provides. The count stops while the output is static.
 
 The hardware monitor backend:
 
@@ -628,12 +628,14 @@ Instead it:
 3. accumulates additional pulses from elapsed time and realized frequency on update/read boundaries
 4. publishes a refreshed snapshot when configuration changes
 
-For PIO channels, `pulse_count` is therefore an estimated period count, not a hardware-observed edge count.
+For PIO channels, that elapsed-time value is the published `pulse_count`. The state machine does not
+keep an edge counter, and a per-period interrupt would cost Core 1 time at the frequencies this
+backend runs. Whole periods are added from elapsed time and the realized frequency. The count is
+monotonic and saturates at the counter maximum.
 
 When a nonzero-frequency request resolves to `0%` or `100%` duty, the backend treats that as a
 static mode and publishes `realized_freq_hz = 0`. From that point `pulse_count` stops advancing
-until the channel returns to running PWM mode. Consumers that need true edge counting must still
-not treat the PIO backend's `pulse_count` as a physical pin toggle count.
+until the channel returns to running PWM mode.
 
 ## Software PWM Driver Detailed Design
 

@@ -20,6 +20,56 @@ env:
   PICO_SDK_PATH: ${{ github.workspace }}/.pico-sdk
 
 jobs:
+  format:
+    name: Formatting and syntax
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install formatting dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang-format
+
+      - name: Syntax-check Python tools
+        run: tools/test/syntax-check-python.sh
+
+      - name: Syntax-check shell tools
+        run: tools/test/syntax-check-shell.sh
+
+      - name: Check C formatting
+        env:
+          FORMAT_BASE: ${{ github.event.before }}
+        run: tools/test/check-clang-format.sh --base "$FORMAT_BASE" --head "${{ github.sha }}"
+
+  unit-tests:
+    name: Host tests and coverage
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake gcovr ninja-build
+
+      - name: Run host unit tests
+        run: tools/test/test-firmware-c.sh --build-dir firmware/build/tests-release
+
+      - name: Generate host coverage report
+        run: tools/test/coverage-firmware-c.sh --build-dir firmware/build/tests-coverage-release --output-dir firmware/build/tests-coverage-release/coverage
+
+      - name: Upload host coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pico-pwm-release-coverage
+          path: firmware/build/tests-coverage-release/coverage
+          if-no-files-found: error
+
   build:
     name: Build (${{ matrix.board }})
     runs-on: ubuntu-24.04
@@ -61,12 +111,6 @@ jobs:
             --sdk-version "$PICO_SDK_VERSION" \
             --sdk-revision "$PICO_SDK_REVISION"
 
-      - name: Syntax-check Python tools
-        run: tools/test/syntax-check-python.sh
-
-      - name: Syntax-check shell tools
-        run: tools/test/syntax-check-shell.sh
-
       - name: Build firmware
         env:
           BOARD: ${{ matrix.board }}
@@ -100,7 +144,7 @@ jobs:
 
   publish:
     name: Publish GitHub Release
-    needs: build
+    needs: [build, format, unit-tests]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

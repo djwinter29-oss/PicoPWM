@@ -10,6 +10,10 @@
 
 #include <stdint.h>
 
+/** @brief Populate the fixed channel table before Core 1 launches. */
+bool pwm_driver_configure_table(const pwm_driver_config_bank_backend_t backends[PWM_DRIVER_CONFIG_BANK_COUNT],
+                                const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]);
+
 /**
  * @brief Accumulate additional pulses from one cached base count and elapsed time.
  * @param pulse_count Cached base pulse count.
@@ -18,25 +22,26 @@
  * @param now_us Current timestamp used for elapsed-time accumulation.
  * @return Saturating pulse count advanced by elapsed time at @p freq_hz.
  */
-static inline uint32_t pwm_driver_accumulate_pulse_count(uint32_t pulse_count, uint32_t freq_hz, uint64_t pulse_ref_us, uint64_t now_us) {
-	uint64_t total_pulses;
+static inline uint32_t pwm_driver_accumulate_pulse_count(uint32_t pulse_count, uint32_t freq_hz, uint64_t pulse_ref_us,
+                                                         uint64_t now_us) {
+    uint64_t total_pulses;
 
-	if (freq_hz == 0u || now_us <= pulse_ref_us) {
-		return pulse_count;
-	}
+    if (freq_hz == 0u || now_us <= pulse_ref_us) {
+        return pulse_count;
+    }
 
-	total_pulses = (uint64_t)pulse_count + ((now_us - pulse_ref_us) * (uint64_t)freq_hz) / 1000000u;
-	if (total_pulses > UINT32_MAX) {
-		return UINT32_MAX;
-	}
+    total_pulses = (uint64_t)pulse_count + ((now_us - pulse_ref_us) * (uint64_t)freq_hz) / 1000000u;
+    if (total_pulses > UINT32_MAX) {
+        return UINT32_MAX;
+    }
 
-	return (uint32_t)total_pulses;
+    return (uint32_t)total_pulses;
 }
 
 /** @brief Resolve a profile backend-local channel to its configured GPIO. */
-uint pwm_driver_get_gpio(pwm_profile_backend_t backend, uint backend_channel);
+uint pwm_driver_get_gpio(pwm_driver_config_backend_t backend, uint backend_channel);
 /** @brief Resolve a backend-local channel to its logical profile channel. */
-uint pwm_driver_get_logical_channel(pwm_profile_backend_t backend, uint backend_channel);
+uint pwm_driver_get_logical_channel(pwm_driver_config_backend_t backend, uint backend_channel);
 
 /**
  * @brief Submit one cross-core logical channel update.
@@ -61,16 +66,6 @@ bool pwm_driver_get(uint channel, pwm_driver_state_t *state);
  * @return Result code for the admitted command attempt.
  */
 pwm_driver_result_t pwm_driver_restore_defaults(void);
-
-/**
- * @brief Lock one physical bank into a generator or monitor role and initialize its backend.
- * @param bank Physical bank to lock.
- * @param role Requested role.
- * @return Result code for the admitted command attempt; `PWM_DRIVER_RESULT_INVALID` if @p bank
- *         is already locked or the arguments are out of range.
- * @note This is the internal Core 0 command-ingress API underneath `device_api`.
- */
-pwm_driver_result_t pwm_driver_lock_bank(pwm_profile_bank_t bank, pwm_profile_bank_role_t role);
 
 /**
  * @brief Publish one newly applied logical channel snapshot.

@@ -1,10 +1,7 @@
 # Pinout
 
-This page documents the physical mapping for the current default profile. The
-logical channel IDs are stable across generator and monitoring firmware, but a
-different build profile may assign different backends, directions, or GPIOs.
-The selected profile must be treated as the source of truth for a particular
-firmware image.
+This page defines the fixed physical mapping for every firmware image. The
+logical channel IDs permanently identify one of three 8-channel banks.
 
 Hardware PWM and PIO assignments have peripheral-specific pin and resource
 constraints. Hardware PWM is fixed to one set of 8 slice-B GPIOs and PIO PWM is
@@ -22,6 +19,17 @@ board wiring and policy explicitly support that choice.
 GPIO23 and GPIO24 are optional software-only profile pins. They are not part
 of the normal Pico channel map and cannot be assigned to hardware PWM or PIO
 profiles.
+
+## Fixed PWM Banks
+
+| Bank | Logical channels | GPIOs | Allowed backend families |
+|---|---:|---|---|
+| Bank A | 0..7 | GPIO `1,3,5,7,9,11,13,15` | HW generator/monitor or SW generator/monitor |
+| Bank B | 8..15 | GPIO `0,2,4,6,8,10,12,14` | PIO generator/monitor or SW generator/monitor |
+| Bank C | 16..23 | GPIO `16,17,18,19,20,21,22,28` | SW generator or SW monitor only |
+
+The startup `pwm_driver_config_t` selects one backend family and one role for
+each bank. The mapping cannot be changed at runtime.
 
 ## PWM Channels
 
@@ -52,10 +60,8 @@ profiles.
 | 22 | Software PWM | 6 | GPIO 22 | |
 | 23 | Software PWM | 7 | GPIO 28 | Shared with ADC2 |
 
-The current default generator profile uses PWM slice channel B pins
-intentionally. This keeps the external channel order aligned with the planned
-monitoring-oriented firmware; alternate profiles may provide a different
-assignment.
+Bank A uses PWM slice channel-B pins intentionally. Bank B uses the companion
+slice-A pins for PIO-capable routing. Bank C is software-only.
 
 ## I2C
 

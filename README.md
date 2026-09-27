@@ -9,12 +9,12 @@ The project is intended for both:
 - **Raspberry Pi Pico** based on **RP2040**
 - **Raspberry Pi Pico 2** based on **RP2350**
 
-Build profiles select whether each logical channel is a generator or monitor,
-and whether it uses the hardware PWM, PIO, or software backend. The host sees
-the same logical channel IDs and control commands regardless of profile.
+Startup configuration selects whether each fixed Bank A/B/C is a generator or
+monitor and which backend family it uses. The host sees the same logical
+channel IDs and control commands for every valid configuration.
 
-Each channel profile also defines its GPIO, direction, capabilities, frequency
-limits, and backend-local resource assignment.
+Each fixed channel allocation defines its GPIO, direction, capabilities,
+frequency limits, and backend-local resource assignment.
 
 The framework intentionally exposes backend tradeoffs rather than hiding them:
 
@@ -139,8 +139,8 @@ See [docs/pinout.md](docs/pinout.md) for the complete PWM channel and host-inter
 - **USB CDC serial**: text commands at 115200 baud
 - **I2C slave**: binary register map at 7-bit address `0x40`; see [Pinout](docs/pinout.md) for physical connections
 
-Use the `stop` command to apply the selected profile's safe reset behavior.
-Generator profiles stop outputs; monitor profiles leave measured input channels
+Use the `stop` command to apply the configured banks' safe reset behavior.
+Generator banks stop outputs; monitor banks leave measured input channels
 unchanged. `pulse_count` is monotonic from power-on and is not reset by `stop`.
 
 ---
@@ -149,7 +149,7 @@ unchanged. `pulse_count` is monotonic from power-on and is not reset by `stop`.
 
 - [Architecture](docs/architecture.md)
 - [Firmware Configuration](docs/configuration.md)
-- [Channel Configuration](docs/channel_config.md)
+- [PWM Driver Configuration](docs/pwm_driver_config.md)
 - [Control Interfaces](docs/control/README.md)
 - [I2C Protocol](docs/control/i2c_protocol.md)
 - [USB CDC CLI](docs/control/usb_cdc_cli.md)
@@ -179,8 +179,9 @@ dependency.
 
 ## Default Generator State
 
-In a generator profile, after power-up or reset, **all 24 output channels are
-off**:
+After power-up or reset, the default configuration is monitor-only, so no PWM
+outputs are actively driven. If generator banks are configured, they start
+with their outputs off:
 
 | Property | Value |
 |----------|-------|
@@ -189,8 +190,8 @@ off**:
 | Pulse count | 0 |
 
 No demo channels are configured. Use the USB CDC shell or I2C commands to set
-frequencies and duty cycles. Monitor profiles report input state instead of
-using this output-default state.
+frequencies and duty cycles. Monitor banks report input state instead of using
+this output-default state.
 
 Use the `stop` command to reset all channels back to this state at any time. `pulse_count` continues accumulating from power-on.
 

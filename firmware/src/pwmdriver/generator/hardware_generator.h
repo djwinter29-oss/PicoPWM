@@ -9,7 +9,7 @@
 #include "../pwm_driver.h"
 
 /** @brief Initialize the hardware PWM generator backend. */
-void hw_gen_init(void);
+bool hw_gen_init(void);
 
 /**
  * @brief Apply one logical hardware-PWM channel update.

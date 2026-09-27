@@ -17,17 +17,24 @@ const char *device_api_device_name(void);
 /** @brief Return the build-time firmware version exposed by control/status transports. */
 const char *device_api_firmware_version(void);
 
-/**
- * @brief Lock one physical bank into a generator or monitor role at runtime.
- * @param bank Physical bank to lock.
- * @param role Requested role.
- * @return Result code from the shared PWM control plane; `PWM_DRIVER_RESULT_INVALID` if the
- *         bank is already locked (locking is one-shot until reboot).
- */
-pwm_driver_result_t device_api_lock_bank(pwm_profile_bank_t bank, pwm_profile_bank_role_t role);
+/** @brief Publish the running and target startup configurations to the device facade. */
+bool device_api_config_init(const pwm_driver_config_t *running, const pwm_driver_config_t *target);
 
-/** @brief Return one physical bank's current runtime lock state. */
-pwm_profile_bank_state_t device_api_get_bank_state(pwm_profile_bank_t bank);
+/** @brief Return the target startup configuration. */
+bool device_api_config_get_target(pwm_driver_config_t *config);
+
+/** @brief Return the immutable running startup configuration. */
+bool device_api_config_get_running(pwm_driver_config_t *config);
+
+/** @brief Change one target bank without affecting the running configuration. */
+bool device_api_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_backend_t backend,
+                                pwm_driver_config_bank_role_t role);
+
+/** @brief Change only the target I2C address; it applies after save and reboot. */
+bool device_api_config_set_i2c_address(uint8_t address);
+
+/** @brief Persist the target configuration for the next reboot. */
+bool device_api_config_save_target(void);
 
 /** @brief Return the logical PWM channel count exposed by the firmware. */
 uint8_t device_api_channel_count(void);

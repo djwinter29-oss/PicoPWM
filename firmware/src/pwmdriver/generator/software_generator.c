@@ -11,6 +11,7 @@
 #include "hardware/gpio.h"
 #include "hardware/sync.h"
 #include "hardware/timer.h"
+#include "generator_math.h"
 
 /** @brief Software PWM scheduler tick period in microseconds. */
 #define SW_PWM_TICK_US 10
@@ -19,17 +20,17 @@
 
 /** @brief Runtime scheduling state for one software PWM backend channel. */
 typedef struct {
-    uint gpio; /**< Assigned output GPIO. */
-    uint32_t period_ticks; /**< Whole-tick PWM period for the current configuration. */
-    uint32_t duty_ticks; /**< Whole-tick active window for the current configuration. */
-    uint32_t counter; /**< Current tick position within the PWM period. */
-    uint32_t realized_freq_hz; /**< Realized output frequency in Hz. */
-    uint8_t realized_duty; /**< Realized duty in percent in the range `[0, 100]`. */
+    uint gpio;                     /**< Assigned output GPIO. */
+    uint32_t period_ticks;         /**< Whole-tick PWM period for the current configuration. */
+    uint32_t duty_ticks;           /**< Whole-tick active window for the current configuration. */
+    uint32_t counter;              /**< Current tick position within the PWM period. */
+    uint32_t realized_freq_hz;     /**< Realized output frequency in Hz. */
+    uint8_t realized_duty;         /**< Realized duty in percent in the range `[0, 100]`. */
     volatile uint32_t pulse_count; /**< Monotonic generated-period count from power-on. */
 } sw_pwm_channel_t;
 
 /** @brief Software PWM runtime state in backend-local channel order. */
-static sw_pwm_channel_t sw_pwm_channels[PWM_PROFILE_CHANNEL_COUNT];
+static sw_pwm_channel_t sw_pwm_channels[PWM_DRIVER_CONFIG_CHANNEL_COUNT];
 /** @brief Repeating timer that drives the software PWM scheduler. */
 static repeating_timer_t sw_pwm_timer;
 /** @brief Bitmask of backend-local software PWM channels currently driven by the scheduler. */
@@ -38,12 +39,12 @@ static uint32_t sw_pwm_active_mask = 0u;
 /** @brief Fully resolved software-PWM static-output target consumed by the apply path. */
 typedef struct {
     uint8_t realized_duty; /**< Realized output duty in percent. */
-    bool high; /**< Output level to drive while the channel is static. */
+    bool high;             /**< Output level to drive while the channel is static. */
 } sw_gen_static_target_t;
 
 /** @brief Build one caller-owned software PWM snapshot from the backend-local channel state. */
 static pwm_driver_state_t sw_gen_channel_state(const sw_pwm_channel_t *ch) {
-    return (pwm_driver_state_t) {
+    return (pwm_driver_state_t){
         .freq_hz = ch->realized_freq_hz,
         .duty = ch->realized_duty,
         .pulse_count = ch->pulse_count,
@@ -55,7 +56,8 @@ static void sw_gen_publish_state(uint channel) {
     sw_pwm_channel_t *ch = &sw_pwm_channels[channel];
     pwm_driver_state_t state = sw_gen_channel_state(ch);
 
-    pwm_driver_store_applied_state(pwm_driver_get_logical_channel(PWM_PROFILE_BACKEND_SW_GENERATOR, channel), &state);
+    pwm_driver_store_applied_state(pwm_driver_get_logical_channel(PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR, channel),
+                                   &state);
 }
 
 /** @brief Publish one channel's realized software PWM state while the caller already owns interrupt exclusion. */
@@ -63,21 +65,15 @@ static void sw_gen_publish_state_coherent(uint channel) {
     sw_pwm_channel_t *ch = &sw_pwm_channels[channel];
     pwm_driver_state_t state = sw_gen_channel_state(ch);
 
-    pwm_driver_store_applied_state_coherent(pwm_driver_get_logical_channel(PWM_PROFILE_BACKEND_SW_GENERATOR, channel), &state, time_us_64());
+    pwm_driver_store_applied_state_coherent(
+        pwm_driver_get_logical_channel(PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR, channel), &state, time_us_64());
 }
 
 /** @brief Resolve whether one software-PWM request should be handled as a static-output mode. */
 static bool sw_gen_resolve_static_target(uint32_t freq_hz, uint8_t duty, sw_gen_static_target_t *target) {
-    if (target == NULL) {
+    if (target == NULL || !pwm_generator_resolve_static(freq_hz, duty, &target->high, &target->realized_duty)) {
         return false;
     }
-
-    if (freq_hz != 0u && duty != 0u && duty < 100u) {
-        return false;
-    }
-
-    target->high = duty >= 100u;
-    target->realized_duty = target->high ? 100u : 0u;
     return true;
 }
 
@@ -99,7 +95,8 @@ static void sw_gen_drive_static_level(uint channel, uint8_t realized_duty, bool 
 }
 
 /** @brief Arm one software PWM channel for scheduled output and publish its active runtime state atomically. */
-static void sw_gen_start_scheduled_output(uint channel, uint32_t period_ticks, uint32_t duty_ticks, uint32_t realized_freq_hz, uint8_t realized_duty) {
+static void sw_gen_start_scheduled_output(uint channel, uint32_t period_ticks, uint32_t duty_ticks,
+                                          uint32_t realized_freq_hz, uint8_t realized_duty) {
     sw_pwm_channel_t *ch = &sw_pwm_channels[channel];
     uint32_t save = save_and_disable_interrupts();
 
@@ -130,7 +127,8 @@ static bool sw_pwm_tick_callback(repeating_timer_t *rt) {
         if (ch->counter >= ch->period_ticks) {
             ch->counter = 0;
             ch->pulse_count++;
-            pwm_driver_store_pulse_count(pwm_driver_get_logical_channel(PWM_PROFILE_BACKEND_SW_GENERATOR, channel), ch->pulse_count);
+            pwm_driver_store_pulse_count(
+                pwm_driver_get_logical_channel(PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR, channel), ch->pulse_count);
         }
         gpio_put(ch->gpio, ch->counter < ch->duty_ticks);
     }
@@ -139,11 +137,11 @@ static bool sw_pwm_tick_callback(repeating_timer_t *rt) {
 }
 
 /** @copydoc sw_gen_init */
-void sw_gen_init(void) {
+bool sw_gen_init(void) {
     sw_pwm_active_mask = 0u;
 
-    for (int i = 0; i < pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_SW_GENERATOR); i++) {
-        uint gpio = pwm_driver_get_gpio(PWM_PROFILE_BACKEND_SW_GENERATOR, i);
+    for (int i = 0; i < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR); i++) {
+        uint gpio = pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR, i);
 
         sw_pwm_channels[i].gpio = gpio;
         sw_pwm_channels[i].period_ticks = 0u;
@@ -158,7 +156,7 @@ void sw_gen_init(void) {
         gpio_put(gpio, 0);
     }
 
-    add_repeating_timer_us(-SW_PWM_TICK_US, sw_pwm_tick_callback, NULL, &sw_pwm_timer);
+    return add_repeating_timer_us(-SW_PWM_TICK_US, sw_pwm_tick_callback, NULL, &sw_pwm_timer);
 }
 
 /** @copydoc sw_gen_set */
@@ -168,8 +166,10 @@ bool sw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     uint32_t duty_ticks;
     uint32_t realized_freq_hz;
 
-    if (channel >= pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_SW_GENERATOR)) return false;
-    if (duty > 100u) duty = 100u;
+    if (channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR))
+        return false;
+    if (duty > 100u)
+        duty = 100u;
 
     if (sw_gen_resolve_static_target(freq_hz, duty, &static_target)) {
         sw_gen_drive_static_level(channel, static_target.realized_duty, static_target.high);
@@ -181,10 +181,12 @@ bool sw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     }
 
     period = (SW_PWM_BASE_HZ + (freq_hz / 2u)) / freq_hz;
-    if (period < 1) period = 1;
+    if (period < 1)
+        period = 1;
 
     duty_ticks = (uint32_t)(((uint64_t)period * duty + 50u) / 100u);
-    if (duty_ticks > period) duty_ticks = period;
+    if (duty_ticks > period)
+        duty_ticks = period;
 
     realized_freq_hz = (SW_PWM_BASE_HZ + (period / 2u)) / period;
     sw_gen_start_scheduled_output(channel, period, duty_ticks, realized_freq_hz, duty);
@@ -198,7 +200,8 @@ bool sw_gen_restore_defaults(void) {
 
     /* Phase 1: clear coherent runtime state while the scheduler cannot observe partial reset. */
     sw_pwm_active_mask = 0u;
-    for (uint channel = 0; channel < pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_SW_GENERATOR); channel++) {
+    for (uint channel = 0; channel < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR);
+         channel++) {
         sw_pwm_channel_t *ch = &sw_pwm_channels[channel];
 
         ch->period_ticks = 0u;
@@ -210,7 +213,8 @@ bool sw_gen_restore_defaults(void) {
     restore_interrupts(save);
 
     /* Phase 2: publish the reset output level and shared snapshot after the coherent state reset. */
-    for (uint channel = 0; channel < pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_SW_GENERATOR); channel++) {
+    for (uint channel = 0; channel < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR);
+         channel++) {
         gpio_put(sw_pwm_channels[channel].gpio, 0);
         sw_gen_publish_state(channel);
     }

@@ -1,27 +1,37 @@
 # Firmware Configuration
 
 PicoPWM produces one firmware build from one stable logical channel interface.
-Channel roles are chosen at runtime, per physical bank, by the host; there is
-no build-time profile selection.
+Channel roles are selected once at startup by `pwm_driver_init()`; there is no
+build-time profile selection or runtime role switching.
 
-## Runtime Bank Locking
+## Startup Bank Configuration
 
-The GPIO map is fixed into three 8-pin banks (see [Pinout](pinout.md)): the
-hardware PWM bank (slice-B pins), the PIO PWM bank (companion slice-A pins),
-and the software-only bank. All three banks start **unlocked** at boot: GPIOs
-are high-Z, no backend is running, and `get`/`set` on any channel in an
-unlocked bank returns `PWM_DRIVER_RESULT_UNAVAILABLE`.
+The GPIO map is fixed into three 8-pin banks (see [Pinout](pinout.md)):
+Bank A is HW-capable, Bank B is PIO-capable, and Bank C is software-only. All
+three banks are configured before Core 1 starts, so every logical channel has a
+valid backend and role during runtime.
 
-The host locks one bank at a time into a `generator` or `monitor` role with
-the CDC `bank` command or the I2C `REG_BANK_LOCK` register (see
-[USB CDC CLI](control/usb_cdc_cli.md) and [I2C Protocol](control/i2c_protocol.md)).
-Locking is **one-shot per boot**: once a bank is locked it stays that way until
-the board reboots, which clears all three locks back to unlocked. This
-sidesteps the hazard of switching a GPIO's function while it may be actively
-driving or reading a signal.
+The three bank roles are selected by `pwm_driver_init()` before Core 1 starts.
+They remain fixed for the lifetime of the firmware process, which avoids
+switching a GPIO's function while it may be actively driving or reading a
+signal. Optional backend-specific settings are supplied through the startup
+configuration structure.
 
-Each bank locks independently, so `2^3 = 8` combinations are reachable in one
-firmware image:
+The running configuration is immutable until reboot. CDC and I2C may change a
+separate target configuration, inspect both target and running settings, and
+save the target to flash. A reboot then validates and applies the saved target;
+invalid or missing flash data falls back to the electrically conservative
+default `A=HW/monitor`, `B=PIO/monitor`, `C=SW/monitor` configuration.
+
+The target record contains a magic value, format version, generation number,
+backend/role/address values, and checksum. Two records occupy the final 8 KiB
+as alternating slots. The firmware link step rejects images that overlap this
+reserved area. A new record is written to the inactive slot, so power loss
+during a save preserves the previous valid target.
+
+Each bank is configured independently, so `2^3 = 8` role combinations are
+reachable in one firmware image. Backend-family choices are constrained:
+Bank A allows HW or SW, Bank B allows PIO or SW, and Bank C allows SW only.
 
 | HW bank (GPIO 1,3,5,7,9,11,13,15) | PIO bank (GPIO 0,2,4,6,8,10,12,14) | SW bank (GPIO 16,17,18,19,20,21,22,28) |
 | --- | --- | --- |
@@ -105,5 +115,5 @@ A profile must validate these conditions at build time or startup:
 
 See [Architecture](architecture.md) for ownership boundaries and [USB CDC
 CLI](control/usb_cdc_cli.md) for the stable interactive interface. See
-[Channel Configuration](channel_config.md) for the fixed per-bank GPIO map and
-validation rules behind bank locking.
+[PWM Driver Configuration](pwm_driver_config.md) for the fixed Bank A/B/C GPIO map
+and startup configuration validation rules.

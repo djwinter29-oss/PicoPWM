@@ -10,28 +10,20 @@
  * I2C peripheral instance.
  * Standard Pico board: i2c1 (GPIO 26 SDA, GPIO 27 SCL).
  */
-#define I2C_SLAVE_INST    i2c1
+#define I2C_SLAVE_INST i2c1
 
 /** @brief IRQ line paired with the selected I2C peripheral instance. */
-#define I2C_SLAVE_IRQ     I2C1_IRQ
-
-/**
- * I2C slave address (7-bit).
- * Default is 0x40. Can be overridden at build time with CMake:
- * -DPICO_PWM_I2C_ADDR=0x50
- * Valid range: 0x00 to 0x7F (7-bit addresses only).
- */
-#define I2C_SLAVE_ADDR PICO_PWM_I2C_ADDR
+#define I2C_SLAVE_IRQ I2C1_IRQ
 
 /**
  * SDA pin (GPIO 26).
  */
-#define I2C_SDA_PIN       26
+#define I2C_SDA_PIN 26
 
 /**
  * SCL pin (GPIO 27).
  */
-#define I2C_SCL_PIN       27
+#define I2C_SCL_PIN 27
 
 /**
  * I2C clock speed in Hz (for internal timing configuration only).

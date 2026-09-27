@@ -4,10 +4,11 @@
  */
 
 #include "pico/stdlib.h"
-#include "hardware/clocks.h"
 #include "pico/multicore.h"
 #include "cli/pwm_commands.h"
 #include "board/led.h"
+#include "board/system.h"
+#include "device_api/device_api.h"
 #include "i2c/i2c_slave.h"
 #include "pwmdriver/pwm_driver.h"
 #include "usb/usb_cdc.h"
@@ -25,12 +26,8 @@ int main(void) {
     };
     bool usb_was_connected = false;
 
-    // Overclock to 150 MHz for more CPU headroom and higher HW PWM max frequency.
-    // Falls back to the existing clock if this fails (e.g., silicon limits).
-    if (!set_sys_clock_khz(150000, true)) {
-        // If 150 MHz fails, it usually remains at the previous frequency (125 MHz default).
-        // We continue anyway because the firmware works at both speeds.
-    }
+    // Overclock before any PWM backend caches the system clock for timing calculations.
+    system_init_clock();
 
     led_init();
 
@@ -38,16 +35,23 @@ int main(void) {
     usb_cdc_init();
     pwm_commands_init(&pwm_command_session, &shell_transport);
 
-    // Launch Core 1 to manage all PWM hardware.
-    pwm_driver_launch();
+    // Configure and launch all three PWM banks before starting Core 1.
+    pwm_driver_config_t pwm_config;
+    pwm_driver_config_load_target(&pwm_config);
+    if (!device_api_config_init(&pwm_config, &pwm_config) || !pwm_driver_init(&pwm_config)) {
+        system_reboot();
+    }
 
     // Wait for Core 1 mailbox service before accepting commands.
     while (!pwm_driver_is_ready()) {
+        if (pwm_driver_startup_failed()) {
+            system_reboot();
+        }
         tight_loop_contents();
     }
 
     // Core 0: start communication interfaces.
-    i2c_slave_init();
+    i2c_slave_init(pwm_config.i2c_address);
 
     // Core 0 main loop: service USB CDC and I2C.
     while (true) {

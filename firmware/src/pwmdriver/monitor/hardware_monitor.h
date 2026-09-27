@@ -21,14 +21,14 @@
 /** @brief Sentinel duty returned when the hardware monitor cannot publish a sane sample. */
 #define HW_MON_UNSTABLE_DUTY 0u
 /** @brief Return whether one exported hardware-monitor state is the unstable sentinel. */
-#define HW_MON_IS_UNSTABLE(state_value) \
-	((state_value).freq_hz == HW_MON_UNSTABLE_FREQ_HZ && (state_value).duty == HW_MON_UNSTABLE_DUTY)
+#define HW_MON_IS_UNSTABLE(state_value)                                                                                \
+    ((state_value).freq_hz == HW_MON_UNSTABLE_FREQ_HZ && (state_value).duty == HW_MON_UNSTABLE_DUTY)
 
 /** @brief Initialize the standalone hardware monitor module and arm all hardware-channel input pins.
  *
  * Repeated calls are ignored after the first successful initialization.
  */
-void hw_mon_init(void);
+bool hw_mon_init(void);
 
 /** @brief Forward one shared GPIO edge event to the hardware monitor bank. */
 void hw_mon_handle_gpio_irq(uint gpio, uint32_t events);

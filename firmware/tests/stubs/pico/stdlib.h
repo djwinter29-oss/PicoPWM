@@ -5,4 +5,6 @@
 
 typedef unsigned int uint;
 
+#define PICO_FLASH_SIZE_BYTES (2u * 1024u * 1024u)
+
 #endif

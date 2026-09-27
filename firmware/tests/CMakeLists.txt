@@ -42,16 +42,36 @@ target_include_directories(cli_channel_commands_test PRIVATE
 pico_pwm_test_warnings(cli_channel_commands_test)
 add_test(NAME cli_channel_commands COMMAND cli_channel_commands_test)
 
-add_executable(channel_config_test
-    channel_config_test.c
-    ${SOURCE_ROOT}/pwmdriver/channel_config/channel_config.c
+add_executable(pwm_driver_config_test
+    pwm_driver_config_test.c
+    stubs/hardware/flash.c
+    ${SOURCE_ROOT}/pwmdriver/pwm_driver_config.c
 )
-target_include_directories(channel_config_test PRIVATE
+target_include_directories(pwm_driver_config_test PRIVATE
     ${TEST_STUB_ROOT}
     ${SOURCE_ROOT}
 )
-pico_pwm_test_warnings(channel_config_test)
-add_test(NAME channel_config COMMAND channel_config_test)
+pico_pwm_test_warnings(pwm_driver_config_test)
+target_compile_definitions(pwm_driver_config_test PRIVATE PICO_PWM_CONFIG_FLASH_OFFSET=0)
+add_test(NAME pwm_driver_config COMMAND pwm_driver_config_test)
+
+add_executable(pio_monitor_decode_test
+    pio_monitor_decode_test.c
+)
+target_include_directories(pio_monitor_decode_test PRIVATE
+    ${SOURCE_ROOT}
+)
+pico_pwm_test_warnings(pio_monitor_decode_test)
+add_test(NAME pio_monitor_decode COMMAND pio_monitor_decode_test)
+
+add_executable(generator_math_test
+    generator_math_test.c
+)
+target_include_directories(generator_math_test PRIVATE
+    ${SOURCE_ROOT}
+)
+pico_pwm_test_warnings(generator_math_test)
+add_test(NAME generator_math COMMAND generator_math_test)
 
 add_executable(i2c_control_map_test
     i2c_control_map_test.c

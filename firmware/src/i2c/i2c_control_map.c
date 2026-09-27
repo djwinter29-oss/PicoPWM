@@ -7,8 +7,10 @@
  * see i2c_slave.c for ISR and buffering logic.
  *
  * **Register Categories**:
- * - **Read-only (0x00, 0x01, 0x02, 0x03, 0x10..0x27)**: Device info, version, channel state, bank lock state.
- * - **Write (0x04, 0x30..0x47, 0x90, 0x91, 0x92)**: Bank lock, channel frequency/duty, stop, LED, reboot.
+ * - **Read-only (0x00, 0x01, 0x02, 0x03, 0x10..0x27)**: Device info, version, target/running configuration, channel
+ * state.
+ * - **Write (0x04, 0x05, 0x30..0x47, 0x90, 0x91, 0x92)**: Target configuration, channel frequency/duty, stop, LED,
+ * reboot.
  *
  * **Output Validation**:
  * - Device name and firmware version strings are bounds-checked to prevent I2C response
@@ -40,21 +42,17 @@ static bool i2c_control_map_is_full_write(uint8_t reg) {
 }
 
 bool i2c_control_map_is_write_register(uint8_t reg) {
-    return i2c_control_map_is_full_write(reg) ||
-           (reg == I2C_CONTROL_MAP_REG_STOP_ALL) ||
-           (reg == I2C_CONTROL_MAP_REG_LED) ||
-           (reg == I2C_CONTROL_MAP_REG_REBOOT) ||
-           (reg == I2C_CONTROL_MAP_REG_BANK_LOCK);
+    return i2c_control_map_is_full_write(reg) || (reg == I2C_CONTROL_MAP_REG_STOP_ALL) ||
+           (reg == I2C_CONTROL_MAP_REG_LED) || (reg == I2C_CONTROL_MAP_REG_REBOOT) ||
+           (reg == I2C_CONTROL_MAP_REG_CONFIG_SET) || (reg == I2C_CONTROL_MAP_REG_CONFIG_SAVE) ||
+           (reg == I2C_CONTROL_MAP_REG_CONFIG_ADDRESS);
 }
 
 uint8_t i2c_control_map_expected_write_length(uint8_t reg) {
-    if ((reg == I2C_CONTROL_MAP_REG_INFO) ||
-        (reg == I2C_CONTROL_MAP_REG_VERSION) ||
-        (reg == I2C_CONTROL_MAP_REG_CHANNEL_COUNT) ||
-        (reg == I2C_CONTROL_MAP_REG_BANK_STATE) ||
-        i2c_control_map_is_channel_read(reg) ||
-        (reg == I2C_CONTROL_MAP_REG_STOP_ALL) ||
-        (reg == I2C_CONTROL_MAP_REG_REBOOT)) {
+    if ((reg == I2C_CONTROL_MAP_REG_INFO) || (reg == I2C_CONTROL_MAP_REG_VERSION) ||
+        (reg == I2C_CONTROL_MAP_REG_CHANNEL_COUNT) || (reg == I2C_CONTROL_MAP_REG_CONFIG) ||
+        i2c_control_map_is_channel_read(reg) || (reg == I2C_CONTROL_MAP_REG_STOP_ALL) ||
+        (reg == I2C_CONTROL_MAP_REG_REBOOT) || (reg == I2C_CONTROL_MAP_REG_CONFIG_SAVE)) {
         return 1u;
     }
 
@@ -62,8 +60,12 @@ uint8_t i2c_control_map_expected_write_length(uint8_t reg) {
         return 2u;
     }
 
-    if (reg == I2C_CONTROL_MAP_REG_BANK_LOCK) {
-        return 3u;
+    if (reg == I2C_CONTROL_MAP_REG_CONFIG_SET) {
+        return 4u;
+    }
+
+    if (reg == I2C_CONTROL_MAP_REG_CONFIG_ADDRESS) {
+        return 2u;
     }
 
     if (i2c_control_map_is_full_write(reg)) {
@@ -73,7 +75,8 @@ uint8_t i2c_control_map_expected_write_length(uint8_t reg) {
     return 0u;
 }
 
-bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *response, uint8_t *response_len) {
+bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *response, uint8_t response_capacity,
+                                   uint8_t *response_len) {
     pwm_driver_state_t state = {0u, 50u, 0u};
     const char *text;
     size_t text_len;
@@ -85,7 +88,7 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
     if (reg == I2C_CONTROL_MAP_REG_INFO) {
         text = device_api_device_name();
         text_len = strlen(text) + 1u;
-        if (text_len > 64u) {  // Prevent response buffer overflow
+        if (text_len > response_capacity) {
             return false;
         }
         *response_len = (uint8_t)text_len;
@@ -96,7 +99,7 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
     if (reg == I2C_CONTROL_MAP_REG_VERSION) {
         text = device_api_firmware_version();
         text_len = strlen(text) + 1u;
-        if (text_len > 64u) {  // Prevent response buffer overflow
+        if (text_len > response_capacity) {
             return false;
         }
         *response_len = (uint8_t)text_len;
@@ -104,21 +107,46 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
         return true;
     }
 
-    if (reg == I2C_CONTROL_MAP_REG_BANK_STATE) {
-        response[0] = (uint8_t)device_api_get_bank_state(PWM_PROFILE_BANK_HW);
-        response[1] = (uint8_t)device_api_get_bank_state(PWM_PROFILE_BANK_PIO);
-        response[2] = (uint8_t)device_api_get_bank_state(PWM_PROFILE_BANK_SW);
-        *response_len = 3u;
+    if (reg == I2C_CONTROL_MAP_REG_CONFIG) {
+        pwm_driver_config_t running;
+        pwm_driver_config_t target;
+        if (response_capacity < 14u) {
+            return false;
+        }
+        if (!device_api_config_get_running(&running) || !device_api_config_get_target(&target)) {
+            return false;
+        }
+        response[0] = (uint8_t)running.bank_a_backend;
+        response[1] = (uint8_t)running.bank_a_role;
+        response[2] = (uint8_t)running.bank_b_backend;
+        response[3] = (uint8_t)running.bank_b_role;
+        response[4] = (uint8_t)running.bank_c_backend;
+        response[5] = (uint8_t)running.bank_c_role;
+        response[6] = (uint8_t)target.bank_a_backend;
+        response[7] = (uint8_t)target.bank_a_role;
+        response[8] = (uint8_t)target.bank_b_backend;
+        response[9] = (uint8_t)target.bank_b_role;
+        response[10] = (uint8_t)target.bank_c_backend;
+        response[11] = (uint8_t)target.bank_c_role;
+        response[12] = running.i2c_address;
+        response[13] = target.i2c_address;
+        *response_len = 14u;
         return true;
     }
 
     if (reg == I2C_CONTROL_MAP_REG_CHANNEL_COUNT) {
+        if (response_capacity < 1u) {
+            return false;
+        }
         response[0] = device_api_channel_count();
         *response_len = 1u;
         return true;
     }
 
     if (i2c_control_map_is_channel_read(reg)) {
+        if (response_capacity < 9u) {
+            return false;
+        }
         uint channel = (uint)(reg - I2C_CONTROL_MAP_REG_CH_BASE);
         if (!device_api_get_channel(channel, &state)) {
             response[0] = (uint8_t)PWM_DRIVER_RESULT_UNAVAILABLE;
@@ -133,11 +161,17 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
     }
 
     if (i2c_control_map_is_write_register(reg)) {
+        if (response_capacity < 1u) {
+            return false;
+        }
         response[0] = last_status;
         *response_len = 1u;
         return true;
     }
 
+    if (response_capacity < 1u) {
+        return false;
+    }
     response[0] = (uint8_t)PWM_DRIVER_RESULT_INVALID;
     *response_len = 1u;
     return false;
@@ -173,13 +207,29 @@ pwm_driver_result_t i2c_control_map_execute_write(uint8_t reg, const uint8_t *pa
         return PWM_DRIVER_RESULT_OK;
     }
 
-    if (reg == I2C_CONTROL_MAP_REG_BANK_LOCK) {
-        if ((payload == NULL) || (payload_len != 2u) || (payload[0] >= PWM_PROFILE_BANK_COUNT) ||
-            (payload[1] > (uint8_t)PWM_PROFILE_BANK_ROLE_MONITOR)) {
+    if (reg == I2C_CONTROL_MAP_REG_CONFIG_SET) {
+        if ((payload == NULL) || (payload_len != 3u)) {
             return PWM_DRIVER_RESULT_INVALID;
         }
+        return device_api_config_set_bank((pwm_driver_config_bank_t)payload[0],
+                                          (pwm_driver_config_bank_backend_t)payload[1],
+                                          (pwm_driver_config_bank_role_t)payload[2])
+                   ? PWM_DRIVER_RESULT_OK
+                   : PWM_DRIVER_RESULT_INVALID;
+    }
 
-        return device_api_lock_bank((pwm_profile_bank_t)payload[0], (pwm_profile_bank_role_t)payload[1]);
+    if (reg == I2C_CONTROL_MAP_REG_CONFIG_ADDRESS) {
+        if ((payload == NULL) || (payload_len != 1u) || (payload[0] < 0x08u) || (payload[0] > 0x77u)) {
+            return PWM_DRIVER_RESULT_INVALID;
+        }
+        return device_api_config_set_i2c_address(payload[0]) ? PWM_DRIVER_RESULT_OK : PWM_DRIVER_RESULT_INVALID;
+    }
+
+    if (reg == I2C_CONTROL_MAP_REG_CONFIG_SAVE) {
+        if (payload_len != 0u) {
+            return PWM_DRIVER_RESULT_INVALID;
+        }
+        return device_api_config_save_target() ? PWM_DRIVER_RESULT_OK : PWM_DRIVER_RESULT_INVALID;
     }
 
     if (i2c_control_map_is_full_write(reg)) {

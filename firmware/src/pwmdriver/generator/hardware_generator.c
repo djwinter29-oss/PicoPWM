@@ -11,6 +11,7 @@
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
 #include "hardware/pwm.h"
+#include "generator_math.h"
 
 /** @brief Cached system clock used by the hardware generator timing search. */
 static uint32_t hw_gen_sys_clk_hz = 0u;
@@ -33,18 +34,7 @@ static void hw_gen_publish_state(uint channel, uint32_t realized_freq_hz, uint8_
  * @return Compare level accepted by the Pico SDK PWM API.
  */
 static uint32_t hw_pwm_level_from_duty(uint32_t top, uint8_t duty_percent) {
-    if (duty_percent == 0u) {
-        return 0;
-    }
-    if (duty_percent >= 100u) {
-        return top + 1u;
-    }
-
-    uint32_t level = (uint32_t)(((uint64_t)(top + 1u) * duty_percent + 50u) / 100u);
-    if (level > top + 1u) {
-        level = top + 1u;
-    }
-    return level;
+    return pwm_generator_level_from_duty(top + 1u, duty_percent);
 }
 
 /** @brief Bind one hardware generator pin back to PWM mode. */
@@ -66,7 +56,7 @@ static uint8_t hw_gen_static_duty(uint8_t duty_percent) {
 
 /** @brief Apply one realized static hardware output state and publish the matching shared snapshot. */
 static void hw_gen_apply_static_state(uint channel, uint8_t realized_duty) {
-    uint gpio = pwm_driver_get_gpio(PWM_PROFILE_BACKEND_HW_GENERATOR, channel);
+    uint gpio = pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR, channel);
     uint slice = pwm_gpio_to_slice_num(gpio);
     uint ch = pwm_gpio_to_channel(gpio);
 
@@ -84,7 +74,8 @@ static void hw_gen_publish_state(uint channel, uint32_t realized_freq_hz, uint8_
         .pulse_count = 0u,
     };
 
-    pwm_driver_store_applied_state(pwm_driver_get_logical_channel(PWM_PROFILE_BACKEND_HW_GENERATOR, channel), &state);
+    pwm_driver_store_applied_state(pwm_driver_get_logical_channel(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR, channel),
+                                   &state);
 }
 
 /** @brief Return the smallest supported hardware PWM frequency in Hz for the current clock plan. */
@@ -122,7 +113,8 @@ static uint32_t hw_gen_realized_freq_hz(uint32_t top, uint16_t div_x16) {
 }
 
 /** @brief Evaluate one timing candidate and keep it when it improves the current best error. */
-static void hw_gen_consider_timing(uint32_t freq_hz, uint32_t div_x16, uint32_t *best_top, uint16_t *best_div_x16, uint32_t *best_delta_hz) {
+static void hw_gen_consider_timing(uint32_t freq_hz, uint32_t div_x16, uint32_t *best_top, uint16_t *best_div_x16,
+                                   uint32_t *best_delta_hz) {
     uint64_t numerator = (uint64_t)hw_gen_sys_clk_hz * 16u;
     uint64_t denominator = (uint64_t)freq_hz * div_x16;
     uint64_t period_counts;
@@ -204,11 +196,11 @@ static bool hw_gen_find_timing(uint32_t freq_hz, uint32_t *best_top, uint16_t *b
 }
 
 /** @copydoc hw_gen_init */
-void hw_gen_init(void) {
+bool hw_gen_init(void) {
     hw_gen_sys_clk_hz = clock_get_hz(clk_sys);
 
-    for (int i = 0; i < pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_HW_GENERATOR); i++) {
-        uint gpio = pwm_driver_get_gpio(PWM_PROFILE_BACKEND_HW_GENERATOR, i);
+    for (int i = 0; i < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR); i++) {
+        uint gpio = pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR, i);
         hw_gen_bind_pwm_pin(gpio);
 
         uint slice = pwm_gpio_to_slice_num(gpio);
@@ -221,8 +213,9 @@ void hw_gen_init(void) {
 
         pwm_set_chan_level(slice, ch, 0);
         pwm_set_enabled(slice, false);
-
     }
+
+    return true;
 }
 
 /** @copydoc hw_gen_set */
@@ -232,10 +225,12 @@ bool hw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     uint32_t realized_freq_hz;
     uint8_t static_duty;
 
-    if (channel >= pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_HW_GENERATOR)) return false;
-    if (duty > 100u) duty = 100u;
+    if (channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR))
+        return false;
+    if (duty > 100u)
+        duty = 100u;
 
-    uint gpio = pwm_driver_get_gpio(PWM_PROFILE_BACKEND_HW_GENERATOR, channel);
+    uint gpio = pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR, channel);
     uint slice = pwm_gpio_to_slice_num(gpio);
     uint ch = pwm_gpio_to_channel(gpio);
 
@@ -272,7 +267,8 @@ bool hw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
 
 /** @copydoc hw_gen_restore_defaults */
 bool hw_gen_restore_defaults(void) {
-    for (uint channel = 0; channel < pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_HW_GENERATOR); channel++) {
+    for (uint channel = 0; channel < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR);
+         channel++) {
         hw_gen_apply_static_state(channel, 0u);
     }
 

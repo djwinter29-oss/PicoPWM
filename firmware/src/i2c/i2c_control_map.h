@@ -13,16 +13,21 @@
 
 /** @brief I2C register and command byte assignments for the shared control map. */
 typedef enum {
-	I2C_CONTROL_MAP_REG_INFO = 0x00u, /**< Read-only register returning the fixed device name string. */
-	I2C_CONTROL_MAP_REG_VERSION = 0x01u, /**< Read-only register returning the fixed firmware version string. */
-	I2C_CONTROL_MAP_REG_CHANNEL_COUNT = 0x02u, /**< Read-only register returning the logical channel count. */
-	I2C_CONTROL_MAP_REG_BANK_STATE = 0x03u, /**< Read-only register returning 3 bytes: HW/PIO/SW bank lock state (0=unlocked, 1=generator, 2=monitor). */
-	I2C_CONTROL_MAP_REG_BANK_LOCK = 0x04u, /**< Write register locking one bank (payload: bank id, role id); reads the last command result. */
-	I2C_CONTROL_MAP_REG_CH_BASE = 0x10u, /**< Base register for 24 channel snapshot reads, one 9-byte record per channel. */
-	I2C_CONTROL_MAP_REG_SET_BASE = 0x30u, /**< Base register for full channel write commands carrying freq and duty. */
-	I2C_CONTROL_MAP_REG_STOP_ALL = 0x90u, /**< Register used to request stop-all and to read the last command result. */
-	I2C_CONTROL_MAP_REG_LED = 0x91u, /**< Register used to set the board LED state and to read the last command result. */
-	I2C_CONTROL_MAP_REG_REBOOT = 0x92u, /**< Register used to request a board reboot and to read the last command result. */
+    I2C_CONTROL_MAP_REG_INFO = 0x00u,          /**< Read-only register returning the fixed device name string. */
+    I2C_CONTROL_MAP_REG_VERSION = 0x01u,       /**< Read-only register returning the fixed firmware version string. */
+    I2C_CONTROL_MAP_REG_CHANNEL_COUNT = 0x02u, /**< Read-only register returning the logical channel count. */
+    I2C_CONTROL_MAP_REG_CONFIG = 0x03u,      /**< Read-only target configuration: backend/role for Banks A, B, and C. */
+    I2C_CONTROL_MAP_REG_CONFIG_SET = 0x04u,  /**< Write target bank configuration: bank, backend, role. */
+    I2C_CONTROL_MAP_REG_CONFIG_SAVE = 0x05u, /**< Write command persisting target configuration for the next reboot. */
+    I2C_CONTROL_MAP_REG_CONFIG_ADDRESS = 0x06u, /**< Write target I2C address: one 7-bit payload byte. */
+    I2C_CONTROL_MAP_REG_CH_BASE =
+        0x10u, /**< Base register for 24 channel snapshot reads, one 9-byte record per channel. */
+    I2C_CONTROL_MAP_REG_SET_BASE = 0x30u, /**< Base register for full channel write commands carrying freq and duty. */
+    I2C_CONTROL_MAP_REG_STOP_ALL = 0x90u, /**< Register used to request stop-all and to read the last command result. */
+    I2C_CONTROL_MAP_REG_LED =
+        0x91u, /**< Register used to set the board LED state and to read the last command result. */
+    I2C_CONTROL_MAP_REG_REBOOT =
+        0x92u, /**< Register used to request a board reboot and to read the last command result. */
 } i2c_control_map_reg_t;
 
 /**
@@ -44,10 +49,12 @@ uint8_t i2c_control_map_expected_write_length(uint8_t reg);
  * @param reg I2C register or command byte.
  * @param last_status Last completed write status tracked by the transport.
  * @param response Caller-owned destination buffer.
+ * @param response_capacity Capacity of @p response in bytes.
  * @param response_len Caller-owned destination for the response byte count.
  * @return `true` when the register is supported and the response was built.
  */
-bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *response, uint8_t *response_len);
+bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *response, uint8_t response_capacity,
+                                   uint8_t *response_len);
 
 /**
  * @brief Execute one I2C write command payload on Core 0.

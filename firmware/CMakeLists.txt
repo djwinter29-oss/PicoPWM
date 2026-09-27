@@ -10,19 +10,27 @@ endif()
 include("${PICO_SDK_PATH}/external/pico_sdk_import.cmake")
 
 project(PicoPWM C CXX ASM)
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
 set(PICO_PWM_FIRMWARE_VERSION "0.0.0-dev" CACHE STRING "Firmware version string exposed over CDC and I2C")
 set(PICO_PWM_I2C_CLOCK_SPEED 400000 CACHE STRING "I2C slave clock speed in Hz (100000 or 400000)")
-set(PICO_PWM_I2C_ADDR 0x40 CACHE STRING "I2C slave address (7-bit, 0x00..0x7F)")
 
 pico_sdk_init()
+
+set(PICO_PWM_CONFIG_STORAGE_SIZE 8192)
+if(PICO_FLASH_SIZE_BYTES LESS PICO_PWM_CONFIG_STORAGE_SIZE)
+    message(FATAL_ERROR
+        "PicoPWM requires at least ${PICO_PWM_CONFIG_STORAGE_SIZE} bytes of reserved flash storage; "
+        "reported flash size is ${PICO_FLASH_SIZE_BYTES}")
+endif()
+math(EXPR PICO_PWM_CONFIG_FLASH_OFFSET "${PICO_FLASH_SIZE_BYTES} - ${PICO_PWM_CONFIG_STORAGE_SIZE}")
 
 add_executable(pico_pwm
     src/main.c
     src/device_api/device_api.c
-    src/pwmdriver/channel_config/channel_config.c
+    src/pwmdriver/pwm_driver_config.c
     src/board/led.c
     src/board/system.c
     src/pwmdriver/pwm_driver.c
@@ -65,12 +73,12 @@ target_link_libraries(pico_pwm
     tinyusb_board
 )
 
-target_link_libraries(pico_pwm hardware_dma)
+target_link_libraries(pico_pwm hardware_dma hardware_flash)
 
 target_compile_definitions(pico_pwm PRIVATE
     PICO_PWM_FIRMWARE_VERSION_STR="${PICO_PWM_FIRMWARE_VERSION}"
     PICO_PWM_I2C_CLOCK_SPEED=${PICO_PWM_I2C_CLOCK_SPEED}
-    PICO_PWM_I2C_ADDR=${PICO_PWM_I2C_ADDR}
+    PICO_PWM_CONFIG_FLASH_OFFSET=${PICO_PWM_CONFIG_FLASH_OFFSET}
 )
 
 target_include_directories(pico_pwm PRIVATE
@@ -84,3 +92,10 @@ pico_enable_stdio_usb(pico_pwm 0)
 pico_enable_stdio_uart(pico_pwm 0)
 
 pico_add_extra_outputs(pico_pwm)
+
+add_custom_command(TARGET pico_pwm POST_BUILD
+    COMMAND ${CMAKE_COMMAND}
+        -DPICO_PWM_BINARY="$<TARGET_FILE_DIR:pico_pwm>/pico_pwm.bin"
+        -DPICO_PWM_FLASH_LIMIT=${PICO_PWM_CONFIG_FLASH_OFFSET}
+        -P ${CMAKE_CURRENT_LIST_DIR}/check_config_flash_overlap.cmake
+)

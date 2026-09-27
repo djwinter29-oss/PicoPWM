@@ -1,6 +1,6 @@
 # I2C Protocol
 
-The Pico acts as an I2C slave on **I2C1** at 7-bit address `0x40`. See
+The Pico acts as an I2C slave on **I2C1**, using GPIO26 for SDA and GPIO27 for
 [Pinout](../pinout.md) for SDA and SCL assignments.
 
 ### Electrical
@@ -16,6 +16,12 @@ All transactions are initiated by an I2C master. The protocol is **write-then-re
 
 Read commands are answered from the realized channel snapshot published by the PWM driver layer. Write commands are captured in the I2C ISR, deferred into normal Core 0 polling, and then applied through the same shared control path used by the USB CDC CLI.
 
+Only one write command is pending at a time. If another complete write arrives
+before the pending command has been executed, it is rejected with
+`PWM_DRIVER_RESULT_BUSY` and is not queued. The master must retry the command
+after reading its status or after a short delay. This bounded single-slot policy
+prevents the ISR from overwriting an in-flight payload or consuming unbounded
+memory.
 ## Global Register Map
 
 Every transaction starts with one register byte. A write transaction may add
@@ -28,22 +34,31 @@ below. Channel register ranges use the channel count advertised by
 | `REG_INFO` | `0x00` | 1 | variable | Device name string, including null terminator |
 | `REG_VERSION` | `0x01` | 1 | variable | Firmware version string, including null terminator |
 | `REG_CHANNELS` | `0x02` | 1 | 1 | Logical channel count |
-| `REG_BANK_STATE` | `0x03` | 1 | 3 | Per-bank lock state, one byte each for HW/PIO/SW: `0`=unlocked, `1`=generator, `2`=monitor |
-| `REG_BANK_LOCK` | `0x04` | 3 | 1 | Two-byte `bank_id`/`role_id` payload; locks one bank, returns status |
+| `REG_CONFIG` | `0x03` | 1 | 14 | Running then target backend/role pairs and I2C addresses |
+| `REG_CONFIG_SET` | `0x04` | 4 | 1 | Payload: bank, backend, role; updates target only |
+| `REG_CONFIG_SAVE` | `0x05` | 1 | 1 | Persists target; reboot applies it |
+| `REG_CONFIG_ADDRESS` | `0x06` | 2 | 1 | One-byte target 7-bit I2C address; reboot applies it |
 | `REG_GET_CHk` | `0x10 + k` | 1 | 9 | Channel state: `freq`, `duty`, `pulse_count` |
 | `REG_SET_CHk` | `0x30 + k` | 6 | 1 | Five-byte `freq`/`duty` payload; returns status |
 | `REG_STOP_ALL` | `0x90` | 1 | 1 | Profile reset request; returns status |
 | `REG_LED` | `0x91` | 2 | 1 | One-byte LED value; returns status |
 | `REG_REBOOT` | `0x92` | 1 | 1 | Reboot request; returns status |
 
-`bank_id` is `0`=HW, `1`=PIO, `2`=SW. `role_id` is `0`=generator, `1`=monitor.
-Locking a bank is one-shot: `REG_BANK_LOCK` on an already-locked bank returns
-an invalid status, and a channel in an unlocked bank returns
-`PWM_DRIVER_RESULT_UNAVAILABLE` for `REG_GET_CHk`/`REG_SET_CHk`.
-
 Here `n` is the channel count returned by `REG_CHANNELS` and `k` ranges from
-`0` through `n - 1`. The current default profile exposes 24 channels, so the
+`0` through `n - 1`. The fixed Bank A/B/C allocation exposes 24 channels, so the
 ranges are `0x10..0x27` and `0x30..0x47`.
+
+`REG_CONFIG` returns 14 bytes: six bytes for the running configuration followed
+by six bytes for the target configuration, then the running and target I2C
+addresses. Each configuration uses one
+backend/role pair per bank in A, B, C order. Backend values are `0`=HW,
+`1`=PIO, `2`=SW; role values are `0`=generator and `1`=monitor.
+
+`REG_CONFIG_SET` accepts three payload bytes: `bank`, `backend`, `role`. It
+updates the target only. `REG_CONFIG_ADDRESS` accepts one usable 7-bit address byte
+(`0x08..0x77`)
+and updates the target only. `REG_CONFIG_SAVE` validates and persists the
+target; the host must issue `REG_REBOOT` before the target becomes running.
 
 ## Channel Property Layout
 

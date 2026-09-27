@@ -44,48 +44,49 @@
 #define SW_MON_GPIO_COUNT 30u
 
 /** @brief Per-channel standalone software monitor runtime ownership table. */
-static pwm_gpio_mon_channel_t sw_mon_channels[PWM_PROFILE_CHANNEL_COUNT];
+static pwm_gpio_mon_channel_t sw_mon_channels[PWM_DRIVER_CONFIG_CHANNEL_COUNT];
 /** @brief Direct GPIO-to-channel lookup table; `-1` marks unrelated GPIOs. */
-static int8_t sw_mon_gpio_to_channel[SW_MON_GPIO_COUNT] = {
-    [0 ... SW_MON_GPIO_COUNT - 1] = -1
-};
+static int8_t sw_mon_gpio_to_channel[SW_MON_GPIO_COUNT] = {[0 ... SW_MON_GPIO_COUNT - 1] = -1};
 /** @brief Guards the standalone software monitor lifecycle so init only runs once. */
 static bool sw_mon_initialized = false;
 
 /** @copydoc sw_mon_handle_gpio_irq */
 void sw_mon_handle_gpio_irq(uint gpio, uint32_t events) {
-    pwm_gpio_mon_handle_irq(gpio, events, SW_MON_GPIO_COUNT, sw_mon_gpio_to_channel, sw_mon_channels, SW_MON_UNSTABLE_FREQ_HZ, SW_MON_UNSTABLE_DUTY);
+    pwm_gpio_mon_handle_irq(gpio, events, SW_MON_GPIO_COUNT, sw_mon_gpio_to_channel, sw_mon_channels,
+                            SW_MON_UNSTABLE_FREQ_HZ, SW_MON_UNSTABLE_DUTY);
 }
 
 /** @brief Read one channel state under interrupt exclusion and apply static-level fallback when idle. */
 static bool sw_mon_read_channel(uint channel, pwm_driver_state_t *state) {
-    return pwm_gpio_mon_read_channel(channel, state, sw_mon_channels, SW_MON_STATIC_TIMEOUT_US, PWM_PROFILE_BACKEND_SW_MONITOR);
+    return pwm_gpio_mon_read_channel(channel, state, sw_mon_channels, SW_MON_STATIC_TIMEOUT_US,
+                                     PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR);
 }
 
 /** @copydoc sw_mon_init */
-void sw_mon_init(void) {
+bool sw_mon_init(void) {
     if (sw_mon_initialized) {
-        return;
+        return true;
     }
 
-    for (uint channel = 0; channel < pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_SW_MONITOR); channel++) {
-        uint pin = pwm_driver_get_gpio(PWM_PROFILE_BACKEND_SW_MONITOR, channel);
+    for (uint channel = 0; channel < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR);
+         channel++) {
+        uint pin = pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR, channel);
 
         pwm_gpio_mon_init_pin(pin);
         sw_mon_gpio_to_channel[pin] = (int8_t)channel;
         pwm_gpio_mon_reset_channel(&sw_mon_channels[channel]);
 
-        if (channel != 0u) {
-            gpio_set_irq_enabled(pin, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
-        }
+        gpio_set_irq_enabled(pin, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
     }
 
     sw_mon_initialized = true;
+    return true;
 }
 
 /** @copydoc sw_mon_get */
 bool sw_mon_get(uint channel, pwm_driver_state_t *state) {
-    if (!sw_mon_initialized || channel >= pwm_profile_backend_channel_count(PWM_PROFILE_BACKEND_SW_MONITOR) || state == NULL) {
+    if (!sw_mon_initialized ||
+        channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR) || state == NULL) {
         return false;
     }
 

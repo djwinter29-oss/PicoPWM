@@ -78,6 +78,7 @@ gcovr \
     --object-directory "$BUILD_DIR_PATH" \
     --filter 'firmware/src' \
     --exclude '.*CMakeFiles.*' \
+    --exclude '.*CompilerIdC.*' \
     --gcov-ignore-errors=no_working_dir_found \
     --exclude-unreachable-branches \
     --exclude-throw-branches \
@@ -88,6 +89,7 @@ gcovr \
     --object-directory "$BUILD_DIR_PATH" \
     --filter 'firmware/src' \
     --exclude '.*CMakeFiles.*' \
+    --exclude '.*CompilerIdC.*' \
     --gcov-ignore-errors=no_working_dir_found \
     --exclude-unreachable-branches \
     --exclude-throw-branches \
@@ -98,6 +100,7 @@ gcovr \
     --object-directory "$BUILD_DIR_PATH" \
     --filter 'firmware/src' \
     --exclude '.*CMakeFiles.*' \
+    --exclude '.*CompilerIdC.*' \
     --gcov-ignore-errors=no_working_dir_found \
     --exclude-unreachable-branches \
     --exclude-throw-branches \

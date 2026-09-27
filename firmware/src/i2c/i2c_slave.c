@@ -10,8 +10,8 @@
 #include <stdbool.h>
 #include <string.h>
 
-#define I2C_REQ_BUF_SIZE  9
-#define RESP_BUF_SIZE     64
+#define I2C_REQ_BUF_SIZE 9
+#define RESP_BUF_SIZE 64
 
 static uint8_t req_buf[I2C_REQ_BUF_SIZE];
 static uint8_t req_len = 0;
@@ -29,7 +29,7 @@ static uint8_t resp_idx = 0;
 
 static void prepare_response(uint8_t reg) {
     resp_idx = 0;
-    if (!i2c_control_map_read_register(reg, last_status[reg], resp_buf, &resp_len)) {
+    if (!i2c_control_map_read_register(reg, last_status[reg], resp_buf, RESP_BUF_SIZE, &resp_len)) {
         resp_buf[0] = (uint8_t)PWM_DRIVER_RESULT_INVALID;
         resp_len = 1u;
     }
@@ -126,7 +126,7 @@ static void i2c_slave_isr(void) {
     (void)hw->clr_intr;
 }
 
-void i2c_slave_init(void) {
+void i2c_slave_init(uint8_t address) {
     gpio_init(I2C_SDA_PIN);
     gpio_init(I2C_SCL_PIN);
     gpio_set_function(I2C_SDA_PIN, GPIO_FUNC_I2C);
@@ -139,14 +139,12 @@ void i2c_slave_init(void) {
     // the actual bus speed is set by the I2C master. Ensure this matches the expected
     // master clock to avoid timing violations.
     i2c_init(I2C_SLAVE_INST, I2C_CLOCK_SPEED);
-    i2c_set_slave_mode(I2C_SLAVE_INST, true, I2C_SLAVE_ADDR);
+    i2c_set_slave_mode(I2C_SLAVE_INST, true, address);
 
     i2c_hw_t *hw = i2c_get_hw(I2C_SLAVE_INST);
     // Enable RX_FULL, RD_REQ and TX_EMPTY interrupts.
-    hw->intr_mask = I2C_IC_INTR_MASK_M_RX_FULL_BITS |
-                    I2C_IC_INTR_MASK_M_RD_REQ_BITS |
-                    I2C_IC_INTR_MASK_M_TX_EMPTY_BITS |
-                    I2C_IC_INTR_MASK_M_STOP_DET_BITS;
+    hw->intr_mask = I2C_IC_INTR_MASK_M_RX_FULL_BITS | I2C_IC_INTR_MASK_M_RD_REQ_BITS |
+                    I2C_IC_INTR_MASK_M_TX_EMPTY_BITS | I2C_IC_INTR_MASK_M_STOP_DET_BITS;
 
     int irq = I2C_SLAVE_IRQ;
     irq_set_exclusive_handler(irq, i2c_slave_isr);
@@ -163,8 +161,9 @@ void i2c_slave_init(void) {
 void i2c_slave_poll(void) {
     if (req_pending) {
         // Capture pending request state to locals before clearing pending flag.
-        // Safe on RP2040: Core 0 ISR and polling loop run on same IRQ,
-        // Cortex-M0+ is non-reentrant, and ISR cannot preempt polling loop.
+        // Safe on RP2040 and RP2350: copy the volatile slot to locals before
+        // clearing the pending flag, so the ISR and poller never share mutable
+        // payload storage while the deferred command executes.
         uint8_t reg = req_pending_reg;
         uint8_t payload[I2C_REQ_BUF_SIZE - 1u];
         uint8_t payload_len = req_pending_payload_len;

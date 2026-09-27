@@ -16,12 +16,30 @@ const char *device_api_firmware_version(void) {
     return PICO_PWM_FIRMWARE_VERSION_STR;
 }
 
-pwm_driver_result_t device_api_lock_bank(pwm_profile_bank_t bank, pwm_profile_bank_role_t role) {
-    return pwm_driver_lock_bank(bank, role);
+bool device_api_config_init(const pwm_driver_config_t *running, const pwm_driver_config_t *target) {
+    return pwm_driver_config_init_state(running, target);
 }
 
-pwm_profile_bank_state_t device_api_get_bank_state(pwm_profile_bank_t bank) {
-    return pwm_profile_get_bank_state(bank);
+bool device_api_config_get_target(pwm_driver_config_t *config) {
+    return pwm_driver_config_get_target(config);
+}
+
+bool device_api_config_get_running(pwm_driver_config_t *config) {
+    return pwm_driver_config_get_running(config);
+}
+
+bool device_api_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_backend_t backend,
+                                pwm_driver_config_bank_role_t role) {
+    return pwm_driver_config_set_bank(bank, backend, role);
+}
+
+bool device_api_config_save_target(void) {
+    pwm_driver_config_t target;
+    return pwm_driver_config_get_target(&target) && pwm_driver_config_save_target(&target);
+}
+
+bool device_api_config_set_i2c_address(uint8_t address) {
+    return pwm_driver_config_set_i2c_address(address);
 }
 
 uint8_t device_api_channel_count(void) {

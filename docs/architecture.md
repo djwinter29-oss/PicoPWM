@@ -59,24 +59,24 @@ rejects the request.
 Use the architecture-related pages as follows:
 
 - [Architecture](architecture.md) — system structure, layer boundaries, and request flow
-- [Firmware Configuration](configuration.md) — runtime bank locking, channel tables, and capability rules
+- [Firmware Configuration](configuration.md) — startup bank configuration, channel tables, and capability rules
 - [Pinout](pinout.md) — physical PWM, I2C, and shared-pin mapping
 - [PWM Driver Design](detail/pwm_driver_design.md) — detailed `pwmdriver` and backend internals
 - [Hardware PWM Generator](detail/generator/hardware_generator.md) — hardware output timing and slice constraints
 - [PIO PWM Generator](detail/generator/pio_generator.md) — PIO output timing and state-machine constraints
 - [Software PWM Generator](detail/generator/software_generator.md) — shared timer output generation
 - [Hardware PWM Monitor](detail/monitor/hardware_monitor.md) — GPIO interrupt measurement limits
-- [PIO PWM Monitor](detail/monitor/pio_monitor.md) — DMA-backed high/low measurement
+- [PIO PWM Monitor](detail/monitor/pio_monitor.md) — one-period high/low measurement
 - [Software PWM Monitor](detail/monitor/software_monitor.md) — low-frequency polling/edge measurement
 
 ## System Model
 
 PicoPWM targets Raspberry Pi Pico (RP2040) and Pico 2 (RP2350) with one shared
-logical channel model. Runtime bank locking selects whether the fixed hardware,
+logical channel model. Startup bank configuration selects whether the fixed hardware,
 PIO, and software banks act as PWM generators or PWM monitors.
 
 The host-visible channel IDs and command syntax remain stable across profiles.
-The channel configuration, not the CLI, defines each channel's backend, direction,
+The PWM driver configuration, not the CLI, defines each channel's backend, direction,
 GPIO, limits, and supported operations. The current default profiles expose 24
 channels through this table.
 
@@ -85,6 +85,45 @@ Each logical channel exposes the same readback model:
 - `freq_hz`
 - `duty`
 - `pulse_count`
+
+The field has backend-specific semantics: GPIO monitors count accepted
+edge-reconstructed periods, the PIO monitor reports `0` because it captures one
+period per sample without accumulating periods, and PIO generator readback may
+estimate elapsed periods from its last published reference timestamp.
+
+### Monitor Measurement Strategy
+
+The monitor design is intentionally optimized for occasional latest-value
+measurements, not waveform history or trend analysis. A host read needs one
+usable frequency/duty result at a time; configuration changes and measured
+signal changes are not expected to arrive at a rate that requires continuous
+capture.
+
+The three monitor banks therefore use different mechanisms according to their
+hardware envelope:
+
+- The hardware and software banks use GPIO edge interrupts with software
+    timestamps. They are simple and suitable for their low-frequency ranges.
+- The PIO bank captures one complete high/low period in PIO, reads the two FIFO
+    words directly, and stops the state machine.
+
+Continuous PIO capture through DMA was considered, but rejected for this
+product. DMA would reduce CPU involvement while continuously draining the
+FIFO, but the firmware would still retain only one latest sample. It would add
+DMA-channel allocation, buffer-coherence handling, transfer-lifetime behavior,
+and recovery paths without providing history or a better user-visible result.
+
+CPU GPIO polling was rejected because it spends CPU time waiting and becomes
+less reliable as frequency increases. GPIO edge interrupts remain appropriate
+for the slower banks. PWM-slice input capture was rejected because it would
+couple measurement to PWM slice routing and complicate the fixed bank model.
+
+PIO one-period capture is the resulting compromise: PIO provides accurate
+high/low timing for a complete period, while direct FIFO reads keep resource
+ownership and runtime behavior small. If the product later requires continuous
+high-rate capture, trend analysis, or waveform history, DMA or a dedicated
+buffered capture design should be reconsidered as a new requirement rather than
+added preemptively.
 
 The hardware PWM bank intentionally uses PWM slice channel B pins so the external pin order stays aligned with the monitoring-oriented wiring plan. See [Pinout](pinout.md) for the physical mapping.
 
@@ -103,6 +142,12 @@ Core 0 owns the host-facing transports:
 - `cli/pwm_commands.*` for human-readable CLI commands
 - `i2c/i2c_slave.*` for the I2C slave ISR and deferred write scheduling
 - `i2c/i2c_control_map.*` for the I2C register map and payload translation
+
+USB CDC uses bounded 128-byte receive and 256-byte transmit queues. When a
+queue is full, additional received bytes or transmit responses are dropped and
+the transport reports failure where the API permits it. This fixed-resource
+policy prevents unbounded memory growth; applications requiring reliable bulk
+transfer must provide host-side pacing and retry at the command level.
 
 ### 2. Shared Control Layer
 
@@ -128,7 +173,7 @@ Responsibilities:
 
 ### 4. Configuration and Backend Layer
 
-The channel configuration owns the logical channel table and capability
+The PWM driver configuration owns the logical channel table and capability
 validation. Core 1 then dispatches each configured channel to its selected
 backend.
 
@@ -271,7 +316,7 @@ flowchart TD
     Reset[Power-on or reset] --> Clock[Set system clock target]
     Clock --> LED[Initialize board LED helper]
     LED --> USB[Initialize TinyUSB CDC and CLI binding]
-    USB --> Launch[Launch Core 1 with pwm_driver_launch]
+    USB --> Launch[Initialize Core 1 with pwm_driver_init]
     Launch --> Ready{pwm_driver_is_ready?}
     Ready -- No --> Ready
     Ready -- Yes --> I2C[Initialize I2C slave]
@@ -287,7 +332,7 @@ In ordered form:
 1. Core 0 raises the system clock target to 150 MHz when possible.
 2. Core 0 initializes the board LED helper.
 3. Core 0 initializes TinyUSB CDC and the CLI transport binding.
-4. Core 0 launches Core 1 with `pwm_driver_launch()`.
+4. Core 0 initializes and launches Core 1 with `pwm_driver_init(config)`.
 5. Core 0 waits for `pwm_driver_is_ready()`.
 6. Core 0 initializes the I2C slave transport.
 7. The main loop services `usb_cdc_poll()`, `pwm_commands_poll()`, and `i2c_slave_poll()`.

@@ -12,7 +12,7 @@
 #define SW_GEN_MAX_FREQ_HZ 1000u
 
 /** @brief Initialize the software PWM generator backend and its repeating timer. */
-void sw_gen_init(void);
+bool sw_gen_init(void);
 
 /**
  * @brief Apply one logical software-PWM channel update.

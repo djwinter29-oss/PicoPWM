@@ -91,6 +91,15 @@ target_include_directories(i2c_write_queue_test PRIVATE
 pico_pwm_test_warnings(i2c_write_queue_test)
 add_test(NAME i2c_write_queue COMMAND i2c_write_queue_test)
 
+add_executable(i2c_irq_gate_test
+    i2c_irq_gate_test.c
+)
+target_include_directories(i2c_irq_gate_test PRIVATE
+    ${SOURCE_ROOT}
+)
+pico_pwm_test_warnings(i2c_irq_gate_test)
+add_test(NAME i2c_irq_gate COMMAND i2c_irq_gate_test)
+
 add_executable(i2c_control_map_test
     i2c_control_map_test.c
     ${SOURCE_ROOT}/i2c/i2c_control_map.c

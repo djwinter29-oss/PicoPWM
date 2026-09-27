@@ -17,8 +17,9 @@ All transactions are initiated by an I2C master. The protocol is **write-then-re
 Read commands are answered from the realized channel snapshot published by the PWM driver layer. The ISR only captures bytes. Core 0 builds the response buffer before the slave releases a stretched clock, so channel reads and string copies do not run in the ISR. Write commands are queued by the ISR and applied from Core 0 polling through the same shared control path used by the USB CDC CLI.
 
 The firmware keeps four complete writes. A write that arrives while that queue
-is full is dropped and its register status stays `PWM_DRIVER_RESULT_BUSY`. The
-master retries after reading status. The fixed queue bounds ISR memory use.
+is full is dropped, and the register status becomes `PWM_DRIVER_RESULT_UNAVAILABLE`
+immediately. The status read finishes as a failure and the master can send the
+write again. The fixed queue bounds ISR memory use.
 
 ## Global Register Map
 
@@ -121,7 +122,7 @@ Master read:  [0x01] or [0x00]
 
 Here `freq_le32` is a little-endian `uint32_t` in Hz and `duty_u8` is one byte representing duty percent.
 
-`0x01` means the request is still busy or queued when read immediately after the write transaction. After a short delay, the master can repeat a one-byte write of `0x30` followed by a read to fetch the latest status byte for that command register.
+`0x01` means the request is still busy or queued when read immediately after the write transaction. `0x03` (`PWM_DRIVER_RESULT_UNAVAILABLE`) means the write was dropped because four writes were already queued; that status is final and the master can send the write again. After a short delay, the master can repeat a one-byte write of `0x30` followed by a read to fetch the latest status byte for that command register.
 
 **Stop all channels**
 
@@ -150,7 +151,7 @@ Master read:  [status]
 - String responses include a null terminator. Allocate enough space for the full version string plus the terminator.
 - The I2C ISR only captures request bytes and serves prepared response bytes. Write commands are executed later from normal Core 0 polling.
 - A write command can therefore report `busy` if read back immediately. The master should allow a small delay and then re-read the same command register to fetch the final result.
-- The slave admits one deferred write at a time; additional writes are rejected with `PWM_DRIVER_RESULT_BUSY` and are not queued. The master must retry them.
+- The slave queues up to four writes. A write that arrives while the queue is full is dropped and the register status becomes `PWM_DRIVER_RESULT_UNAVAILABLE` immediately. The master can send that write again.
 - `REG_REBOOT` follows the same deferred path, but the device may reset before a later status re-read is possible.
 - `pulse_count` is read-only over I2C. It cannot be set or reset via this interface.
 - `freq` and `duty` returned over I2C are the realized values published by the PWM driver layer.

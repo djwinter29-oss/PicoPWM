@@ -3,6 +3,7 @@
 #include "config/i2c_config.h"
 #include "device_api/device_api.h"
 #include "i2c/i2c_control_map.h"
+#include "i2c/i2c_irq_gate.h"
 #include "i2c/i2c_write_queue.h"
 #include "pwmdriver/pwm_driver.h"
 #include "hardware/i2c.h"
@@ -11,6 +12,11 @@
 #include "hardware/sync.h"
 #include <stdbool.h>
 #include <string.h>
+
+_Static_assert(I2C_WRITE_STATUS_QUEUED == (int)PWM_DRIVER_RESULT_BUSY,
+               "queued write status must match PWM_DRIVER_RESULT_BUSY");
+_Static_assert(I2C_WRITE_STATUS_REJECTED == (int)PWM_DRIVER_RESULT_UNAVAILABLE,
+               "rejected write status must match PWM_DRIVER_RESULT_UNAVAILABLE");
 
 #define I2C_REQ_BUF_SIZE 9
 #define RESP_BUF_SIZE 64
@@ -31,6 +37,7 @@ static volatile bool response_ready = false;
 static volatile bool irq_deferred = false;
 static int i2c_irq_number = -1;
 static bool i2c_started = false;
+static i2c_irq_gate_t i2c_gate;
 
 static void prepare_response(uint8_t reg) {
     resp_idx = 0;
@@ -83,9 +90,9 @@ static void capture_request_byte(uint8_t byte) {
         uint8_t reg = req_buf[0];
         if (i2c_control_map_is_write_register(reg)) {
             uint8_t payload_len = (uint8_t)(req_expected_len - 1u);
-            /* A full queue drops this payload. BUSY tells the master to retry. */
-            (void)i2c_write_queue_push(&write_queue, reg, &req_buf[1], payload_len);
-            last_status[reg] = (uint8_t)PWM_DRIVER_RESULT_BUSY;
+            bool queued = i2c_write_queue_push(&write_queue, reg, &req_buf[1], payload_len);
+            // A full queue drops this payload and finishes as UNAVAILABLE so the status read does not wait.
+            last_status[reg] = i2c_write_queue_status(queued);
         }
 
         request_response(reg);
@@ -93,26 +100,38 @@ static void capture_request_byte(uint8_t byte) {
     }
 }
 
-static bool feed_response_byte(i2c_hw_t *hw, bool read_request) {
-    if (!response_ready) {
-        if (!irq_deferred) {
-            irq_set_enabled(i2c_irq_number, false);
-            irq_deferred = true;
-        }
-        return false;
+static uint32_t i2c_slave_intr_mask(void) {
+    uint32_t mask = I2C_IC_INTR_MASK_M_RX_FULL_BITS | I2C_IC_INTR_MASK_M_RD_REQ_BITS | I2C_IC_INTR_MASK_M_STOP_DET_BITS;
+    mask |= i2c_gate.tx_empty_unmasked ? I2C_IC_INTR_MASK_M_TX_EMPTY_BITS : 0u;
+    return mask;
+}
+
+static void i2c_slave_apply_tx_mask(i2c_hw_t *hw) {
+    hw->intr_mask = i2c_slave_intr_mask();
+}
+
+static void i2c_slave_apply_action(i2c_hw_t *hw, i2c_gate_action_t action, bool read_request) {
+    if (action == I2C_GATE_WRITE_BYTE && resp_idx < resp_len) {
+        hw->data_cmd = resp_buf[resp_idx++];
+    } else if (action == I2C_GATE_PAD_BYTE) {
+        hw->data_cmd = 0u;
     }
 
-    if (resp_idx < resp_len) {
-        hw->data_cmd = resp_buf[resp_idx++];
-    } else if (read_request) {
-        hw->data_cmd = 0;
+    if (read_request && action != I2C_GATE_STRETCH && action != I2C_GATE_NONE) {
+        (void)hw->clr_rd_req;
     }
-    return true;
+
+    i2c_slave_apply_tx_mask(hw);
+    if (!i2c_gate.irq_enabled) {
+        irq_set_enabled(i2c_irq_number, false);
+        irq_deferred = true;
+    }
 }
 
 static void i2c_slave_isr(void) {
     i2c_hw_t *hw = i2c_get_hw(I2C_SLAVE_INST);
     uint32_t status = hw->intr_stat;
+    bool handled_read = false;
 
     // RX_FULL: received data from master (command byte).
     if (status & I2C_IC_INTR_STAT_R_RX_FULL_BITS) {
@@ -123,21 +142,31 @@ static void i2c_slave_isr(void) {
     if (status & I2C_IC_INTR_STAT_R_STOP_DET_BITS) {
         (void)hw->clr_stop_det;
         reset_request_capture();
+        i2c_irq_gate_on_stop(&i2c_gate);
+        i2c_slave_apply_tx_mask(hw);
     }
 
-    // RD_REQ / TX_EMPTY: master is clocking out a response. Leave RD_REQ pending
-    // when the buffer is not ready so SCL stretches until Core 0 prepares it.
-    if (status & (I2C_IC_INTR_STAT_R_RD_REQ_BITS | I2C_IC_INTR_STAT_R_TX_EMPTY_BITS)) {
-        bool read_request = (status & I2C_IC_INTR_STAT_R_RD_REQ_BITS) != 0u;
-        if (!feed_response_byte(hw, read_request)) {
+    // RD_REQ: master is clocking out a response. Leave RD_REQ pending when the
+    // buffer is not ready so SCL stretches until Core 0 prepares it. TX_EMPTY
+    // stays masked unless this byte still has followers; it is level-triggered
+    // and clr_intr does not clear it.
+    if (status & I2C_IC_INTR_STAT_R_RD_REQ_BITS) {
+        i2c_gate_action_t action = i2c_irq_gate_on_read_request(&i2c_gate, response_ready, resp_idx, resp_len);
+        i2c_slave_apply_action(hw, action, true);
+        handled_read = true;
+        if (action == I2C_GATE_STRETCH) {
             return;
         }
-        if (read_request) {
-            (void)hw->clr_rd_req;
-        }
     }
 
-    // Clear all interrupts.
+    if ((status & I2C_IC_INTR_STAT_R_TX_EMPTY_BITS) != 0u && i2c_gate.tx_empty_unmasked && !handled_read) {
+        i2c_gate_action_t action = i2c_irq_gate_on_tx_empty(&i2c_gate, response_ready, resp_idx, resp_len);
+        i2c_slave_apply_action(hw, action, false);
+    } else if ((status & I2C_IC_INTR_STAT_R_TX_EMPTY_BITS) != 0u && !i2c_gate.tx_empty_unmasked) {
+        i2c_slave_apply_tx_mask(hw);
+    }
+
+    // Clear interrupts that are not level-triggered.
     (void)hw->clr_intr;
 }
 
@@ -163,6 +192,7 @@ void i2c_slave_service_reads(void) {
     }
 
     if (irq_deferred) {
+        i2c_irq_gate_resume(&i2c_gate);
         irq_deferred = false;
         irq_set_enabled(i2c_irq_number, true);
     }
@@ -184,9 +214,9 @@ void i2c_slave_init(uint8_t address) {
     i2c_set_slave_mode(I2C_SLAVE_INST, true, address);
 
     i2c_hw_t *hw = i2c_get_hw(I2C_SLAVE_INST);
-    // Enable RX_FULL, RD_REQ and TX_EMPTY interrupts.
-    hw->intr_mask = I2C_IC_INTR_MASK_M_RX_FULL_BITS | I2C_IC_INTR_MASK_M_RD_REQ_BITS |
-                    I2C_IC_INTR_MASK_M_TX_EMPTY_BITS | I2C_IC_INTR_MASK_M_STOP_DET_BITS;
+    i2c_irq_gate_init(&i2c_gate);
+    // RX_FULL, RD_REQ, and STOP only. TX_EMPTY is unmasked while a read still needs bytes.
+    i2c_slave_apply_tx_mask(hw);
 
     i2c_irq_number = I2C_SLAVE_IRQ;
     irq_set_exclusive_handler(i2c_irq_number, i2c_slave_isr);

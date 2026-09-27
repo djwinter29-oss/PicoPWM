@@ -52,6 +52,17 @@ static inline bool i2c_write_queue_push(i2c_write_queue_t *queue, uint8_t reg, c
     return true;
 }
 
+/** @brief Status byte while a queued write is still waiting. Matches `PWM_DRIVER_RESULT_BUSY`. */
+#define I2C_WRITE_STATUS_QUEUED 1u
+/** @brief Finished status when a write is dropped because the queue is full. Matches `PWM_DRIVER_RESULT_UNAVAILABLE`.
+ */
+#define I2C_WRITE_STATUS_REJECTED 3u
+
+/** @brief Status a master should observe for a write that was queued or rejected. */
+static inline uint8_t i2c_write_queue_status(bool queued) {
+    return queued ? I2C_WRITE_STATUS_QUEUED : I2C_WRITE_STATUS_REJECTED;
+}
+
 /** @brief Remove the oldest write. Returns false when the queue is empty. */
 static inline bool i2c_write_queue_pop(i2c_write_queue_t *queue, i2c_write_slot_t *out) {
     if (queue == NULL || out == NULL || queue->count == 0u) {

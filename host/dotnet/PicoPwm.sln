@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PicoPwm.Host", "src\PicoPwm.Host\PicoPwm.Host.csproj", "{8D9A0C65-46A2-4F2D-A7B0-6CF7F4E1A321}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PicoPwm.Host.Tests", "tests\PicoPwm.Host.Tests\PicoPwm.Host.Tests.csproj", "{4B605B68-1DA0-4C52-AF45-C6E3BFC0F7C8}"
+EndProject
+Global
+    GlobalSection(SolutionConfigurationPlatforms) = preSolution
+        Debug|Any CPU = Debug|Any CPU
+        Release|Any CPU = Release|Any CPU
+    EndGlobalSection
+    GlobalSection(ProjectConfigurationPlatforms) = postSolution
+        {8D9A0C65-46A2-4F2D-A7B0-6CF7F4E1A321}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {8D9A0C65-46A2-4F2D-A7B0-6CF7F4E1A321}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {8D9A0C65-46A2-4F2D-A7B0-6CF7F4E1A321}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {8D9A0C65-46A2-4F2D-A7B0-6CF7F4E1A321}.Release|Any CPU.Build.0 = Release|Any CPU
+        {4B605B68-1DA0-4C52-AF45-C6E3BFC0F7C8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {4B605B68-1DA0-4C52-AF45-C6E3BFC0F7C8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {4B605B68-1DA0-4C52-AF45-C6E3BFC0F7C8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {4B605B68-1DA0-4C52-AF45-C6E3BFC0F7C8}.Release|Any CPU.Build.0 = Release|Any CPU
+    EndGlobalSection
+EndGlobal

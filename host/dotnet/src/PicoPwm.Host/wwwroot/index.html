@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PicoPWM Control / .NET</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">PicoPWM / .NET host</p>
+        <h1>Channel desk</h1>
+        <p class="subhead">Manage all 24 logical channels over CDC or I2C.</p>
+      </div>
+      <button class="stop" id="stop">Stop all</button>
+    </header>
+    <div id="message" class="message" hidden></div>
+    <section class="summary">
+      <div><strong id="total">--</strong><span>channels</span></div>
+      <div><strong id="running">--</strong><span>running</span></div>
+      <div><strong id="pulses">--</strong><span>pulses observed</span></div>
+    </section>
+    <section id="channels" class="channel-grid" aria-label="PWM channels"></section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

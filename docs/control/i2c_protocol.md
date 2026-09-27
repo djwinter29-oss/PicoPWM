@@ -1,7 +1,7 @@
 # I2C Protocol
 
-The Pico acts as an I2C slave on **I2C1**, using GPIO26 for SDA and GPIO27 for
-[Pinout](../pinout.md) for SDA and SCL assignments.
+The Pico acts as an I2C slave on **I2C1**. See [Pinout](../pinout.md) for the
+SDA and SCL GPIO assignments.
 
 ### Electrical
 
@@ -14,14 +14,12 @@ All transactions are initiated by an I2C master. The protocol is **write-then-re
 1. **Write phase**: master sends one register byte and, when required, its payload.
 2. **Read phase**: master reads the response bytes.
 
-Read commands are answered from the realized channel snapshot published by the PWM driver layer. Write commands are captured in the I2C ISR, deferred into normal Core 0 polling, and then applied through the same shared control path used by the USB CDC CLI.
+Read commands are answered from the realized channel snapshot published by the PWM driver layer. The ISR only captures bytes. Core 0 builds the response buffer before the slave releases a stretched clock, so channel reads and string copies do not run in the ISR. Write commands are queued by the ISR and applied from Core 0 polling through the same shared control path used by the USB CDC CLI.
 
-Only one write command is pending at a time. If another complete write arrives
-before the pending command has been executed, it is rejected with
-`PWM_DRIVER_RESULT_BUSY` and is not queued. The master must retry the command
-after reading its status or after a short delay. This bounded single-slot policy
-prevents the ISR from overwriting an in-flight payload or consuming unbounded
-memory.
+The firmware keeps four complete writes. A write that arrives while that queue
+is full is dropped and its register status stays `PWM_DRIVER_RESULT_BUSY`. The
+master retries after reading status. The fixed queue bounds ISR memory use.
+
 ## Global Register Map
 
 Every transaction starts with one register byte. A write transaction may add

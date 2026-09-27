@@ -94,15 +94,17 @@ The generator program is intentionally small.
 
 It loads:
 
-- a period count into `x`
-- a duty threshold into `isr`
+- a match threshold into `x`
+- a period count into `isr`
 
 At runtime it:
 
-1. copies the duty threshold into `y`
-2. counts one period using `y--`
-3. drives the side-set output high only while the loop index is still inside the duty window
+1. copies the period into `y` and forces the pin low
+2. counts one period using `y--`, from the period down through 0
+3. drives the side-set output high on the iteration where `x == y`, then leaves that level unchanged for the rest of the period
 4. restarts continuously
+
+C programs `x` as `high_iterations - 1`, so the sticky-high tail is the requested duty. The low-path instruction must not side-set; a side-set there collapses every duty to a single high tick.
 
 That keeps the state machine compact and leaves timing search and realized-state policy in C.
 

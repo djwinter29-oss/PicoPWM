@@ -6,6 +6,7 @@ for script in \
     tools/firmware/load.sh \
     tools/firmware/setup-sdk-env.sh \
     tools/release/resolve-release-version.sh \
+    tools/test/check-firmware-invariants.sh \
     tools/test/check.sh \
     tools/test/coverage-firmware-c.sh \
     tools/test/test-firmware-c.sh \

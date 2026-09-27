@@ -73,11 +73,11 @@ tools/test/coverage-firmware-c.sh
 The root CMake project intentionally configures the firmware build only;
 `firmware/tests` uses the host compiler and is managed by these test helpers.
 
-Channel roles are chosen at runtime, not at build time: every logical channel
-starts disabled, and the host locks each of the 3 physical banks (hardware
-PWM, PIO, software) into a `generator` or `monitor` role over CDC or I2C. See
-[Firmware Configuration](docs/configuration.md#runtime-bank-locking) for the
-full model.
+Channel roles are chosen in the startup configuration, not at build time. The
+host updates a target with `config set` over CDC or the matching I2C registers,
+persists it with `config save`, and applies it by rebooting. See
+[Firmware Configuration](docs/configuration.md#startup-bank-configuration) for
+the full model.
 
 Build outputs of interest:
 

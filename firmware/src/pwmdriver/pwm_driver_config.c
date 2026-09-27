@@ -146,6 +146,7 @@ bool pwm_driver_config_save_target(const pwm_driver_config_t *config) {
     slot_offset = first_is_newer ? PWM_DRIVER_CONFIG_FLASH_OFFSET + FLASH_SECTOR_SIZE : PWM_DRIVER_CONFIG_FLASH_OFFSET;
     memset(sector, 0xff, sizeof(sector));
     memcpy(sector, &record, sizeof(record));
+    /* Core 1 must already have called multicore_lockout_victim_init(). */
     multicore_lockout_start_blocking();
     flash_range_erase(slot_offset, FLASH_SECTOR_SIZE);
     flash_range_program(slot_offset, sector, FLASH_SECTOR_SIZE);

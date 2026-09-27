@@ -27,7 +27,7 @@ int main(void) {
     bool usb_was_connected = false;
 
     // Overclock before any PWM backend caches the system clock for timing calculations.
-    system_init_clock();
+    (void)system_init_clock();
 
     led_init();
 
@@ -42,9 +42,13 @@ int main(void) {
         system_reboot();
     }
 
+    system_watchdog_start();
+
     // Wait for Core 1 mailbox service before accepting commands.
+    absolute_time_t ready_deadline = make_timeout_time_ms(2000);
     while (!pwm_driver_is_ready()) {
-        if (pwm_driver_startup_failed()) {
+        system_watchdog_kick();
+        if (pwm_driver_startup_failed() || time_reached(ready_deadline)) {
             system_reboot();
         }
         tight_loop_contents();
@@ -52,11 +56,14 @@ int main(void) {
 
     // Core 0: start communication interfaces.
     i2c_slave_init(pwm_config.i2c_address);
+    pwm_driver_set_wait_hook(i2c_slave_service_reads);
 
     // Core 0 main loop: service USB CDC and I2C.
     while (true) {
         bool usb_connected;
 
+        system_watchdog_kick();
+        i2c_slave_service_reads();
         usb_cdc_poll();
         // Detect USB connection events and print the initial CLI help.
         usb_connected = usb_cdc_is_connected();

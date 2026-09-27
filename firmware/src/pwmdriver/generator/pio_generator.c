@@ -147,13 +147,16 @@ static uint32_t gen_realized_freq_hz_for_timing(uint16_t period_count, uint32_t 
 }
 
 /**
- * @brief Convert one duty request into the PIO loop threshold used by the generator program.
+ * @brief Convert one duty request into the PIO sticky-high match value.
  * @param period_count Backend loop count representing one PWM period.
  * @param duty_percent Requested duty in percent.
- * @return Threshold value written into the generator state machine FIFO.
+ * @return Match value written into the generator state machine FIFO as X.
  */
 static uint32_t gen_level_from_duty(uint16_t period_count, uint8_t duty_percent) {
-    return pwm_generator_level_from_duty(period_count + 1u, duty_percent);
+    pwm_pio_duty_program_t program;
+
+    pwm_pio_program_duty(period_count, duty_percent, &program);
+    return program.match;
 }
 
 /**

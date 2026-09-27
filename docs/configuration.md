@@ -86,14 +86,16 @@ backend-local resources behind the profile mapping.
 
 ## Stable CLI Contract
 
-The host-facing commands remain the same regardless of which banks are locked:
+The host-facing commands remain the same regardless of which startup roles are
+running:
 
 - `info`, `version`, `get`, and `status` report device identity and realized
-  channel state.
-- `bank` locks one bank into a role, or reports all three banks' lock states.
+  channel state. `info` also reports whether the system-clock target was met.
+- `config` shows the running and target bank settings. `config set` changes
+  the target, and `config save` persists it. A reboot applies the target.
 - `set` applies to output-capable channels and returns `ERR unavailable` for
-  monitor-only, unlocked, or disabled channels.
-- `stop` applies the safe output reset behavior to all locked channels.
+  monitor channels.
+- `stop` applies the safe output reset behavior to configured generator channels.
 - `led` and `reboot` remain board-level commands.
 
 The CLI must not require the host to know which backend owns a logical channel.

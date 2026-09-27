@@ -293,11 +293,11 @@ sequenceDiagram
 
     C0->>WR: pwm_driver_init(config)
     WR->>WR: init pending mailbox slot
-    WR->>WR: init snapshot defaults (all banks unlocked)
+    WR->>WR: init snapshot defaults for the startup bank roles
     WR->>C1: multicore_launch_core1(core_main)
     C1->>C1: gpio_set_irq_callback(pwm_driver_monitor_gpio_irq)
     C1->>WR: pwm_ready = true
-    C1->>C1: mailbox loop + __wfe()
+    C1->>C1: mailbox loop with 1 ms wait
 ```
 
 All selected backends initialize during startup from the supplied configuration.
@@ -308,7 +308,7 @@ All selected backends initialize during startup from the supplied configuration.
 sequenceDiagram
     participant Main as Core 0 main
     participant WR as pwm_driver.c
-    participant CFG as channel_config.c
+    participant CFG as pwm_driver_config.c
     participant C1 as Core 1
     participant BE as selected backends
 
@@ -414,8 +414,7 @@ stateDiagram-v2
     PENDING --> ACTIVE: Core 1 claims command
     ACTIVE --> COMPLETE: Core 1 publishes result
     COMPLETE --> IDLE: Core 0 collects result
-    PENDING --> IDLE: rejected as busy
-    ACTIVE --> IDLE: timeout observed by Core 0
+    PENDING --> IDLE: Core 0 cancels an unclaimed command at the apply deadline
 ```
 
 The mailbox carries control mutations and their result status. It does not
@@ -433,7 +432,7 @@ are exposed through the versioned realized-state snapshot.
 5. Reply publication for the active Core 0 command.
 6. Shared-state publication.
 7. Readback through a versioned snapshot.
-8. Lazy backend initialization triggered by bank-lock mailbox commands.
+8. Backend initialization on Core 1 from the startup bank configuration.
 
 ### Logical Routing
 
@@ -812,7 +811,7 @@ If another write is already pending or executing on Core 1 when a caller reaches
 
 The public write layer also keeps a small Core 0 mutex around the write entry points so only one mailbox submission path can compete for the single-slot command record at a time.
 
-After admission, the caller waits synchronously for the Core 1 reply, but only up to the apply timeout. If Core 1 does not publish a reply in time, the wrapper returns `PWM_DRIVER_RESULT_TIMEOUT`. That timeout does not cancel the already admitted command, so higher layers must treat the final apply result as unknown until they read back state.
+After admission, the caller waits synchronously for the Core 1 reply, up to the apply timeout. If the command is still `PENDING` when that deadline expires, Core 0 cancels it and returns `PWM_DRIVER_RESULT_TIMEOUT`; the command will not be applied. If Core 1 has already moved the slot to `ACTIVE`, Core 0 keeps waiting and returns the published result. A stalled Core 1 heartbeat during that wait reboots the board.
 
 Restore-defaults uses the same mailbox path, but Core 1 now fans out through backend-native reset helpers rather than re-entering the normal per-channel public setter path.
 
@@ -829,7 +828,7 @@ I2C writes should continue to defer out of ISR context before they enter `device
 
 ## Startup Bank Configuration
 
-`pwm_driver_config_channels` is a runtime table owned by `channel_config.c` and is
+`pwm_driver_config_channels` is a runtime table owned by `pwm_driver_config.c` and is
 fully populated from `pwm_driver_config_t` before Core 1 starts. There is no
 bank-lock mailbox operation; one firmware image reaches all 8 bank-role
 combinations by selecting roles in the startup configuration.

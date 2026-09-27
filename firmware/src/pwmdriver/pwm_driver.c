@@ -5,6 +5,9 @@
 
 #include "pwm_driver.h"
 #include "pwm_driver_internal.h"
+#include "pwm_driver_mailbox.h"
+
+#include "board/system.h"
 
 #include "monitor/software_monitor.h"
 #include "generator/pio_generator.h"
@@ -75,14 +78,6 @@ typedef enum {
     PWM_DRIVER_OP_RESTORE_DEFAULTS, /**< Restore all logical channels to their shared default state. */
 } pwm_driver_op_t;
 
-/** @brief Mailbox lifecycle states for the one-slot Core 0/Core 1 command exchange. */
-typedef enum {
-    PWM_DRIVER_MAILBOX_IDLE = 0, /**< No command is pending or waiting for collection. */
-    PWM_DRIVER_MAILBOX_PENDING,  /**< Core 0 published a command that Core 1 has not claimed yet. */
-    PWM_DRIVER_MAILBOX_ACTIVE,   /**< Core 1 claimed the command and is applying it. */
-    PWM_DRIVER_MAILBOX_COMPLETE, /**< Core 1 published a reply for the last admitted command. */
-} pwm_driver_mailbox_state_t;
-
 /** @brief One in-flight cross-core mailbox command record. */
 typedef struct {
     pwm_driver_op_t op; /**< Operation kind carried across the mailbox. */
@@ -125,6 +120,16 @@ typedef struct {
     volatile uint64_t pulse_ref_us; /**< Cache timestamp paired with the published pulse counter. */
 } pwm_driver_readback_t;
 
+/** @brief Core 1 loop counter used to detect a stalled backend owner. */
+static volatile uint32_t pwm_core1_heartbeat;
+/** @brief Last Core 1 heartbeat observed by a Core 0 mailbox wait. */
+static uint32_t pwm_core1_heartbeat_seen;
+/** @brief True after Core 0 has sampled the Core 1 heartbeat once. */
+static bool pwm_core1_heartbeat_seen_valid;
+/** @brief Time of the last observed Core 1 heartbeat change. */
+static absolute_time_t pwm_core1_heartbeat_stamp;
+/** @brief Optional Core 0 callback invoked while a mailbox wait is spinning. */
+static void (*pwm_wait_hook)(void);
 /** @brief Critical section protecting mailbox request and reply records. */
 static critical_section_t pwm_reply_lock;
 /** @brief Core 0 serialization lock shared by the public control entry points. */
@@ -421,8 +426,28 @@ static void pwm_driver_process_mailbox(void) {
     } while (true);
 }
 
+/** @brief Return false when Core 1 has not advanced its loop counter within the apply timeout. */
+static bool pwm_driver_core1_heartbeat_ok(void) {
+    uint32_t heartbeat;
+
+    pwm_driver_memory_barrier();
+    heartbeat = pwm_core1_heartbeat;
+    if (!pwm_core1_heartbeat_seen_valid || heartbeat != pwm_core1_heartbeat_seen) {
+        pwm_core1_heartbeat_seen = heartbeat;
+        pwm_core1_heartbeat_seen_valid = true;
+        pwm_core1_heartbeat_stamp = get_absolute_time();
+        return true;
+    }
+
+    return absolute_time_diff_us(pwm_core1_heartbeat_stamp, get_absolute_time()) <
+           (int64_t)PWM_DRIVER_APPLY_TIMEOUT_MS * 1000;
+}
+
 /** @brief Core 1 main loop that owns backend initialization and mailbox processing. */
 static void pwm_driver_core_main(void) {
+    /* Required before Core 0 may call multicore_lockout_start_blocking() from config save. */
+    multicore_lockout_victim_init();
+
     /* Register the shared GPIO callback before backend initialization arms monitor pins. */
     gpio_set_irq_callback(pwm_driver_monitor_gpio_irq);
 
@@ -434,14 +459,16 @@ static void pwm_driver_core_main(void) {
     pwm_lifecycle = PWM_DRIVER_LIFECYCLE_READY;
 
     while (true) {
+        pwm_core1_heartbeat++;
+        pwm_driver_memory_barrier();
         pwm_driver_process_mailbox();
         pwm_driver_refresh_monitor_state();
-        if (pwm_driver_config_is_monitor()) {
-            sleep_us(1000u);
-        } else {
-            __wfe();
-        }
+        best_effort_wfe_or_timeout(make_timeout_time_us(1000));
     }
+}
+
+void pwm_driver_set_wait_hook(void (*hook)(void)) {
+    pwm_wait_hook = hook;
 }
 
 bool pwm_driver_init(const pwm_driver_config_t *config) {
@@ -512,38 +539,64 @@ pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd) {
     }
 
     critical_section_enter_blocking(&pwm_reply_lock);
-    if (pwm_mailbox.state == PWM_DRIVER_MAILBOX_PENDING || pwm_mailbox.state == PWM_DRIVER_MAILBOX_ACTIVE) {
+    if (!pwm_mailbox_admits_submit(pwm_mailbox.state)) {
         critical_section_exit(&pwm_reply_lock);
         return PWM_DRIVER_RESULT_BUSY;
     }
 
+    /* A completed reply left by a previous waiter is stale once a new command is admitted. */
+    pwm_mailbox.state = PWM_DRIVER_MAILBOX_IDLE;
     pwm_mailbox.cmd = *cmd;
     pwm_mailbox.state = PWM_DRIVER_MAILBOX_PENDING;
     critical_section_exit(&pwm_reply_lock);
 
     __sev();
     deadline = make_timeout_time_ms(PWM_DRIVER_APPLY_TIMEOUT_MS);
+    pwm_driver_memory_barrier();
+    pwm_core1_heartbeat_seen = pwm_core1_heartbeat;
+    pwm_core1_heartbeat_seen_valid = true;
+    pwm_core1_heartbeat_stamp = get_absolute_time();
 
     do {
+        bool timed_out = false;
+        bool cancelled = false;
+        pwm_mailbox_timeout_action_t action = PWM_MAILBOX_TIMEOUT_WAIT;
+
         critical_section_enter_blocking(&pwm_reply_lock);
-        reply = pwm_mailbox.reply;
-        bool reply_ready = pwm_mailbox.state == PWM_DRIVER_MAILBOX_COMPLETE;
-        if (reply_ready) {
+        if (pwm_mailbox.state == PWM_DRIVER_MAILBOX_COMPLETE) {
+            reply = pwm_mailbox.reply;
             pwm_mailbox.state = PWM_DRIVER_MAILBOX_IDLE;
-        }
-        critical_section_exit(&pwm_reply_lock);
-        if (reply_ready) {
-            break;
+            critical_section_exit(&pwm_reply_lock);
+            return reply.ok ? PWM_DRIVER_RESULT_OK : PWM_DRIVER_RESULT_APPLY_FAILED;
         }
 
-        if (time_reached(deadline)) {
+        timed_out = time_reached(deadline);
+        if (timed_out) {
+            action = pwm_mailbox_timeout_action(pwm_mailbox.state);
+            if (action == PWM_MAILBOX_TIMEOUT_CANCEL) {
+                pwm_mailbox.state = PWM_DRIVER_MAILBOX_IDLE;
+                cancelled = true;
+            }
+        }
+        critical_section_exit(&pwm_reply_lock);
+
+        /*
+         * A live Core 1 loop heartbeats about once per millisecond. No progress
+         * across the apply deadline means the backend owner is stuck.
+         */
+        if (timed_out && !pwm_driver_core1_heartbeat_ok()) {
+            system_reboot();
+        }
+        if (cancelled) {
             return PWM_DRIVER_RESULT_TIMEOUT;
         }
 
-        best_effort_wfe_or_timeout(deadline);
+        system_watchdog_kick();
+        if (pwm_wait_hook != NULL) {
+            pwm_wait_hook();
+        }
+        best_effort_wfe_or_timeout(make_timeout_time_us(1000));
     } while (true);
-
-    return reply.ok ? PWM_DRIVER_RESULT_OK : PWM_DRIVER_RESULT_APPLY_FAILED;
 }
 
 /** @copydoc pwm_driver_set */

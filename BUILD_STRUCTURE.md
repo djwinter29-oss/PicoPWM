@@ -8,16 +8,14 @@ All build artifacts are now consolidated under `firmware/build/` and are git-ign
 PicoPWM/
 ├── firmware/
 │   ├── build/                 # ← All builds here (git-ignored)
-│   │   ├── generator/
-│   │   ├── monitor/
-│   │   ├── pico/              # Board-specific
-│   │   ├── pico2/             # Board-specific
-│   │   └── custom/            # Custom profiles
+│   │   ├── pico/              # --board pico
+│   │   ├── pico2/             # --board pico2
+│   │   └── <profile>/         # --profile <name>, directory name only
 │   ├── src/
 │   └── CMakeLists.txt
-├── .gitignore                 # Ignores /firmware/build-*
+├── .gitignore                 # Ignores /firmware/build and /firmware/build-*
 └── tools/firmware/
-    └── build.sh               # Updated to support unified structure
+    └── build.sh
 ```
 
 ## Usage
@@ -33,9 +31,9 @@ PICO_SDK_PATH=/path/to/pico-sdk ./tools/firmware/build.sh --profile my-build
 ```
 
 Note: `--profile` here only names the output directory
-(`firmware/build/<name>`); channel roles (generator/monitor per bank) are no
-longer selected at build time, see
-[Firmware Configuration](docs/configuration.md#runtime-bank-locking).
+(`firmware/build/<name>`); channel roles (generator/monitor per bank) are
+selected in the startup configuration, see
+[Firmware Configuration](docs/configuration.md#startup-bank-configuration).
 
 ### Custom I2C Clock Speed
 The I2C slave is configured for **400 kHz by default**, which is backward-compatible with 100 kHz masters.

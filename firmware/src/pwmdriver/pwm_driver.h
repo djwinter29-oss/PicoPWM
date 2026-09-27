@@ -59,7 +59,7 @@ typedef enum {
     PWM_DRIVER_RESULT_BUSY,         /**< Another command was already pending or executing. */
     PWM_DRIVER_RESULT_INVALID,      /**< The caller supplied an invalid channel or value. */
     PWM_DRIVER_RESULT_UNAVAILABLE,  /**< The requested operation is not available in the current context. */
-    PWM_DRIVER_RESULT_TIMEOUT,      /**< Core 1 did not publish a reply before the command timeout. */
+    PWM_DRIVER_RESULT_TIMEOUT,      /**< The command was still unclaimed at the apply deadline and was cancelled. */
     PWM_DRIVER_RESULT_APPLY_FAILED, /**< The backend rejected the admitted request. */
 } pwm_driver_result_t;
 
@@ -77,6 +77,12 @@ typedef struct {
  * @return `true` when the configuration was accepted and Core 1 was launched.
  */
 bool pwm_driver_init(const pwm_driver_config_t *config);
+
+/**
+ * @brief Register a Core 0 callback invoked while a mailbox wait is spinning.
+ * @param hook Callback used to keep other Core 0 work moving, or `NULL` to clear it.
+ */
+void pwm_driver_set_wait_hook(void (*hook)(void));
 
 /**
  * @brief Return whether Core 1 started the PWM mailbox runtime.

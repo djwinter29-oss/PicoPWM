@@ -18,7 +18,7 @@ const char *device_api_device_name(void);
 const char *device_api_firmware_version(void);
 
 /** @brief Publish the running and target startup configurations to the device facade. */
-void device_api_config_init(const pwm_driver_config_t *running, const pwm_driver_config_t *target);
+bool device_api_config_init(const pwm_driver_config_t *running, const pwm_driver_config_t *target);
 
 /** @brief Return the target startup configuration. */
 bool device_api_config_get_target(pwm_driver_config_t *config);

@@ -112,9 +112,4 @@ bool pwm_driver_config_is_monitor(void);
 /** @brief Return a short name for one configured backend. */
 const char *pwm_driver_config_backend_name(pwm_driver_config_backend_t backend);
 
-/** @brief Populate all fixed banks from startup backend/role selections before Core 1 launches. */
-bool pwm_driver_config_configure(const pwm_driver_config_bank_backend_t backends[PWM_DRIVER_CONFIG_BANK_COUNT],
-                           const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]);
-
-
 #endif

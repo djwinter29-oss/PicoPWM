@@ -10,6 +10,11 @@
 
 #include <stdint.h>
 
+/** @brief Populate the fixed channel table before Core 1 launches. */
+bool pwm_driver_configure_table(
+	const pwm_driver_config_bank_backend_t backends[PWM_DRIVER_CONFIG_BANK_COUNT],
+	const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]);
+
 /**
  * @brief Accumulate additional pulses from one cached base count and elapsed time.
  * @param pulse_count Cached base pulse count.

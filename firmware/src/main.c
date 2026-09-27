@@ -43,8 +43,7 @@ int main(void) {
     // Configure and launch all three PWM banks before starting Core 1.
     pwm_driver_config_t pwm_config;
     pwm_driver_config_load_target(&pwm_config);
-    device_api_config_init(&pwm_config, &pwm_config);
-    if (!pwm_driver_init(&pwm_config)) {
+    if (!device_api_config_init(&pwm_config, &pwm_config) || !pwm_driver_init(&pwm_config)) {
         system_reboot();
     }
 

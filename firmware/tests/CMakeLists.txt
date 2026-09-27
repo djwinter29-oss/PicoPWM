@@ -44,6 +44,7 @@ add_test(NAME cli_channel_commands COMMAND cli_channel_commands_test)
 
 add_executable(pwm_driver_config_test
     pwm_driver_config_test.c
+    stubs/hardware/flash.c
     ${SOURCE_ROOT}/pwmdriver/pwm_driver_config.c
 )
 target_include_directories(pwm_driver_config_test PRIVATE

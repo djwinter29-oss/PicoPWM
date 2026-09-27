@@ -1,9 +1,35 @@
-#include "pwmdriver/pwm_driver_config.h"
+#include "pwmdriver/pwm_driver_internal.h"
+#include "hardware/flash.h"
 
 #include <assert.h>
 #include <string.h>
 
 int main(void) {
+    pwm_driver_config_t config;
+
+    test_flash_reset();
+
+    /* Invalid storage falls back to the conservative default. */
+    assert(!pwm_driver_config_load_target(&config));
+    assert(pwm_driver_config_validate_target(&config));
+    assert(config.i2c_address == 0x40u);
+
+    /* A second save becomes the newest slot and supersedes the first. */
+    pwm_driver_config_default(&config);
+    config.i2c_address = 0x41u;
+    assert(pwm_driver_config_save_target(&config));
+    config.i2c_address = 0x42u;
+    assert(pwm_driver_config_save_target(&config));
+    assert(pwm_driver_config_load_target(&config));
+    assert(config.i2c_address == 0x42u);
+
+    /* Corrupting the newest slot must preserve the previous valid target. */
+    test_flash[FLASH_SECTOR_SIZE] ^= 0x01u;
+    assert(pwm_driver_config_load_target(&config));
+    assert(config.i2c_address == 0x41u);
+
+    test_flash_reset();
+
     /* Startup roles populate the fixed channel table before the driver launches Core 1. */
 
     /* Configure all three banks at startup. */
@@ -17,7 +43,7 @@ int main(void) {
         PWM_DRIVER_CONFIG_BANK_BACKEND_PIO,
         PWM_DRIVER_CONFIG_BANK_BACKEND_SW,
     };
-    assert(pwm_driver_config_configure(backends, roles));
+    assert(pwm_driver_configure_table(backends, roles));
 
     {
         pwm_driver_config_bank_backend_t invalid_backends[PWM_DRIVER_CONFIG_BANK_COUNT] = {
@@ -25,13 +51,13 @@ int main(void) {
             PWM_DRIVER_CONFIG_BANK_BACKEND_PIO,
             PWM_DRIVER_CONFIG_BANK_BACKEND_SW,
         };
-        assert(!pwm_driver_config_configure(invalid_backends, roles));
+        assert(!pwm_driver_configure_table(invalid_backends, roles));
         invalid_backends[0] = PWM_DRIVER_CONFIG_BANK_BACKEND_HW;
         invalid_backends[1] = PWM_DRIVER_CONFIG_BANK_BACKEND_HW;
-        assert(!pwm_driver_config_configure(invalid_backends, roles));
+        assert(!pwm_driver_configure_table(invalid_backends, roles));
         invalid_backends[1] = PWM_DRIVER_CONFIG_BANK_BACKEND_PIO;
         invalid_backends[2] = PWM_DRIVER_CONFIG_BANK_BACKEND_HW;
-        assert(!pwm_driver_config_configure(invalid_backends, roles));
+        assert(!pwm_driver_configure_table(invalid_backends, roles));
     }
     {
         const pwm_driver_config_channel_t *profile = pwm_driver_config_get_channel(0u);

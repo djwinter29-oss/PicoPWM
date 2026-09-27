@@ -40,8 +40,14 @@ uint pwm_driver_get_logical_channel(pwm_driver_config_backend_t backend, uint ba
 }
 
 /** @brief Indicates whether Core 1 finished backend initialization. */
-static volatile bool pwm_ready = false;
-static volatile bool pwm_startup_error = false;
+typedef enum {
+    PWM_DRIVER_LIFECYCLE_RESET = 0,
+    PWM_DRIVER_LIFECYCLE_STARTING,
+    PWM_DRIVER_LIFECYCLE_READY,
+    PWM_DRIVER_LIFECYCLE_FAILED,
+} pwm_driver_lifecycle_t;
+
+static volatile pwm_driver_lifecycle_t pwm_lifecycle = PWM_DRIVER_LIFECYCLE_RESET;
 
 /** @brief Backend-local set operation signature used by the routing table. */
 typedef bool (*pwm_driver_backend_set_fn_t)(uint channel, uint32_t freq_hz, uint8_t duty);
@@ -414,12 +420,11 @@ static void pwm_driver_core_main(void) {
     gpio_set_irq_callback(pwm_driver_monitor_gpio_irq);
 
     if (!pwm_driver_initialize_backends()) {
-        pwm_startup_error = true;
-        pwm_ready = false;
+        pwm_lifecycle = PWM_DRIVER_LIFECYCLE_FAILED;
         return;
     }
 
-    pwm_ready = true;
+    pwm_lifecycle = PWM_DRIVER_LIFECYCLE_READY;
 
     while (true) {
         pwm_driver_refresh_monitor_state();
@@ -436,7 +441,7 @@ bool pwm_driver_init(const pwm_driver_config_t *config) {
     pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT];
     pwm_driver_config_bank_backend_t backends[PWM_DRIVER_CONFIG_BANK_COUNT];
 
-    if (config == NULL) {
+    if ((config == NULL) || (pwm_lifecycle != PWM_DRIVER_LIFECYCLE_RESET)) {
         return false;
     }
 
@@ -450,12 +455,11 @@ bool pwm_driver_init(const pwm_driver_config_t *config) {
     roles[PWM_DRIVER_CONFIG_BANK_A] = config->bank_a_role;
     roles[PWM_DRIVER_CONFIG_BANK_B] = config->bank_b_role;
     roles[PWM_DRIVER_CONFIG_BANK_C] = config->bank_c_role;
-    if (!pwm_driver_config_configure(backends, roles)) {
+    if (!pwm_driver_configure_table(backends, roles)) {
         return false;
     }
 
-    pwm_ready = false;
-    pwm_startup_error = false;
+    pwm_lifecycle = PWM_DRIVER_LIFECYCLE_STARTING;
     critical_section_init(&pwm_reply_lock);
     mutex_init(&control_api_lock);
     pwm_driver_cache_defaults();
@@ -468,11 +472,11 @@ bool pwm_driver_init(const pwm_driver_config_t *config) {
 
 /** @copydoc pwm_driver_is_ready */
 bool pwm_driver_is_ready(void) {
-    return pwm_ready;
+    return pwm_lifecycle == PWM_DRIVER_LIFECYCLE_READY;
 }
 
 bool pwm_driver_startup_failed(void) {
-    return pwm_startup_error;
+    return pwm_lifecycle == PWM_DRIVER_LIFECYCLE_FAILED;
 }
 
 /** @copydoc pwm_driver_submit_locked */
@@ -484,7 +488,7 @@ pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd) {
         return PWM_DRIVER_RESULT_UNAVAILABLE;
     }
 
-    if (!pwm_ready) {
+    if (pwm_lifecycle != PWM_DRIVER_LIFECYCLE_READY) {
         return PWM_DRIVER_RESULT_UNAVAILABLE;
     }
 

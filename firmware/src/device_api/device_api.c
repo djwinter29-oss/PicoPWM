@@ -16,10 +16,8 @@ const char *device_api_firmware_version(void) {
     return PICO_PWM_FIRMWARE_VERSION_STR;
 }
 
-void device_api_config_init(const pwm_driver_config_t *running, const pwm_driver_config_t *target) {
-    if ((running != NULL) && (target != NULL)) {
-        pwm_driver_config_init_state(running, target);
-    }
+bool device_api_config_init(const pwm_driver_config_t *running, const pwm_driver_config_t *target) {
+    return pwm_driver_config_init_state(running, target);
 }
 
 bool device_api_config_get_target(pwm_driver_config_t *config) {

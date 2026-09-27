@@ -34,7 +34,7 @@ typedef struct {
     uint32_t crc;
 } pwm_driver_config_record_t;
 
-static uint32_t pwm_driver_config_record_crc(const pwm_driver_config_record_t *record) {
+static uint32_t pwm_driver_config_record_checksum(const pwm_driver_config_record_t *record) {
     const uint8_t *bytes = (const uint8_t *)record;
     uint32_t hash = 2166136261u;
 
@@ -81,14 +81,14 @@ bool pwm_driver_config_load_target(pwm_driver_config_t *config) {
     pwm_driver_config_default(&candidate);
     const pwm_driver_config_record_t *first = (const pwm_driver_config_record_t *)(XIP_BASE + PWM_DRIVER_CONFIG_FLASH_OFFSET);
     const pwm_driver_config_record_t *second = (const pwm_driver_config_record_t *)(XIP_BASE + PWM_DRIVER_CONFIG_FLASH_OFFSET + FLASH_SECTOR_SIZE);
-    bool first_valid = first->magic == PWM_DRIVER_CONFIG_MAGIC && first->version == PWM_DRIVER_CONFIG_VERSION && first->crc == pwm_driver_config_record_crc(first);
-    bool second_valid = second->magic == PWM_DRIVER_CONFIG_MAGIC && second->version == PWM_DRIVER_CONFIG_VERSION && second->crc == pwm_driver_config_record_crc(second);
+    bool first_valid = first->magic == PWM_DRIVER_CONFIG_MAGIC && first->version == PWM_DRIVER_CONFIG_VERSION && first->crc == pwm_driver_config_record_checksum(first);
+    bool second_valid = second->magic == PWM_DRIVER_CONFIG_MAGIC && second->version == PWM_DRIVER_CONFIG_VERSION && second->crc == pwm_driver_config_record_checksum(second);
     if (!first_valid && !second_valid) {
         *config = candidate;
         return false;
     }
 
-    record = (first_valid && (!second_valid || first->generation >= second->generation)) ? first : second;
+    record = (first_valid && (!second_valid || (int32_t)(first->generation - second->generation) >= 0)) ? first : second;
 
     candidate.bank_a_backend = (pwm_driver_config_bank_backend_t)record->backends[PWM_DRIVER_CONFIG_BANK_A];
     candidate.bank_b_backend = (pwm_driver_config_bank_backend_t)record->backends[PWM_DRIVER_CONFIG_BANK_B];
@@ -126,11 +126,12 @@ bool pwm_driver_config_save_target(const pwm_driver_config_t *config) {
     record.i2c_address = config->i2c_address;
     first = (const pwm_driver_config_record_t *)(XIP_BASE + PWM_DRIVER_CONFIG_FLASH_OFFSET);
     second = (const pwm_driver_config_record_t *)(XIP_BASE + PWM_DRIVER_CONFIG_FLASH_OFFSET + FLASH_SECTOR_SIZE);
-    bool first_valid = first->magic == PWM_DRIVER_CONFIG_MAGIC && first->version == PWM_DRIVER_CONFIG_VERSION && first->crc == pwm_driver_config_record_crc(first);
-    bool second_valid = second->magic == PWM_DRIVER_CONFIG_MAGIC && second->version == PWM_DRIVER_CONFIG_VERSION && second->crc == pwm_driver_config_record_crc(second);
-    record.generation = (first_valid && second_valid) ? ((first->generation > second->generation) ? first->generation : second->generation) + 1u : (first_valid ? first->generation + 1u : second_valid ? second->generation + 1u : 1u);
-    record.crc = pwm_driver_config_record_crc(&record);
-    slot_offset = (first_valid && (!second_valid || first->generation >= second->generation)) ? PWM_DRIVER_CONFIG_FLASH_OFFSET + FLASH_SECTOR_SIZE : PWM_DRIVER_CONFIG_FLASH_OFFSET;
+    bool first_valid = first->magic == PWM_DRIVER_CONFIG_MAGIC && first->version == PWM_DRIVER_CONFIG_VERSION && first->crc == pwm_driver_config_record_checksum(first);
+    bool second_valid = second->magic == PWM_DRIVER_CONFIG_MAGIC && second->version == PWM_DRIVER_CONFIG_VERSION && second->crc == pwm_driver_config_record_checksum(second);
+    bool first_is_newer = first_valid && (!second_valid || (int32_t)(first->generation - second->generation) >= 0);
+    record.generation = first_valid && second_valid ? (first_is_newer ? first->generation : second->generation) + 1u : first_valid ? first->generation + 1u : second_valid ? second->generation + 1u : 1u;
+    record.crc = pwm_driver_config_record_checksum(&record);
+    slot_offset = first_is_newer ? PWM_DRIVER_CONFIG_FLASH_OFFSET + FLASH_SECTOR_SIZE : PWM_DRIVER_CONFIG_FLASH_OFFSET;
     memset(sector, 0xff, sizeof(sector));
     memcpy(sector, &record, sizeof(record));
     multicore_lockout_start_blocking();
@@ -140,11 +141,16 @@ bool pwm_driver_config_save_target(const pwm_driver_config_t *config) {
     return memcmp((const void *)(uintptr_t)(XIP_BASE + slot_offset), &record, sizeof(record)) == 0;
 }
 
-void pwm_driver_config_init_state(const pwm_driver_config_t *running, const pwm_driver_config_t *target) {
-    if ((running != NULL) && (target != NULL)) {
-        pwm_driver_config_running = *running;
-        pwm_driver_config_target = *target;
+bool pwm_driver_config_init_state(const pwm_driver_config_t *running, const pwm_driver_config_t *target) {
+    if ((running == NULL) || (target == NULL) ||
+        !pwm_driver_config_validate_target(running) ||
+        !pwm_driver_config_validate_target(target)) {
+        return false;
     }
+
+    pwm_driver_config_running = *running;
+    pwm_driver_config_target = *target;
+    return true;
 }
 
 bool pwm_driver_config_get_target(pwm_driver_config_t *config) {
@@ -187,11 +193,12 @@ bool pwm_driver_config_set_i2c_address(uint8_t address) {
  * @brief Runtime logical channel table.
  *
  * All channels start `DISABLED` at boot. Each bank's 8 channels are filled in
- * once by `pwm_driver_config_configure()` before Core 1 starts.
+ * once by `pwm_driver_configure_table()` before Core 1 starts.
  */
 static pwm_driver_config_channel_t pwm_driver_config_channels[PWM_DRIVER_CONFIG_CHANNEL_COUNT] = {
     [0 ... PWM_DRIVER_CONFIG_CHANNEL_COUNT - 1] = {.direction = PWM_DRIVER_CONFIG_DIRECTION_DISABLED},
 };
+static bool pwm_driver_config_table_configured = false;
 
 const pwm_driver_config_channel_t *pwm_driver_config_get_channel(uint channel) {
     if (channel >= PWM_DRIVER_CONFIG_CHANNEL_COUNT) {
@@ -387,9 +394,9 @@ static void pwm_driver_config_fill_bank(pwm_driver_config_bank_t bank, pwm_drive
     }
 }
 
-bool pwm_driver_config_configure(const pwm_driver_config_bank_backend_t backends[PWM_DRIVER_CONFIG_BANK_COUNT],
+bool pwm_driver_configure_table(const pwm_driver_config_bank_backend_t backends[PWM_DRIVER_CONFIG_BANK_COUNT],
                            const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]) {
-    if ((backends == NULL) || (roles == NULL)) {
+    if ((backends == NULL) || (roles == NULL) || pwm_driver_config_table_configured) {
         return false;
     }
 
@@ -410,5 +417,9 @@ bool pwm_driver_config_configure(const pwm_driver_config_bank_backend_t backends
         pwm_driver_config_fill_bank(bank, backends[bank], roles[bank]);
     }
 
-    return pwm_driver_config_validate();
+    if (!pwm_driver_config_validate()) {
+        return false;
+    }
+    pwm_driver_config_table_configured = true;
+    return true;
 }

@@ -6,17 +6,12 @@
 
 #define FLASH_SECTOR_SIZE 4096u
 #define PICO_FLASH_SIZE_BYTES (2u * 1024u * 1024u)
-#define XIP_BASE 0u
+#define TEST_FLASH_SIZE (2u * FLASH_SECTOR_SIZE)
+extern uint8_t test_flash[TEST_FLASH_SIZE];
+#define XIP_BASE ((uintptr_t)test_flash)
 
-static inline void flash_range_erase(uint32_t offset, size_t count) {
-    (void)offset;
-    (void)count;
-}
-
-static inline void flash_range_program(uint32_t offset, const uint8_t *data, size_t count) {
-    (void)offset;
-    (void)data;
-    (void)count;
-}
+void test_flash_reset(void);
+void flash_range_erase(uint32_t offset, size_t count);
+void flash_range_program(uint32_t offset, const uint8_t *data, size_t count);
 
 #endif

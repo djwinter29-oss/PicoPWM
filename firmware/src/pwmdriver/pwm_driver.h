@@ -41,8 +41,8 @@ bool pwm_driver_config_validate_target(const pwm_driver_config_t *config);
 bool pwm_driver_config_load_target(pwm_driver_config_t *config);
 /** @brief Persist a validated target configuration in flash. */
 bool pwm_driver_config_save_target(const pwm_driver_config_t *config);
-/** @brief Publish running and target configuration snapshots for transport status. */
-void pwm_driver_config_init_state(const pwm_driver_config_t *running, const pwm_driver_config_t *target);
+/** @brief Publish validated running and target configuration snapshots for transport status. */
+bool pwm_driver_config_init_state(const pwm_driver_config_t *running, const pwm_driver_config_t *target);
 /** @brief Copy the target configuration snapshot. */
 bool pwm_driver_config_get_target(pwm_driver_config_t *config);
 /** @brief Copy the immutable running configuration snapshot. */

@@ -69,6 +69,33 @@ jobs:
           path: firmware/build/tests-coverage-pr/coverage
           if-no-files-found: error
 
+  host-apps:
+    name: Python and .NET host tests
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Test Python host
+        working-directory: host/python
+        run: |
+          python3 -m pip install -e ".[test]"
+          python3 -m pytest
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Test .NET host
+        run: dotnet test host/dotnet/PicoPwm.sln --configuration Release
+
   firmware:
     name: Firmware (${{ matrix.board }})
     runs-on: ubuntu-24.04

@@ -120,7 +120,7 @@ Architecturally, `pwm_driver_set()` is an internal command-ingress API.
 - The wrapper returns `PWM_DRIVER_RESULT_BUSY` if the caller reaches the mailbox while another write is already pending or in progress.
 - The wrapper returns `PWM_DRIVER_RESULT_INVALID` for invalid channel or unsupported frequency requests.
 - The wrapper returns `PWM_DRIVER_RESULT_UNAVAILABLE` if Core 1 is not ready yet.
-- The wrapper returns `PWM_DRIVER_RESULT_TIMEOUT` if Core 1 does not publish a reply before the apply timeout. This timeout does not cancel the admitted command, so the final hardware outcome is unknown until the caller reads back state.
+- The wrapper returns `PWM_DRIVER_RESULT_TIMEOUT` if Core 1 does not publish a reply before the apply timeout. A command that is still unclaimed is cancelled and is not applied. A command Core 1 has already claimed keeps running; the caller must read back state for that outcome. If the reply arrives in the same timeout check, the wrapper returns that result instead of `TIMEOUT`.
 - The wrapper returns `PWM_DRIVER_RESULT_APPLY_FAILED` if Core 1 accepts the command but the backend rejects it.
 - `pwm_driver_restore_defaults()` uses the same mailbox path but applies one bulk restore-defaults command on Core 1 instead of 24 separate round trips.
 
@@ -812,7 +812,7 @@ If another write is already pending or executing on Core 1 when a caller reaches
 
 The public write layer also keeps a small Core 0 mutex around the write entry points so only one mailbox submission path can compete for the single-slot command record at a time.
 
-After admission, the caller waits synchronously for the Core 1 reply, but only up to the apply timeout. If Core 1 does not publish a reply in time, the wrapper returns `PWM_DRIVER_RESULT_TIMEOUT`. That timeout does not cancel the already admitted command, so higher layers must treat the final apply result as unknown until they read back state.
+After admission, the caller waits synchronously for the Core 1 reply, but only up to the apply timeout. If the slot is still pending when that deadline expires, Core 0 cancels it and returns `PWM_DRIVER_RESULT_TIMEOUT`; the cancelled command is not applied. If Core 1 has already claimed the command, the same timeout means the apply is in progress and a later submission waits until it finishes. A reply that lands in the timeout check is returned directly.
 
 Restore-defaults uses the same mailbox path, but Core 1 now fans out through backend-native reset helpers rather than re-entering the normal per-channel public setter path.
 

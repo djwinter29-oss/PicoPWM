@@ -14,6 +14,14 @@ int main(void) {
     assert(pwm_driver_config_validate_target(&config));
     assert(config.i2c_address == 0x40u);
 
+    /* Flash erase stays refused until Core 1 has armed the lockout victim. */
+    pwm_driver_config_default(&config);
+    config.i2c_address = 0x41u;
+    assert(!pwm_driver_config_lockout_victim_ready());
+    assert(!pwm_driver_config_save_target(&config));
+    pwm_driver_config_arm_lockout_victim();
+    assert(pwm_driver_config_lockout_victim_ready());
+
     /* A second save becomes the newest slot and supersedes the first. */
     pwm_driver_config_default(&config);
     config.i2c_address = 0x41u;

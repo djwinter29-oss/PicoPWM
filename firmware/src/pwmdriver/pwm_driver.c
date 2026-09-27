@@ -75,14 +75,6 @@ typedef enum {
     PWM_DRIVER_OP_RESTORE_DEFAULTS, /**< Restore all logical channels to their shared default state. */
 } pwm_driver_op_t;
 
-/** @brief Mailbox lifecycle states for the one-slot Core 0/Core 1 command exchange. */
-typedef enum {
-    PWM_DRIVER_MAILBOX_IDLE = 0, /**< No command is pending or waiting for collection. */
-    PWM_DRIVER_MAILBOX_PENDING,  /**< Core 0 published a command that Core 1 has not claimed yet. */
-    PWM_DRIVER_MAILBOX_ACTIVE,   /**< Core 1 claimed the command and is applying it. */
-    PWM_DRIVER_MAILBOX_COMPLETE, /**< Core 1 published a reply for the last admitted command. */
-} pwm_driver_mailbox_state_t;
-
 /** @brief One in-flight cross-core mailbox command record. */
 typedef struct {
     pwm_driver_op_t op; /**< Operation kind carried across the mailbox. */
@@ -178,7 +170,7 @@ static const pwm_driver_backend_t pwm_driver_backends[PWM_DRIVER_CONFIG_BACKEND_
             .set = hw_gen_set,
             .restore_defaults = hw_gen_restore_defaults,
             .get = NULL,
-            .finalize_readback = NULL,
+            .finalize_readback = hw_gen_finalize_readback,
         },
     [PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR] =
         {
@@ -423,6 +415,9 @@ static void pwm_driver_process_mailbox(void) {
 
 /** @brief Core 1 main loop that owns backend initialization and mailbox processing. */
 static void pwm_driver_core_main(void) {
+    /* Arm the flash lockout victim before READY, so config save cannot hang Core 0. */
+    pwm_driver_config_arm_lockout_victim();
+
     /* Register the shared GPIO callback before backend initialization arms monitor pins. */
     gpio_set_irq_callback(pwm_driver_monitor_gpio_irq);
 
@@ -537,6 +532,22 @@ pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd) {
         }
 
         if (time_reached(deadline)) {
+            pwm_driver_timeout_disposition_t disposition;
+
+            critical_section_enter_blocking(&pwm_reply_lock);
+            disposition = pwm_driver_timeout_disposition(pwm_mailbox.state);
+            if (disposition == PWM_DRIVER_TIMEOUT_CANCEL) {
+                pwm_mailbox.state = PWM_DRIVER_MAILBOX_IDLE;
+                critical_section_exit(&pwm_reply_lock);
+                return PWM_DRIVER_RESULT_TIMEOUT;
+            }
+            if (disposition == PWM_DRIVER_TIMEOUT_TAKE_REPLY) {
+                reply = pwm_mailbox.reply;
+                pwm_mailbox.state = PWM_DRIVER_MAILBOX_IDLE;
+                critical_section_exit(&pwm_reply_lock);
+                return reply.ok ? PWM_DRIVER_RESULT_OK : PWM_DRIVER_RESULT_APPLY_FAILED;
+            }
+            critical_section_exit(&pwm_reply_lock);
             return PWM_DRIVER_RESULT_TIMEOUT;
         }
 

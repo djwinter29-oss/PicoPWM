@@ -199,13 +199,13 @@ with their outputs off:
 |----------|-------|
 | Frequency | 0 Hz (off) |
 | Duty | 0% |
-| Pulse count | 0 |
+| Pulse count | 0 at power-on; `stop` does not clear it |
 
 No demo channels are configured. Use the USB CDC shell or I2C commands to set
 frequencies and duty cycles. Monitor banks report input state instead of using
 this output-default state.
 
-Use the `stop` command to reset all channels back to this state at any time. `pulse_count` continues accumulating from power-on.
+Use the `stop` command to drive generator outputs low again (`0 Hz`, `0%` duty). `pulse_count` continues accumulating from power-on.
 
 ---
 

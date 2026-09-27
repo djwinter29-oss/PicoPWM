@@ -163,7 +163,9 @@ bool board_commands_stop(void *context, int argc, const char *const *argv) {
         if (pwm_driver_config_is_monitor()) {
             return shell_write_line(COMMAND_SHELL, "OK monitor channels unchanged");
         }
-        return shell_write_line(COMMAND_SHELL, "OK all channels stopped and reset (freq=0, duty=50%)");
+        snprintf(line, sizeof(line), "OK all channels stopped and reset (freq=%u, duty=%u%%)",
+                 PWM_DRIVER_STOPPED_FREQ_HZ, (unsigned)PWM_DRIVER_STOPPED_DUTY_PERCENT);
+        return shell_write_line(COMMAND_SHELL, line);
     }
 
     snprintf(line, sizeof(line), "ERR stop %s", board_commands_result_text(result));

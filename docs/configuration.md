@@ -27,7 +27,10 @@ The target record contains a magic value, format version, generation number,
 backend/role/address values, and checksum. Two records occupy the final 8 KiB
 as alternating slots. The firmware link step rejects images that overlap this
 reserved area. A new record is written to the inactive slot, so power loss
-during a save preserves the previous valid target.
+during a save preserves the previous valid target. Core 1 arms the flash
+lockout victim before it reports ready. `config save` fails instead of erasing
+flash when that victim is not armed, so Core 0 cannot block forever inside the
+multicore lockout.
 
 Each bank is configured independently, so `2^3 = 8` role combinations are
 reachable in one firmware image. Backend-family choices are constrained:
@@ -90,10 +93,13 @@ The host-facing commands remain the same regardless of which banks are locked:
 
 - `info`, `version`, `get`, and `status` report device identity and realized
   channel state.
-- `bank` locks one bank into a role, or reports all three banks' lock states.
+- `config` reports the running and target bank settings. `config set` changes
+  one target bank, `config address` changes the target I2C address, and
+  `config save` persists the target. Saved settings apply on the next reboot.
 - `set` applies to output-capable channels and returns `ERR unavailable` for
   monitor-only, unlocked, or disabled channels.
-- `stop` applies the safe output reset behavior to all locked channels.
+- `stop` drives generator outputs low (`freq = 0 Hz`, `duty = 0%`) and does
+  not clear `pulse_count`. Monitor channels are left unchanged.
 - `led` and `reboot` remain board-level commands.
 
 The CLI must not require the host to know which backend owns a logical channel.

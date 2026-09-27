@@ -10,6 +10,36 @@
 
 #include <stdint.h>
 
+/** @brief One-slot mailbox lifecycle observed by the Core 0 timeout decision. */
+typedef enum {
+    PWM_DRIVER_MAILBOX_IDLE = 0, /**< No command is pending or waiting for collection. */
+    PWM_DRIVER_MAILBOX_PENDING,  /**< Core 0 published a command that Core 1 has not claimed yet. */
+    PWM_DRIVER_MAILBOX_ACTIVE,   /**< Core 1 claimed the command and is applying it. */
+    PWM_DRIVER_MAILBOX_COMPLETE, /**< Core 1 published a reply for the last admitted command. */
+} pwm_driver_mailbox_state_t;
+
+/** @brief What Core 0 should do when an admitted command reaches the apply timeout. */
+typedef enum {
+    PWM_DRIVER_TIMEOUT_CANCEL = 0, /**< The command is still unclaimed and must not be applied. */
+    PWM_DRIVER_TIMEOUT_TAKE_REPLY, /**< Core 1 already published a reply; return that result. */
+    PWM_DRIVER_TIMEOUT_IN_FLIGHT,  /**< Core 1 has claimed the command, so the apply cannot be cancelled. */
+} pwm_driver_timeout_disposition_t;
+
+/**
+ * @brief Decide how a timed-out mailbox command is retired.
+ * @param state Mailbox state observed while the reply lock is held.
+ * @return Cancel, take the published reply, or leave an in-flight apply running.
+ */
+static inline pwm_driver_timeout_disposition_t pwm_driver_timeout_disposition(pwm_driver_mailbox_state_t state) {
+    if (state == PWM_DRIVER_MAILBOX_PENDING) {
+        return PWM_DRIVER_TIMEOUT_CANCEL;
+    }
+    if (state == PWM_DRIVER_MAILBOX_COMPLETE) {
+        return PWM_DRIVER_TIMEOUT_TAKE_REPLY;
+    }
+    return PWM_DRIVER_TIMEOUT_IN_FLIGHT;
+}
+
 /** @brief Populate the fixed channel table before Core 1 launches. */
 bool pwm_driver_configure_table(const pwm_driver_config_bank_backend_t backends[PWM_DRIVER_CONFIG_BANK_COUNT],
                                 const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]);

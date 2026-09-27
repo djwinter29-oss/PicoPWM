@@ -21,7 +21,10 @@ before the pending command has been executed, it is rejected with
 `PWM_DRIVER_RESULT_BUSY` and is not queued. The master must retry the command
 after reading its status or after a short delay. This bounded single-slot policy
 prevents the ISR from overwriting an in-flight payload or consuming unbounded
-memory.
+memory. A command that finishes later does not replace a newer `BUSY` status
+for the same register, so a rejected or newly queued attempt stays visible
+until its own result is published.
+
 ## Global Register Map
 
 Every transaction starts with one register byte. A write transaction may add

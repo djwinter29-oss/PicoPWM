@@ -42,10 +42,8 @@ Implemented by `board_commands.*`.
 | `config set <a|b|c> <hw|pio|sw> <gen|mon>` | Change one target bank. | `config set a hw gen` |
 | `config save` | Persist target settings; reboot to apply. | `config save` |
 | `config address <7-bit>` | Change the target I2C address. | `config address 0x42` |
-| `bank` | Show each bank's lock state (unlocked/generator/monitor). | `bank` |
-| `bank <hw\|pio\|sw> <generator\|monitor>` | Lock one bank's role; one-shot until reboot. | `bank hw generator` |
 | `led <on\|off>` | Set the board LED state. | `led on` |
-| `stop` | Restore configured generator banks' safe defaults. | `stop` |
+| `stop` | Hold generator outputs low at 0 Hz and 0% duty. `pulse_count` is not cleared. | `stop` |
 | `reboot` | Reboot the board. | `reboot` |
 
 ### Shell Commands

@@ -41,6 +41,13 @@ bool pwm_driver_config_validate_target(const pwm_driver_config_t *config);
 bool pwm_driver_config_load_target(pwm_driver_config_t *config);
 /** @brief Persist a validated target configuration in flash. */
 bool pwm_driver_config_save_target(const pwm_driver_config_t *config);
+/**
+ * @brief Arm Core 1 as the flash-programming lockout victim.
+ * @note Core 1 must call this before Core 0 persists configuration. `config save` fails closed until it has.
+ */
+void pwm_driver_config_arm_lockout_victim(void);
+/** @brief Return whether Core 1 has armed the flash-programming lockout victim. */
+bool pwm_driver_config_lockout_victim_ready(void);
 /** @brief Publish validated running and target configuration snapshots for transport status. */
 bool pwm_driver_config_init_state(const pwm_driver_config_t *running, const pwm_driver_config_t *target);
 /** @brief Copy the target configuration snapshot. */
@@ -53,13 +60,19 @@ bool pwm_driver_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config
 /** @brief Update the target I2C address without changing the running address. */
 bool pwm_driver_config_set_i2c_address(uint8_t address);
 
+/** @brief Generator output frequency after power-on and after `stop`. */
+#define PWM_DRIVER_STOPPED_FREQ_HZ 0u
+/** @brief Generator duty after power-on and after `stop`. The pin is held low. */
+#define PWM_DRIVER_STOPPED_DUTY_PERCENT 0u
+
 /** @brief Result codes returned by shared PWM control operations. */
 typedef enum {
     PWM_DRIVER_RESULT_OK = 0,       /**< The request completed successfully. */
     PWM_DRIVER_RESULT_BUSY,         /**< Another command was already pending or executing. */
     PWM_DRIVER_RESULT_INVALID,      /**< The caller supplied an invalid channel or value. */
     PWM_DRIVER_RESULT_UNAVAILABLE,  /**< The requested operation is not available in the current context. */
-    PWM_DRIVER_RESULT_TIMEOUT,      /**< Core 1 did not publish a reply before the command timeout. */
+    PWM_DRIVER_RESULT_TIMEOUT,      /**< An unclaimed command was cancelled at the timeout, or Core 1 already
+                                         claimed it and has not finished. */
     PWM_DRIVER_RESULT_APPLY_FAILED, /**< The backend rejected the admitted request. */
 } pwm_driver_result_t;
 
@@ -67,8 +80,8 @@ typedef enum {
 typedef struct {
     uint32_t freq_hz;     /**< Realized output frequency in Hz. */
     uint8_t duty;         /**< Realized duty cycle in percent in the range `[0, 100]`. */
-    uint32_t pulse_count; /**< Monotonic generated-period count from power-on; the PIO backend reports this as an
-                             estimated period count rather than a hardware-counted edge total. */
+    uint32_t pulse_count; /**< Monotonic generated-period count from power-on. Hardware and PIO generators estimate
+                             this from elapsed time; `stop` does not clear it. */
 } pwm_driver_state_t;
 
 /**

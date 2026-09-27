@@ -3,6 +3,7 @@
 #include "config/i2c_config.h"
 #include "device_api/device_api.h"
 #include "i2c/i2c_control_map.h"
+#include "i2c/i2c_status.h"
 #include "pwmdriver/pwm_driver.h"
 #include "hardware/i2c.h"
 #include "hardware/gpio.h"
@@ -21,7 +22,7 @@ static volatile bool req_pending = false;
 static volatile uint8_t req_pending_reg = 0;
 static uint8_t req_pending_payload[I2C_REQ_BUF_SIZE - 1u];
 static volatile uint8_t req_pending_payload_len = 0;
-static volatile uint8_t last_status[UINT8_MAX + 1u];
+static volatile i2c_reg_status_t last_status[UINT8_MAX + 1u];
 
 static uint8_t resp_buf[RESP_BUF_SIZE];
 static uint8_t resp_len = 0;
@@ -29,7 +30,7 @@ static uint8_t resp_idx = 0;
 
 static void prepare_response(uint8_t reg) {
     resp_idx = 0;
-    if (!i2c_control_map_read_register(reg, last_status[reg], resp_buf, RESP_BUF_SIZE, &resp_len)) {
+    if (!i2c_control_map_read_register(reg, last_status[reg].status, resp_buf, RESP_BUF_SIZE, &resp_len)) {
         resp_buf[0] = (uint8_t)PWM_DRIVER_RESULT_INVALID;
         resp_len = 1u;
     }
@@ -52,7 +53,7 @@ static void capture_request_byte(uint8_t byte) {
         resp_len = 0u;
         resp_idx = 0u;
         if ((req_expected_len == 0u) || (req_expected_len > I2C_REQ_BUF_SIZE)) {
-            last_status[byte] = (uint8_t)PWM_DRIVER_RESULT_INVALID;
+            i2c_reg_status_set(&last_status[byte], (uint8_t)PWM_DRIVER_RESULT_INVALID);
             reset_request_capture();
             req_in_error = true;
             return;
@@ -60,7 +61,7 @@ static void capture_request_byte(uint8_t byte) {
     }
 
     if (req_len >= I2C_REQ_BUF_SIZE) {
-        last_status[req_buf[0]] = (uint8_t)PWM_DRIVER_RESULT_INVALID;
+        i2c_reg_status_set(&last_status[req_buf[0]], (uint8_t)PWM_DRIVER_RESULT_INVALID);
         reset_request_capture();
         return;
     }
@@ -74,9 +75,9 @@ static void capture_request_byte(uint8_t byte) {
                 req_pending_payload_len = (uint8_t)(req_expected_len - 1u);
                 memcpy((void *)req_pending_payload, &req_buf[1], req_pending_payload_len);
                 req_pending = true;
-                last_status[req_buf[0]] = (uint8_t)PWM_DRIVER_RESULT_BUSY;
+                i2c_reg_status_set(&last_status[req_buf[0]], (uint8_t)PWM_DRIVER_RESULT_BUSY);
             } else {
-                last_status[req_buf[0]] = (uint8_t)PWM_DRIVER_RESULT_BUSY;
+                i2c_reg_status_set(&last_status[req_buf[0]], (uint8_t)PWM_DRIVER_RESULT_BUSY);
             }
         }
 
@@ -88,42 +89,50 @@ static void capture_request_byte(uint8_t byte) {
 
 static void i2c_slave_isr(void) {
     i2c_hw_t *hw = i2c_get_hw(I2C_SLAVE_INST);
-    uint32_t status = hw->intr_stat;
 
-    // RX_FULL: received data from master (command byte).
-    if (status & I2C_IC_INTR_STAT_R_RX_FULL_BITS) {
-        uint8_t byte = (uint8_t)(hw->data_cmd & 0xFF);
-        capture_request_byte(byte);
-    }
+    /* Service every event observed during this IRQ. Do not write IC_CLR_INTR:
+     * that register clears events that arrived after the first status sample,
+     * including RX bytes that have not been copied out yet.
+     */
+    for (uint32_t guard = 0u; guard < 64u; ++guard) {
+        uint32_t status = hw->intr_stat;
 
-    // RD_REQ: master wants to read, provide the first byte.
-    if (status & I2C_IC_INTR_STAT_R_RD_REQ_BITS) {
-        if ((resp_len == 0u) && (req_len == 1u)) {
-            prepare_response(req_buf[0]);
+        if (status == 0u) {
+            return;
+        }
+
+        if (status & I2C_IC_INTR_STAT_R_RX_FULL_BITS) {
+            while (hw->rxflr != 0u) {
+                capture_request_byte((uint8_t)(hw->data_cmd & 0xFFu));
+            }
+        }
+
+        if (status & I2C_IC_INTR_STAT_R_RD_REQ_BITS) {
+            if ((resp_len == 0u) && (req_len == 1u)) {
+                prepare_response(req_buf[0]);
+                reset_request_capture();
+            }
+            if (resp_idx < resp_len) {
+                hw->data_cmd = resp_buf[resp_idx++];
+            } else {
+                hw->data_cmd = 0u;
+            }
+            (void)hw->clr_rd_req;
+        }
+
+        if ((status & I2C_IC_INTR_STAT_R_TX_EMPTY_BITS) && (hw->txflr < 16u)) {
+            if (resp_idx < resp_len) {
+                hw->data_cmd = resp_buf[resp_idx++];
+            } else {
+                hw->data_cmd = 0u;
+            }
+        }
+
+        if (status & I2C_IC_INTR_STAT_R_STOP_DET_BITS) {
+            (void)hw->clr_stop_det;
             reset_request_capture();
         }
-        if (resp_idx < resp_len) {
-            hw->data_cmd = resp_buf[resp_idx++];
-        } else {
-            hw->data_cmd = 0;
-        }
-        (void)hw->clr_rd_req;
     }
-
-    // TX_EMPTY: master is clocking out more bytes, provide the next byte.
-    if (status & I2C_IC_INTR_STAT_R_TX_EMPTY_BITS) {
-        if (resp_idx < resp_len) {
-            hw->data_cmd = resp_buf[resp_idx++];
-        }
-    }
-
-    if (status & I2C_IC_INTR_STAT_R_STOP_DET_BITS) {
-        (void)hw->clr_stop_det;
-        reset_request_capture();
-    }
-
-    // Clear all interrupts.
-    (void)hw->clr_intr;
 }
 
 void i2c_slave_init(uint8_t address) {
@@ -154,7 +163,8 @@ void i2c_slave_init(uint8_t address) {
     resp_len = 0u;
     resp_idx = 0u;
     for (uint16_t reg = 0u; reg <= UINT8_MAX; ++reg) {
-        last_status[reg] = (uint8_t)PWM_DRIVER_RESULT_OK;
+        last_status[reg].epoch = 0u;
+        last_status[reg].status = (uint8_t)PWM_DRIVER_RESULT_OK;
     }
 }
 
@@ -167,10 +177,16 @@ void i2c_slave_poll(void) {
         uint8_t reg = req_pending_reg;
         uint8_t payload[I2C_REQ_BUF_SIZE - 1u];
         uint8_t payload_len = req_pending_payload_len;
+        uint32_t epoch = last_status[reg].epoch;
+        uint8_t result;
 
         memcpy(payload, (const void *)req_pending_payload, payload_len);
-        // Clear pending before execute so ISR can queue the next write immediately.
+        /* Clear pending before execute so the ISR can queue the next write.
+         * The result is published only when that newer write has not already
+         * replaced this command's status epoch.
+         */
         req_pending = false;
-        last_status[reg] = (uint8_t)i2c_control_map_execute_write(reg, payload, payload_len);
+        result = (uint8_t)i2c_control_map_execute_write(reg, payload, payload_len);
+        i2c_reg_status_complete(&last_status[reg], epoch, result);
     }
 }

@@ -64,12 +64,23 @@ reboot
 Valid user-configurable 7-bit addresses: `0x08` to `0x77`; reserved I2C
 addresses are rejected.
 
-### Combining Clock Speed and Address
-```bash
-PICO_SDK_PATH=/path/to/pico-sdk cmake -S firmware -B firmware/build/gen-100k-addr-0x30 \
-  -DPICO_PWM_I2C_CLOCK_SPEED=100000 \
+### Build-time clock and runtime address
 
-cmake --build firmware/build/gen-100k-addr-0x30 --parallel
+I2C clock speed is selected when configuring the firmware. The slave address is
+not a CMake option; change it after flashing.
+
+```bash
+PICO_SDK_PATH=/path/to/pico-sdk cmake -S firmware -B firmware/build/i2c-100k \
+  -DPICO_PWM_I2C_CLOCK_SPEED=100000
+cmake --build firmware/build/i2c-100k --parallel
+```
+
+Then set the address from the CDC shell and reboot so the saved target is applied:
+
+```text
+config address 0x30
+config save
+reboot
 ```
 
 ## Git Ignore Rules

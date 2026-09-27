@@ -27,10 +27,10 @@ typedef struct {
     pwm_driver_config_bank_backend_t bank_a_backend; /**< Bank A backend family: HW or SW. */
     pwm_driver_config_bank_backend_t bank_b_backend; /**< Bank B backend family: PIO or SW. */
     pwm_driver_config_bank_backend_t bank_c_backend; /**< Bank C backend family: SW only. */
-    pwm_driver_bank_role_t bank_a_role; /**< Bank A role. */
-    pwm_driver_bank_role_t bank_b_role; /**< Bank B role. */
-    pwm_driver_bank_role_t bank_c_role; /**< Bank C role. */
-    uint8_t i2c_address; /**< Running/target 7-bit I2C address. */
+    pwm_driver_bank_role_t bank_a_role;              /**< Bank A role. */
+    pwm_driver_bank_role_t bank_b_role;              /**< Bank B role. */
+    pwm_driver_bank_role_t bank_c_role;              /**< Bank C role. */
+    uint8_t i2c_address;                             /**< Running/target 7-bit I2C address. */
 } pwm_driver_config_t;
 
 /** @brief Return the safe default startup configuration. */
@@ -55,19 +55,20 @@ bool pwm_driver_config_set_i2c_address(uint8_t address);
 
 /** @brief Result codes returned by shared PWM control operations. */
 typedef enum {
-    PWM_DRIVER_RESULT_OK = 0, /**< The request completed successfully. */
-    PWM_DRIVER_RESULT_BUSY, /**< Another command was already pending or executing. */
-    PWM_DRIVER_RESULT_INVALID, /**< The caller supplied an invalid channel or value. */
-    PWM_DRIVER_RESULT_UNAVAILABLE, /**< The requested operation is not available in the current context. */
-    PWM_DRIVER_RESULT_TIMEOUT, /**< Core 1 did not publish a reply before the command timeout. */
+    PWM_DRIVER_RESULT_OK = 0,       /**< The request completed successfully. */
+    PWM_DRIVER_RESULT_BUSY,         /**< Another command was already pending or executing. */
+    PWM_DRIVER_RESULT_INVALID,      /**< The caller supplied an invalid channel or value. */
+    PWM_DRIVER_RESULT_UNAVAILABLE,  /**< The requested operation is not available in the current context. */
+    PWM_DRIVER_RESULT_TIMEOUT,      /**< Core 1 did not publish a reply before the command timeout. */
     PWM_DRIVER_RESULT_APPLY_FAILED, /**< The backend rejected the admitted request. */
 } pwm_driver_result_t;
 
 /** @brief Realized logical state snapshot for one PWM channel. */
 typedef struct {
-    uint32_t freq_hz; /**< Realized output frequency in Hz. */
-    uint8_t duty; /**< Realized duty cycle in percent in the range `[0, 100]`. */
-    uint32_t pulse_count; /**< Monotonic generated-period count from power-on; the PIO backend reports this as an estimated period count rather than a hardware-counted edge total. */
+    uint32_t freq_hz;     /**< Realized output frequency in Hz. */
+    uint8_t duty;         /**< Realized duty cycle in percent in the range `[0, 100]`. */
+    uint32_t pulse_count; /**< Monotonic generated-period count from power-on; the PIO backend reports this as an
+                             estimated period count rather than a hardware-counted edge total. */
 } pwm_driver_state_t;
 
 /**

@@ -21,8 +21,8 @@
 /** @brief Sentinel duty returned when the hardware monitor cannot publish a sane sample. */
 #define HW_MON_UNSTABLE_DUTY 0u
 /** @brief Return whether one exported hardware-monitor state is the unstable sentinel. */
-#define HW_MON_IS_UNSTABLE(state_value) \
-	((state_value).freq_hz == HW_MON_UNSTABLE_FREQ_HZ && (state_value).duty == HW_MON_UNSTABLE_DUTY)
+#define HW_MON_IS_UNSTABLE(state_value)                                                                                \
+    ((state_value).freq_hz == HW_MON_UNSTABLE_FREQ_HZ && (state_value).duty == HW_MON_UNSTABLE_DUTY)
 
 /** @brief Initialize the standalone hardware monitor module and arm all hardware-channel input pins.
  *

@@ -43,31 +43,31 @@ typedef uint8_t pio_gen_mode_t;
 
 enum {
     PIO_GEN_MODE_DISABLED = 0, /**< Channel is stopped and driven low. */
-    PIO_GEN_MODE_PWM, /**< Channel is running the PIO PWM loop. */
-    PIO_GEN_MODE_STATIC_LOW, /**< Channel is configured for nonzero-frequency 0% duty. */
-    PIO_GEN_MODE_STATIC_HIGH, /**< Channel is configured for nonzero-frequency 100% duty. */
+    PIO_GEN_MODE_PWM,          /**< Channel is running the PIO PWM loop. */
+    PIO_GEN_MODE_STATIC_LOW,   /**< Channel is configured for nonzero-frequency 0% duty. */
+    PIO_GEN_MODE_STATIC_HIGH,  /**< Channel is configured for nonzero-frequency 100% duty. */
 };
 
 /** @brief Runtime ownership and realized state for one PIO generator channel. */
 typedef struct {
-    uint64_t pulse_ref_us; /**< Reference timestamp used to accumulate estimated pulse count. */
-    PIO pio; /**< Owning PIO block for the channel. */
-    uint32_t clkdiv_x256; /**< Quantized PIO clock divider in units of 1/256. */
-    uint32_t pulse_count; /**< Monotonic generated-period count accumulated at sync points. */
+    uint64_t pulse_ref_us;     /**< Reference timestamp used to accumulate estimated pulse count. */
+    PIO pio;                   /**< Owning PIO block for the channel. */
+    uint32_t clkdiv_x256;      /**< Quantized PIO clock divider in units of 1/256. */
+    uint32_t pulse_count;      /**< Monotonic generated-period count accumulated at sync points. */
     uint32_t realized_freq_hz; /**< Cached realized output frequency in Hz used for publication and pulse estimation. */
-    uint16_t period_count; /**< Current period loop count programmed into the PIO generator. */
-    uint8_t sm; /**< Owning state machine index within @ref pio. */
-    uint8_t duty_percent; /**< Realized PIO generator duty in percent. */
-    pio_gen_mode_t mode; /**< Current generator mode for the channel. */
+    uint16_t period_count;     /**< Current period loop count programmed into the PIO generator. */
+    uint8_t sm;                /**< Owning state machine index within @ref pio. */
+    uint8_t duty_percent;      /**< Realized PIO generator duty in percent. */
+    pio_gen_mode_t mode;       /**< Current generator mode for the channel. */
 } pio_gen_channel_t;
 
 /** @brief Fully resolved realized PIO channel target state used by the internal apply path. */
 typedef struct {
-    uint32_t clkdiv_x256; /**< Quantized PIO clock divider in units of 1/256 for PWM mode. */
+    uint32_t clkdiv_x256;      /**< Quantized PIO clock divider in units of 1/256 for PWM mode. */
     uint32_t realized_freq_hz; /**< Realized output frequency in Hz after the apply step. */
-    uint16_t period_count; /**< PIO loop count representing one PWM period in PWM mode. */
-    uint8_t duty_percent; /**< Realized output duty in percent. */
-    pio_gen_mode_t mode; /**< Resolved target output mode. */
+    uint16_t period_count;     /**< PIO loop count representing one PWM period in PWM mode. */
+    uint8_t duty_percent;      /**< Realized output duty in percent. */
+    pio_gen_mode_t mode;       /**< Resolved target output mode. */
 } pio_gen_realized_target_t;
 
 /** @brief Per-channel PIO generator runtime ownership table. */
@@ -86,7 +86,8 @@ static void gen_publish_state(uint channel);
 /** @brief Stop one PIO generator channel and drive its output to one static level. */
 static void gen_drive_level(uint channel, bool high);
 /** @brief Publish one coherent runtime mode snapshot after the hardware state is already applied. */
-static void gen_publish_mode_state(uint channel, pio_gen_mode_t mode, uint8_t duty_percent, uint16_t period_count, uint32_t clkdiv_x256, uint32_t realized_freq_hz);
+static void gen_publish_mode_state(uint channel, pio_gen_mode_t mode, uint8_t duty_percent, uint16_t period_count,
+                                   uint32_t clkdiv_x256, uint32_t realized_freq_hz);
 /** @brief Enable one PIO generator channel with the supplied realized timing. */
 static void gen_enable_channel(uint channel, uint16_t period_count, uint32_t clkdiv_x256, uint8_t duty_percent);
 
@@ -190,14 +191,8 @@ static void gen_apply_mode(uint channel, const pio_gen_realized_target_t *target
         gen_drive_level(channel, target->mode == PIO_GEN_MODE_STATIC_HIGH);
     }
 
-    gen_publish_mode_state(
-        channel,
-        target->mode,
-        target->duty_percent,
-        target->period_count,
-        target->clkdiv_x256,
-        target->realized_freq_hz
-    );
+    gen_publish_mode_state(channel, target->mode, target->duty_percent, target->period_count, target->clkdiv_x256,
+                           target->realized_freq_hz);
 }
 
 /** @brief Resolve one requested PIO update into the realized target consumed by the apply path. */
@@ -244,7 +239,8 @@ static bool gen_resolve_target(uint32_t freq_hz, uint8_t duty, pio_gen_realized_
 }
 
 /** @brief Publish one coherent runtime mode snapshot after the hardware state is already applied. */
-static void gen_publish_mode_state(uint channel, pio_gen_mode_t mode, uint8_t duty_percent, uint16_t period_count, uint32_t clkdiv_x256, uint32_t realized_freq_hz) {
+static void gen_publish_mode_state(uint channel, pio_gen_mode_t mode, uint8_t duty_percent, uint16_t period_count,
+                                   uint32_t clkdiv_x256, uint32_t realized_freq_hz) {
     pio_gen_channel_t *ctx = &pio_channels[channel];
 
     ctx->mode = mode;
@@ -266,7 +262,8 @@ static void gen_publish_state(uint channel) {
         .pulse_count = pio_channels[channel].pulse_count,
     };
 
-    pwm_driver_store_applied_state(pwm_driver_get_logical_channel(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR, channel), &state);
+    pwm_driver_store_applied_state(pwm_driver_get_logical_channel(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR, channel),
+                                   &state);
 }
 
 /**
@@ -279,15 +276,9 @@ static void gen_publish_state(uint channel) {
  * @param best_actual_hz Caller-owned best realized output frequency updated when this candidate wins.
  * @param best_error_hz Caller-owned best absolute frequency error updated when this candidate wins.
  */
-static void gen_consider_timing_candidate(
-    uint32_t freq_hz,
-    uint32_t sys_clk_hz,
-    uint16_t period_count,
-    uint16_t *best_period,
-    uint32_t *best_clkdiv_x256,
-    uint32_t *best_actual_hz,
-    uint32_t *best_error_hz
-) {
+static void gen_consider_timing_candidate(uint32_t freq_hz, uint32_t sys_clk_hz, uint16_t period_count,
+                                          uint16_t *best_period, uint32_t *best_clkdiv_x256, uint32_t *best_actual_hz,
+                                          uint32_t *best_error_hz) {
     uint32_t cycles_per_period = gen_cycles_per_period(period_count);
     uint64_t divider_denominator = (uint64_t)freq_hz * cycles_per_period;
     uint64_t clkdiv_x256;
@@ -352,36 +343,15 @@ static bool gen_find_timing(uint32_t freq_hz, uint16_t *period_count_out, uint32
     }
     candidate_period = (uint16_t)candidate_period_u32;
 
-    gen_consider_timing_candidate(
-        freq_hz,
-        sys_clk_hz,
-        candidate_period,
-        &best_candidate_period,
-        &best_candidate_clkdiv_x256,
-        &best_candidate_actual_hz,
-        &best_candidate_error_hz
-    );
+    gen_consider_timing_candidate(freq_hz, sys_clk_hz, candidate_period, &best_candidate_period,
+                                  &best_candidate_clkdiv_x256, &best_candidate_actual_hz, &best_candidate_error_hz);
     if (candidate_period > 1u) {
-        gen_consider_timing_candidate(
-            freq_hz,
-            sys_clk_hz,
-            (uint16_t)(candidate_period - 1u),
-            &best_candidate_period,
-            &best_candidate_clkdiv_x256,
-            &best_candidate_actual_hz,
-            &best_candidate_error_hz
-        );
+        gen_consider_timing_candidate(freq_hz, sys_clk_hz, (uint16_t)(candidate_period - 1u), &best_candidate_period,
+                                      &best_candidate_clkdiv_x256, &best_candidate_actual_hz, &best_candidate_error_hz);
     }
     if (candidate_period < 65535u) {
-        gen_consider_timing_candidate(
-            freq_hz,
-            sys_clk_hz,
-            (uint16_t)(candidate_period + 1u),
-            &best_candidate_period,
-            &best_candidate_clkdiv_x256,
-            &best_candidate_actual_hz,
-            &best_candidate_error_hz
-        );
+        gen_consider_timing_candidate(freq_hz, sys_clk_hz, (uint16_t)(candidate_period + 1u), &best_candidate_period,
+                                      &best_candidate_clkdiv_x256, &best_candidate_actual_hz, &best_candidate_error_hz);
     }
 
     if (best_candidate_actual_hz == 0u) {
@@ -488,12 +458,9 @@ bool pio_gen_init(void) {
         pio_channels[i].pulse_count = 0;
         pio_channels[i].pulse_ref_us = time_us_64();
 
-        generator_program_init(
-            pio_channels[i].pio,
-            pio_channels[i].sm,
-            pio_program_offsets[pio_index(pio_channels[i].pio)],
-            pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR, i)
-        );
+        generator_program_init(pio_channels[i].pio, pio_channels[i].sm,
+                               pio_program_offsets[pio_index(pio_channels[i].pio)],
+                               pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR, i));
         gen_drive_level(i, false);
     }
 
@@ -504,7 +471,8 @@ bool pio_gen_init(void) {
 bool pio_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     pio_gen_realized_target_t target;
 
-    if (channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR)) return false;
+    if (channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR))
+        return false;
 
     if (!gen_resolve_target(freq_hz, duty, &target)) {
         return false;
@@ -517,7 +485,8 @@ bool pio_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
 
 /** @copydoc pio_gen_restore_defaults */
 bool pio_gen_restore_defaults(void) {
-    for (uint channel = 0; channel < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR); channel++) {
+    for (uint channel = 0; channel < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR);
+         channel++) {
         pio_gen_realized_target_t target;
 
         hard_assert(gen_resolve_target(0u, 0u, &target));
@@ -529,9 +498,11 @@ bool pio_gen_restore_defaults(void) {
 
 /** @copydoc pio_gen_finalize_readback */
 void pio_gen_finalize_readback(uint channel, pwm_driver_state_t *state, uint64_t pulse_ref_us) {
-    if (channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR) || state == NULL || state->freq_hz == 0u) {
+    if (channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR) || state == NULL ||
+        state->freq_hz == 0u) {
         return;
     }
 
-    state->pulse_count = pwm_driver_accumulate_pulse_count(state->pulse_count, state->freq_hz, pulse_ref_us, time_us_64());
+    state->pulse_count =
+        pwm_driver_accumulate_pulse_count(state->pulse_count, state->freq_hz, pulse_ref_us, time_us_64());
 }

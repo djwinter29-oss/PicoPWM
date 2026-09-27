@@ -26,8 +26,8 @@ static inline uint32_t pwm_generator_level_from_duty(uint32_t period_counts, uin
 }
 
 /** @brief Resolve whether a software PWM request is a static output. */
-static inline bool pwm_generator_resolve_static(uint32_t frequency_hz, uint8_t duty_percent,
-                                                bool *high_out, uint8_t *realized_duty_out) {
+static inline bool pwm_generator_resolve_static(uint32_t frequency_hz, uint8_t duty_percent, bool *high_out,
+                                                uint8_t *realized_duty_out) {
     if (high_out == NULL || realized_duty_out == NULL ||
         (frequency_hz != 0u && duty_percent != 0u && duty_percent < 100u)) {
         return false;

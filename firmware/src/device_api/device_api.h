@@ -28,7 +28,7 @@ bool device_api_config_get_running(pwm_driver_config_t *config);
 
 /** @brief Change one target bank without affecting the running configuration. */
 bool device_api_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_backend_t backend,
-								pwm_driver_config_bank_role_t role);
+                                pwm_driver_config_bank_role_t role);
 
 /** @brief Change only the target I2C address; it applies after save and reboot. */
 bool device_api_config_set_i2c_address(uint8_t address);

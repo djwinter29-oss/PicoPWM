@@ -16,7 +16,8 @@ const char *device_api_firmware_version(void) {
 }
 
 bool device_api_config_get_running(pwm_driver_config_t *config) {
-    if (config == NULL) return false;
+    if (config == NULL)
+        return false;
     *config = (pwm_driver_config_t){
         .bank_a_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_HW,
         .bank_b_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_PIO,
@@ -53,8 +54,7 @@ uint8_t device_api_channel_count(void) {
 }
 
 bool device_api_get_channel(uint channel, pwm_driver_state_t *state) {
-    if ((channel >= PWM_DRIVER_CHANNEL_COUNT) || (state == NULL) ||
-        (channel >= 8u)) {
+    if ((channel >= PWM_DRIVER_CHANNEL_COUNT) || (state == NULL) || (channel >= 8u)) {
         return false;
     }
 
@@ -77,8 +77,7 @@ void led_set(bool enabled) {
     (void)enabled;
 }
 
-void system_reboot(void) {
-}
+void system_reboot(void) {}
 
 static void test_expected_lengths(void) {
     assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_INFO) == 1u);
@@ -108,7 +107,8 @@ static void test_read_responses(void) {
     assert(response[4] == 50u);
     assert(response[5] == 7u);
 
-    assert(i2c_control_map_read_register((uint8_t)(I2C_CONTROL_MAP_REG_CH_BASE + 8u), 0u, response, sizeof(response), &response_len));
+    assert(i2c_control_map_read_register((uint8_t)(I2C_CONTROL_MAP_REG_CH_BASE + 8u), 0u, response, sizeof(response),
+                                         &response_len));
     assert(response_len == 1u);
     assert(response[0] == PWM_DRIVER_RESULT_UNAVAILABLE);
     assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CONFIG, 0u, response, 13u, &response_len));
@@ -118,10 +118,13 @@ static void test_write_validation(void) {
     const uint8_t channel_payload[] = {0u, 0u, 0u, 0u, 50u};
     const uint8_t address_payload[] = {0x40u};
 
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_SET_BASE, channel_payload, 4u) == PWM_DRIVER_RESULT_INVALID);
+    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_SET_BASE, channel_payload, 4u) ==
+           PWM_DRIVER_RESULT_INVALID);
     assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_SET_BASE, channel_payload, 5u) == PWM_DRIVER_RESULT_OK);
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_ADDRESS, address_payload, 0u) == PWM_DRIVER_RESULT_INVALID);
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_ADDRESS, address_payload, 1u) == PWM_DRIVER_RESULT_OK);
+    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_ADDRESS, address_payload, 0u) ==
+           PWM_DRIVER_RESULT_INVALID);
+    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_ADDRESS, address_payload, 1u) ==
+           PWM_DRIVER_RESULT_OK);
 }
 
 int main(void) {

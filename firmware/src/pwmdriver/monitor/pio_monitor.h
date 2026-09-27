@@ -17,8 +17,8 @@
 /** @brief Sentinel duty returned when a captured pair is invalid. */
 #define PIO_MON_UNSTABLE_DUTY 0u
 /** @brief Return whether one exported monitor state represents the unstable-read sentinel. */
-#define PIO_MON_IS_UNSTABLE(state_value) \
-	((state_value).freq_hz == PIO_MON_UNSTABLE_FREQ_HZ && (state_value).duty == PIO_MON_UNSTABLE_DUTY)
+#define PIO_MON_IS_UNSTABLE(state_value)                                                                               \
+    ((state_value).freq_hz == PIO_MON_UNSTABLE_FREQ_HZ && (state_value).duty == PIO_MON_UNSTABLE_DUTY)
 
 /** @brief Initialize the standalone PIO monitor module and arm all PIO-bank input pins.
  *

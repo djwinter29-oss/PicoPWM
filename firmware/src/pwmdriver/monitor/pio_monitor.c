@@ -40,12 +40,12 @@
 
 /** @brief Runtime ownership and last sample state for one PIO monitor channel. */
 typedef struct {
-    pwm_driver_state_t state; /**< Latest exported monitor state. */
+    pwm_driver_state_t state;  /**< Latest exported monitor state. */
     uint64_t capture_start_us; /**< Timestamp when the current one-period capture started. */
-    bool sample_valid; /**< Indicates whether one full PWM period has been captured. */
-    bool capture_active; /**< Indicates that the PIO state machine is capturing one period. */
+    bool sample_valid;         /**< Indicates whether one full PWM period has been captured. */
+    bool capture_active;       /**< Indicates that the PIO state machine is capturing one period. */
 
-    PIO pio; /**< Owning PIO block for the channel. */
+    PIO pio;    /**< Owning PIO block for the channel. */
     uint8_t sm; /**< Owning state machine index within @ref pio. */
 } pio_mon_channel_t;
 
@@ -165,7 +165,8 @@ bool pio_mon_init(void) {
         pio_mon_program_offsets[1] = pio_add_program(pio1, &monitor_program);
     }
 
-    for (uint channel = 0; channel < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR); channel++) {
+    for (uint channel = 0; channel < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR);
+         channel++) {
         pio_mon_channel_t *ctx = &pio_mon_channels[channel];
         uint pin = pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR, channel);
         uint8_t program_offset;
@@ -187,7 +188,8 @@ bool pio_mon_init(void) {
 
 /** @copydoc pio_mon_get */
 bool pio_mon_get(uint channel, pwm_driver_state_t *state) {
-    if (!pio_mon_initialized || channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR) || state == NULL) {
+    if (!pio_mon_initialized ||
+        channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR) || state == NULL) {
         return false;
     }
 

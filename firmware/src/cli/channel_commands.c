@@ -39,8 +39,8 @@ static bool channel_commands_parse_int(const char *text, int *value_out) {
 
     errno = 0;
     parsed = strtol(text, &end, 10);
-    if ((errno == ERANGE) || (end == text) || (end == NULL) || (*end != '\0') ||
-        (parsed < INT_MIN) || (parsed > INT_MAX)) {
+    if ((errno == ERANGE) || (end == text) || (end == NULL) || (*end != '\0') || (parsed < INT_MIN) ||
+        (parsed > INT_MAX)) {
         return false;
     }
 
@@ -89,15 +89,8 @@ static bool channel_commands_write_status_row(shell_t *shell, int channel, const
     const pwm_driver_config_channel_t *profile = pwm_driver_config_get_channel((uint)channel);
     const char *type = (profile == NULL) ? "?" : pwm_driver_config_backend_name(profile->backend);
 
-    snprintf(line,
-             sizeof(line),
-             "%-2d  %-7s  %-3s  %9lu  %6u  %lu",
-             channel,
-             type,
-             state->freq_hz > 0u ? "ON" : "OFF",
-             (unsigned long)state->freq_hz,
-             (unsigned)state->duty,
-             (unsigned long)state->pulse_count);
+    snprintf(line, sizeof(line), "%-2d  %-7s  %-3s  %9lu  %6u  %lu", channel, type, state->freq_hz > 0u ? "ON" : "OFF",
+             (unsigned long)state->freq_hz, (unsigned)state->duty, (unsigned long)state->pulse_count);
     return shell_write_line(shell, line);
 }
 
@@ -129,13 +122,8 @@ bool channel_commands_get(void *context, int argc, const char *const *argv) {
     if (!device_api_get_channel((uint)channel, &state)) {
         return shell_write_line(COMMAND_SHELL, "ERR channel unavailable");
     }
-    snprintf(line,
-             sizeof(line),
-             "CH%d: freq=%lu Hz, duty=%u%%, pulses=%lu, enabled=%s",
-             channel,
-             (unsigned long)state.freq_hz,
-             (unsigned)state.duty,
-             (unsigned long)state.pulse_count,
+    snprintf(line, sizeof(line), "CH%d: freq=%lu Hz, duty=%u%%, pulses=%lu, enabled=%s", channel,
+             (unsigned long)state.freq_hz, (unsigned)state.duty, (unsigned long)state.pulse_count,
              state.freq_hz > 0u ? "yes" : "no");
     return shell_write_line(COMMAND_SHELL, line);
 }
@@ -163,7 +151,8 @@ bool channel_commands_set(void *context, int argc, const char *const *argv) {
 
     result = device_api_set_channel((uint)channel, frequency, duty);
     if (result == PWM_DRIVER_RESULT_OK) {
-        snprintf(line, sizeof(line), "OK CH%d freq=%lu Hz duty=%u%%", channel, (unsigned long)frequency, (unsigned)duty);
+        snprintf(line, sizeof(line), "OK CH%d freq=%lu Hz duty=%u%%", channel, (unsigned long)frequency,
+                 (unsigned)duty);
     } else {
         snprintf(line, sizeof(line), "ERR CH%d set %s", channel, channel_commands_result_text(result));
     }

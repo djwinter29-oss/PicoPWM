@@ -44,20 +44,20 @@ typedef pwm_gpio_mon_channel_t hw_mon_channel_t;
 /** @brief Per-channel standalone hardware monitor runtime ownership table. */
 static hw_mon_channel_t hw_mon_channels[HW_PWM_COUNT];
 /** @brief Direct GPIO-to-channel lookup table; `-1` marks unrelated GPIOs. */
-static int8_t hw_mon_gpio_to_channel[HW_MON_GPIO_COUNT] = {
-    [0 ... HW_MON_GPIO_COUNT - 1] = -1
-};
+static int8_t hw_mon_gpio_to_channel[HW_MON_GPIO_COUNT] = {[0 ... HW_MON_GPIO_COUNT - 1] = -1};
 /** @brief Guards the standalone hardware monitor lifecycle so init only runs once. */
 static bool hw_mon_initialized = false;
 
 /** @copydoc hw_mon_handle_gpio_irq */
 void hw_mon_handle_gpio_irq(uint gpio, uint32_t events) {
-    pwm_gpio_mon_handle_irq(gpio, events, HW_MON_GPIO_COUNT, hw_mon_gpio_to_channel, hw_mon_channels, HW_MON_UNSTABLE_FREQ_HZ, HW_MON_UNSTABLE_DUTY);
+    pwm_gpio_mon_handle_irq(gpio, events, HW_MON_GPIO_COUNT, hw_mon_gpio_to_channel, hw_mon_channels,
+                            HW_MON_UNSTABLE_FREQ_HZ, HW_MON_UNSTABLE_DUTY);
 }
 
 /** @brief Read one channel state under interrupt exclusion and apply static-level fallback when idle. */
 static bool hw_mon_read_channel(uint channel, pwm_driver_state_t *state) {
-    return pwm_gpio_mon_read_channel(channel, state, hw_mon_channels, HW_MON_STATIC_TIMEOUT_US, PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR);
+    return pwm_gpio_mon_read_channel(channel, state, hw_mon_channels, HW_MON_STATIC_TIMEOUT_US,
+                                     PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR);
 }
 
 /** @copydoc hw_mon_init */
@@ -66,7 +66,8 @@ bool hw_mon_init(void) {
         return true;
     }
 
-    for (uint channel = 0; channel < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR); channel++) {
+    for (uint channel = 0; channel < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR);
+         channel++) {
         uint pin = pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR, channel);
 
         pwm_gpio_mon_init_pin(pin);
@@ -83,7 +84,8 @@ bool hw_mon_init(void) {
 
 /** @copydoc hw_mon_get */
 bool hw_mon_get(uint channel, pwm_driver_state_t *state) {
-    if (!hw_mon_initialized || channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR) || state == NULL) {
+    if (!hw_mon_initialized ||
+        channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR) || state == NULL) {
         return false;
     }
 

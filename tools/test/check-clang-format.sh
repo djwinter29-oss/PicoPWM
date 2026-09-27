@@ -35,26 +35,45 @@ if [ -z "$BASE_SHA" ]; then
 fi
 
 if [ -n "$BASE_SHA" ] && git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
-    files=$(git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA" -- \
-        '*.c' '*.h')
+    diff_args="$BASE_SHA $HEAD_SHA"
 else
-    files=$(git ls-files -- '*.c' '*.h')
+    diff_args="${HEAD_SHA}^ $HEAD_SHA"
 fi
 
-if [ -z "$files" ]; then
+tmp_ranges=$(mktemp)
+trap 'rm -f "$tmp_ranges"' EXIT
+
+git diff --unified=0 --diff-filter=ACMR $diff_args -- '*.c' '*.h' |
+    awk '
+        /^diff --git / {
+            file = $4
+            sub(/^b\//, "", file)
+        }
+        /^@@ / {
+            range = $3
+            sub(/^\+/, "", range)
+            split(range, parts, ",")
+            start = parts[1]
+            count = parts[2]
+            if (count == "") count = 1
+            if (count > 0) print file, start, start + count - 1
+        }
+    ' >"$tmp_ranges"
+
+if [ ! -s "$tmp_ranges" ]; then
     echo "clang-format: no changed C files"
     exit 0
 fi
 
 status=0
-for file in $files; do
+while read -r file start end; do
     if [ ! -f "$file" ]; then
         continue
     fi
-    if ! clang-format --dry-run --Werror --style=file "$file"; then
-        echo "clang-format: $file is not formatted" >&2
+    if ! clang-format --dry-run --Werror --style=file --lines "$start:$end" "$file"; then
+        echo "clang-format: $file lines $start-$end are not formatted" >&2
         status=1
     fi
-done
+done <"$tmp_ranges"
 
 exit "$status"

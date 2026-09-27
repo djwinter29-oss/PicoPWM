@@ -27,8 +27,8 @@
 /** @brief Sentinel duty returned when the software monitor cannot publish a sane sample. */
 #define SW_MON_UNSTABLE_DUTY 0u
 /** @brief Return whether one exported software-monitor state is the unstable sentinel. */
-#define SW_MON_IS_UNSTABLE(state_value) \
-	((state_value).freq_hz == SW_MON_UNSTABLE_FREQ_HZ && (state_value).duty == SW_MON_UNSTABLE_DUTY)
+#define SW_MON_IS_UNSTABLE(state_value)                                                                                \
+    ((state_value).freq_hz == SW_MON_UNSTABLE_FREQ_HZ && (state_value).duty == SW_MON_UNSTABLE_DUTY)
 
 /** @brief Initialize the standalone software monitor module and arm all software-channel input pins.
  *

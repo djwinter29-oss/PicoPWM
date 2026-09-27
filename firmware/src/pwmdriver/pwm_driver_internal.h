@@ -11,9 +11,8 @@
 #include <stdint.h>
 
 /** @brief Populate the fixed channel table before Core 1 launches. */
-bool pwm_driver_configure_table(
-	const pwm_driver_config_bank_backend_t backends[PWM_DRIVER_CONFIG_BANK_COUNT],
-	const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]);
+bool pwm_driver_configure_table(const pwm_driver_config_bank_backend_t backends[PWM_DRIVER_CONFIG_BANK_COUNT],
+                                const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]);
 
 /**
  * @brief Accumulate additional pulses from one cached base count and elapsed time.
@@ -23,19 +22,20 @@ bool pwm_driver_configure_table(
  * @param now_us Current timestamp used for elapsed-time accumulation.
  * @return Saturating pulse count advanced by elapsed time at @p freq_hz.
  */
-static inline uint32_t pwm_driver_accumulate_pulse_count(uint32_t pulse_count, uint32_t freq_hz, uint64_t pulse_ref_us, uint64_t now_us) {
-	uint64_t total_pulses;
+static inline uint32_t pwm_driver_accumulate_pulse_count(uint32_t pulse_count, uint32_t freq_hz, uint64_t pulse_ref_us,
+                                                         uint64_t now_us) {
+    uint64_t total_pulses;
 
-	if (freq_hz == 0u || now_us <= pulse_ref_us) {
-		return pulse_count;
-	}
+    if (freq_hz == 0u || now_us <= pulse_ref_us) {
+        return pulse_count;
+    }
 
-	total_pulses = (uint64_t)pulse_count + ((now_us - pulse_ref_us) * (uint64_t)freq_hz) / 1000000u;
-	if (total_pulses > UINT32_MAX) {
-		return UINT32_MAX;
-	}
+    total_pulses = (uint64_t)pulse_count + ((now_us - pulse_ref_us) * (uint64_t)freq_hz) / 1000000u;
+    if (total_pulses > UINT32_MAX) {
+        return UINT32_MAX;
+    }
 
-	return (uint32_t)total_pulses;
+    return (uint32_t)total_pulses;
 }
 
 /** @brief Resolve a profile backend-local channel to its configured GPIO. */

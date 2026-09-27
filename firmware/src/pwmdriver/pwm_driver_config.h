@@ -27,35 +27,35 @@
 typedef enum {
     PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR = 0, /**< Hardware PWM slice output, fixed to the 8 slice-B GPIOs. */
     PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR, /**< PIO state-machine output, fixed to the 8 companion slice-A GPIOs. */
-    PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR, /**< Software timer-driven output on any unclaimed GPIO. */
-    PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR, /**< Hardware-bank GPIO edge-timestamp input measurement. */
-    PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR, /**< PIO-bank one-period input measurement. */
+    PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR,  /**< Software timer-driven output on any unclaimed GPIO. */
+    PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR,    /**< Hardware-bank GPIO edge-timestamp input measurement. */
+    PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR,   /**< PIO-bank one-period input measurement. */
     PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR, /**< Software GPIO edge-timestamp input measurement on any unclaimed GPIO. */
 } pwm_driver_config_backend_t;
 
 /** @brief Signal direction for one logical profile channel. */
 typedef enum {
     PWM_DRIVER_CONFIG_DIRECTION_OUTPUT = 0, /**< Channel generates a PWM output signal. */
-    PWM_DRIVER_CONFIG_DIRECTION_INPUT, /**< Channel measures a PWM input signal. */
-    PWM_DRIVER_CONFIG_DIRECTION_DISABLED, /**< Channel slot is unused by the selected profile. */
+    PWM_DRIVER_CONFIG_DIRECTION_INPUT,      /**< Channel measures a PWM input signal. */
+    PWM_DRIVER_CONFIG_DIRECTION_DISABLED,   /**< Channel slot is unused by the selected profile. */
 } pwm_driver_config_direction_t;
 
 /** @brief Bitmask of operations one logical profile channel supports. */
 typedef enum {
     PWM_DRIVER_CONFIG_CAP_READ = 1u << 0, /**< Channel state can be read back. */
-    PWM_DRIVER_CONFIG_CAP_SET = 1u << 1, /**< Channel frequency/duty can be written. */
+    PWM_DRIVER_CONFIG_CAP_SET = 1u << 1,  /**< Channel frequency/duty can be written. */
 } pwm_driver_config_capability_t;
 
 /** @brief Build-time descriptor for one logical PWM channel. */
 typedef struct {
-    pwm_driver_config_backend_t backend; /**< Backend implementation that owns this channel. */
+    pwm_driver_config_backend_t backend;     /**< Backend implementation that owns this channel. */
     pwm_driver_config_direction_t direction; /**< Output, input, or disabled. */
-    uint gpio; /**< Physical GPIO assigned to this channel; ignored when disabled. */
-    uint backend_channel; /**< Backend-local index this channel maps to. */
-    uint8_t capabilities; /**< Bitmask of `pwm_driver_config_capability_t` operations supported. */
-    uint32_t min_frequency_hz; /**< Minimum generated or measurable nonzero frequency. */
-    uint32_t max_frequency_hz; /**< Maximum generated or measurable frequency. */
-    uint32_t accuracy_ppm; /**< Expected generation or measurement accuracy in parts-per-million. */
+    uint gpio;                               /**< Physical GPIO assigned to this channel; ignored when disabled. */
+    uint backend_channel;                    /**< Backend-local index this channel maps to. */
+    uint8_t capabilities;                    /**< Bitmask of `pwm_driver_config_capability_t` operations supported. */
+    uint32_t min_frequency_hz;               /**< Minimum generated or measurable nonzero frequency. */
+    uint32_t max_frequency_hz;               /**< Maximum generated or measurable frequency. */
+    uint32_t accuracy_ppm;                   /**< Expected generation or measurement accuracy in parts-per-million. */
 } pwm_driver_config_channel_t;
 
 /** @brief Number of logical channels exposed by the selected profile. */
@@ -67,22 +67,22 @@ typedef struct {
 /** @brief Fixed physical bank; each bank owns 8 stable logical channels. */
 typedef enum {
     PWM_DRIVER_CONFIG_BANK_A = 0, /**< HW-capable GPIOs, logical channels 0..7. */
-    PWM_DRIVER_CONFIG_BANK_B, /**< PIO-capable GPIOs, logical channels 8..15. */
-    PWM_DRIVER_CONFIG_BANK_C, /**< Software-only GPIOs, logical channels 16..23. */
+    PWM_DRIVER_CONFIG_BANK_B,     /**< PIO-capable GPIOs, logical channels 8..15. */
+    PWM_DRIVER_CONFIG_BANK_C,     /**< Software-only GPIOs, logical channels 16..23. */
     PWM_DRIVER_CONFIG_BANK_COUNT, /**< Number of physical banks. */
 } pwm_driver_config_bank_t;
 
 /** @brief Requested role when locking one bank. */
 typedef enum {
     PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR = 0, /**< Bank channels become PWM outputs. */
-    PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR, /**< Bank channels become PWM inputs. */
+    PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR,       /**< Bank channels become PWM inputs. */
 } pwm_driver_config_bank_role_t;
 
 /** @brief Backend family selected for one fixed bank. */
 typedef enum {
     PWM_DRIVER_CONFIG_BANK_BACKEND_HW = 0, /**< Bank A hardware PWM backend. */
-    PWM_DRIVER_CONFIG_BANK_BACKEND_PIO, /**< Bank B PIO backend. */
-    PWM_DRIVER_CONFIG_BANK_BACKEND_SW, /**< Software backend; valid for all banks, required for Bank C. */
+    PWM_DRIVER_CONFIG_BANK_BACKEND_PIO,    /**< Bank B PIO backend. */
+    PWM_DRIVER_CONFIG_BANK_BACKEND_SW,     /**< Software backend; valid for all banks, required for Bank C. */
 } pwm_driver_config_bank_backend_t;
 
 /** @brief Return the active profile's logical channel table. */
@@ -92,7 +92,8 @@ const pwm_driver_config_channel_t *pwm_driver_config_get_channel(uint channel);
 bool pwm_driver_config_get_gpio(pwm_driver_config_backend_t backend, uint backend_channel, uint *gpio_out);
 
 /** @brief Return the logical channel for one backend-local channel. */
-bool pwm_driver_config_get_logical_channel(pwm_driver_config_backend_t backend, uint backend_channel, uint *channel_out);
+bool pwm_driver_config_get_logical_channel(pwm_driver_config_backend_t backend, uint backend_channel,
+                                           uint *channel_out);
 
 /** @brief Return the number of channels assigned to one backend. */
 uint pwm_driver_config_backend_channel_count(pwm_driver_config_backend_t backend);

@@ -66,28 +66,29 @@ typedef bool (*pwm_driver_backend_init_fn_t)(void);
 /** @brief Read one backend-local monitor sample. */
 typedef bool (*pwm_driver_backend_get_fn_t)(uint channel, pwm_driver_state_t *state);
 /** @brief Backend-owned readback finalization signature used by the routing table. */
-typedef void (*pwm_driver_backend_finalize_readback_fn_t)(uint channel, pwm_driver_state_t *state, uint64_t pulse_ref_us);
+typedef void (*pwm_driver_backend_finalize_readback_fn_t)(uint channel, pwm_driver_state_t *state,
+                                                          uint64_t pulse_ref_us);
 
 /** @brief Mailbox operation kinds owned by the cross-core PWM wrapper. */
 typedef enum {
-    PWM_DRIVER_OP_SET_CHANNEL = 0, /**< Apply one logical channel update. */
+    PWM_DRIVER_OP_SET_CHANNEL = 0,  /**< Apply one logical channel update. */
     PWM_DRIVER_OP_RESTORE_DEFAULTS, /**< Restore all logical channels to their shared default state. */
 } pwm_driver_op_t;
 
 /** @brief Mailbox lifecycle states for the one-slot Core 0/Core 1 command exchange. */
 typedef enum {
     PWM_DRIVER_MAILBOX_IDLE = 0, /**< No command is pending or waiting for collection. */
-    PWM_DRIVER_MAILBOX_PENDING, /**< Core 0 published a command that Core 1 has not claimed yet. */
-    PWM_DRIVER_MAILBOX_ACTIVE, /**< Core 1 claimed the command and is applying it. */
+    PWM_DRIVER_MAILBOX_PENDING,  /**< Core 0 published a command that Core 1 has not claimed yet. */
+    PWM_DRIVER_MAILBOX_ACTIVE,   /**< Core 1 claimed the command and is applying it. */
     PWM_DRIVER_MAILBOX_COMPLETE, /**< Core 1 published a reply for the last admitted command. */
 } pwm_driver_mailbox_state_t;
 
 /** @brief One in-flight cross-core mailbox command record. */
 typedef struct {
     pwm_driver_op_t op; /**< Operation kind carried across the mailbox. */
-    uint8_t channel; /**< Logical channel index for `SET_CHANNEL`. */
-    uint32_t freq_hz; /**< Requested frequency in Hz. */
-    uint8_t duty; /**< Requested duty for `SET_CHANNEL`. */
+    uint8_t channel;    /**< Logical channel index for `SET_CHANNEL`. */
+    uint32_t freq_hz;   /**< Requested frequency in Hz. */
+    uint8_t duty;       /**< Requested duty for `SET_CHANNEL`. */
 } pwm_driver_cmd_t;
 
 /** @brief Reply record published by Core 1 after one mailbox apply attempt. */
@@ -98,24 +99,24 @@ typedef struct {
 /** @brief One-slot Core 0/Core 1 mailbox state bundle. */
 typedef struct {
     volatile pwm_driver_mailbox_state_t state; /**< Current lifecycle state of the mailbox slot. */
-    pwm_driver_cmd_t cmd; /**< Last command published by Core 0 for Core 1 to claim. */
-    pwm_driver_reply_t reply; /**< Last reply published by Core 1 for Core 0 to collect. */
+    pwm_driver_cmd_t cmd;                      /**< Last command published by Core 0 for Core 1 to claim. */
+    pwm_driver_reply_t reply;                  /**< Last reply published by Core 1 for Core 0 to collect. */
 } pwm_driver_mailbox_t;
 
 /** @brief Routing descriptor for one logical backend bank. */
 typedef struct {
-    pwm_driver_backend_init_fn_t init; /**< Backend initialization callback. */
-    pwm_driver_backend_set_fn_t set; /**< Backend-local set callback. */
-    pwm_driver_backend_restore_defaults_fn_t restore_defaults; /**< Backend-native restore-defaults callback. */
-    pwm_driver_backend_get_fn_t get; /**< Optional backend-local read callback. */
+    pwm_driver_backend_init_fn_t init;                           /**< Backend initialization callback. */
+    pwm_driver_backend_set_fn_t set;                             /**< Backend-local set callback. */
+    pwm_driver_backend_restore_defaults_fn_t restore_defaults;   /**< Backend-native restore-defaults callback. */
+    pwm_driver_backend_get_fn_t get;                             /**< Optional backend-local read callback. */
     pwm_driver_backend_finalize_readback_fn_t finalize_readback; /**< Optional backend-owned readback finalizer. */
 } pwm_driver_backend_t;
 
 /** @brief Shared realized-state snapshot record for one logical channel. */
 typedef struct {
-    volatile uint32_t version; /**< Even/odd version counter used for lock-free snapshot reads. */
-    volatile uint32_t freq_hz; /**< Realized frequency in Hz. */
-    volatile uint8_t duty; /**< Realized duty in percent in the range `[0, 100]`. */
+    volatile uint32_t version;     /**< Even/odd version counter used for lock-free snapshot reads. */
+    volatile uint32_t freq_hz;     /**< Realized frequency in Hz. */
+    volatile uint8_t duty;         /**< Realized duty in percent in the range `[0, 100]`. */
     volatile uint32_t pulse_count; /**< Monotonic generated-period count from power-on. */
 } pwm_driver_shared_state_t;
 
@@ -139,48 +140,54 @@ static pwm_driver_mailbox_t pwm_mailbox = {
 
 /** @brief Backend routing table in logical-channel order. */
 static const pwm_driver_backend_t pwm_driver_backends[PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR + 1u] = {
-    [PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR] = {
-        .init = hw_mon_init,
-        .set = NULL,
-        .restore_defaults = NULL,
-        .get = hw_mon_get,
-        .finalize_readback = NULL,
-    },
-    [PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR] = {
-        .init = pio_mon_init,
-        .set = NULL,
-        .restore_defaults = NULL,
-        .get = pio_mon_get,
-        .finalize_readback = NULL,
-    },
-    [PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR] = {
-        .init = sw_mon_init,
-        .set = NULL,
-        .restore_defaults = NULL,
-        .get = sw_mon_get,
-        .finalize_readback = NULL,
-    },
-    [PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR] = {
-        .init = sw_gen_init,
-        .set = sw_gen_set,
-        .restore_defaults = sw_gen_restore_defaults,
-        .get = NULL,
-        .finalize_readback = NULL,
-    },
-    [PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR] = {
-        .init = hw_gen_init,
-        .set = hw_gen_set,
-        .restore_defaults = hw_gen_restore_defaults,
-        .get = NULL,
-        .finalize_readback = NULL,
-    },
-    [PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR] = {
-        .init = pio_gen_init,
-        .set = pio_gen_set,
-        .restore_defaults = pio_gen_restore_defaults,
-        .get = NULL,
-        .finalize_readback = pio_gen_finalize_readback,
-    },
+    [PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR] =
+        {
+            .init = hw_mon_init,
+            .set = NULL,
+            .restore_defaults = NULL,
+            .get = hw_mon_get,
+            .finalize_readback = NULL,
+        },
+    [PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR] =
+        {
+            .init = pio_mon_init,
+            .set = NULL,
+            .restore_defaults = NULL,
+            .get = pio_mon_get,
+            .finalize_readback = NULL,
+        },
+    [PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR] =
+        {
+            .init = sw_mon_init,
+            .set = NULL,
+            .restore_defaults = NULL,
+            .get = sw_mon_get,
+            .finalize_readback = NULL,
+        },
+    [PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR] =
+        {
+            .init = sw_gen_init,
+            .set = sw_gen_set,
+            .restore_defaults = sw_gen_restore_defaults,
+            .get = NULL,
+            .finalize_readback = NULL,
+        },
+    [PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR] =
+        {
+            .init = hw_gen_init,
+            .set = hw_gen_set,
+            .restore_defaults = hw_gen_restore_defaults,
+            .get = NULL,
+            .finalize_readback = NULL,
+        },
+    [PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR] =
+        {
+            .init = pio_gen_init,
+            .set = pio_gen_set,
+            .restore_defaults = pio_gen_restore_defaults,
+            .get = NULL,
+            .finalize_readback = pio_gen_finalize_readback,
+        },
 };
 
 /** @brief Dispatch the Pico SDK's single GPIO callback to all configured monitor banks. */
@@ -239,7 +246,8 @@ static pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd)
  * @param pulse_count Pulse counter value to publish.
  * @param pulse_ref_us Timestamp paired with @p pulse_count.
  */
-static void pwm_driver_cache_write_coherent(uint channel, const uint32_t *freq_hz, const uint8_t *duty, uint32_t pulse_count, uint64_t pulse_ref_us) {
+static void pwm_driver_cache_write_coherent(uint channel, const uint32_t *freq_hz, const uint8_t *duty,
+                                            uint32_t pulse_count, uint64_t pulse_ref_us) {
     pwm_state_cache[channel].version++;
     if (freq_hz != NULL) {
         pwm_state_cache[channel].freq_hz = *freq_hz;
@@ -261,7 +269,8 @@ static void pwm_driver_cache_write_coherent(uint channel, const uint32_t *freq_h
  * @param pulse_count Pulse counter value to publish.
  * @param pulse_ref_us Timestamp paired with @p pulse_count.
  */
-static void pwm_driver_cache_write(uint channel, const uint32_t *freq_hz, const uint8_t *duty, uint32_t pulse_count, uint64_t pulse_ref_us) {
+static void pwm_driver_cache_write(uint channel, const uint32_t *freq_hz, const uint8_t *duty, uint32_t pulse_count,
+                                   uint64_t pulse_ref_us) {
     uint32_t irq_state;
 
     if (channel >= PWM_DRIVER_CHANNEL_COUNT) {
@@ -399,11 +408,7 @@ static void pwm_driver_process_mailbox(void) {
 
         bool ok = false;
         if (cmd.op == PWM_DRIVER_OP_SET_CHANNEL) {
-            ok = pwm_driver_backend_set(
-                cmd.channel,
-                cmd.freq_hz,
-                cmd.duty
-            );
+            ok = pwm_driver_backend_set(cmd.channel, cmd.freq_hz, cmd.duty);
         } else if (cmd.op == PWM_DRIVER_OP_RESTORE_DEFAULTS) {
             ok = pwm_driver_backend_restore_defaults();
         }
@@ -498,8 +503,7 @@ pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd) {
         return PWM_DRIVER_RESULT_INVALID;
     }
 
-    if (cmd->op != PWM_DRIVER_OP_SET_CHANNEL &&
-        cmd->op != PWM_DRIVER_OP_RESTORE_DEFAULTS) {
+    if (cmd->op != PWM_DRIVER_OP_SET_CHANNEL && cmd->op != PWM_DRIVER_OP_RESTORE_DEFAULTS) {
         return PWM_DRIVER_RESULT_INVALID;
     }
 
@@ -563,7 +567,7 @@ pwm_driver_result_t pwm_driver_set(uint channel, uint32_t freq_hz, uint8_t duty)
     }
 
     mutex_enter_blocking(&control_api_lock);
-    result = pwm_driver_submit_locked(&(pwm_driver_cmd_t) {
+    result = pwm_driver_submit_locked(&(pwm_driver_cmd_t){
         .op = PWM_DRIVER_OP_SET_CHANNEL,
         .channel = (uint8_t)channel,
         .freq_hz = freq_hz,
@@ -584,8 +588,7 @@ bool pwm_driver_get(uint channel, pwm_driver_state_t *state) {
     uint64_t pulse_ref_us;
 
     profile = pwm_driver_config_get_channel(channel);
-    if ((profile == NULL) || (state == NULL) ||
-        ((profile->capabilities & PWM_DRIVER_CONFIG_CAP_READ) == 0u)) {
+    if ((profile == NULL) || (state == NULL) || ((profile->capabilities & PWM_DRIVER_CONFIG_CAP_READ) == 0u)) {
         return false;
     }
 
@@ -621,7 +624,7 @@ pwm_driver_result_t pwm_driver_restore_defaults(void) {
     pwm_driver_result_t status;
 
     mutex_enter_blocking(&control_api_lock);
-    status = pwm_driver_submit_locked(&(pwm_driver_cmd_t) {
+    status = pwm_driver_submit_locked(&(pwm_driver_cmd_t){
         .op = PWM_DRIVER_OP_RESTORE_DEFAULTS,
     });
     mutex_exit(&control_api_lock);

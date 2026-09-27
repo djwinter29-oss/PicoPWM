@@ -74,7 +74,8 @@ static void hw_gen_publish_state(uint channel, uint32_t realized_freq_hz, uint8_
         .pulse_count = 0u,
     };
 
-    pwm_driver_store_applied_state(pwm_driver_get_logical_channel(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR, channel), &state);
+    pwm_driver_store_applied_state(pwm_driver_get_logical_channel(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR, channel),
+                                   &state);
 }
 
 /** @brief Return the smallest supported hardware PWM frequency in Hz for the current clock plan. */
@@ -112,7 +113,8 @@ static uint32_t hw_gen_realized_freq_hz(uint32_t top, uint16_t div_x16) {
 }
 
 /** @brief Evaluate one timing candidate and keep it when it improves the current best error. */
-static void hw_gen_consider_timing(uint32_t freq_hz, uint32_t div_x16, uint32_t *best_top, uint16_t *best_div_x16, uint32_t *best_delta_hz) {
+static void hw_gen_consider_timing(uint32_t freq_hz, uint32_t div_x16, uint32_t *best_top, uint16_t *best_div_x16,
+                                   uint32_t *best_delta_hz) {
     uint64_t numerator = (uint64_t)hw_gen_sys_clk_hz * 16u;
     uint64_t denominator = (uint64_t)freq_hz * div_x16;
     uint64_t period_counts;
@@ -211,7 +213,6 @@ bool hw_gen_init(void) {
 
         pwm_set_chan_level(slice, ch, 0);
         pwm_set_enabled(slice, false);
-
     }
 
     return true;
@@ -224,8 +225,10 @@ bool hw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     uint32_t realized_freq_hz;
     uint8_t static_duty;
 
-    if (channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR)) return false;
-    if (duty > 100u) duty = 100u;
+    if (channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR))
+        return false;
+    if (duty > 100u)
+        duty = 100u;
 
     uint gpio = pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR, channel);
     uint slice = pwm_gpio_to_slice_num(gpio);
@@ -264,7 +267,8 @@ bool hw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
 
 /** @copydoc hw_gen_restore_defaults */
 bool hw_gen_restore_defaults(void) {
-    for (uint channel = 0; channel < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR); channel++) {
+    for (uint channel = 0; channel < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR);
+         channel++) {
         hw_gen_apply_static_state(channel, 0u);
     }
 

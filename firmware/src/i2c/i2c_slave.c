@@ -10,8 +10,8 @@
 #include <stdbool.h>
 #include <string.h>
 
-#define I2C_REQ_BUF_SIZE  9
-#define RESP_BUF_SIZE     64
+#define I2C_REQ_BUF_SIZE 9
+#define RESP_BUF_SIZE 64
 
 static uint8_t req_buf[I2C_REQ_BUF_SIZE];
 static uint8_t req_len = 0;
@@ -143,10 +143,8 @@ void i2c_slave_init(uint8_t address) {
 
     i2c_hw_t *hw = i2c_get_hw(I2C_SLAVE_INST);
     // Enable RX_FULL, RD_REQ and TX_EMPTY interrupts.
-    hw->intr_mask = I2C_IC_INTR_MASK_M_RX_FULL_BITS |
-                    I2C_IC_INTR_MASK_M_RD_REQ_BITS |
-                    I2C_IC_INTR_MASK_M_TX_EMPTY_BITS |
-                    I2C_IC_INTR_MASK_M_STOP_DET_BITS;
+    hw->intr_mask = I2C_IC_INTR_MASK_M_RX_FULL_BITS | I2C_IC_INTR_MASK_M_RD_REQ_BITS |
+                    I2C_IC_INTR_MASK_M_TX_EMPTY_BITS | I2C_IC_INTR_MASK_M_STOP_DET_BITS;
 
     int irq = I2C_SLAVE_IRQ;
     irq_set_exclusive_handler(irq, i2c_slave_isr);

@@ -137,12 +137,20 @@ def test_flask_dashboard_updates_channel_and_stops():
     response = http.get("/")
     assert response.status_code == 200
     assert b"Channel desk" in response.data
-    assert response.data.count(b"Apply") == 24
+    assert http.get("/css/style.css").status_code == 200
+    assert http.get("/js/app.js").status_code == 200
 
-    response = http.post("/channels/3", data={"frequency_hz": "800", "duty_percent": "25"})
-    assert response.status_code == 302
+    response = http.get("/api/channels")
+    assert response.status_code == 200
+    assert len(response.json) == 24
+    assert response.json[3]["frequencyHz"] == 1000
+    assert response.json[3]["pulseCount"] == 0
+
+    response = http.post("/api/channels/3", json={"frequencyHz": 800, "dutyPercent": 25})
+    assert response.status_code == 200
     assert backend.get_channel(3).frequency_hz == 800
+    assert response.json["frequencyHz"] == 800
 
-    response = http.post("/stop")
-    assert response.status_code == 302
+    response = http.post("/api/stop")
+    assert response.status_code == 200
     assert backend.stopped

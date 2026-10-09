@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Protocol
 
 
@@ -20,9 +20,13 @@ class ChannelState:
         return self.frequency_hz > 0
 
     def as_dict(self) -> dict[str, int | bool]:
-        value = asdict(self)
-        value["enabled"] = self.enabled
-        return value
+        return {
+            "channel": self.channel,
+            "frequencyHz": self.frequency_hz,
+            "dutyPercent": self.duty_percent,
+            "pulseCount": self.pulse_count,
+            "enabled": self.enabled,
+        }
 
 
 class PicoPWMBackend(Protocol):

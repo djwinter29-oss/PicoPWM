@@ -44,6 +44,20 @@ from picopwm.client import PicoPWMClient
 app = create_app(PicoPWMClient(my_backend))
 ```
 
+## Shared Web UI
+
+The shared frontend source is in `host/web/`: `index.html`, `css/style.css`,
+and `js/app.js`. Flask serves these files from the repository checkout, and the
+.NET host links them into its static web root. Keep UI changes in this source
+directory rather than copying them into either host project. The documented
+editable install keeps this shared directory available to the Python app.
+
+Both hosts expose the same JSON API:
+
+- `GET /api/channels`
+- `POST /api/channels/{channel}` with `{"frequencyHz": 1000, "dutyPercent": 50}`
+- `POST /api/stop`
+
 Run the focused tests from this directory with:
 
 ```sh

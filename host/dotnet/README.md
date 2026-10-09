@@ -16,18 +16,22 @@ Python host tool:
 
 ```sh
 cd host/dotnet
-PICOPWM_TRANSPORT=cdc PICOPWM_CDC_PORT=/dev/ttyACM0 dotnet run --project src/PicoPwm.Host
+PICOPWM_TRANSPORT=cdc PICOPWM_CDC_PORT=/dev/ttyACM0 dotnet run --project PicoPwm
 ```
 
 ## Run over I2C
 
 ```sh
 cd host/dotnet
-PICOPWM_TRANSPORT=i2c PICOPWM_I2C_BUS=1 PICOPWM_I2C_ADDRESS=0x40 dotnet run --project src/PicoPwm.Host
+PICOPWM_TRANSPORT=i2c PICOPWM_I2C_BUS=1 PICOPWM_I2C_ADDRESS=0x40 dotnet run --project PicoPwm
 ```
 
 Open <http://localhost:5000>. The dashboard reads the realized state of every
 channel, applies frequency and duty updates, and exposes stop-all.
+
+The dashboard's canonical HTML, CSS, and JavaScript live in `host/web/`; this
+project links those files into `wwwroot` during build and publish. Make frontend
+changes in the shared source, not in generated or linked output.
 
 The API endpoints are:
 

@@ -7,6 +7,11 @@ function showMessage(text, error = false) {
   messageElement.className = error ? "message error" : "message success";
 }
 
+async function responseError(response, fallback) {
+  const body = await response.json().catch(() => ({}));
+  return body.error ?? body.detail ?? fallback;
+}
+
 function channelCard(channel) {
   const card = document.createElement("article");
   card.className = `channel ${channel.enabled ? "active" : ""}`;
@@ -29,7 +34,7 @@ function channelCard(channel) {
       body: JSON.stringify({ frequencyHz: Number(form.get("frequencyHz")), dutyPercent: Number(form.get("dutyPercent")) })
     });
     if (!response.ok) {
-      showMessage((await response.json()).error ?? "Channel update failed", true);
+      showMessage(await responseError(response, "Channel update failed"), true);
       return;
     }
     showMessage(`Channel ${channel.channel} updated`);
@@ -41,7 +46,7 @@ function channelCard(channel) {
 async function refresh() {
   const response = await fetch("/api/channels");
   if (!response.ok) {
-    showMessage("Device unavailable", true);
+    showMessage(await responseError(response, "Device unavailable"), true);
     return;
   }
   const channels = await response.json();
@@ -53,7 +58,7 @@ async function refresh() {
 
 document.querySelector("#stop").addEventListener("click", async () => {
   const response = await fetch("/api/stop", { method: "POST" });
-  showMessage(response.ok ? "All channels stopped" : "Stop failed", !response.ok);
+  showMessage(response.ok ? "All channels stopped" : await responseError(response, "Stop failed"), !response.ok);
   await refresh();
 });
 

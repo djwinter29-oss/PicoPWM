@@ -23,9 +23,6 @@ picopwm-web = "picopwm.app:main"
 [tool.setuptools.packages.find]
 where = ["."]
 
-[tool.setuptools.package-data]
-picopwm = ["templates/*.html", "static/*.css"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

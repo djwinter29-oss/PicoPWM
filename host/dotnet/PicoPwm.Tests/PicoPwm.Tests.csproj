@@ -17,6 +17,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/PicoPwm.Host/PicoPwm.Host.csproj" />
+    <ProjectReference Include="../PicoPwm/PicoPwm.csproj" />
   </ItemGroup>
 </Project>

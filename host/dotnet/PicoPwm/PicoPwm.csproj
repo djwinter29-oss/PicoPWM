@@ -3,15 +3,16 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.IO.Ports" Version="8.0.0" />
+    <PackageReference Include="HidSharp" Version="2.6.4" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="../../web/**/*"
+    <Content Include="../../web/**/*" Exclude="../../web/tests/**"
              Link="wwwroot/%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />

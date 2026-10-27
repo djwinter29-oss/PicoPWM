@@ -211,10 +211,16 @@ Operation validity, checked before any side effect; every failure returns `INVAL
 
 `SAVE_CONFIG` erases and programs flash. The SDK flash routines do not pause the other core, so firmware locks out
 Core 1 for the erase and program (`multicore_lockout_start_blocking()`). While locked out, Core 1 services nothing:
-software-backend edges and monitor sampling are delayed, and the host should expect disturbed software generators and
-stale monitor readings for that interval. Hosts should stop software generators and avoid relying on monitors while a
-save is `PENDING`. The save runs from Core 0 polling, never from the USB callback. Core 0 is not locked out, so it keeps answering GETs
-with `PENDING` until the save finishes.
+software-backend edges and monitor sampling are delayed. Hosts stop software generators and ignore monitor readings
+before submitting `SAVE_CONFIG`, and resume once a final status arrives.
+
+The save runs from Core 0 polling, never from the USB callback. Core 0 is also blocked, because the flash routines
+disable XIP and Core 0 cannot run code from flash during the erase and program. For that interval Core 0 services
+nothing: HID GETs are delayed or NAKed, and CDC and I2C slave service stall as well, so CLI users and I2C masters see
+the same pause. `PENDING` is observable only before the save starts. Hosts allow a multi-second timeout for report 20
+during a save. A SET sent during the save is not dropped: it is delayed and accepted once the slot frees, so a host
+that times out reads the result and matches `transaction_id` before retrying, to avoid a double submit. The interval
+is not yet measured.
 
 ### GET_REPORT: Result (payload 12 bytes)
 
@@ -233,14 +239,16 @@ report 2 for configuration) to see the realized state.
 
 Serialize transactions per device. The rules are:
 
-- **Framing:** TinyUSB acknowledges a Feature SET before the application sees it, and its set-report callback cannot
-  stall, so firmware cannot refuse a SET at the USB level. A SET whose length is not 12 is dropped silently with no
-  state change. Hosts therefore confirm acceptance by matching `transaction_id`, not by the transfer succeeding; any
+- **Framing:** TinyUSB stalls a SET whose `wLength` exceeds `CFG_TUD_HID_EP_BUFSIZE` at the setup stage, before the
+  application sees it. Any other SET is acknowledged first and only then passed to the set-report callback, which
+  cannot stall. A SET that is not exactly 12 payload bytes (13 with the report ID) is therefore dropped silently with
+  no state change. Hosts confirm acceptance by matching `transaction_id`, not by the transfer succeeding; any
   `sendFeatureReport` error is also "not accepted". Every other failure is reported in the result as described below.
 - **Status per fault:** unsupported `version` is `UNSUPPORTED`; unknown `operation` is `UNSUPPORTED`; zero
   `transaction_id`, nonzero reserved or unused fields, and any operation-validity failure are `INVALID`.
-  A rejected request still echoes its `transaction_id` and `operation` so the host can match it.
-- **Before any request** a GET reads all zero.
+  A rejected request still echoes its `transaction_id` and the raw `operation` byte it received, even when that byte
+  is not a defined operation, so the host can match it.
+- **Before any request** a GET returns `version` `1` with every other field zero.
 - **Accepted requests:** a SET is accepted when it passes framing and the request slot is free. The set-report
   callback only copies the 12 bytes into a single pending-request slot; Core 0 validates and executes from there.
   A SET is accepted exactly when the next GET shows its `transaction_id`, because a dropped SET leaves no trace.
@@ -260,7 +268,7 @@ Serialize transactions per device. The rules are:
 - **Transaction IDs:** a host increments the ID per request and skips `0` on wrap. Firmware does not deduplicate, so a
   repeated ID is a new request.
 - **Result lifetime:** the result persists until the next accepted SET and is never consumed by a GET. A reset or
-  disconnect clears it to all zero, so hosts discard pending-transaction assumptions and reread identity.
+  disconnect clears it to that initial state, so hosts discard pending-transaction assumptions and reread identity.
 - **Stale results:** clients match `transaction_id` and `operation` and never treat a stale result as success.
 - **Concurrent interfaces:** CDC, I2C, and HID may all change channels or the target configuration; the last write
   wins, and the realized state in reports 10-12 and 2 is authoritative.
@@ -303,8 +311,53 @@ Hex blocks are payloads without the transport report ID. Assume channel 3 is a g
 **Report 10 with channel 0 at 1000 Hz and 50%, others stopped:**
 
 ```text
-01 E8 03 00 00 32 00 00 00 00 00 ... (zero-filled to 41 bytes)
+01 E8 03 00 00 32 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00
 ```
+
+## HID Report Descriptor
+
+The interface is one vendor-defined application collection with Feature reports only. Every item is a byte-wide
+`Feature (Data, Variable, Absolute)` item, so the descriptor declares exactly the payload lengths in the Report IDs
+table. The usage ID of each report equals its report ID, and there are no Input or Output items.
+
+| Item | Value |
+| ---- | ----- |
+| Usage page / usage | `0xFF00` / `0x01`, application collection |
+| Logical range | `0`-`255` (`Report Size` 8 bits) |
+| Report count per ID | `1` = 18, `2` = 21, `10`-`12` = 41, `20` = 12 |
+| Boot protocol | None (`HID_ITF_PROTOCOL_NONE`) |
+
+Reference descriptor (63 bytes):
+
+```text
+06 00 FF 09 01 A1 01 15 00 26 FF 00 75 08
+85 01 95 12 09 01 B1 02
+85 02 95 15 09 02 B1 02
+85 0A 95 29 09 0A B1 02
+85 0B 95 29 09 0B B1 02
+85 0C 95 29 09 0C B1 02
+85 14 95 0C 09 14 B1 02
+C0
+```
+
+TinyUSB requirements:
+
+- Enable one HID instance (`CFG_TUD_HID 1`) with `CFG_TUD_HID_EP_BUFSIZE` of at least 64. The largest report is 42
+  bytes including its ID, so no multi-packet Feature transfer is needed, and the buffer also bounds a SET.
+- `tud_hid_descriptor_report_cb()` returns the descriptor above. The HID interface descriptor still declares an
+  interrupt IN endpoint (the stack requires one); it is never used to send data, so its polling interval is not
+  significant, and `tud_hid_report()` is never called.
+- `tud_hid_get_report_cb()` fills the payload for the requested Feature report ID, without the report-ID byte, and
+  returns the exact payload length. TinyUSB prepends the report ID and sends at least that one byte, so returning `0`
+  does not stall: a GET for an unknown ID or a non-Feature type would look like a one-byte success. The descriptor
+  already limits valid IDs, so firmware returns `0` for them and hosts reject any report whose length is not the
+  declared one.
+- `tud_hid_set_report_cb()` handles only Feature report `20` of exactly 12 payload bytes and copies it into the
+  request slot; anything else is ignored.
+- The HID interface follows the CDC interface pair in the configuration descriptor, and the total configuration
+  length is updated with it.
 
 ## Host Polling and Validation
 
@@ -318,6 +371,9 @@ Hex blocks are payloads without the transport report ID. Assume channel 3 is a g
    `operation` match. Use one controlling host.
 5. After a successful mutation, read reports 10-12 (channels) or report 2 (configuration) to see the realized state.
 
+Always request the full declared report length: TinyUSB truncates a reply to the host's `wLength`, and a report
+shorter than declared is invalid. During `SAVE_CONFIG`, allow a multi-second timeout.
+
 Validate type, ID, exact length, version, reserved fields and bits, and enum values. A read error invalidates the
 affected live data only. Disconnect or restart discards caches and pending-transaction assumptions; rediscover
 identity and configuration.
@@ -325,18 +381,25 @@ identity and configuration.
 ## Design Validation
 
 Descriptor, firmware, Python, .NET, WebHID, and tests must agree on this contract. Writes to read-only reports must
-not execute actions or change state. The examples above are part of the shared host/firmware vectors, which cover at least one request per operation
-and per status.
+not execute actions or change state. The examples above are part of the shared host/firmware vectors, which cover at
+least one request per operation and per status.
 
 Required coverage:
 
-- Wrong-length SET is dropped with no state change and its `transaction_id` never appears in the result; bad version, unknown operation, zero `transaction_id`, and nonzero
-  reserved or unused fields return the status listed in Transaction Rules.
+- A SET that is not 12 payload bytes is dropped with no state change and its `transaction_id` never appears in the
+  result; a SET larger than the endpoint buffer is stalled by TinyUSB.
+- Bad version, unknown operation, zero `transaction_id`, and nonzero reserved or unused fields return the status
+  listed in Transaction Rules, echoing the raw `operation` byte.
+- A GET of an undeclared ID or a non-Feature type returns a short reply that hosts reject.
 - SET while the slot is busy is dropped and leaves the pending result intact; a SET right after a final status is
   accepted; a repeated `transaction_id` runs as a new request.
 - Per-operation validity failures return `INVALID` with no side effect.
 - Result clearing to zero after reset, and stale-result matching by `transaction_id` and `operation`.
-- `SAVE_CONFIG` stays `PENDING` while Core 0 answers GETs, then reports `OK` or `STORAGE_FAILED`.
+- `SAVE_CONFIG` reports `PENDING` before the save starts; GETs during the erase and program may be delayed, and the
+  final result is `OK` or `STORAGE_FAILED`.
+- A GET of report 20 before any request returns `version` `1` and all other fields zero.
 - Reports 10-12 with every channel populated, and failure of the whole report when any channel read fails.
 - Clock profile gating: unaccepted profiles, and overclock without the acknowledgement flag.
 - Identity checks: VID, PID, usage page, and `product_id`.
+- The report descriptor parses to exactly the Feature reports and lengths in the Report IDs table, with no Input or
+  Output items, and a GET of each report returns its declared length.

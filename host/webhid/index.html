@@ -4,17 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
-  <title>PicoUart Diagnostics | WebHID</title>
+  <title>PicoPWM Control | WebHID</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="css/dashboard.css?v=26">
-  <link rel="stylesheet" href="css/webhid.css?v=8">
-  <script type="module" src="js/app.mjs?v=16"></script>
+  <link rel="stylesheet" href="css/webhid.css?v=9">
+  <script type="module" src="js/app.mjs?v=1"></script>
 </head>
 <body>
   <header class="topbar">
-    <a class="wordmark" href="./" aria-label="PicoUart WebHID home">
-      <span class="mark">PU</span>
-      <span><strong>PicoUart</strong>
+    <a class="wordmark" href="./" aria-label="PicoPWM WebHID home">
+      <span class="mark">PW</span>
+      <span><strong>PicoPWM</strong>
         <span class="brand-meta"><small>WebHID</small>
           <span class="host-version" id="host-version" aria-label="Host application version">0.0.0-debug</span>
         </span>
@@ -29,135 +29,119 @@
 
   <main>
     <section class="page-heading">
-      <div><h1>Diagnostics</h1></div>
+      <div><h1>PWM control</h1></div>
     </section>
 
     <section aria-labelledby="identity-title">
       <div class="section-heading">
         <h2 id="identity-title">Device identity</h2>
-        <div class="actions" aria-label="Connection and board controls">
-          <button class="button button-led" id="toggle-led" type="button" data-state="unknown"
-            title="Board identification LED state unavailable" disabled>Board LED: --</button>
+        <div class="actions" aria-label="Connection controls">
           <button class="button button-secondary" id="connect" type="button" disabled>Connect</button>
         </div>
       </div>
       <div class="summary identity-summary">
         <div class="summary-item"><span>Product</span><strong id="product-name">--</strong></div>
-        <div class="summary-item"><span>Board model</span><strong id="board-model">--</strong></div>
+        <div class="summary-item"><span>MCU</span><strong id="mcu">--</strong></div>
         <div class="summary-item"><span>Serial / UID</span><strong id="serial">--</strong></div>
-        <div class="summary-item"><span>System clock</span><strong id="system-clock">--</strong></div>
-        <div class="summary-item"><span>Firmware RAM reserved / total</span><strong id="ram-usage">--</strong></div>
         <div class="summary-item"><span>Firmware version</span><strong id="firmware">--</strong></div>
+        <div class="summary-item"><span>System clock</span><strong id="system-clock">--</strong></div>
+        <div class="summary-item"><span>Target clock profile</span><strong id="clock-profile">--</strong></div>
       </div>
     </section>
 
     <section aria-labelledby="configuration-title">
       <div class="section-heading">
         <h2 id="configuration-title">Board configuration</h2>
-        <div class="actions" aria-label="Boot configuration controls">
-          <button class="button button-secondary" id="save-configuration" type="button" disabled>Save &amp; Reboot</button>
-          <button class="button button-secondary" id="reboot-board" type="button" hidden disabled>Reboot board</button>
+        <div class="actions" aria-label="Configuration controls">
+          <button class="button button-secondary" id="save-configuration" type="button" hidden disabled>Save target</button>
         </div>
       </div>
       <div class="summary configuration-summary">
-        <div class="summary-item">
-          <label for="configuration-profile">Stored boot profile</label>
-          <select id="configuration-profile" disabled></select>
-        </div>
-        <div class="summary-item"><span>Reset cause</span><strong id="reset-cause">--</strong></div>
-        <div class="summary-item"><span>UART TX ring capacity</span><strong id="uart-tx-capacity">--</strong></div>
-        <div class="summary-item"><span>UART RX ring capacity</span><strong id="uart-rx-capacity">--</strong></div>
-        <div class="summary-item"><span>CDC TX FIFO capacity</span><strong id="cdc-tx-capacity">--</strong></div>
-        <div class="summary-item"><span>CDC RX FIFO capacity</span><strong id="cdc-rx-capacity">--</strong></div>
+        <div class="summary-item"><span>I2C address</span><strong id="i2c-address">--</strong></div>
+        <div class="summary-item"><span>Target</span><strong id="target-state">--</strong></div>
       </div>
-      <details class="pin-map-disclosure">
-        <summary>Channel pin mapping</summary>
-        <div class="table-scroll static-map">
-          <table>
-            <caption>Configured GPIO assignments (GP numbers, not physical header pins)</caption>
-            <thead><tr><th scope="col">Channel</th><th scope="col">TX</th><th scope="col">RX</th>
-              <th scope="col">RTS</th><th scope="col">CTS</th></tr></thead>
-            <tbody id="board-pins"></tbody>
-          </table>
-        </div>
-      </details>
-      <p class="configuration-message" id="configuration-message" role="status" aria-live="polite"></p>
+      <div class="table-scroll static-map">
+        <table>
+          <caption>Bank roles; target values apply after save and restart</caption>
+          <thead><tr><th scope="col">Bank</th><th scope="col">Running</th><th scope="col">Target</th></tr></thead>
+          <tbody id="bank-config"></tbody>
+        </table>
+      </div>
+      <div class="control-grid">
+        <label>Bank
+          <select id="bank-index" disabled>
+            <option value="0">A</option><option value="1">B</option><option value="2">C</option>
+          </select>
+        </label>
+        <label>Backend
+          <select id="bank-backend" disabled>
+            <option value="0">HW</option><option value="1">PIO</option><option value="2">SW</option>
+          </select>
+        </label>
+        <label>Role
+          <select id="bank-role" disabled>
+            <option value="0">Generator</option><option value="1">Monitor</option>
+          </select>
+        </label>
+        <button class="button button-secondary" id="apply-bank" type="button" disabled>Set bank target</button>
+      </div>
+      <div class="control-grid">
+        <label>I2C address (0-127)
+          <input id="i2c-input" type="number" min="0" max="127" step="1" value="32" disabled>
+        </label>
+        <button class="button button-secondary" id="apply-i2c" type="button" disabled>Set I2C target</button>
+        <label>Clock profile
+          <select id="clock-profile-select" disabled></select>
+        </label>
+        <label class="inline-check"><input id="clock-ack" type="checkbox" disabled>
+          <span>Acknowledge overclock</span></label>
+        <button class="button button-secondary" id="apply-clock" type="button" disabled>Set clock target</button>
+      </div>
     </section>
 
-    <dialog class="confirmation-dialog" id="configuration-dialog" aria-labelledby="configuration-dialog-title">
-      <h2 id="configuration-dialog-title">Save clock profile?</h2>
-      <p id="configuration-dialog-profile"></p>
+    <dialog class="confirmation-dialog" id="save-dialog" aria-labelledby="save-dialog-title">
+      <h2 id="save-dialog-title">Save target configuration?</h2>
       <p class="configuration-warning">
-        Saving flashes the boot profile and automatically reboots the board. Close all CDC ports and stop external
-        UART traffic first.
+        Saving erases and programs flash. The board stops answering HID, CDC, and I2C for a moment, and software
+        generators and monitors are disturbed. Stop software generators first. The saved target applies only after you
+        restart the board; there is no reboot command.
       </p>
-      <label class="configuration-acknowledgement" id="configuration-acknowledgement" hidden>
-        <input id="configuration-unsafe-ack" type="checkbox" disabled>
+      <label class="configuration-acknowledgement" id="save-overclock" hidden>
+        <input id="save-unsafe-ack" type="checkbox" disabled>
         <span>I acknowledge the non-default overclock request.</span>
       </label>
       <div class="dialog-actions">
-        <button class="button button-cancel" id="cancel-configuration" type="button">Cancel</button>
-        <button class="button button-danger" id="confirm-configuration" type="button" disabled>Save &amp; Reboot</button>
+        <button class="button button-cancel" id="cancel-save" type="button">Cancel</button>
+        <button class="button button-danger" id="confirm-save" type="button" disabled>Save</button>
       </div>
     </dialog>
-
-    <dialog class="confirmation-dialog" id="reboot-dialog" aria-labelledby="reboot-dialog-title">
-      <h2 id="reboot-dialog-title">Reboot board?</h2>
-      <p class="configuration-warning">
-        This immediately restarts the board. Close all CDC ports and stop external UART traffic first.
-      </p>
-      <div class="dialog-actions">
-        <button class="button button-cancel" id="cancel-reboot" type="button">Cancel</button>
-        <button class="button button-danger" id="confirm-reboot" type="button">Reboot board</button>
-      </div>
-    </dialog>
-
-    <section aria-labelledby="runtime-title">
-      <div class="section-heading"><h2 id="runtime-title">Runtime status</h2></div>
-      <div class="summary runtime-summary">
-        <div class="summary-item"><span>Uptime</span><strong id="uptime">--</strong></div>
-        <div class="summary-item"><span>Board temperature</span><strong id="temperature">--</strong></div>
-        <div class="summary-item" title="Service-work wall time divided by the measurement window; not CPU utilization">
-          <span>Service load (Core 0 / Core 1)</span><strong id="service-load">--</strong>
-        </div>
-      </div>
-    </section>
 
     <section class="channels-section" aria-labelledby="channels-title">
       <div class="section-heading">
-        <h2 id="channels-title">UART channels <span>CDC0–CDC5</span></h2>
+        <h2 id="channels-title">Channels <span>0&ndash;23</span></h2>
+        <div class="actions"><button class="button button-danger" id="stop-all" type="button" disabled>Stop all</button></div>
+      </div>
+      <div class="control-grid">
+        <label>Channel
+          <input id="set-channel" type="number" min="0" max="23" step="1" value="0" disabled>
+        </label>
+        <label>Frequency (Hz)
+          <input id="set-freq" type="number" min="0" step="1" value="1000" disabled>
+        </label>
+        <label>Duty (%)
+          <input id="set-duty" type="number" min="0" max="100" step="1" value="50" disabled>
+        </label>
+        <button class="button button-secondary" id="apply-channel" type="button" disabled>Set channel</button>
       </div>
       <div class="table-scroll">
         <table>
-          <colgroup>
-            <col class="port-column"><col class="health-column"><col class="configuration-column">
-            <col class="throughput-column"><col class="diagnostics-column">
-          </colgroup>
-          <thead><tr>
-            <th scope="col">Port</th>
-            <th scope="col">Channel status</th>
-            <th scope="col">UART configuration</th>
-            <th class="traffic-heading" scope="col" title="Rates ramp from a one-second to a five-second average as samples arrive.">
-              <span class="traffic-heading-title">Traffic</span>
-              <span class="traffic-heading-groups" aria-hidden="true">UART &middot; USB</span>
-            </th>
-            <th scope="col">Diagnostics</th>
-          </tr></thead>
+          <thead><tr><th scope="col">Channel</th><th scope="col">Bank</th><th scope="col">Role</th>
+            <th scope="col">Frequency</th><th scope="col">Duty</th></tr></thead>
           <tbody id="channel-rows"></tbody>
         </table>
       </div>
+      <p class="configuration-message" id="read-errors" role="status" aria-live="polite" data-error="true"></p>
     </section>
-
-    <dialog class="diagnostics-dialog" id="channel-diagnostics-dialog" aria-labelledby="channel-diagnostics-title">
-      <div class="dialog-heading">
-        <h2 id="channel-diagnostics-title">Channel diagnostics</h2>
-        <button class="button button-secondary" id="close-channel-diagnostics" type="button">Close</button>
-      </div>
-      <div class="diagnostics-content" id="channel-diagnostics-content"></div>
-      <button class="button button-small" id="refresh-diagnostics" type="button" disabled>
-        Refresh diagnostics
-      </button>
-    </dialog>
 
     <footer class="status-line" role="status" aria-live="polite">
       <span class="status-mark" aria-hidden="true"></span>

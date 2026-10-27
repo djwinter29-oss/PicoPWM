@@ -1,3 +1,12 @@
+.control-grid { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 14px 0; }
+.control-grid label { display: grid; gap: 4px; color: var(--muted); font-size: 12px; }
+.control-grid input, .control-grid select {
+  min-height: 38px; padding: 0 10px; border: 1px solid #cbd6d3; border-radius: 7px;
+  background: var(--paper); color: var(--ink); font: 600 14px var(--mono);
+}
+.control-grid .inline-check { display: flex; align-items: center; gap: 6px; min-height: 38px; }
+.control-grid .inline-check input { min-height: 0; }
+td.number { font-family: var(--mono); text-align: right; }
 .status-line { align-items: baseline; }
 .status-line .status-mark { flex-shrink: 0; }
 #status-message { overflow-wrap: anywhere; }

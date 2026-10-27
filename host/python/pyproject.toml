@@ -9,13 +9,11 @@ description = "Python host tools and Flask management interface for PicoPWM"
 requires-python = ">=3.10"
 dependencies = [
     "Flask>=3.0,<4",
+    "hidapi>=0.14",
 ]
 
 [project.optional-dependencies]
-cdc = ["pyserial>=3.5"]
-i2c = ["smbus2>=0.5"]
 test = ["pytest>=8"]
-all = ["pyserial>=3.5", "smbus2>=0.5", "pytest>=8"]
 
 [project.scripts]
 picopwm-web = "picopwm.app:main"

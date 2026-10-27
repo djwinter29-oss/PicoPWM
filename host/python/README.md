@@ -1,62 +1,61 @@
 # PicoPWM host tools
 
-This package provides a transport-neutral Python client and a Flask management
-interface for the firmware's 24 logical channels. It supports both firmware
-control paths:
-
-- USB CDC at 115200 baud through `pyserial`
-- I2C bus 1, default address `0x40`, through `smbus2`
+This package provides a Python HID client and a Flask management interface for the
+firmware's 24 logical channels over the USB HID vendor interface (VID `0xCAFE`, PID
+`0x4012`; see [hid-report-reference.md](../../docs/design/usb/hid-report-reference.md)).
+The firmware does not implement HID yet, so no device is found until it does.
 
 ## Install
 
 From `host/python`:
 
 ```sh
-python -m pip install -e '.[all]'
+python -m pip install -e '.[test]'
 ```
 
-Install only the path you need with `.[cdc]` or `.[i2c]`.
+The `hidapi` dependency needs HID access to the board (on Linux, a udev rule or access
+to `/dev/hidraw*`). From the repository root, `tools/host/run-python.sh` creates a
+virtualenv, installs the host and runs it.
 
 ## Run the web interface
 
-USB CDC (Linux default `/dev/ttyACM0`):
-
 ```sh
-PICOPWM_TRANSPORT=cdc PICOPWM_CDC_PORT=/dev/ttyACM0 picopwm-web
+picopwm-web
 ```
 
-I2C:
+Set `PICOPWM_SERIAL` or `PICOPWM_DEVICE_PATH` when more than one board is attached, and
+`PICOPWM_HOST` / `PICOPWM_PORT` to change the listen address (default `127.0.0.1:5000`).
 
-```sh
-PICOPWM_TRANSPORT=i2c PICOPWM_I2C_BUS=1 PICOPWM_I2C_ADDRESS=0x40 picopwm-web
-```
+Open <http://127.0.0.1:5000>. The dashboard mirrors the WebHID page: identity, bank
+configuration, channel controls, clock profile, and save.
 
-Open <http://127.0.0.1:5000>. The dashboard reads all 24 channels, applies
-frequency and duty updates, and exposes the firmware stop-all operation.
-
-The Flask app factory accepts an injected `PicoPWMClient`, which keeps tests and
-lab integrations independent of physical hardware:
+The Flask app factory accepts an injected `PicoPwmHid`, which keeps tests independent of
+hardware:
 
 ```python
 from picopwm.app import create_app
-from picopwm.client import PicoPWMClient
+from picopwm.client import PicoPwmHid
 
-app = create_app(PicoPWMClient(my_backend))
+app = create_app(PicoPwmHid(lambda: my_device))
 ```
 
 ## Shared Web UI
 
-The shared frontend source is in `host/web/`: `index.html`, `css/style.css`,
-and `js/app.js`. Flask serves these files from the repository checkout, and the
-.NET host links them into its static web root. Keep UI changes in this source
-directory rather than copying them into either host project. The documented
-editable install keeps this shared directory available to the Python app.
+The shared frontend source is in `host/web/`: the WebHID-style `index.html`, `css/`, and
+`js/`. Flask serves these files from the repository checkout, and the .NET host links
+them into its static web root. Keep UI changes in this source directory rather than
+copying them into either host project. The documented editable install keeps this
+shared directory available to the Python app.
 
-Both hosts expose the same JSON API:
+Both hosts expose the same JSON API (snake_case, as in the HID report layouts):
 
-- `GET /api/channels`
-- `POST /api/channels/{channel}` with `{"frequencyHz": 1000, "dutyPercent": 50}`
-- `POST /api/stop`
+- `GET /api/status` returns identity, configuration, and all 24 channels, or
+  `connected: false` with an `error`
+- `POST /api/channels/{channel}` with `{"freq_hz": 1000, "duty": 50}`
+- `POST /api/stop`, `/api/bank`, `/api/i2c-address`, `/api/clock-profile`, `/api/save`
+
+Errors return 400 for invalid input and 409 when the device rejects a command or its
+outcome is unconfirmed.
 
 Run the focused tests from this directory with:
 

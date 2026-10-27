@@ -2,6 +2,9 @@
 set -eu
 
 for script in \
+    tools/host/run-dotnet.sh \
+    tools/host/run-python.sh \
+    tools/host/run-webhid.sh \
     tools/firmware/build.sh \
     tools/firmware/load.sh \
     tools/release/resolve-release-version.sh \

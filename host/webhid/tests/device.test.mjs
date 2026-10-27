@@ -1,176 +1,163 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { decodeBoardConfiguration, DEVICE_FILTER, identityDiscoveryLength, matchesPicoUart,
-  PicoUartWebHid } from "../js/device.mjs";
+import {
+  DEVICE_FILTER, OPERATION, PicoPwmWebHid, decodeActionResult, decodeBankStatus, decodeConfiguration,
+  decodeIdentity, encodeActionRequest, matchesPicoPwm,
+} from "../js/device.mjs";
 
-test("WebHID accepts valid distinct UART and CDC buffer capacities", () => {
-  const bytes = new Uint8Array(36);
-  bytes[0] = 1;
-  bytes[1] = 0;
-  bytes[2] = 6;
-  bytes.fill(255, 3, 27);
-  bytes[27] = 2;
-  const report = new DataView(bytes.buffer);
-  report.setUint16(28, 4096, true);
-  report.setUint16(30, 4096, true);
-  report.setUint16(32, 2048, true);
-  report.setUint16(34, 2048, true);
+const view = bytes => new DataView(Uint8Array.from(bytes).buffer);
 
-  assert.deepEqual(decodeBoardConfiguration(report, { hardware_channel_mask: 0x3f }).capacities,
-    { uart_tx: 4096, uart_rx: 4096, cdc_tx: 2048, cdc_rx: 2048 });
+const identityBytes = (overrides = {}) => {
+  const bytes = [1, 3, 0, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 2, 24, 3, 0x1f];
+  Object.entries(overrides).forEach(([index, value]) => { bytes[index] = value; });
+  return bytes;
+};
 
-  report.setUint16(32, 0, true);
-  assert.throws(() => decodeBoardConfiguration(report, { hardware_channel_mask: 0x3f }),
-    /Invalid board-configuration fields/);
+const configurationBytes = () => [
+  1, 0, 1, 2, 0, 0, 1, 0x20, 0, 1, 2, 0, 0, 1, 0x20, 1, 1, 0x80, 0xd1, 0xf0, 0x08,
+];
+
+test("identity decodes and rejects bad contracts", () => {
+  const identity = decodeIdentity(view(identityBytes()));
+  assert.equal(identity.mcu, "RP2350");
+  assert.equal(identity.firmware_version, "1.2.3");
+  assert.equal(identity.serial_number, "0102030405060708");
+  assert.ok(identity.can_save && identity.can_set_clock);
+  assert.throws(() => decodeIdentity(view(identityBytes({ 1: 1 }))), /product ID/);
+  assert.throws(() => decodeIdentity(view(identityBytes({ 15: 8 }))), /capabilities/);
+  assert.throws(() => decodeIdentity(view(identityBytes({ 16: 1 }))), /capabilities/);
+  assert.throws(() => decodeIdentity(view(identityBytes({ 16: 0 }))), /capabilities/);
+  assert.throws(() => decodeIdentity(view(identityBytes().slice(1))), /exactly 18/);
+  assert.deepEqual(decodeIdentity(view([1, ...identityBytes()])).mcu, "RP2350");
 });
 
-test("background refresh preserves connected controls and serializes user operations", async () => {
-  for (const operation of ["performAction", "refreshDiagnostics"]) {
-    const phases = [];
-    const client = new PicoUartWebHid(null, state => phases.push(state.phase));
-    client.device = {};
-    client.state.phase = "connected";
-    client.information = { capabilities: 0 };
-    client.state.dashboard.configuration = {};
-    client.state.dashboard.action_result = {};
-    let finishTelemetry;
-    let telemetryReads = 0;
-    client.readTelemetry = () => {
-      telemetryReads++;
-      return new Promise(resolve => { finishTelemetry = resolve; });
-    };
-    let diagnosticsRead = false;
-    client.readChannelDetails = async () => {
-      diagnosticsRead = true;
-      await client.refresh();
-    };
-    const refresh = client.refresh();
-    assert.equal(client.refreshInFlight, true);
-    assert.equal(client.state.phase, "connected");
-    assert.ok(phases.every(phase => phase === "connected"));
-    let settled = false;
-    const pending = (operation === "performAction" ? client.performAction(2) : client.refreshDiagnostics())
-      .then(() => { settled = true; }, error => {
-        assert.match(error.message, /Board-action capability unavailable/);
-        settled = true;
-      });
-    await Promise.resolve();
-    assert.equal(settled, false);
-    assert.equal(diagnosticsRead, false);
-    finishTelemetry();
-    await refresh;
-    await pending;
-    assert.equal(settled, true);
-    assert.equal(diagnosticsRead, operation === "refreshDiagnostics");
-    assert.equal(telemetryReads, 1);
-    assert.equal(client.state.phase, "connected");
-  }
+test("configuration decodes the documented example", () => {
+  const configuration = decodeConfiguration(view(configurationBytes()));
+  assert.equal(configuration.system_clock_hz, 150_000_000);
+  assert.equal(configuration.running.i2c_address, 0x20);
+  assert.deepEqual(configuration.running.backends, [0, 1, 2]);
+  assert.equal(configuration.clock_profile, 1);
+  const invalid = configurationBytes();
+  invalid[16] = 5;
+  assert.throws(() => decodeConfiguration(view(invalid)), /Invalid/);
 });
 
-test("identity report length comes from the protocol rather than OS collection metadata", () => {
-  assert.equal(identityDiscoveryLength(), 27);
+test("bank status decodes eight channels and validates duty", () => {
+  const bytes = [1];
+  for (let index = 0; index < 8; index++) bytes.push(...[100 + index, 0, 0, 0], 50);
+  const entries = decodeBankStatus(view(bytes), 11);
+  assert.equal(entries.length, 8);
+  assert.deepEqual(entries[0], { channel: 8, freq_hz: 100, duty: 50 });
+  assert.equal(entries[7].channel, 15);
+  bytes[5] = 101;
+  assert.throws(() => decodeBankStatus(view(bytes), 11), /duty/);
+  assert.throws(() => decodeBankStatus(view(bytes.slice(1)), 11), /exactly 41/);
 });
 
-test("WebHID strips the leading Report ID from Windows Feature responses", async () => {
-  const client = new PicoUartWebHid(null);
-  const report = Uint8Array.from([1, 1, 1, 0, ...Array(24).fill(0)]);
-  client.device = { receiveFeatureReport: async () => new DataView(report.buffer) };
-  const payload = await client.readFeature(1, 27);
-  assert.equal(payload.byteLength, 27);
-  assert.deepEqual(Array.from(new Uint8Array(payload.buffer, payload.byteOffset, 3)), [1, 1, 0]);
-
-  const payloadOnly = Uint8Array.from([1, 1, 0, ...Array(24).fill(0)]);
-  client.device.receiveFeatureReport = async () => new DataView(payloadOnly.buffer);
-  const unchanged = await client.readFeature(1, 27);
-  assert.equal(unchanged.byteLength, 27);
-  assert.deepEqual(Array.from(new Uint8Array(unchanged.buffer, unchanged.byteOffset, 3)), [1, 1, 0]);
+test("action request and result match the report 20 layout", () => {
+  const request = encodeActionRequest(7, OPERATION.SET_CHANNEL, { channel: 5, arg0: 0x01020304, arg1: 50 });
+  assert.equal(request.length, 12);
+  assert.deepEqual([...request], [1, 7, 1, 5, 4, 3, 2, 1, 50, 0, 0, 0]);
+  assert.deepEqual(decodeActionResult(view([1, 7, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0])),
+    { transaction_id: 7, operation: 1, status: 6, status_name: "PENDING" });
+  assert.throws(() => decodeActionResult(view([1, 7, 1, 9, 0, 0, 0, 0, 0, 0, 0, 0])), /Invalid/);
+  assert.throws(() => decodeActionResult(view([1, 7, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1])), /Invalid/);
+  assert.throws(() => decodeActionResult(view([2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])), /Invalid/);
 });
 
-test("WebHID normalizes Report ID prefixes on Input snapshots", () => {
-  const client = new PicoUartWebHid(null);
-  const device = { addEventListener(_name, callback) { this.inputListener = callback; }, removeEventListener() {} };
-  client.device = device;
-  client.generation = 1;
-  client.addInputListener(device, 1);
-
-  const report = new Uint8Array(31);
-  report[0] = 10;
-  const data = new DataView(report.buffer, 1);
-  data.setUint8(0, 1);
-  data.setUint8(1, 2);
-  data.setUint8(2, 1);
-  data.setUint32(3, 115200, true);
-  data.setUint8(7, 8);
-  data.setUint8(8, 1);
-  data.setUint8(9, 0);
-  data.setUint16(10, 1, true);
-  data.setUint16(12, 500, true);
-  for (let index = 0; index < 4; index++) data.setUint32(14 + index * 4, index + 1, true);
-  device.inputListener({ device, reportId: 10, data: new DataView(report.buffer) });
-
-  assert.equal(client.state.dashboard.channels[0].baud_rate, 115200);
-  assert.equal(client.state.dashboard.channels[0].sequence, 1);
+test("device filter requires the vendor usage page", () => {
+  assert.equal(DEVICE_FILTER.productId, 0x4012);
+  assert.ok(matchesPicoPwm({ vendorId: 0xcafe, productId: 0x4012, collections: [{ usagePage: 0xff00 }] }));
+  assert.ok(!matchesPicoPwm({ vendorId: 0xcafe, productId: 0x4010, collections: [{ usagePage: 0xff00 }] }));
+  assert.ok(!matchesPicoPwm({ vendorId: 0xcafe, productId: 0x4012, collections: [{ usagePage: 1 }] }));
 });
 
-test("WebHID discovery filters by PicoUart VID/PID and leaves descriptor validation to connection", () => {
-  assert.deepEqual(DEVICE_FILTER, { vendorId: 0xcafe, productId: 0x4010 });
-  assert.equal(matchesPicoUart({ vendorId: 0xcafe, productId: 0x4010, collections: [] }), true);
-  assert.equal(matchesPicoUart({ vendorId: 0xcafe, productId: 0x4011 }), false);
-  assert.equal(matchesPicoUart({ vendorId: 0xcafe, productId: 0x4010 }), true);
-});
+function fakeDevice({ acceptSet = true, pendingPolls = 1 } = {}) {
+  const device = {
+    vendorId: 0xcafe, productId: 0x4012, collections: [{ usagePage: 0xff00 }], opened: false,
+    sent: [], result: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], pending: 0,
+    async open() { this.opened = true; },
+    async close() { this.opened = false; },
+    async receiveFeatureReport(id) {
+      if (id === 1) return view(identityBytes());
+      if (id === 2) return view(configurationBytes());
+      if (id === 20) {
+        const result = [...this.result];
+        if (this.pending > 0) { this.pending--; result[3] = 6; }
+        return view(result);
+      }
+      const bytes = [1];
+      for (let index = 0; index < 8; index++) bytes.push(...[100 * index, 0, 0, 0], index);
+      return view(bytes);
+    },
+    async sendFeatureReport(id, data) {
+      assert.equal(id, 20);
+      this.sent.push([...data]);
+      if (acceptSet) {
+        this.result = [1, data[1], data[2], 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        this.pending = pendingPolls;
+      }
+    },
+  };
+  return device;
+}
 
-test("WebHID chooser requests PicoUart vendor devices before exact product validation", async () => {
-  const requests = [];
-  const hid = { addEventListener() {}, requestDevice: async options => { requests.push(options); return []; } };
-  const client = new PicoUartWebHid(hid);
+async function connected(device) {
+  const hid = { addEventListener() {}, requestDevice: async () => [device] };
+  const client = new PicoPwmWebHid(hid);
   await client.connect();
-  assert.deepEqual(requests, [{ filters: [{ vendorId: 0xcafe }] }]);
+  return client;
+}
+
+test("connect reads identity, configuration, and all 24 channels", async () => {
+  const client = await connected(fakeDevice());
+  assert.equal(client.state.phase, "connected");
+  const { dashboard } = client.state;
+  assert.equal(dashboard.identity.mcu, "RP2350");
+  assert.equal(dashboard.configuration.system_clock_hz, 150_000_000);
+  assert.ok(dashboard.channels.every(channel => channel.freq_hz !== null));
+  assert.equal(dashboard.channels[23].channel, 23);
+  await client.disconnect();
   assert.equal(client.state.phase, "disconnected");
 });
 
-test("input rates smooth cumulative counters over five seconds across sequence gaps", () => {
-  const client = new PicoUartWebHid(null);
-  const originalNow = Date.now;
-  let now = 1000;
-  Date.now = () => now;
-  try {
-    client.applyInputSnapshot({
-      id: 0,
-      sequence: 10,
-      interval_ms: 500,
-      uart_measurement_state: 1,
-      counters: { uart_tx: 100, uart_rx: 200, usb_tx: 300, usb_rx: 400 },
-    });
-    assert.equal(client.state.dashboard.channels[0].rates.uart_tx, null);
+test("setChannel sends a nonzero transaction and waits past PENDING", async () => {
+  const device = fakeDevice();
+  const client = await connected(device);
+  await client.setChannel(3, 1000, 25);
+  assert.deepEqual(device.sent[0], [1, 1, 1, 3, 0xe8, 3, 0, 0, 25, 0, 0, 0]);
+  assert.equal(client.state.dashboard.action_result.status_name, "OK");
+  await client.stop();
+  assert.equal(device.sent[1][1], 2);
+  assert.equal(device.sent[1][2], OPERATION.STOP);
+});
 
-    const samples = [
-      [2000, 11, 500, { uart_tx: 2100, uart_rx: 1200, usb_tx: 1300, usb_rx: 900 }],
-      [3000, 12, 500, { uart_tx: 2100, uart_rx: 1200, usb_tx: 1300, usb_rx: 900 }],
-      [4000, 13, 500, { uart_tx: 6100, uart_rx: 3200, usb_tx: 4300, usb_rx: 2400 }],
-      [5000, 14, 500, { uart_tx: 6100, uart_rx: 3200, usb_tx: 4300, usb_rx: 2400 }],
-      [6000, 16, 65535, { uart_tx: 7100, uart_rx: 3700, usb_tx: 5300, usb_rx: 2900 }],
-    ];
-    const expectedRates = [
-      { uart_tx: 2000, uart_rx: 1000, usb_tx: 1000, usb_rx: 500 },
-      { uart_tx: 1000, uart_rx: 500, usb_tx: 500, usb_rx: 250 },
-      { uart_tx: 2000, uart_rx: 1000, usb_tx: 4000 / 3, usb_rx: 2000 / 3 },
-      { uart_tx: 1500, uart_rx: 750, usb_tx: 1000, usb_rx: 500 },
-      { uart_tx: 1400, uart_rx: 700, usb_tx: 1000, usb_rx: 500 },
-    ];
-    for (const [index, [time, sequence, interval_ms, counters]] of samples.entries()) {
-      now = time;
-      client.applyInputSnapshot({ id: 0, sequence, interval_ms, uart_measurement_state: 1, counters });
-      assert.deepEqual(client.state.dashboard.channels[0].rates, expectedRates[index]);
-    }
+test("a dropped SET is reported as not accepted", async () => {
+  const client = await connected(fakeDevice({ acceptSet: false }));
+  await assert.rejects(() => client.setChannel(0, 1000, 50), /did not accept/);
+  assert.equal(client.state.phase, "connected");
+});
 
-    const dashboard = client.state.dashboard;
-    const channel = dashboard.channels[0];
-    assert.equal(channel.deltas.uart_tx, null);
-    assert.deepEqual(channel.rates, expectedRates.at(-1));
-    assert.equal(channel.traffic_gaps, 1);
-    assert.equal(dashboard.traffic_gaps, 1);
-    assert.equal(dashboard.traffic_incomplete, true);
-  } finally {
-    Date.now = originalNow;
-  }
+test("failure status and local validation are surfaced without a send", async () => {
+  const device = fakeDevice();
+  const client = await connected(device);
+  await assert.rejects(() => client.setChannel(24, 1, 1), /out of range/);
+  await assert.rejects(() => client.setChannel(0, 1, 101), /out of range/);
+  await assert.rejects(() => client.setClockProfile(2, false), /Acknowledge/);
+  await assert.rejects(() => client.setBank(3, 0, 0), /out of range/);
+  assert.equal(device.sent.length, 0);
+  device.sendFeatureReport = async function send(id, data) {
+    this.result = [1, data[1], data[2], 2, 0, 0, 0, 0, 0, 0, 0, 0];
+  };
+  await assert.rejects(() => client.setI2cAddress(0x20), /INVALID/);
+});
+
+test("save and overclock rules shape the request flags", async () => {
+  const device = fakeDevice();
+  const client = await connected(device);
+  await client.setClockProfile(2, true);
+  assert.deepEqual(device.sent[0].slice(2, 10), [6, 0, 2, 0, 0, 0, 0, 2]);
+  await client.saveConfiguration(false);
+  assert.equal(device.sent[1][2], OPERATION.SAVE_CONFIG);
+  assert.equal(device.sent[1][9], 1);
 });

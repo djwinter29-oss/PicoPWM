@@ -1,92 +1,60 @@
-# PicoUart WebHID Dashboard
+# PicoPWM WebHID Control
 
-**Monitor six UARTs directly from your browser.** The WebHID dashboard shows PicoUart identity, runtime health,
-per-channel traffic statistics, and RX dropped-byte counts on Raspberry Pi Pico and Pico 2.
-
-Diagnostics use a separate USB HID interface, without a Python/.NET application backend. UART payloads and baud/framing
-settings still use the six USB CDC serial ports, not this page.
+**Control and monitor 24 PWM channels directly from your browser.** The page reads PicoPWM identity, configuration,
+and realized channel state over a vendor HID interface, and sends channel, bank, I2C address, clock profile, and save
+commands. It follows the
+[HID report reference](../../docs/design/usb/hid-report-reference.md); there is no application backend.
 
 ## Requirements
 
-- Desktop Google Chrome or Microsoft Edge with WebHID enabled; Firefox and Safari are not supported, and mobile
-	browsers generally do not support WebHID
-- A Raspberry Pi Pico or Pico 2 running compatible
-	[PicoUart firmware](https://github.com/djwinter29-oss/PicoUart/releases), connected to the computer running the browser
-- Browser permission and OS access to the board's HID interface; Linux may need
-	[device permissions](../../tools/README.md#linux-hid-permissions)
-
-## Install
-
-Open the [hosted WebHID dashboard](https://djwinter29-oss.github.io/PicoUart/). No local installation, Python, .NET,
-or server is required. The GitHub Pages site uses HTTPS; self-hosted pages also require HTTPS or localhost.
-If your browser does not support WebHID, use the local [Python](../python/README.md) or [.NET](../dotnet/README.md)
-dashboard instead.
+- Desktop Google Chrome or Microsoft Edge with WebHID enabled; Firefox, Safari, and most mobile browsers are not
+  supported
+- A Raspberry Pi Pico or Pico 2 running PicoPWM firmware that implements the HID interface (`0xCAFE:0x4012`, HID
+  `product_id` `0x0003`), connected to the computer running the browser
+- Browser permission and OS access to the board's HID interface; Linux needs a udev rule for the device
 
 ## Quick Start
 
-1. Connect the flashed board to this computer over a USB data cable.
-2. Open the hosted page, click **Connect**, and choose the PicoUart vendor HID interface.
-3. Inspect board identity, runtime values, and UART health/traffic alongside your serial tools.
+1. Connect the board over a USB data cable and open the page over HTTPS or `localhost`.
+2. Click **Connect** and choose the PicoPWM vendor HID interface.
+3. Read identity, bank roles, and per-channel frequency and duty. Status refreshes every second.
+4. Use **Set channel** or **Stop all** for generators. Bank, I2C address, and clock profile changes edit the target
+   configuration only.
+5. Click **Save target**, then restart the board yourself. HID has no reboot command, so the saved target applies only
+   after a power cycle or reset. Reconnect and reread the configuration.
 
-The button becomes **Disconnect** while connected. Board telemetry refreshes every second; static device information
-is read once, and each channel publishes a combined traffic/settings/fault snapshot every 500 ms. Disconnect closes the HID
-connection; unplugging clears the last sample. After unplug/replug or a configuration-save reboot, use **Connect**
-again; the app does not automatically select or reopen a device.
+Use one controlling host per board. The page never reopens a device automatically.
 
-Firmware must implement the current version-1 HID contract. Missing or invalid reports show `--` with an explicit
-read error; no alternate layouts are supported.
-Read failures leave the device available for automatic polling or Disconnect, but clear stale metadata rather than
-inventing a clock or MCU.
+Serve the page locally with `tools/host/run-webhid.sh` (default `http://127.0.0.1:8000/`, `--port` to change).
 
-Use one HID monitor per physical board; competing native clients can contend for input reports or device access.
+## Behavior Notes
 
-## Test Automation
+- Frequency `0` means a static level, not a missing reading. Monitors keep their last values for about one second
+  after the input stops.
+- Reports have no pulse counter; use CDC or I2C when an event count is needed.
+- A save erases flash, so HID, CDC, and I2C all pause briefly and software generators are disturbed. Stop software
+  generators first. If the result is unconfirmed, disconnect, reconnect, and check `target_dirty` before retrying.
+- Clock profiles above 150 MHz are overclocks and require an explicit acknowledgement; only profiles the firmware
+  advertises are offered. A save is not a stability qualification. Recover from a profile that prevents boot with
+  BOOTSEL.
+- Missing or invalid reports show `--` with an explicit read error; no alternate layouts are supported.
 
-This page is an interactive diagnostic view, not a headless test runner. It has no CLI, JSON/log export, or UART
-payload capture. For scripted status samples and traffic logs, use the [Python CLI](../python/README.md#test-automation)
-or [.NET CLI](../dotnet/README.md#test-automation). Disconnect the browser before another client monitors the same
-board.
+## Test
 
-Traffic statistics are not raw UART messages. Firmware counters show bytes since MCU boot modulo $2^{32}$, so a
-missing report does not by itself lose totals; it resets the current throughput window. If counters may have wrapped
-more than once between observations, the exact increment is unknowable. A quiet or healthy-looking page alone is not
-evidence that an automated test passed.
-
-## Other Commands And Controls
-
-**Board LED** sends explicit identification On/Off commands; its indicator shows physical output.
-The **Boot configuration** section saves the selected boot-time clock profile. A verified save automatically
-reboots the board and briefly disconnects USB, even though there is no standalone reset command. Close all CDC ports
-and stop external UART traffic first; non-default clocks require explicit unsafe-overclock acknowledgement.
-
-Persistent configuration source, fallback reason, and active/stored clock profiles are read from report 2; this
-diagnostic does not expose credentials or raw flash contents.
-After reconnecting, inspect the actual active profile and any fallback reason rather than assuming the requested clock
-became active. A verified save does not establish overclock stability. See the
-[configuration procedure](../../docs/development/host-tools.md#persistent-configuration).
-
-Writes are limited to user-initiated LED state changes and configuration save. Firmware flashing and WebSerial payload access
-are not implemented.
+```bash
+node --test host/webhid/tests/*.test.mjs
+```
 
 ## Troubleshooting
 
 - **Connect disabled:** use desktop Chrome/Edge in a secure context and check whether browser policy disables WebHID.
-- **Board not found:** check compatible firmware, the USB data cable, device enumeration, and browser site permissions.
-- **Access denied:** browser permission does not replace OS permissions; follow the Linux permission guide above and
-	close competing HID clients.
-- **No valid reports:** check firmware compatibility and USB connectivity. Missing values are not zero traffic.
-
-WebHID does not request a password. Chrome's chooser lists eligible USB devices connected to the computer running
-Chrome. Forwarding a page from a remote Linux/WSL/SSH workspace does not forward its USB devices.
-
-If the Pico is attached to the remote machine, use the [Python](../python/README.md) or [.NET](../dotnet/README.md)
-dashboard on its forwarded, configured local port, or connect the USB data cable to the browser's computer. If it is
-already local, check the USB data cable, device enumeration, browser site permissions, and OS device permissions.
-Installing an OS access rule may require administrator approval in the OS; do not enter that password into the page.
+- **Board not found:** check the firmware, the USB data cable, and browser site permissions.
+- **Access denied:** browser permission does not replace OS permissions; close competing HID clients.
+- **Remote workspace:** Chrome lists USB devices of the computer running Chrome; a forwarded page does not forward
+  USB devices.
 
 ## Documentation
 
 - [Project, firmware, and wiring](../../README.md)
-- [Host development and source-checkout setup](../../docs/development/host-tools.md#webhid-development)
-- [HID report reference and compatibility](../../docs/design/usb/hid-report-reference.md)
-- [Security and lab-only USB identity](../../SECURITY.md)
+- [HID report reference](../../docs/design/usb/hid-report-reference.md)
+- [CDC and HID overview](../../docs/design/usb/cdc-hid-overview.md)

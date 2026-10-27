@@ -1,6 +1,5 @@
 #include "driver/i2c/i2c_slave.h"
 
-#include "config/i2c_config.h"
 #include "app/i2c/i2c_control_map.h"
 #include "driver/i2c/i2c_irq_gate.h"
 #include "driver/i2c/i2c_write_queue.h"

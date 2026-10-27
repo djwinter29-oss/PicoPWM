@@ -6,7 +6,7 @@
  * to 100 kHz fails with a 400 kHz master; one set to 400 kHz also works with a 100 kHz master.
  */
 
-#include "config/i2c_config.h"
+#include "driver/i2c/i2c_slave.h"
 
 const i2c_board_config_t i2c_board_config = {
     .instance = i2c1,

@@ -79,16 +79,14 @@ static void gen_drive_level(uint channel, bool high) {
  * @param channel Backend-local channel index.
  * @param period_count Backend loop count representing one PWM period.
  * @param clkdiv_x256 Quantized PIO clock divider in units of `1/256`.
- * @param duty_percent Requested duty in percent.
+ * @param program Duty program for @p period_count; its match value is loaded into the state machine.
  */
-static void gen_enable_channel(uint channel, uint16_t period_count, uint32_t clkdiv_x256, uint8_t duty_percent) {
+static void gen_enable_channel(uint channel, uint16_t period_count, uint32_t clkdiv_x256,
+                               const pwm_pio_duty_program_t *program) {
     pio_gen_channel_t *ctx = &pio_channels[channel];
     PIO pio = ctx->pio;
     uint sm = ctx->sm;
     uint pin = pio_pwm_config.channels[channel].gpio;
-    pwm_pio_duty_program_t program;
-
-    pwm_pio_program_duty(period_count, duty_percent, &program);
 
     /* Static levels hand the pin to SIO, so only static -> PWM transitions must rebind it to PIO ownership. */
     if (!ctx->running) {
@@ -101,7 +99,7 @@ static void gen_enable_channel(uint channel, uint16_t period_count, uint32_t clk
     pio_sm_clear_fifos(pio, sm);
     pio_sm_restart(pio, sm);
 
-    pio_sm_put_blocking(pio, sm, program.match);
+    pio_sm_put_blocking(pio, sm, program->match);
     pio_sm_put_blocking(pio, sm, period_count);
 
     pio_sm_set_enabled(pio, sm, true);
@@ -139,6 +137,7 @@ bool pio_gen_init(void) {
 bool pio_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     uint16_t period_count = 0u;
     uint32_t clkdiv_x256 = 256u;
+    pwm_pio_duty_program_t program;
     uint8_t realized_duty;
     bool high;
 
@@ -160,7 +159,10 @@ bool pio_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
         return false;
     }
 
-    gen_enable_channel(channel, period_count, clkdiv_x256, duty);
-    gen_publish_state(channel, pwm_pio_realized_freq_hz(pio_gen_sys_clk_hz, period_count, clkdiv_x256), duty);
+    pwm_pio_program_duty(period_count, duty, &program);
+    gen_enable_channel(channel, period_count, clkdiv_x256, &program);
+    /* Publish the duty the loop really produces; short periods quantize it. */
+    gen_publish_state(channel, pwm_pio_realized_freq_hz(pio_gen_sys_clk_hz, period_count, clkdiv_x256),
+                      pwm_realized_duty(program.high_iterations, program.total_iterations));
     return true;
 }

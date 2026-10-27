@@ -1,7 +1,8 @@
 # Software PWM Generator Design
 
 The software generator produces PWM through one shared repeating timer and a
-per-channel scheduler state. Source files:
+per-channel scheduler state. The timer runs on a private Core 1 alarm pool and is
+armed only while a channel is active. Source files:
 
 - `firmware/src/driver/pwm/software/software_generator.c`
 - `firmware/src/driver/pwm/software/software_generator.h`

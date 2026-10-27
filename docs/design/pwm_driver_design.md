@@ -201,7 +201,7 @@ Resources used:
 - PWM slices
 - GPIO edge IRQs for hardware and software monitor channels
 - PIO programs, state machines, and IRQs
-- repeating timer callback for software PWM
+- one repeating timer on a private Core 1 alarm pool for software PWM, armed only while a channel is active
 - multicore event signaling
 
 ## Core Ownership Model
@@ -587,7 +587,7 @@ The software PWM backend provides the lowest-cost implementation for slower freq
 ### Resource Allocation
 
 - 8 output GPIOs
-- one repeating timer callback
+- one private alarm pool created on Core 1 and one repeating timer, armed on demand
 - one per-channel runtime struct
 
 ### Timing Base
@@ -629,9 +629,9 @@ For each channel:
 4. leave the channel out of the active mask
 5. initialize GPIO as output low
 
-After channel setup:
-
-1. start one repeating timer at `10 us`
+After channel setup the backend creates a private alarm pool with `alarm_pool_create_with_unused_hardware_alarm()`.
+Init runs on Core 1, and the SDK services a pool's alarms on the core that created it, so the tick interrupt runs on
+Core 1. The default pool belongs to Core 0 and would run the tick there, racing the Core 1 writers. No timer runs yet.
 
 ### Set-Frequency Behavior
 
@@ -641,12 +641,12 @@ When applying a new configuration:
 2. if `freq_hz <= 0`, remove the channel from the active mask and drive a static level
 3. otherwise compute `period_ticks`
 4. compute `duty_ticks`
-5. compute realized frequency
+5. compute realized frequency and realized duty (`duty_ticks` over `period_ticks`, rounded)
 6. protect shared channel timing fields with interrupt masking
-7. write timing fields and realized state
-8. reset the per-channel running counter
-9. add the channel to the active mask
-10. publish realized state before releasing the interrupt-masked section
+7. write timing fields and reset the per-channel running counter
+8. add the channel to the active mask
+9. if the tick timer is not armed, arm it at `10 us` on the private pool (still on Core 1)
+10. publish the realized state
 
 ### Timer Callback Behavior
 
@@ -657,6 +657,9 @@ On every timer tick:
 3. increment running counter
 4. when counter reaches period, reset counter
 5. drive GPIO high while `counter < duty_ticks`, otherwise low
+
+When no channel is active the callback clears the running flag and returns `false`, which disarms the timer. A board
+whose software bank is idle or static therefore takes no tick interrupts.
 
 ### Concurrency Handling
 
@@ -694,8 +697,8 @@ The architectural intent is that the `pwm` snapshot is the single source of trut
 
 Important readback properties:
 
-- values are realized backend values, not merely requested values; a requested frequency is rounded to the nearest
-  achievable one, so callers who need the rounding read the value back
+- values are realized backend values, not merely requested values; frequency is rounded to the nearest achievable
+  one and duty is derived from the integer step counts that program the output, so callers read both back
 - a static request (zero frequency, `0%` or `100%`) is published as `0 Hz` with a realized duty of `0` or `100`, for
   every generator backend
 - `stop` disables generator output

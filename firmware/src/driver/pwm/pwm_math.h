@@ -30,4 +30,20 @@ static inline bool pwm_generator_resolve_static(uint32_t frequency_hz, uint8_t d
     return true;
 }
 
+/**
+ * @brief Realized duty in percent from the integer high and total step counts that program the output.
+ * @param high_steps Steps the output is high in one period.
+ * @param total_steps Steps in one period; zero yields 0.
+ * @return Rounded duty in percent, clamped to `[0, 100]`.
+ */
+static inline uint8_t pwm_realized_duty(uint32_t high_steps, uint32_t total_steps) {
+    uint64_t duty;
+
+    if (total_steps == 0u) {
+        return 0u;
+    }
+    duty = ((uint64_t)high_steps * 100u + total_steps / 2u) / total_steps;
+    return duty > 100u ? 100u : (uint8_t)duty;
+}
+
 #endif

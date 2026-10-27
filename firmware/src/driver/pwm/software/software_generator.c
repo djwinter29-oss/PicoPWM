@@ -11,6 +11,7 @@
 #include "hardware/gpio.h"
 #include "hardware/sync.h"
 #include "hardware/timer.h"
+#include "pico/time.h"
 #include "../pwm_math.h"
 
 /** @brief Software PWM scheduler tick period in microseconds. */
@@ -20,91 +21,45 @@
 
 /** @brief Runtime scheduling state for one software PWM backend channel. */
 typedef struct {
-    uint gpio;                     /**< Assigned output GPIO. */
-    uint32_t period_ticks;         /**< Whole-tick PWM period for the current configuration. */
-    uint32_t duty_ticks;           /**< Whole-tick active window for the current configuration. */
-    uint32_t counter;              /**< Current tick position within the PWM period. */
-    uint32_t realized_freq_hz;     /**< Realized output frequency in Hz. */
-    uint8_t realized_duty;         /**< Realized duty in percent in the range `[0, 100]`. */
+    uint gpio;             /**< Assigned output GPIO. */
+    uint32_t period_ticks; /**< Whole-tick PWM period for the current configuration. */
+    uint32_t duty_ticks;   /**< Whole-tick active window for the current configuration. */
+    uint32_t counter;      /**< Current tick position within the PWM period. */
 } sw_pwm_channel_t;
 
 /** @brief Software PWM runtime state in backend-local channel order. */
-static sw_pwm_channel_t sw_pwm_channels[PWM_DRIVER_CONFIG_CHANNEL_COUNT];
-/** @brief Repeating timer that drives the software PWM scheduler. */
+static sw_pwm_channel_t sw_pwm_channels[PWM_DRIVER_CONFIG_BANK_SIZE];
+/**
+ * @brief Private alarm pool created on Core 1, so the tick interrupt runs on Core 1 with the rest of the backend.
+ *
+ * The default pool belongs to Core 0 and would run the 100 kHz tick there, racing the Core 1 writers below.
+ */
+static alarm_pool_t *sw_pwm_pool;
+/** @brief Repeating timer that drives the software PWM scheduler; armed only while a channel is active. */
 static repeating_timer_t sw_pwm_timer;
+/** @brief True while @ref sw_pwm_timer is armed; touched only on Core 1 with interrupts masked or in the tick. */
+static bool sw_pwm_timer_running = false;
 /** @brief Bitmask of backend-local software PWM channels currently driven by the scheduler. */
 static uint32_t sw_pwm_active_mask = 0u;
 
-/** @brief Fully resolved software-PWM static-output target consumed by the apply path. */
-typedef struct {
-    uint8_t realized_duty; /**< Realized output duty in percent. */
-    bool high;             /**< Output level to drive while the channel is static. */
-} sw_gen_static_target_t;
-
-/** @brief Build one caller-owned software PWM snapshot from the backend-local channel state. */
-static pwm_driver_state_t sw_gen_channel_state(const sw_pwm_channel_t *ch) {
-    return (pwm_driver_state_t){
-        .freq_hz = ch->realized_freq_hz,
-        .duty = ch->realized_duty,
-    };
-}
-
 /** @brief Publish one channel's realized software PWM state into the shared driver snapshot. */
-static void sw_gen_publish_state(uint channel) {
-    sw_pwm_channel_t *ch = &sw_pwm_channels[channel];
-    pwm_driver_state_t state = sw_gen_channel_state(ch);
+static void sw_gen_publish_state(uint channel, uint32_t freq_hz, uint8_t duty) {
+    pwm_driver_state_t state = {.freq_hz = freq_hz, .duty = duty};
 
-    pwm_driver_store_applied_state(((uint)PWM_BANK_C * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)), &state);
+    pwm_driver_store_applied_state((uint)PWM_BANK_C * PWM_DRIVER_CONFIG_BANK_SIZE + channel, &state);
 }
 
-/** @brief Resolve whether one software-PWM request should be handled as a static-output mode. */
-static bool sw_gen_resolve_static_target(uint32_t freq_hz, uint8_t duty, sw_gen_static_target_t *target) {
-    if (target == NULL || !pwm_generator_resolve_static(freq_hz, duty, &target->high, &target->realized_duty)) {
-        return false;
-    }
-    return true;
-}
-
-/** @brief Drive one software PWM channel to a static level and publish matching realized state. */
-static void sw_gen_drive_static_level(uint channel, uint8_t realized_duty, bool high) {
-    sw_pwm_channel_t *ch = &sw_pwm_channels[channel];
-    uint32_t save = save_and_disable_interrupts();
-
-    sw_pwm_active_mask &= ~(1u << channel);
-    ch->period_ticks = 0u;
-    ch->duty_ticks = 0u;
-    ch->counter = 0u;
-    ch->realized_freq_hz = 0u;
-    ch->realized_duty = realized_duty;
-    restore_interrupts(save);
-
-    gpio_put(ch->gpio, high);
-    sw_gen_publish_state(channel);
-}
-
-/** @brief Arm one software PWM channel for scheduled output and publish its active runtime state atomically. */
-static void sw_gen_start_scheduled_output(uint channel, uint32_t period_ticks, uint32_t duty_ticks,
-                                          uint32_t realized_freq_hz, uint8_t realized_duty) {
-    sw_pwm_channel_t *ch = &sw_pwm_channels[channel];
-    uint32_t save = save_and_disable_interrupts();
-
-    ch->period_ticks = period_ticks;
-    ch->duty_ticks = duty_ticks;
-    ch->counter = 0u;
-    ch->realized_freq_hz = realized_freq_hz;
-    ch->realized_duty = realized_duty;
-    sw_pwm_active_mask |= (1u << channel);
-    restore_interrupts(save);
-    sw_gen_publish_state(channel);
-}
-
-/** @brief Repeating timer callback that advances all active software PWM channels. */
+/** @brief Repeating timer callback that advances all active channels and disarms itself when none remain. */
 static bool sw_pwm_tick_callback(repeating_timer_t *rt) {
-    uint32_t active_mask;
+    uint32_t active_mask = sw_pwm_active_mask;
 
     (void)rt;
 
-    active_mask = sw_pwm_active_mask;
+    if (active_mask == 0u) {
+        sw_pwm_timer_running = false;
+        return false;
+    }
+
     while (active_mask != 0u) {
         uint32_t channel = (uint32_t)__builtin_ctz(active_mask);
         sw_pwm_channel_t *ch = &sw_pwm_channels[channel];
@@ -121,42 +76,89 @@ static bool sw_pwm_tick_callback(repeating_timer_t *rt) {
     return true;
 }
 
+/** @brief Drive one software PWM channel to a static level and publish matching realized state. */
+static void sw_gen_drive_static_level(uint channel, uint8_t realized_duty, bool high) {
+    sw_pwm_channel_t *ch = &sw_pwm_channels[channel];
+    uint32_t save = save_and_disable_interrupts();
+
+    sw_pwm_active_mask &= ~(1u << channel);
+    ch->period_ticks = 0u;
+    ch->duty_ticks = 0u;
+    ch->counter = 0u;
+    restore_interrupts(save);
+
+    gpio_put(ch->gpio, high);
+    sw_gen_publish_state(channel, 0u, realized_duty);
+}
+
+/**
+ * @brief Arm one channel for scheduled output, starting the tick when this is the first active channel.
+ * @return `false` when the tick could not be armed; the channel is left inactive.
+ */
+static bool sw_gen_start_scheduled_output(uint channel, uint32_t period_ticks, uint32_t duty_ticks) {
+    sw_pwm_channel_t *ch = &sw_pwm_channels[channel];
+    uint32_t save = save_and_disable_interrupts();
+    bool arm;
+
+    ch->period_ticks = period_ticks;
+    ch->duty_ticks = duty_ticks;
+    ch->counter = 0u;
+    sw_pwm_active_mask |= (1u << channel);
+    arm = !sw_pwm_timer_running;
+    sw_pwm_timer_running = true;
+    restore_interrupts(save);
+
+    if (arm &&
+        !alarm_pool_add_repeating_timer_us(sw_pwm_pool, -SW_PWM_TICK_US, sw_pwm_tick_callback, NULL, &sw_pwm_timer)) {
+        save = save_and_disable_interrupts();
+        sw_pwm_active_mask &= ~(1u << channel);
+        sw_pwm_timer_running = false;
+        restore_interrupts(save);
+        return false;
+    }
+
+    return true;
+}
+
 /** @copydoc sw_gen_init */
 bool sw_gen_init(void) {
     sw_pwm_active_mask = 0u;
 
-    for (int i = 0; i < PWM_DRIVER_CONFIG_BANK_SIZE; i++) {
+    if (sw_pwm_pool == NULL) {
+        sw_pwm_pool = alarm_pool_create_with_unused_hardware_alarm(1);
+        if (sw_pwm_pool == NULL) {
+            return false;
+        }
+    }
+
+    for (uint i = 0u; i < PWM_DRIVER_CONFIG_BANK_SIZE; i++) {
         uint gpio = software_pwm_config.channels[i].gpio;
 
-        sw_pwm_channels[i].gpio = gpio;
-        sw_pwm_channels[i].period_ticks = 0u;
-        sw_pwm_channels[i].duty_ticks = 0u;
-        sw_pwm_channels[i].counter = 0u;
-        sw_pwm_channels[i].realized_freq_hz = PWM_DRIVER_STOPPED_FREQ_HZ;
-        sw_pwm_channels[i].realized_duty = PWM_DRIVER_STOPPED_DUTY_PERCENT;
-
+        sw_pwm_channels[i] = (sw_pwm_channel_t){.gpio = gpio};
         gpio_init(gpio);
         gpio_set_dir(gpio, GPIO_OUT);
         gpio_put(gpio, 0);
     }
 
-    return add_repeating_timer_us(-SW_PWM_TICK_US, sw_pwm_tick_callback, NULL, &sw_pwm_timer);
+    return true;
 }
 
 /** @copydoc sw_gen_set */
 bool sw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
-    sw_gen_static_target_t static_target;
+    uint8_t realized_duty;
     uint32_t period;
     uint32_t duty_ticks;
-    uint32_t realized_freq_hz;
+    bool high;
 
-    if (channel >= PWM_DRIVER_CONFIG_BANK_SIZE)
+    if (channel >= PWM_DRIVER_CONFIG_BANK_SIZE) {
         return false;
-    if (duty > 100u)
+    }
+    if (duty > 100u) {
         duty = 100u;
+    }
 
-    if (sw_gen_resolve_static_target(freq_hz, duty, &static_target)) {
-        sw_gen_drive_static_level(channel, static_target.realized_duty, static_target.high);
+    if (pwm_generator_resolve_static(freq_hz, duty, &high, &realized_duty)) {
+        sw_gen_drive_static_level(channel, realized_duty, high);
         return true;
     }
 
@@ -165,16 +167,17 @@ bool sw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     }
 
     period = (SW_PWM_BASE_HZ + (freq_hz / 2u)) / freq_hz;
-    if (period < 1)
-        period = 1;
-
+    if (period < 1u) {
+        period = 1u;
+    }
     duty_ticks = (uint32_t)(((uint64_t)period * duty + 50u) / 100u);
-    if (duty_ticks > period)
+    if (duty_ticks > period) {
         duty_ticks = period;
+    }
 
-    realized_freq_hz = (SW_PWM_BASE_HZ + (period / 2u)) / period;
-    sw_gen_start_scheduled_output(channel, period, duty_ticks, realized_freq_hz, duty);
-
+    if (!sw_gen_start_scheduled_output(channel, period, duty_ticks)) {
+        return false;
+    }
+    sw_gen_publish_state(channel, (SW_PWM_BASE_HZ + (period / 2u)) / period, pwm_realized_duty(duty_ticks, period));
     return true;
 }
-

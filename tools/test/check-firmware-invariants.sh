@@ -8,6 +8,7 @@ PIO_FILE="$REPO_ROOT/firmware/src/driver/pwm/pio/pio_generator.pio"
 DRIVER_FILE="$REPO_ROOT/firmware/src/driver/pwm/pwm_driver.c"
 CONFIG_FILE="$REPO_ROOT/firmware/src/platform/boot_config.c"
 SLAVE_FILE="$REPO_ROOT/firmware/src/driver/i2c/i2c_slave.c"
+SW_GEN_FILE="$REPO_ROOT/firmware/src/driver/pwm/software/software_generator.c"
 
 # The low path must not side-set. A side-set there makes every duty a one-tick pulse.
 awk '
@@ -30,6 +31,12 @@ awk '
 
 if ! grep -q "jmp skip        side 1" "$PIO_FILE"; then
     echo "pio_generator.pio: missing sticky-high side-set" >&2
+    exit 1
+fi
+
+# The default alarm pool belongs to Core 0; the software tick must run on a Core 1 pool.
+if grep -Eq "(^|[^_a-z])add_repeating_timer_us" "$SW_GEN_FILE" || ! grep -q "alarm_pool_create_with_unused_hardware_alarm" "$SW_GEN_FILE"; then
+    echo "software_generator.c: the tick timer must use a private alarm pool created on Core 1" >&2
     exit 1
 fi
 

@@ -15,3 +15,6 @@ __pycache__/
 # .NET build artifacts
 host/dotnet/**/bin/
 host/dotnet/**/obj/
+
+# Temporary files
+tmp/

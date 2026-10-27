@@ -11,7 +11,8 @@
 /** @brief Maximum supported software PWM frequency in Hz. */
 #define SW_GEN_MAX_FREQ_HZ 1000u
 
-/** @brief Initialize the software PWM generator backend and its repeating timer. */
+/** @brief Initialize the software PWM generator on Core 1; the tick timer is armed on demand by the first active
+ * channel. */
 bool sw_gen_init(void);
 
 /**

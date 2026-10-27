@@ -168,7 +168,13 @@ The current generator workflow is:
 3. resolve static outputs first for `freq_hz = 0` and endpoint duties
 4. otherwise search a local divider window for the best valid `TOP` and divider pair
 5. program wrap, divider, and compare level into the slice
-6. publish the realized frequency and duty through the backend state
+6. publish the realized frequency and the realized duty (`level` over `TOP + 1`, rounded) through the backend state
+
+The timing search (`pwm_hw_find_timing` in `hardware_math.h`) is pure integer math taking the system clock as a
+parameter, and a host sweep test bounds its error. It rejects zero, frequencies below the minimum for the clock, and
+frequencies above half the system clock, so the backend has no separate range check. The config layer's fixed `10 Hz`
+floor is the documented public limit; at higher system clocks the real minimum rises (about `15 Hz` at `250 MHz`) and
+the backend then rejects the request with an apply failure.
 
 ### Generator Tradeoffs
 

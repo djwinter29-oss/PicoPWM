@@ -25,8 +25,10 @@ current target range is about `1 Hz .. 1 MHz`.
 
 The compact PIO program loads a period count and duty threshold, loops
 continuously, and drives the side-set output. C code selects timing values,
-handles static output cases, and publishes realized frequency, duty, and pulse
-state through `pwm`.
+handles static output cases, and publishes realized frequency and duty through
+`pwm`. Realized duty comes from the programmed loop (`high_iterations` over
+`total_iterations`), so short periods publish a quantized duty. The timing search
+lives in `pio_math.h` and is covered by a host frequency sweep.
 
 The public policy is:
 

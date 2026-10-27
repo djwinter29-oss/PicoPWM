@@ -2,7 +2,7 @@
 
 PicoPWM has one firmware image and one logical channel table, owned entirely
 by `firmware/src/driver/pwm/pwm_driver.c`. Persisted settings (bank roles and I2C
-address, two CRC-protected flash slots) live in `firmware/src/app/device_service/device_config.c`
+address, system clock profile, one CRC-protected flash record) live in `firmware/src/platform/boot_config.c`
 and are handed to the driver as three roles. There is no per-profile source file
 and no `PICO_PWM_PROFILE` CMake option. Channel roles are stored in the startup
 configuration. The host edits that target, saves it, and applies it by rebooting.

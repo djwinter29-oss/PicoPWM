@@ -55,7 +55,7 @@ The current implementation is split as follows:
 | `firmware/src/app/i2c/i2c_control_map.c` | I2C register encode/decode and deferred write translation into `device_service` |
 | `firmware/src/driver/pwm/pwm_driver.h` | Public wrapper API, bank/role types, board GPIO structs and channel capacity constants |
 | `firmware/src/driver/pwm/pwm_driver.c` | Core 1 launch, mailbox loop, bank roles, channel lookups, frequency limits, board GPIO validation, shared snapshot |
-| `firmware/src/app/device_service/device_config.[ch]` | Persisted bank roles and I2C address (CRC-protected flash slots) |
+| `firmware/src/platform/boot_config.[ch]` | Persisted clock profile, bank roles and I2C address (CRC-protected flash record) |
 | `firmware/src/driver/pwm/hardware/hardware_generator.c` | Hardware PWM generator backend |
 | `firmware/src/driver/pwm/hardware/hardware_monitor.c` | Hardware PWM monitor backend |
 | `firmware/src/driver/pwm/pio/pio_generator.c` | PIO generator backend |
@@ -81,7 +81,7 @@ pwm_driver_result_t device_service_restore_defaults(void);
 Below that, `pwm` owns the internal cross-core mailbox boundary used by `device_service`:
 
 ```c
-bool pwm_driver_init(const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]);
+bool pwm_driver_init(const pwm_role_t roles[PWM_BANK_COUNT]);
 bool pwm_driver_is_ready(void);
 ```
 

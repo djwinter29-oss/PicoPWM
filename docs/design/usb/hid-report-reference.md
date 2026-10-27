@@ -86,14 +86,14 @@ Feature report, host reads, 18-byte payload.
 
 Feature report, host reads, 21-byte payload.
 
-Backed by `device_config_get_running()` and `device_config_get_target()`.
+Running values come from the live modules (`device_service_bank_role()`, `device_service_i2c_address()`); target values come from `boot_config`.
 
 | Offset | Size | Field | Meaning |
 | -----: | ---: | ----- | ------- |
 | 0 | 1 | `version` | Layout version, `1`. |
 | 1 | 7 | `running` | Bytes 0-2 Bank A/B/C backend, bytes 3-5 Bank A/B/C role, byte 6 7-bit I2C address. Values are the `pwm_driver_config` bank enums below. |
 | 8 | 7 | `target` | Same layout; takes effect only after save and restart. |
-| 15 | 1 | `target_dirty` | `1` when the target differs from the saved copy. |
+| 15 | 1 | reserved | Zero; hosts ignore it. |
 | 16 | 1 | `clock_profile` | Target system clock request (profile table below). Always a valid, accepted profile. Takes effect after save and restart. |
 | 17 | 4 | `system_clock_hz` | Running `clk_sys`, from `system_clock_hz()`; separate from the request. |
 
@@ -102,8 +102,8 @@ not stored by the firmware; it is reported as a constant and a `SET_BANK`/`CONFI
 
 The target is changed and saved through report 20, never by writing report 2. A saved target takes effect only after
 the device restarts. HID provides no reboot, so the host asks the user to power-cycle or reset the board, then
-rereads reports 1 and 2. A host that lost the connection during a save rereads report 2: `target_dirty` of `0` with the
-expected `target` means the save completed.
+rereads reports 1 and 2. A host that lost the connection during a save rereads report 2 after the restart and compares
+`running` with the expected values.
 
 ### System Clock Profile
 
@@ -191,9 +191,9 @@ length because a report ID has a single descriptor length.
 | -: | ---- | ------- |
 | 1 | `SET_CHANNEL` | `device_service_set_channel(channel, freq_hz, duty)`. |
 | 2 | `STOP` | `device_service_restore_defaults()`; outputs stop and defaults are restored. |
-| 3 | `SET_BANK` | `device_config_set_bank()`; `channel` is the bank (`0`-`2`), `arg0` byte 0 backend, byte 1 role. |
-| 4 | `SET_I2C_ADDRESS` | `device_config_set_i2c_address()`; `arg0` low byte is the 7-bit address. |
-| 5 | `SAVE_CONFIG` | `device_config_save()`; requires flag bit 0, plus bit 1 when the target clock profile is above `1`. Persists only; it does not restart the device. See Save Cost. |
+| 3 | `SET_BANK` | `boot_config_set_bank()`; `channel` is the bank (`0`-`2`), `arg0` byte 0 backend, byte 1 role. |
+| 4 | `SET_I2C_ADDRESS` | `boot_config_set_i2c_address()`; `arg0` low byte is the 7-bit address. |
+| 5 | `SAVE_CONFIG` | `boot_config_save()`; requires flag bit 0, plus bit 1 when the target clock profile is above `1`. Persists only; it does not restart the device. See Save Cost. |
 | 6 | `SET_CLOCK_PROFILE` | Sets the target clock profile from `arg0` low byte; profiles above `1` require flag bit 1. |
 
 Operation validity, checked before any side effect; every failure returns `INVALID` and changes nothing:
@@ -202,7 +202,7 @@ Operation validity, checked before any side effect; every failure returns `INVAL
   is `[0, 100]`, and `freq_hz` is accepted by `device_service_set_channel()`.
 - `STOP`: `channel`, `arg0`, and `arg1` are zero.
 - `SET_BANK`: `channel` is `0`-`2`, and the backend/role pair is allowed for that bank.
-- `SET_I2C_ADDRESS`: the address is accepted by `device_config_set_i2c_address()`.
+- `SET_I2C_ADDRESS`: the address is accepted by `boot_config_set_i2c_address()`.
 - `SAVE_CONFIG`: flag bit 0 set (and bit 1 for an overclock target), and no other fields set.
 - `SET_CLOCK_PROFILE`: the profile is set in `clock_profile_mask`.
 - Unused fields and reserved bits are zero; a nonzero value is `INVALID`.

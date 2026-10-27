@@ -18,6 +18,8 @@ typedef struct {
 extern const i2c_board_config_t i2c_board_config;
 
 void i2c_slave_init(uint8_t address);
+/** @brief Return the 7-bit address passed to `i2c_slave_init()`. */
+uint8_t i2c_slave_address(void);
 void i2c_slave_poll(void);
 
 /**

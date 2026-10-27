@@ -27,7 +27,7 @@ public static class Protocol
 
     public sealed record BankConfiguration(int[] Backends, int[] Roles, int I2cAddress);
 
-    public sealed record Configuration(BankConfiguration Running, BankConfiguration Target, bool TargetDirty,
+    public sealed record Configuration(BankConfiguration Running, BankConfiguration Target,
         int ClockProfile, uint SystemClockHz);
 
     public sealed record ChannelState(int Channel, uint? FreqHz, int? Duty);
@@ -69,9 +69,9 @@ public static class Protocol
     {
         Check(payload, ConfigurationSize, "configuration report");
         var clock = BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(17));
-        if (payload[15] > 1 || payload[16] > 4 || clock == 0)
+        if (payload[16] > 4 || clock == 0)
             throw new InvalidDataException("invalid configuration fields");
-        return new(DecodeBanks(payload, 1), DecodeBanks(payload, 8), payload[15] == 1, payload[16], clock);
+        return new(DecodeBanks(payload, 1), DecodeBanks(payload, 8), payload[16], clock);
     }
 
     public static ChannelState[] DecodeBankStatus(byte[] payload, int bank)

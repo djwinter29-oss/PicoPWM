@@ -43,8 +43,6 @@ function renderConfiguration(data) {
     ? `0x${configuration.running.i2c_address.toString(16).padStart(2, "0")}`
       + (configuration.target.i2c_address === configuration.running.i2c_address ? ""
         : ` (target 0x${configuration.target.i2c_address.toString(16).padStart(2, "0")})`) : null);
-  setText("#target-state", configuration
-    ? configuration.target_dirty ? "Unsaved changes; saved targets apply after restart" : "Saved" : null);
   const rows = document.querySelector("#bank-config");
   rows.replaceChildren();
   BANK_NAMES.forEach((name, bank) => {

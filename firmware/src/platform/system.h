@@ -23,7 +23,7 @@
 #define SYSTEM_CLOCK 150000u
 #endif
 
-/** @brief Configure the board system clock for the PicoPWM firmware runtime. */
+/** @brief Configure the system clock from the boot configuration (SYSTEM_CLOCK when unset). */
 bool system_init_clock(void);
 
 /** @brief Return true when the nominal system-clock target was applied. */

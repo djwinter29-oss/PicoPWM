@@ -24,7 +24,7 @@ function render() {
   $("#clock-profile-select").disabled = !clockReady;
   $("#clock-ack").disabled = !clockReady || Number($("#clock-profile-select").value) <= 1;
   saveButton.hidden = !dashboard.identity?.can_save;
-  saveButton.disabled = !ready || !dashboard.configuration?.target_dirty;
+  saveButton.disabled = !ready;
   if (!dashboard.connected && saveDialog.open) saveDialog.close();
   statusMessage.textContent = state.error ?? state.message;
   statusMessage.parentElement.dataset.error = String(Boolean(state.error));

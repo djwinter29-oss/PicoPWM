@@ -1,7 +1,7 @@
 #include "app/cli/board_commands.h"
 
 #include "driver/pwm/pwm_driver.h"
-#include "app/device_service/device_config.h"
+#include "platform/boot_config.h"
 #include "app/device_service/device_service.h"
 #include "platform/led.h"
 #include "platform/system.h"
@@ -59,33 +59,34 @@ bool board_commands_version(void *context, int argc, const char *const *argv) {
     return shell_write_line(COMMAND_SHELL, device_service_firmware_version());
 }
 
-static const char *board_commands_role_name(pwm_driver_config_bank_role_t role) {
-    return role == PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR ? "gen" : "mon";
+static const char *board_commands_role_name(pwm_role_t role) {
+    return role == PWM_ROLE_GENERATOR ? "gen" : "mon";
 }
 
-static void board_commands_format_config(char *line, size_t size, const char *label,
-                                         const device_config_t *config) {
-    snprintf(line, size, "%s=i2c=0x%02X A:hw/%s B:pio/%s C:sw/%s", label, (unsigned)config->i2c_address,
-             board_commands_role_name(config->bank_a_role), board_commands_role_name(config->bank_b_role),
-             board_commands_role_name(config->bank_c_role));
+static void board_commands_format_config(char *line, size_t size, const char *label, unsigned mhz, uint8_t address,
+                                         pwm_role_t (*role)(pwm_bank_t)) {
+    snprintf(line, size, "%s=clk=%uMHz i2c=0x%02X A:hw/%s B:pio/%s C:sw/%s", label,
+             mhz, (unsigned)address,
+             board_commands_role_name(role(PWM_BANK_A)),
+             board_commands_role_name(role(PWM_BANK_B)),
+             board_commands_role_name(role(PWM_BANK_C)));
 }
 
 bool board_commands_config(void *context, int argc, const char *const *argv) {
     char line[128];
-    device_config_t running;
-    device_config_t target;
 
     if (argc == 1) {
-        device_config_get_running(&running);
-        device_config_get_target(&target);
-        board_commands_format_config(line, sizeof(line), "running", &running);
+        board_commands_format_config(line, sizeof(line), "running", (unsigned)((device_service_system_clock_hz() + 500000u) / 1000000u),
+                                     device_service_i2c_address(), device_service_bank_role);
         shell_write_line(COMMAND_SHELL, line);
-        board_commands_format_config(line, sizeof(line), "target", &target);
+        board_commands_format_config(line, sizeof(line), "target",
+                                     boot_config_get_sysclk_mhz() != 0u ? boot_config_get_sysclk_mhz() : SYSTEM_CLOCK / 1000u,
+                                     boot_config_get_i2c_address(), boot_config_get_bank);
         return shell_write_line(COMMAND_SHELL, line);
     }
 
     if ((argc == 2) && (strcmp(argv[1], "save") == 0)) {
-        return shell_write_line(COMMAND_SHELL, device_config_save()
+        return shell_write_line(COMMAND_SHELL, boot_config_save()
                                                    ? "OK config saved; reboot required"
                                                    : "ERR config invalid or flash write failed");
     }
@@ -94,25 +95,41 @@ bool board_commands_config(void *context, int argc, const char *const *argv) {
         char *end = NULL;
         unsigned long value = strtoul(argv[2], &end, 0);
         return shell_write_line(COMMAND_SHELL, (end != argv[2] && *end == '\0' && value <= 0x77u && value >= 0x08u &&
-                                                device_config_set_i2c_address((uint8_t)value))
+                                                boot_config_set_i2c_address((uint8_t)value))
                                                    ? "OK target address updated; save then reboot"
                                                    : "ERR invalid I2C address");
     }
 
-    if ((argc != 4) || (strcmp(argv[1], "set") != 0)) {
-        return shell_write_line(COMMAND_SHELL,
-                                "ERR usage: config [set <a|b|c> <gen|mon>|address <7-bit>|save]");
+    if ((argc == 3) && (strcmp(argv[1], "clock") == 0)) {
+        char *end = NULL;
+        unsigned long mhz = strtoul(argv[2], &end, 10);
+        bool is_default = strcmp(argv[2], "default") == 0;
+        bool numeric = end != argv[2] && *end == '\0';
+        boot_config_sysclk_t profile = (numeric && mhz == 150u)   ? BOOT_CONFIG_SYSCLK_150MHZ
+                                       : (numeric && mhz == 200u) ? BOOT_CONFIG_SYSCLK_200MHZ
+                                       : (numeric && mhz == 250u) ? BOOT_CONFIG_SYSCLK_250MHZ
+                                                                  : BOOT_CONFIG_SYSCLK_DEFAULT;
+        bool found = is_default || profile != BOOT_CONFIG_SYSCLK_DEFAULT;
+        bool ok = found && boot_config_set_sysclk(profile);
+        return shell_write_line(COMMAND_SHELL, ok
+                                                   ? "OK target clock updated; save then reboot"
+                                                   : "ERR clock must be default, 150, 200 or 250");
     }
 
-    pwm_driver_config_bank_t bank = (strcmp(argv[2], "a") == 0)   ? PWM_DRIVER_CONFIG_BANK_A
-                                    : (strcmp(argv[2], "b") == 0) ? PWM_DRIVER_CONFIG_BANK_B
-                                    : (strcmp(argv[2], "c") == 0) ? PWM_DRIVER_CONFIG_BANK_C
-                                                                  : PWM_DRIVER_CONFIG_BANK_COUNT;
-    pwm_driver_config_bank_role_t role = (strcmp(argv[3], "gen") == 0)   ? PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR
-                                         : (strcmp(argv[3], "mon") == 0) ? PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR
-                                                                         : PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR + 1u;
+    if ((argc != 4) || (strcmp(argv[1], "set") != 0)) {
+        return shell_write_line(COMMAND_SHELL,
+                                "ERR usage: config [set <a|b|c> <gen|mon>|address <7-bit>|clock <default|150|200|250>|save]");
+    }
 
-    return shell_write_line(COMMAND_SHELL, device_config_set_bank(bank, role)
+    pwm_bank_t bank = (strcmp(argv[2], "a") == 0)   ? PWM_BANK_A
+                                    : (strcmp(argv[2], "b") == 0) ? PWM_BANK_B
+                                    : (strcmp(argv[2], "c") == 0) ? PWM_BANK_C
+                                                                  : PWM_BANK_COUNT;
+    pwm_role_t role = (strcmp(argv[3], "gen") == 0)   ? PWM_ROLE_GENERATOR
+                                         : (strcmp(argv[3], "mon") == 0) ? PWM_ROLE_MONITOR
+                                                                         : PWM_ROLE_MONITOR + 1u;
+
+    return shell_write_line(COMMAND_SHELL, boot_config_set_bank(bank, role)
                                                ? "OK target updated; save then reboot"
                                                : "ERR invalid bank/role");
 }

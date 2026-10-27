@@ -42,19 +42,19 @@ target_include_directories(cli_channel_commands_test PRIVATE
 pico_pwm_test_warnings(cli_channel_commands_test)
 add_test(NAME cli_channel_commands COMMAND cli_channel_commands_test)
 
-add_executable(device_config_test
-    device_config_test.c
+add_executable(boot_config_test
+    boot_config_test.c
     stubs/hardware/flash.c
-    ${SOURCE_ROOT}/app/device_service/device_config.c
+    ${SOURCE_ROOT}/platform/boot_config.c
     ${SOURCE_ROOT}/config/board.c
 )
-target_include_directories(device_config_test PRIVATE
+target_include_directories(boot_config_test PRIVATE
     ${TEST_STUB_ROOT}
     ${SOURCE_ROOT}
 )
-pico_pwm_test_warnings(device_config_test)
-target_compile_definitions(device_config_test PRIVATE PICO_PWM_CONFIG_FLASH_OFFSET=0)
-add_test(NAME device_config COMMAND device_config_test)
+pico_pwm_test_warnings(boot_config_test)
+target_compile_definitions(boot_config_test PRIVATE PICO_PWM_CONFIG_FLASH_OFFSET=0)
+add_test(NAME boot_config COMMAND boot_config_test)
 
 add_executable(pio_monitor_decode_test
     pio_monitor_decode_test.c

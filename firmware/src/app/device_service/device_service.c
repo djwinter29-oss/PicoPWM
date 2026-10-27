@@ -6,6 +6,7 @@
 #include "device_service.h"
 
 #include "pico/unique_id.h"
+#include "driver/i2c/i2c_slave.h"
 #include "platform/system.h"
 #include "driver/pwm/pwm_driver_internal.h"
 
@@ -28,6 +29,17 @@ void device_service_get_uid(uint8_t uid[8]) {
 
 uint32_t device_service_system_clock_hz(void) {
     return system_clock_hz();
+}
+
+pwm_role_t device_service_bank_role(pwm_bank_t bank) {
+    pwm_role_t role = PWM_ROLE_MONITOR;
+
+    (void)pwm_driver_config_channel_role((uint)bank * PWM_DRIVER_CONFIG_BANK_SIZE, &role);
+    return role;
+}
+
+uint8_t device_service_i2c_address(void) {
+    return i2c_slave_address();
 }
 
 uint8_t device_service_channel_count(void) {

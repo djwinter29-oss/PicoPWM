@@ -84,14 +84,13 @@ def _bank_configuration(payload: bytes, offset: int) -> dict[str, Any]:
 
 def decode_configuration(payload: bytes) -> dict[str, Any]:
     _check(payload, CONFIGURATION_SIZE, "configuration report")
-    dirty, profile = payload[15], payload[16]
+    profile = payload[16]
     clock = struct.unpack_from("<I", payload, 17)[0]
-    if dirty > 1 or profile > 4 or not clock:
+    if profile > 4 or not clock:
         raise ProtocolError("invalid configuration fields")
     return {
         "running": _bank_configuration(payload, 1),
         "target": _bank_configuration(payload, 8),
-        "target_dirty": bool(dirty),
         "clock_profile": profile,
         "system_clock_hz": clock,
     }

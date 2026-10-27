@@ -265,7 +265,7 @@ static void gen_publish_state(uint channel) {
         .pulse_count = pio_channels[channel].pulse_count,
     };
 
-    pwm_driver_store_applied_state(((uint)PWM_DRIVER_CONFIG_BANK_B * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)),
+    pwm_driver_store_applied_state(((uint)PWM_BANK_B * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)),
                                    &state);
 }
 

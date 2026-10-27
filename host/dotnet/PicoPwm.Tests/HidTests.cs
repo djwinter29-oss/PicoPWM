@@ -46,7 +46,6 @@ public sealed class HidTests
         Assert.Equal("0102030405060708", Protocol.DecodeIdentity(Identity).SerialNumber);
         var config = Protocol.DecodeConfiguration(Configuration);
         Assert.Equal(150_000_000u, config.SystemClockHz);
-        Assert.True(config.TargetDirty);
         Assert.Equal(new Protocol.ChannelState(8, 1000, 50), Protocol.DecodeBankStatus(Bank, 1)[0]);
     }
 

@@ -1,56 +1,51 @@
 #include "app/usb/hid_protocol.h"
 
-#include "app/device_service/device_config.h"
+#include "platform/boot_config.h"
 #include "app/device_service/device_service.h"
 
 #include <assert.h>
 #include <string.h>
 
 static bool save_ok = true;
-static bool dirty = true;
 static int saves;
 static int channel_sets;
 static uint last_channel;
 static uint32_t last_freq;
 static uint8_t last_duty;
-static pwm_driver_config_bank_role_t bank_role;
-static device_config_t running_config = {
-    .bank_a_role = PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
-    .bank_b_role = PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR,
-    .bank_c_role = PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
-    .i2c_address = 0x20,
-};
+static pwm_role_t bank_role;
 
 const char *device_service_firmware_version(void) {
     return "1.2.3-dev";
 }
 
-bool device_config_get_running(device_config_t *config) {
-    *config = running_config;
-    return true;
+pwm_role_t boot_config_get_bank(pwm_bank_t bank) {
+    return bank == PWM_BANK_B ? PWM_ROLE_MONITOR : PWM_ROLE_GENERATOR;
 }
 
-bool device_config_get_target(device_config_t *config) {
-    *config = running_config;
-    return true;
+uint8_t boot_config_get_i2c_address(void) {
+    return 0x20u;
 }
 
-bool device_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_role_t role) {
+pwm_role_t device_service_bank_role(pwm_bank_t bank) {
+    return boot_config_get_bank(bank);
+}
+
+uint8_t device_service_i2c_address(void) {
+    return 0x20u;
+}
+
+bool boot_config_set_bank(pwm_bank_t bank, pwm_role_t role) {
     (void)bank;
     bank_role = role;
     return true;
 }
 
-bool device_config_save(void) {
+bool boot_config_save(void) {
     ++saves;
     return save_ok;
 }
 
-bool device_config_target_dirty(void) {
-    return dirty;
-}
-
-bool device_config_set_i2c_address(uint8_t address) {
+bool boot_config_set_i2c_address(uint8_t address) {
     return address != 0u;
 }
 
@@ -109,7 +104,7 @@ int main(void) {
     assert(memcmp(p, identity, sizeof(identity)) == 0);
     assert(hid_protocol_get(HID_REPORT_ID_IDENTITY, p, 17) == 0u);
     assert(hid_protocol_get(HID_REPORT_ID_CONFIGURATION, p, sizeof(p)) == sizeof(config));
-    assert(p[0] == 1u && p[15] == 1u && memcmp(&p[1], &config[1], 7) == 0 && memcmp(&p[17], &config[17], 4) == 0);
+    assert(p[0] == 1u && p[15] == 0u && memcmp(&p[1], &config[1], 7) == 0 && memcmp(&p[17], &config[17], 4) == 0);
     assert(hid_protocol_get(HID_REPORT_ID_BANK_STATUS + 2, p, sizeof(p)) == HID_BANK_STATUS_SIZE);
     assert(p[0] == 1u && p[1] == (1016u & 0xFFu) && p[2] == (1016u >> 8) && p[5] == 16u);
     assert(hid_protocol_get(13u, p, sizeof(p)) == 0u);

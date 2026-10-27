@@ -56,7 +56,7 @@ static void sw_gen_publish_state(uint channel) {
     sw_pwm_channel_t *ch = &sw_pwm_channels[channel];
     pwm_driver_state_t state = sw_gen_channel_state(ch);
 
-    pwm_driver_store_applied_state(((uint)PWM_DRIVER_CONFIG_BANK_C * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)),
+    pwm_driver_store_applied_state(((uint)PWM_BANK_C * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)),
                                    &state);
 }
 
@@ -66,7 +66,7 @@ static void sw_gen_publish_state_coherent(uint channel) {
     pwm_driver_state_t state = sw_gen_channel_state(ch);
 
     pwm_driver_store_applied_state_coherent(
-        ((uint)PWM_DRIVER_CONFIG_BANK_C * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)), &state, time_us_64());
+        ((uint)PWM_BANK_C * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)), &state, time_us_64());
 }
 
 /** @brief Resolve whether one software-PWM request should be handled as a static-output mode. */
@@ -128,7 +128,7 @@ static bool sw_pwm_tick_callback(repeating_timer_t *rt) {
             ch->counter = 0;
             ch->pulse_count++;
             pwm_driver_store_pulse_count(
-                ((uint)PWM_DRIVER_CONFIG_BANK_C * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)), ch->pulse_count);
+                ((uint)PWM_BANK_C * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)), ch->pulse_count);
         }
         gpio_put(ch->gpio, ch->counter < ch->duty_ticks);
     }

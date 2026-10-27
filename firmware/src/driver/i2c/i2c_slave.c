@@ -247,7 +247,14 @@ void i2c_slave_service_reads(void) {
     }
 }
 
+static uint8_t i2c_slave_current_address;
+
+uint8_t i2c_slave_address(void) {
+    return i2c_slave_current_address;
+}
+
 void i2c_slave_init(uint8_t address) {
+    i2c_slave_current_address = address;
     gpio_init(i2c_board_config.sda_pin);
     gpio_init(i2c_board_config.scl_pin);
     gpio_set_function(i2c_board_config.sda_pin, GPIO_FUNC_I2C);

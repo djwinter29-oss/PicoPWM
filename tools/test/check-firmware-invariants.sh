@@ -6,7 +6,7 @@ REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 
 PIO_FILE="$REPO_ROOT/firmware/src/driver/pwm/pio/pio_generator.pio"
 DRIVER_FILE="$REPO_ROOT/firmware/src/driver/pwm/pwm_driver.c"
-CONFIG_FILE="$REPO_ROOT/firmware/src/app/device_service/device_config.c"
+CONFIG_FILE="$REPO_ROOT/firmware/src/platform/boot_config.c"
 SLAVE_FILE="$REPO_ROOT/firmware/src/driver/i2c/i2c_slave.c"
 
 # The low path must not side-set. A side-set there makes every duty a one-tick pulse.
@@ -39,7 +39,7 @@ if ! grep -q "multicore_lockout_victim_init" "$DRIVER_FILE"; then
 fi
 
 if ! grep -q "multicore_lockout_start_blocking" "$CONFIG_FILE"; then
-    echo "device_config.c: config save must lock out Core 1 around flash programming" >&2
+    echo "boot_config.c: config save must lock out Core 1 around flash programming" >&2
     exit 1
 fi
 
@@ -48,41 +48,41 @@ awk '
     /save_and_disable_interrupts/ { disabled = 1 }
     /multicore_lockout_start_blocking/ {
         if (!disabled) {
-            print "device_config.c: lock out Core 1 only while interrupts are disabled" > "/dev/stderr"
+            print "boot_config.c: lock out Core 1 only while interrupts are disabled" > "/dev/stderr"
             exit 1
         }
         locked = 1
     }
     /flash_range_erase/ {
         if (!disabled || !locked) {
-            print "device_config.c: erase flash only with interrupts disabled and Core 1 locked out" > "/dev/stderr"
+            print "boot_config.c: erase flash only with interrupts disabled and Core 1 locked out" > "/dev/stderr"
             exit 1
         }
         erased = 1
     }
     /flash_range_program/ {
         if (!erased) {
-            print "device_config.c: program flash only after erase, with interrupts still disabled" > "/dev/stderr"
+            print "boot_config.c: program flash only after erase, with interrupts still disabled" > "/dev/stderr"
             exit 1
         }
         programmed = 1
     }
     /multicore_lockout_end_blocking/ {
         if (!programmed) {
-            print "device_config.c: end the Core 1 lockout after flash programming" > "/dev/stderr"
+            print "boot_config.c: end the Core 1 lockout after flash programming" > "/dev/stderr"
             exit 1
         }
     }
     /restore_interrupts/ {
         if (!programmed) {
-            print "device_config.c: restore interrupts after flash programming" > "/dev/stderr"
+            print "boot_config.c: restore interrupts after flash programming" > "/dev/stderr"
             exit 1
         }
         restored = 1
     }
     END {
         if (!restored) {
-            print "device_config.c: config save must disable interrupts around flash programming" > "/dev/stderr"
+            print "boot_config.c: config save must disable interrupts around flash programming" > "/dev/stderr"
             exit 1
         }
     }

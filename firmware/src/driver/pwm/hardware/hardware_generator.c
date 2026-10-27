@@ -106,7 +106,7 @@ static void hw_gen_publish_state(uint channel, uint32_t realized_freq_hz, uint8_
     state.duty = realized_duty;
     state.pulse_count = hw_channels[channel].pulse_count;
 
-    pwm_driver_store_applied_state(((uint)PWM_DRIVER_CONFIG_BANK_A * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)),
+    pwm_driver_store_applied_state(((uint)PWM_BANK_A * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)),
                                    &state);
 }
 

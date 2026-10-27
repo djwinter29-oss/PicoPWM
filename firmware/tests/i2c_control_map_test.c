@@ -2,13 +2,12 @@
 
 #include "platform/led.h"
 #include "platform/system.h"
-#include "app/device_service/device_config.h"
+#include "platform/boot_config.h"
 #include "app/device_service/device_service.h"
 
 #include <assert.h>
 #include <string.h>
 
-static bool config_read_ok = true;
 static bool set_bank_ok = true;
 static bool save_ok = true;
 static bool address_ok = true;
@@ -23,32 +22,34 @@ const char *device_service_firmware_version(void) {
     return "test";
 }
 
-bool device_config_get_running(device_config_t *config) {
-    if ((config == NULL) || !config_read_ok)
-        return false;
-    *config = (device_config_t){
-        .bank_a_role = PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
-        .bank_b_role = PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
-        .bank_c_role = PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
-    };
-    return true;
+pwm_role_t boot_config_get_bank(pwm_bank_t bank) {
+    (void)bank;
+    return PWM_ROLE_GENERATOR;
 }
 
-bool device_config_get_target(device_config_t *config) {
-    return device_config_get_running(config);
+uint8_t boot_config_get_i2c_address(void) {
+    return 0u;
 }
 
-bool device_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_role_t role) {
+pwm_role_t device_service_bank_role(pwm_bank_t bank) {
+    return boot_config_get_bank(bank);
+}
+
+uint8_t device_service_i2c_address(void) {
+    return boot_config_get_i2c_address();
+}
+
+bool boot_config_set_bank(pwm_bank_t bank, pwm_role_t role) {
     (void)bank;
     (void)role;
     return set_bank_ok;
 }
 
-bool device_config_save(void) {
+bool boot_config_save(void) {
     return save_ok;
 }
 
-bool device_config_set_i2c_address(uint8_t address) {
+bool boot_config_set_i2c_address(uint8_t address) {
     (void)address;
     return address_ok;
 }
@@ -144,7 +145,7 @@ static void test_remaining_registers(void) {
     const uint8_t led_on[] = {1u};
     const uint8_t led_off[] = {0u};
     const uint8_t led_bad[] = {2u};
-    const uint8_t bank_payload[] = {0u, 0u, PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR};
+    const uint8_t bank_payload[] = {0u, 0u, PWM_ROLE_MONITOR};
     const uint8_t address_payload[] = {0x41u};
     const uint8_t address_low[] = {0x01u};
     uint8_t extra = 1u;
@@ -163,9 +164,7 @@ static void test_remaining_registers(void) {
     assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CHANNEL_COUNT, 0u, response, 0u, &response_len));
     assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CH_BASE, 0u, response, 8u, &response_len));
 
-    config_read_ok = false;
-    assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CONFIG, 0u, response, sizeof(response), &response_len));
-    config_read_ok = true;
+    assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CONFIG, 0u, response, 13u, &response_len));
 
     assert(i2c_control_map_is_write_register(I2C_CONTROL_MAP_REG_STOP_ALL));
     assert(i2c_control_map_is_write_register(I2C_CONTROL_MAP_REG_LED));

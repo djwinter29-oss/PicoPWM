@@ -23,6 +23,12 @@ void device_service_get_uid(uint8_t uid[8]);
 /** @brief Return the running system clock in Hz. */
 uint32_t device_service_system_clock_hz(void);
 
+/** @brief Role a bank is running with (what the last boot applied). */
+pwm_role_t device_service_bank_role(pwm_bank_t bank);
+
+/** @brief 7-bit I2C address the slave is running with. */
+uint8_t device_service_i2c_address(void);
+
 /** @brief Return the logical PWM channel count exposed by the firmware. */
 uint8_t device_service_channel_count(void);
 

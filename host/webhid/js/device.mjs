@@ -80,14 +80,12 @@ function bankConfiguration(data, offset) {
 export function decodeConfiguration(report) {
   const data = payload(report, CONFIGURATION_LENGTH, "Configuration report", 2);
   if (data.getUint8(0) !== 1) throw new Error("Unsupported configuration layout");
-  const dirty = data.getUint8(15);
   const profile = data.getUint8(16);
   const clock = data.getUint32(17, true);
-  if (dirty > 1 || profile > 4 || !clock) throw new Error("Invalid configuration fields");
+  if (profile > 4 || !clock) throw new Error("Invalid configuration fields");
   return {
     running: bankConfiguration(data, 1),
     target: bankConfiguration(data, 8),
-    target_dirty: Boolean(dirty),
     clock_profile: profile,
     system_clock_hz: clock,
   };

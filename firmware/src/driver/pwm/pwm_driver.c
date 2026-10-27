@@ -28,22 +28,22 @@
 #include <string.h>
 
 /** @brief Bank roles chosen at startup; set once before Core 1 launches. */
-static pwm_driver_config_bank_role_t pwm_driver_config_bank_roles[PWM_DRIVER_CONFIG_BANK_COUNT];
+static pwm_role_t pwm_driver_config_bank_roles[PWM_BANK_COUNT];
 static bool pwm_driver_config_table_configured = false;
 
 /** @brief Return the board GPIO for one channel of a bank. */
-static uint pwm_driver_config_bank_gpio(pwm_driver_config_bank_t bank, uint index) {
+static uint pwm_driver_config_bank_gpio(pwm_bank_t bank, uint index) {
     switch (bank) {
-    case PWM_DRIVER_CONFIG_BANK_A:
+    case PWM_BANK_A:
         return hardware_pwm_config.channels[index].gpio;
-    case PWM_DRIVER_CONFIG_BANK_B:
+    case PWM_BANK_B:
         return pio_pwm_config.channels[index].gpio;
     default:
         return software_pwm_config.channels[index].gpio;
     }
 }
 
-bool pwm_driver_config_channel_role(uint channel, pwm_driver_config_bank_role_t *role) {
+bool pwm_driver_config_channel_role(uint channel, pwm_role_t *role) {
     if (!pwm_driver_config_table_configured || (role == NULL) || (channel >= PWM_DRIVER_CONFIG_CHANNEL_COUNT)) {
         return false;
     }
@@ -52,12 +52,12 @@ bool pwm_driver_config_channel_role(uint channel, pwm_driver_config_bank_role_t 
 }
 
 const char *pwm_driver_config_channel_name(uint channel) {
-    static const char *const names[PWM_DRIVER_CONFIG_BANK_COUNT][2] = {
+    static const char *const names[PWM_BANK_COUNT][2] = {
         {"HW", "HW-MON"},
         {"PIO", "PIO-MON"},
         {"SW", "SW-MON"},
     };
-    pwm_driver_config_bank_role_t role;
+    pwm_role_t role;
 
     return pwm_driver_config_channel_role(channel, &role) ? names[channel / PWM_DRIVER_CONFIG_BANK_SIZE][role] : "?";
 }
@@ -65,7 +65,7 @@ const char *pwm_driver_config_channel_name(uint channel) {
 bool pwm_driver_config_validate(void) {
     uint32_t used = 0u;
 
-    for (pwm_driver_config_bank_t bank = PWM_DRIVER_CONFIG_BANK_A; bank < PWM_DRIVER_CONFIG_BANK_COUNT; ++bank) {
+    for (pwm_bank_t bank = PWM_BANK_A; bank < PWM_BANK_COUNT; ++bank) {
         for (uint i = 0u; i < PWM_DRIVER_CONFIG_BANK_SIZE; ++i) {
             uint gpio = pwm_driver_config_bank_gpio(bank, i);
 
@@ -74,10 +74,10 @@ bool pwm_driver_config_validate(void) {
             }
             used |= 1u << gpio;
 
-            if ((gpio == 23u || gpio == 24u) && bank != PWM_DRIVER_CONFIG_BANK_C) {
+            if ((gpio == 23u || gpio == 24u) && bank != PWM_BANK_C) {
                 return false;
             }
-            if (PWM_DRIVER_CONFIG_REQUIRE_HW_CHANNEL_B && bank == PWM_DRIVER_CONFIG_BANK_A &&
+            if (PWM_DRIVER_CONFIG_REQUIRE_HW_CHANNEL_B && bank == PWM_BANK_A &&
                 pwm_gpio_to_channel(gpio) != PWM_CHAN_B) {
                 return false;
             }
@@ -88,7 +88,7 @@ bool pwm_driver_config_validate(void) {
 }
 
 bool pwm_driver_config_frequency_supported(uint channel, uint32_t frequency_hz) {
-    pwm_driver_config_bank_role_t role;
+    pwm_role_t role;
     uint32_t min_hz = 1u;
     uint32_t max_hz = 1000000u;
 
@@ -99,9 +99,9 @@ bool pwm_driver_config_frequency_supported(uint channel, uint32_t frequency_hz) 
         return true;
     }
 
-    if (channel / PWM_DRIVER_CONFIG_BANK_SIZE == PWM_DRIVER_CONFIG_BANK_A && role == PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR) {
+    if (channel / PWM_DRIVER_CONFIG_BANK_SIZE == PWM_BANK_A && role == PWM_ROLE_GENERATOR) {
         min_hz = 10u;
-    } else if (channel / PWM_DRIVER_CONFIG_BANK_SIZE == PWM_DRIVER_CONFIG_BANK_C) {
+    } else if (channel / PWM_DRIVER_CONFIG_BANK_SIZE == PWM_BANK_C) {
         max_hz = 1000u;
     }
 
@@ -109,9 +109,9 @@ bool pwm_driver_config_frequency_supported(uint channel, uint32_t frequency_hz) 
 }
 
 bool pwm_driver_config_is_monitor(void) {
-    for (pwm_driver_config_bank_t bank = PWM_DRIVER_CONFIG_BANK_A; bank < PWM_DRIVER_CONFIG_BANK_COUNT; ++bank) {
+    for (pwm_bank_t bank = PWM_BANK_A; bank < PWM_BANK_COUNT; ++bank) {
         if (pwm_driver_config_table_configured &&
-            pwm_driver_config_bank_roles[bank] == PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR) {
+            pwm_driver_config_bank_roles[bank] == PWM_ROLE_MONITOR) {
             return true;
         }
     }
@@ -119,14 +119,14 @@ bool pwm_driver_config_is_monitor(void) {
 }
 
 /** @brief Record the bank roles before Core 1 launches; false when already set or invalid. */
-static bool pwm_driver_configure_table(const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]) {
+static bool pwm_driver_configure_table(const pwm_role_t roles[PWM_BANK_COUNT]) {
     if ((roles == NULL) || pwm_driver_config_table_configured) {
         return false;
     }
 
-    for (pwm_driver_config_bank_t bank = PWM_DRIVER_CONFIG_BANK_A; bank < PWM_DRIVER_CONFIG_BANK_COUNT; ++bank) {
-        if ((roles[bank] != PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR) &&
-            (roles[bank] != PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR)) {
+    for (pwm_bank_t bank = PWM_BANK_A; bank < PWM_BANK_COUNT; ++bank) {
+        if ((roles[bank] != PWM_ROLE_GENERATOR) &&
+            (roles[bank] != PWM_ROLE_MONITOR)) {
             return false;
         }
     }
@@ -244,31 +244,31 @@ static pwm_driver_mailbox_t pwm_mailbox = {
 };
 
 /** @brief Backend routing table indexed by `[bank][role]`; each bank owns one fixed module. */
-static const pwm_driver_backend_t pwm_driver_backends[PWM_DRIVER_CONFIG_BANK_COUNT][2] = {
-    [PWM_DRIVER_CONFIG_BANK_A] =
+static const pwm_driver_backend_t pwm_driver_backends[PWM_BANK_COUNT][2] = {
+    [PWM_BANK_A] =
         {
-            [PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR] = {.init = hw_gen_init,
+            [PWM_ROLE_GENERATOR] = {.init = hw_gen_init,
                                                        .set = hw_gen_set,
                                                        .finalize_readback = hw_gen_finalize_readback},
-            [PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR] = {.init = hw_mon_init, .get = hw_mon_get},
+            [PWM_ROLE_MONITOR] = {.init = hw_mon_init, .get = hw_mon_get},
         },
-    [PWM_DRIVER_CONFIG_BANK_B] =
+    [PWM_BANK_B] =
         {
-            [PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR] = {.init = pio_gen_init,
+            [PWM_ROLE_GENERATOR] = {.init = pio_gen_init,
                                                        .set = pio_gen_set,
                                                        .finalize_readback = pio_gen_finalize_readback},
-            [PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR] = {.init = pio_mon_init, .get = pio_mon_get},
+            [PWM_ROLE_MONITOR] = {.init = pio_mon_init, .get = pio_mon_get},
         },
-    [PWM_DRIVER_CONFIG_BANK_C] =
+    [PWM_BANK_C] =
         {
-            [PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR] = {.init = sw_gen_init, .set = sw_gen_set},
-            [PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR] = {.init = sw_mon_init, .get = sw_mon_get},
+            [PWM_ROLE_GENERATOR] = {.init = sw_gen_init, .set = sw_gen_set},
+            [PWM_ROLE_MONITOR] = {.init = sw_mon_init, .get = sw_mon_get},
         },
 };
 
 /** @brief Resolve the module that is active for one bank under the startup roles. */
-static const pwm_driver_backend_t *pwm_driver_bank_backend(pwm_driver_config_bank_t bank) {
-    pwm_driver_config_bank_role_t role;
+static const pwm_driver_backend_t *pwm_driver_bank_backend(pwm_bank_t bank) {
+    pwm_role_t role;
 
     if (!pwm_driver_config_channel_role((uint)bank * PWM_DRIVER_CONFIG_BANK_SIZE, &role)) {
         return NULL;
@@ -291,7 +291,7 @@ static const pwm_driver_backend_t *pwm_driver_get_backend(uint channel, uint *lo
         *local_channel = channel % PWM_DRIVER_CONFIG_BANK_SIZE;
     }
 
-    return pwm_driver_bank_backend((pwm_driver_config_bank_t)(channel / PWM_DRIVER_CONFIG_BANK_SIZE));
+    return pwm_driver_bank_backend((pwm_bank_t)(channel / PWM_DRIVER_CONFIG_BANK_SIZE));
 }
 
 /**
@@ -393,7 +393,7 @@ static bool pwm_driver_backend_set(uint channel, uint32_t freq_hz, uint8_t duty)
 
 /** @brief Initialize every backend selected by the already-populated startup table. */
 static bool pwm_driver_initialize_backends(void) {
-    for (pwm_driver_config_bank_t bank = PWM_DRIVER_CONFIG_BANK_A; bank < PWM_DRIVER_CONFIG_BANK_COUNT; ++bank) {
+    for (pwm_bank_t bank = PWM_BANK_A; bank < PWM_BANK_COUNT; ++bank) {
         const pwm_driver_backend_t *backend = pwm_driver_bank_backend(bank);
 
         if ((backend == NULL) || (backend->init == NULL) || !backend->init()) {
@@ -505,7 +505,7 @@ void pwm_driver_set_wait_hook(void (*hook)(void)) {
     pwm_wait_hook = hook;
 }
 
-bool pwm_driver_init(const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]) {
+bool pwm_driver_init(const pwm_role_t roles[PWM_BANK_COUNT]) {
     if ((roles == NULL) || (pwm_lifecycle != PWM_DRIVER_LIFECYCLE_RESET) || !pwm_driver_configure_table(roles)) {
         return false;
     }
@@ -611,13 +611,13 @@ pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd) {
 
 /** @copydoc pwm_driver_set */
 pwm_driver_result_t pwm_driver_set(uint channel, uint32_t freq_hz, uint8_t duty) {
-    pwm_driver_config_bank_role_t role;
+    pwm_role_t role;
     pwm_driver_result_t result;
 
     if (!pwm_driver_config_channel_role(channel, &role)) {
         return PWM_DRIVER_RESULT_INVALID;
     }
-    if (role == PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR) {
+    if (role == PWM_ROLE_MONITOR) {
         return PWM_DRIVER_RESULT_UNAVAILABLE;
     }
     if (!pwm_driver_config_frequency_supported(channel, freq_hz)) {
@@ -683,9 +683,9 @@ pwm_driver_result_t pwm_driver_restore_defaults(void) {
 
     /* Restoring defaults means stopping every generator channel; monitors have nothing to restore. */
     for (uint channel = 0u; channel < PWM_DRIVER_CHANNEL_COUNT && status == PWM_DRIVER_RESULT_OK; ++channel) {
-        pwm_driver_config_bank_role_t role;
+        pwm_role_t role;
 
-        if (pwm_driver_config_channel_role(channel, &role) && role == PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR) {
+        if (pwm_driver_config_channel_role(channel, &role) && role == PWM_ROLE_GENERATOR) {
             status = pwm_driver_set(channel, 0u, 0u);
         }
     }

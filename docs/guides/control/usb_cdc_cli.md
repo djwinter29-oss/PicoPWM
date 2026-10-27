@@ -41,6 +41,7 @@ Implemented by `board_commands.*`.
 | `config` | Show running and target Bank A/B/C settings. | `config` |
 | `config set <a|b|c> <gen|mon>` | Change one target bank role. | `config set a gen` |
 | `config save` | Persist target settings; reboot to apply. | `config save` |
+| `config clock <default\|150\|200\|250>` | Change the target system clock in MHz. | `config clock 200` |
 | `config address <7-bit>` | Change the target I2C address. | `config address 0x42` |
 | `led <on\|off>` | Set the board LED state. | `led on` |
 | `stop` | Hold generator outputs low at 0 Hz and 0% duty. `pulse_count` is not cleared. | `stop` |

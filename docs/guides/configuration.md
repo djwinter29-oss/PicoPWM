@@ -23,11 +23,11 @@ save the target to flash. A reboot then validates and applies the saved target;
 invalid or missing flash data falls back to the electrically conservative
 default `A=HW/monitor`, `B=PIO/monitor`, `C=SW/monitor` configuration.
 
-The target record contains a magic value, format version, generation number,
-backend/role/address values, and checksum. Two records occupy the final 8 KiB
-as alternating slots. The firmware link step rejects images that overlap this
-reserved area. A new record is written to the inactive slot, so power loss
-during a save preserves the previous valid target. Core 1 arms the flash
+The target record (`firmware/src/platform/boot_config.c`) contains a magic
+value, format version, size, clock profile, role/address values, and a CRC-32.
+It lives in one flash sector at the start of the reserved final 8 KiB. The
+firmware link step rejects images that overlap this reserved area. Power loss
+during a save falls back to the defaults. Core 1 arms the flash
 lockout victim before it reports ready. `config save` fails instead of erasing
 flash when that victim is not armed, so Core 0 cannot block forever inside the
 multicore lockout.
@@ -96,8 +96,9 @@ running:
 - `info`, `version`, `get`, and `status` report device identity and realized
   channel state. `info` also reports whether the system-clock target was met.
 - `config` shows the running and target bank settings. `config set` changes
-  one target bank, `config address` changes the target I2C address, and
-  `config save` persists the target. A reboot applies the target.
+  one target bank, `config address` changes the target I2C address,
+  `config clock <default|150|200|250>` changes the target system clock in MHz
+  (default keeps the board's 150 MHz), and `config save` persists the target. A reboot applies the target.
 - `set` applies to output-capable channels and returns `ERR unavailable` for
   monitor channels.
 - `stop` drives generator outputs low (`freq = 0 Hz`, `duty = 0%`) and does

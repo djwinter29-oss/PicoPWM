@@ -27,11 +27,11 @@
 
 /** @brief Fixed physical bank; each bank owns 8 stable logical channels. */
 typedef enum {
-    PWM_DRIVER_CONFIG_BANK_A = 0, /**< HW-capable GPIOs, logical channels 0..7. */
-    PWM_DRIVER_CONFIG_BANK_B,     /**< PIO-capable GPIOs, logical channels 8..15. */
-    PWM_DRIVER_CONFIG_BANK_C,     /**< Software-only GPIOs, logical channels 16..23. */
-    PWM_DRIVER_CONFIG_BANK_COUNT, /**< Number of physical banks. */
-} pwm_driver_config_bank_t;
+    PWM_BANK_A = 0, /**< HW-capable GPIOs, logical channels 0..7. */
+    PWM_BANK_B,     /**< PIO-capable GPIOs, logical channels 8..15. */
+    PWM_BANK_C,     /**< Software-only GPIOs, logical channels 16..23. */
+    PWM_BANK_COUNT, /**< Number of physical banks. */
+} pwm_bank_t;
 
 /** @brief Board settings for one hardware PWM channel (bank A). */
 typedef struct {
@@ -74,12 +74,12 @@ extern const software_pwm_config_t software_pwm_config;
 
 /** @brief Requested role when locking one bank. */
 typedef enum {
-    PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR = 0, /**< Bank channels become PWM outputs. */
-    PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR,       /**< Bank channels become PWM inputs. */
-} pwm_driver_config_bank_role_t;
+    PWM_ROLE_GENERATOR = 0, /**< Bank channels become PWM outputs. */
+    PWM_ROLE_MONITOR,       /**< Bank channels become PWM inputs. */
+} pwm_role_t;
 
 /** @brief Return the configured role of the bank that owns one logical channel; false when unavailable. */
-bool pwm_driver_config_channel_role(uint channel, pwm_driver_config_bank_role_t *role);
+bool pwm_driver_config_channel_role(uint channel, pwm_role_t *role);
 
 /** @brief Return a short name ("HW", "PIO-MON", ...) for the module that owns one logical channel. */
 const char *pwm_driver_config_channel_name(uint channel);
@@ -129,7 +129,7 @@ typedef struct {
  * @param roles Startup role of banks A, B and C.
  * @return `true` when the roles were accepted and Core 1 was launched.
  */
-bool pwm_driver_init(const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]);
+bool pwm_driver_init(const pwm_role_t roles[PWM_BANK_COUNT]);
 
 /**
  * @brief Register a Core 0 callback invoked while a mailbox wait is spinning.

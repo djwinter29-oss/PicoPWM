@@ -8,7 +8,7 @@
 #include "app/cli/pwm_commands.h"
 #include "platform/led.h"
 #include "platform/system.h"
-#include "app/device_service/device_config.h"
+#include "platform/boot_config.h"
 #include "app/device_service/device_service.h"
 #include "driver/i2c/i2c_slave.h"
 #include "driver/pwm/pwm_driver.h"
@@ -28,7 +28,8 @@ int main(void) {
     };
     bool usb_was_connected = false;
 
-    // Overclock before any PWM backend caches the system clock for timing calculations.
+    // Load boot settings first: the clock must be set before any PWM backend caches it for timing calculations.
+    boot_config_load();
     (void)system_init_clock();
 
     led_init();
@@ -38,11 +39,9 @@ int main(void) {
     pwm_commands_init(&pwm_command_session, &shell_transport);
 
     // Configure and launch all three PWM banks before starting Core 1.
-    device_config_t pwm_config;
-    device_config_load_target(&pwm_config);
-    const pwm_driver_config_bank_role_t bank_roles[PWM_DRIVER_CONFIG_BANK_COUNT] = {
-        pwm_config.bank_a_role, pwm_config.bank_b_role, pwm_config.bank_c_role};
-    if (!device_config_init_state(&pwm_config, &pwm_config) || !pwm_driver_init(bank_roles)) {
+    const pwm_role_t bank_roles[PWM_BANK_COUNT] = {
+        boot_config_get_bank(PWM_BANK_A), boot_config_get_bank(PWM_BANK_B), boot_config_get_bank(PWM_BANK_C)};
+    if (!pwm_driver_init(bank_roles)) {
         system_reboot();
     }
 
@@ -59,7 +58,7 @@ int main(void) {
     }
 
     // Core 0: start communication interfaces.
-    i2c_slave_init(pwm_config.i2c_address);
+    i2c_slave_init(boot_config_get_i2c_address());
     pwm_driver_set_wait_hook(i2c_slave_service_reads);
 
     // Core 0 main loop: service USB CDC, USB HID, and I2C.

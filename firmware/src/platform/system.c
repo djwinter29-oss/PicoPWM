@@ -5,6 +5,8 @@
 
 #include "platform/system.h"
 
+#include "platform/boot_config.h"
+
 #include "hardware/clocks.h"
 #include "hardware/watchdog.h"
 
@@ -16,12 +18,14 @@ static bool system_clock_at_target;
 
 /** @copydoc system_init_clock */
 bool system_init_clock(void) {
+    const uint16_t mhz = boot_config_get_sysclk_mhz();
+
     /*
      * PWM backends sample clock_get_hz(clk_sys) during their own init, which runs
      * after this call. A rejected target therefore changes the realized frequency
      * base, and divider math still matches the clock that is actually running.
      */
-    system_clock_at_target = set_sys_clock_khz(SYSTEM_CLOCK, true);
+    system_clock_at_target = set_sys_clock_khz(mhz != 0u ? (uint32_t)mhz * 1000u : SYSTEM_CLOCK, true);
     return system_clock_at_target;
 }
 

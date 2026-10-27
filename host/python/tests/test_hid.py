@@ -43,7 +43,7 @@ def test_decoders():
     identity = p.decode_identity(IDENTITY)
     assert identity["mcu"] == "RP2350" and identity["serial_number"] == "0102030405060708"
     config = p.decode_configuration(CONFIGURATION)
-    assert config["system_clock_hz"] == 150_000_000 and config["target_dirty"]
+    assert config["system_clock_hz"] == 150_000_000
     assert p.decode_bank_status(BANK, 1)[0] == {"channel": 8, "freq_hz": 1000, "duty": 50}
 
 

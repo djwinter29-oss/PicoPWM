@@ -6,7 +6,7 @@
 #ifndef PWMDRIVER_MONITOR_GPIO_COMMON_H
 #define PWMDRIVER_MONITOR_GPIO_COMMON_H
 
-#include "../pwm_driver_internal.h"
+#include "pwm_driver_internal.h"
 
 #include "pico/time.h"
 

@@ -4,7 +4,7 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 
-PIO_FILE="$REPO_ROOT/firmware/src/driver/pwm/generator/pio_generator.pio"
+PIO_FILE="$REPO_ROOT/firmware/src/driver/pwm/pio/pio_generator.pio"
 DRIVER_FILE="$REPO_ROOT/firmware/src/driver/pwm/pwm_driver.c"
 CONFIG_FILE="$REPO_ROOT/firmware/src/driver/pwm/pwm_driver_config.c"
 SLAVE_FILE="$REPO_ROOT/firmware/src/driver/i2c/i2c_slave.c"

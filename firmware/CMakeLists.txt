@@ -15,7 +15,6 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
 set(PICO_PWM_FIRMWARE_VERSION "0.0.0-dev" CACHE STRING "Firmware version string exposed over CDC and I2C")
-set(PICO_PWM_I2C_CLOCK_SPEED 400000 CACHE STRING "I2C slave clock speed in Hz (100000 or 400000)")
 
 pico_sdk_init()
 
@@ -34,12 +33,12 @@ add_executable(pico_pwm
     src/platform/led.c
     src/platform/system.c
     src/driver/pwm/pwm_driver.c
-    src/driver/pwm/generator/hardware_generator.c
-    src/driver/pwm/generator/pio_generator.c
-    src/driver/pwm/generator/software_generator.c
-    src/driver/pwm/monitor/hardware_monitor.c
-    src/driver/pwm/monitor/pio_monitor.c
-    src/driver/pwm/monitor/software_monitor.c
+    src/driver/pwm/hardware/hardware_generator.c
+    src/driver/pwm/pio/pio_generator.c
+    src/driver/pwm/software/software_generator.c
+    src/driver/pwm/hardware/hardware_monitor.c
+    src/driver/pwm/pio/pio_monitor.c
+    src/driver/pwm/software/software_monitor.c
     src/app/cli/shell.c
     src/app/cli/pwm_commands.c
     src/app/cli/channel_commands.c
@@ -55,10 +54,10 @@ add_executable(pico_pwm
 )
 
 pico_generate_pio_header(pico_pwm
-    ${CMAKE_CURRENT_LIST_DIR}/src/driver/pwm/generator/pio_generator.pio
+    ${CMAKE_CURRENT_LIST_DIR}/src/driver/pwm/pio/pio_generator.pio
 )
 pico_generate_pio_header(pico_pwm
-    ${CMAKE_CURRENT_LIST_DIR}/src/driver/pwm/monitor/pio_monitor.pio
+    ${CMAKE_CURRENT_LIST_DIR}/src/driver/pwm/pio/pio_monitor.pio
 )
 
 target_link_libraries(pico_pwm
@@ -80,7 +79,6 @@ target_link_libraries(pico_pwm hardware_dma hardware_flash)
 
 target_compile_definitions(pico_pwm PRIVATE
     PICO_PWM_FIRMWARE_VERSION_STR="${PICO_PWM_FIRMWARE_VERSION}"
-    PICO_PWM_I2C_CLOCK_SPEED=${PICO_PWM_I2C_CLOCK_SPEED}
     PICO_PWM_CONFIG_FLASH_OFFSET=${PICO_PWM_CONFIG_FLASH_OFFSET}
 )
 

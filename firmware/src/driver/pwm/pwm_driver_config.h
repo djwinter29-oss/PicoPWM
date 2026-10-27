@@ -72,6 +72,14 @@ typedef enum {
     PWM_DRIVER_CONFIG_BANK_COUNT, /**< Number of physical banks. */
 } pwm_driver_config_bank_t;
 
+/**
+ * @brief Static GPIO assignment per bank, defined in config/board.c.
+ *
+ * Bank A is the HW set, bank B the PIO set, and bank C the SW set; a bank keeps its GPIOs when its backend
+ * choice falls back to SW.
+ */
+extern const uint pwm_board_bank_gpio[PWM_DRIVER_CONFIG_BANK_COUNT][PWM_DRIVER_CONFIG_BANK_SIZE];
+
 /** @brief Requested role when locking one bank. */
 typedef enum {
     PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR = 0, /**< Bank channels become PWM outputs. */

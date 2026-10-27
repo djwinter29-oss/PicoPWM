@@ -11,7 +11,7 @@
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
 #include "hardware/pwm.h"
-#include "generator_math.h"
+#include "../generator_math.h"
 
 /** @brief Cached system clock used by the hardware generator timing search. */
 static uint32_t hw_gen_sys_clk_hz = 0u;

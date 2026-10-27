@@ -3,8 +3,8 @@
 The software monitor observes input GPIO edges using a shared software monitor
 pattern and microsecond timestamps. Source files:
 
-- `firmware/src/driver/pwm/monitor/software_monitor.c`
-- `firmware/src/driver/pwm/monitor/software_monitor.h`
+- `firmware/src/driver/pwm/software/software_monitor.c`
+- `firmware/src/driver/pwm/software/software_monitor.h`
 
 ## Constraints
 

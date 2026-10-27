@@ -1,4 +1,4 @@
-#include "driver/pwm/monitor/pio_monitor_decode.h"
+#include "driver/pwm/pio/pio_monitor_decode.h"
 
 #include <assert.h>
 #include <stddef.h>

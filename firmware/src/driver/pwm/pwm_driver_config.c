@@ -412,13 +412,6 @@ const char *pwm_driver_config_backend_name(pwm_driver_config_backend_t backend) 
     }
 }
 
-/** @brief Fixed GPIO assignment for each bank's 8 logical channels; see docs/guides/pinout.md. */
-static const uint pwm_driver_config_bank_gpio[PWM_DRIVER_CONFIG_BANK_COUNT][PWM_DRIVER_CONFIG_BANK_SIZE] = {
-    [PWM_DRIVER_CONFIG_BANK_A] = {1u, 3u, 5u, 7u, 9u, 11u, 13u, 15u},
-    [PWM_DRIVER_CONFIG_BANK_B] = {0u, 2u, 4u, 6u, 8u, 10u, 12u, 14u},
-    [PWM_DRIVER_CONFIG_BANK_C] = {16u, 17u, 18u, 19u, 20u, 21u, 22u, 28u},
-};
-
 /** @brief Fill one bank's 8 channel entries for the resolved backend and role. */
 static void pwm_driver_config_fill_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_backend_t backend,
                                         pwm_driver_config_bank_role_t role) {
@@ -426,7 +419,7 @@ static void pwm_driver_config_fill_bank(pwm_driver_config_bank_t bank, pwm_drive
     bool generator = (role == PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR);
 
     for (uint i = 0u; i < PWM_DRIVER_CONFIG_BANK_SIZE; ++i) {
-        uint gpio = pwm_driver_config_bank_gpio[bank][i];
+        uint gpio = pwm_board_bank_gpio[bank][i];
 
         switch (backend) {
         case PWM_DRIVER_CONFIG_BANK_BACKEND_HW:

@@ -58,15 +58,15 @@ The current implementation is split as follows:
 | `firmware/src/driver/pwm/pwm_driver_config.h` | Startup configuration, validation, persistence, and channel types |
 | `firmware/src/driver/pwm/pwm_driver_config.c` | Fixed channel mapping and versioned CRC-protected flash storage |
 | `firmware/src/driver/pwm/pwm_driver_table.h` | Backend capability and timing descriptors used to populate channel entries |
-| `firmware/src/driver/pwm/generator/hardware_generator.c` | Hardware PWM generator backend |
-| `firmware/src/driver/pwm/monitor/hardware_monitor.c` | Hardware PWM monitor backend |
-| `firmware/src/driver/pwm/generator/pio_generator.c` | PIO generator backend |
-| `firmware/src/driver/pwm/generator/pio_generator.pio` | PIO assembly program used by the PIO generator backend |
-| `firmware/src/driver/pwm/monitor/pio_monitor.c` | PIO monitor backend |
-| `firmware/src/driver/pwm/monitor/pio_monitor.pio` | PIO assembly program used by the PIO monitor backend |
-| `firmware/src/driver/pwm/generator/software_generator.c` | Software PWM generator backend |
-| `firmware/src/driver/pwm/monitor/software_monitor.c` | Software PWM monitor backend |
-| `firmware/src/driver/pwm/monitor/monitor_gpio_common.h` | Shared GPIO edge-timestamp monitor helpers used by the hardware and software monitor backends |
+| `firmware/src/driver/pwm/hardware/hardware_generator.c` | Hardware PWM generator backend |
+| `firmware/src/driver/pwm/hardware/hardware_monitor.c` | Hardware PWM monitor backend |
+| `firmware/src/driver/pwm/pio/pio_generator.c` | PIO generator backend |
+| `firmware/src/driver/pwm/pio/pio_generator.pio` | PIO assembly program used by the PIO generator backend |
+| `firmware/src/driver/pwm/pio/pio_monitor.c` | PIO monitor backend |
+| `firmware/src/driver/pwm/pio/pio_monitor.pio` | PIO assembly program used by the PIO monitor backend |
+| `firmware/src/driver/pwm/software/software_generator.c` | Software PWM generator backend |
+| `firmware/src/driver/pwm/software/software_monitor.c` | Software PWM monitor backend |
+| `firmware/src/driver/pwm/monitor_gpio_common.h` | Shared GPIO edge-timestamp monitor helpers used by the hardware and software monitor backends |
 
 ## External Interface
 
@@ -186,9 +186,9 @@ This layer is the architectural boundary between the shared Core 0 control plane
 
 Owned by the selected profile's generator or monitor modules:
 
-- `generator/hardware_generator.c` and `monitor/hardware_monitor.c`
-- `generator/pio_generator.c` and `monitor/pio_monitor.c`
-- `generator/software_generator.c` and `monitor/software_monitor.c`
+- `hardware/hardware_generator.c` and `hardware/hardware_monitor.c`
+- `pio/pio_generator.c` and `pio/pio_monitor.c`
+- `software/software_generator.c` and `software/software_monitor.c`
 
 Responsibilities:
 
@@ -480,8 +480,8 @@ This provides a lock-free coherent snapshot read on Core 0.
 
 The hardware PWM implementation is now split into:
 
-- `firmware/src/driver/pwm/generator/hardware_generator.c` for the integrated generator backend
-- `firmware/src/driver/pwm/monitor/hardware_monitor.c` for the hardware monitor backend
+- `firmware/src/driver/pwm/hardware/hardware_generator.c` for the integrated generator backend
+- `firmware/src/driver/pwm/hardware/hardware_monitor.c` for the hardware monitor backend
 
 The integrated generator backend:
 
@@ -506,8 +506,8 @@ For the current hardware timing equations, counter-width limits, divider limits,
 
 The software PWM implementation is now split into:
 
-- `firmware/src/driver/pwm/generator/software_generator.c` for the integrated generator backend
-- `firmware/src/driver/pwm/monitor/software_monitor.c` for the software monitor backend
+- `firmware/src/driver/pwm/software/software_generator.c` for the integrated generator backend
+- `firmware/src/driver/pwm/software/software_monitor.c` for the software monitor backend
 
 The integrated generator backend:
 

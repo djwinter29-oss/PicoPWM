@@ -187,9 +187,9 @@ backend.
 
 Core 1 owns the backend implementations:
 
-- `driver/pwm/generator/hardware_generator.*` and `driver/pwm/monitor/hardware_monitor.*`
-- `driver/pwm/generator/pio_generator.*` and `driver/pwm/monitor/pio_monitor.*`
-- `driver/pwm/generator/software_generator.*` and `driver/pwm/monitor/software_monitor.*`
+- `driver/pwm/hardware/hardware_generator.*` and `driver/pwm/hardware/hardware_monitor.*`
+- `driver/pwm/pio/pio_generator.*` and `driver/pwm/pio/pio_monitor.*`
+- `driver/pwm/software/software_generator.*` and `driver/pwm/software/software_monitor.*`
 
 These modules own hardware configuration, IRQ or timer paths, and backend-local state.
 

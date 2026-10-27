@@ -43,21 +43,10 @@ tools/test/test-firmware-c.sh
 tools/test/coverage-firmware-c.sh
 ```
 
-## Custom I2C Clock Speed
+## I2C Slave
 
-The I2C slave is configured for **400 kHz by default**, which is
-backward-compatible with 100 kHz masters. To use 100 kHz:
-
-```sh
-PICO_SDK_PATH="$PWD/firmware/third_party/pico-sdk" \
-  cmake -S firmware -B build/i2c-100k -DPICO_PWM_I2C_CLOCK_SPEED=100000
-cmake --build build/i2c-100k --parallel
-```
-
-Supported speeds:
-
-- `100000` - Standard I2C (100 kHz)
-- `400000` - Fast I2C (400 kHz, default, backward-compatible with 100 kHz masters)
+The I2C slave timing is fixed at 400 kHz in `firmware/src/config/board.c`, which is
+backward-compatible with 100 kHz masters.
 
 The default I2C address is `0x40`. Change it through CDC or I2C and reboot to
 apply the saved address:

@@ -11,7 +11,7 @@
 #include "hardware/gpio.h"
 #include "hardware/sync.h"
 #include "hardware/timer.h"
-#include "generator_math.h"
+#include "../generator_math.h"
 
 /** @brief Software PWM scheduler tick period in microseconds. */
 #define SW_PWM_TICK_US 10

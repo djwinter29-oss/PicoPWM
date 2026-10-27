@@ -3,9 +3,9 @@
 The PIO monitor measures PWM input using one state machine per configured
 channel and direct high/low FIFO capture. Source files:
 
-- `firmware/src/driver/pwm/monitor/pio_monitor.c`
-- `firmware/src/driver/pwm/monitor/pio_monitor.h`
-- `firmware/src/driver/pwm/monitor/pio_monitor.pio`
+- `firmware/src/driver/pwm/pio/pio_monitor.c`
+- `firmware/src/driver/pwm/pio/pio_monitor.h`
+- `firmware/src/driver/pwm/pio/pio_monitor.pio`
 
 ## Constraints
 

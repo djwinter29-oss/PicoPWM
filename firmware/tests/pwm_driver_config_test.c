@@ -1,8 +1,11 @@
 #include "driver/pwm/pwm_driver_internal.h"
 #include "hardware/flash.h"
+#include "hardware/i2c.h"
 
 #include <assert.h>
 #include <string.h>
+
+i2c_inst_t i2c1_inst;
 
 void system_watchdog_kick(void) {}
 

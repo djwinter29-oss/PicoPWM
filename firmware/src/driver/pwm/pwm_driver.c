@@ -9,12 +9,12 @@
 
 #include "platform/system.h"
 
-#include "monitor/software_monitor.h"
-#include "generator/pio_generator.h"
-#include "generator/software_generator.h"
-#include "monitor/hardware_monitor.h"
-#include "monitor/pio_monitor.h"
-#include "generator/hardware_generator.h"
+#include "software/software_monitor.h"
+#include "pio/pio_generator.h"
+#include "software/software_generator.h"
+#include "hardware/hardware_monitor.h"
+#include "pio/pio_monitor.h"
+#include "hardware/hardware_generator.h"
 
 #include "pico/critical_section.h"
 #include "pico/mutex.h"

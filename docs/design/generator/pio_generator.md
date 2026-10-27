@@ -3,9 +3,9 @@
 The PIO generator produces continuous PWM output using one PIO state machine
 per configured channel. Source files:
 
-- `firmware/src/driver/pwm/generator/pio_generator.c`
-- `firmware/src/driver/pwm/generator/pio_generator.h`
-- `firmware/src/driver/pwm/generator/pio_generator.pio`
+- `firmware/src/driver/pwm/pio/pio_generator.c`
+- `firmware/src/driver/pwm/pio/pio_generator.h`
+- `firmware/src/driver/pwm/pio/pio_generator.pio`
 
 ## Resource Constraints
 

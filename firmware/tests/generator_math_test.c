@@ -1,4 +1,4 @@
-#include "driver/pwm/generator/generator_math.h"
+#include "driver/pwm/generator_math.h"
 
 #include <assert.h>
 #include <stddef.h>

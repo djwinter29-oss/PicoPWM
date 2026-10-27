@@ -86,7 +86,7 @@ Feature report, host reads, 18-byte payload.
 
 Feature report, host reads, 21-byte payload.
 
-Backed by `device_service_config_get_running()` and `device_service_config_get_target()`.
+Backed by `device_config_get_running()` and `device_config_get_target()`.
 
 | Offset | Size | Field | Meaning |
 | -----: | ---: | ----- | ------- |
@@ -191,9 +191,9 @@ length because a report ID has a single descriptor length.
 | -: | ---- | ------- |
 | 1 | `SET_CHANNEL` | `device_service_set_channel(channel, freq_hz, duty)`. |
 | 2 | `STOP` | `device_service_restore_defaults()`; outputs stop and defaults are restored. |
-| 3 | `SET_BANK` | `device_service_config_set_bank()`; `channel` is the bank (`0`-`2`), `arg0` byte 0 backend, byte 1 role. |
-| 4 | `SET_I2C_ADDRESS` | `device_service_config_set_i2c_address()`; `arg0` low byte is the 7-bit address. |
-| 5 | `SAVE_CONFIG` | `device_service_config_save_target()`; requires flag bit 0, plus bit 1 when the target clock profile is above `1`. Persists only; it does not restart the device. See Save Cost. |
+| 3 | `SET_BANK` | `device_config_set_bank()`; `channel` is the bank (`0`-`2`), `arg0` byte 0 backend, byte 1 role. |
+| 4 | `SET_I2C_ADDRESS` | `device_config_set_i2c_address()`; `arg0` low byte is the 7-bit address. |
+| 5 | `SAVE_CONFIG` | `device_config_save()`; requires flag bit 0, plus bit 1 when the target clock profile is above `1`. Persists only; it does not restart the device. See Save Cost. |
 | 6 | `SET_CLOCK_PROFILE` | Sets the target clock profile from `arg0` low byte; profiles above `1` require flag bit 1. |
 
 Operation validity, checked before any side effect; every failure returns `INVALID` and changes nothing:
@@ -202,7 +202,7 @@ Operation validity, checked before any side effect; every failure returns `INVAL
   is `[0, 100]`, and `freq_hz` is accepted by `device_service_set_channel()`.
 - `STOP`: `channel`, `arg0`, and `arg1` are zero.
 - `SET_BANK`: `channel` is `0`-`2`, and the backend/role pair is allowed for that bank.
-- `SET_I2C_ADDRESS`: the address is accepted by `device_service_config_set_i2c_address()`.
+- `SET_I2C_ADDRESS`: the address is accepted by `device_config_set_i2c_address()`.
 - `SAVE_CONFIG`: flag bit 0 set (and bit 1 for an overclock target), and no other fields set.
 - `SET_CLOCK_PROFILE`: the profile is set in `clock_profile_mask`.
 - Unused fields and reserved bits are zero; a nonzero value is `INVALID`.

@@ -7,9 +7,91 @@
 #define PWMDRIVER_PWM_DRIVER_H
 
 #include "pico/stdlib.h"
-#include "driver/pwm/pwm_driver_config.h"
 
+#include <stdbool.h>
 #include <stdint.h>
+
+#ifndef PWM_DRIVER_CONFIG_GPIO_COUNT
+#define PWM_DRIVER_CONFIG_GPIO_COUNT 30u
+#endif
+
+#ifndef PWM_DRIVER_CONFIG_REQUIRE_HW_CHANNEL_B
+#define PWM_DRIVER_CONFIG_REQUIRE_HW_CHANNEL_B 1
+#endif
+
+/** @brief Number of logical channels exposed by the selected profile. */
+#define PWM_DRIVER_CONFIG_CHANNEL_COUNT 24u
+
+/** @brief Number of logical channels owned by one physical bank. */
+#define PWM_DRIVER_CONFIG_BANK_SIZE 8u
+
+/** @brief Fixed physical bank; each bank owns 8 stable logical channels. */
+typedef enum {
+    PWM_DRIVER_CONFIG_BANK_A = 0, /**< HW-capable GPIOs, logical channels 0..7. */
+    PWM_DRIVER_CONFIG_BANK_B,     /**< PIO-capable GPIOs, logical channels 8..15. */
+    PWM_DRIVER_CONFIG_BANK_C,     /**< Software-only GPIOs, logical channels 16..23. */
+    PWM_DRIVER_CONFIG_BANK_COUNT, /**< Number of physical banks. */
+} pwm_driver_config_bank_t;
+
+/** @brief Board settings for one hardware PWM channel (bank A). */
+typedef struct {
+    uint gpio; /**< Slice-B GPIO driven or measured by this channel. */
+} hardware_pwm_channel_config_t;
+
+/** @brief Board settings for one PIO PWM channel (bank B). */
+typedef struct {
+    uint gpio; /**< Companion slice-A GPIO driven or measured by this channel. */
+} pio_pwm_channel_config_t;
+
+/** @brief Board settings for one software PWM channel (bank C). */
+typedef struct {
+    uint gpio; /**< Any GPIO not claimed by the hardware or PIO sets. */
+} software_pwm_channel_config_t;
+
+/** @brief Hardware PWM settings (bank A). */
+typedef struct {
+    hardware_pwm_channel_config_t channels[PWM_DRIVER_CONFIG_BANK_SIZE]; /**< Per-channel settings. */
+} hardware_pwm_config_t;
+
+/** @brief PIO PWM settings (bank B). */
+typedef struct {
+    pio_pwm_channel_config_t channels[PWM_DRIVER_CONFIG_BANK_SIZE]; /**< Per-channel settings. */
+} pio_pwm_config_t;
+
+/** @brief Software PWM settings (bank C). */
+typedef struct {
+    software_pwm_channel_config_t channels[PWM_DRIVER_CONFIG_BANK_SIZE]; /**< Per-channel settings. */
+} software_pwm_config_t;
+
+/**
+ * @brief Static PWM board settings, defined in config/board.c.
+ *
+ * Bank A is hardware PWM, bank B is PIO and bank C is software; only the role is selectable.
+ */
+extern const hardware_pwm_config_t hardware_pwm_config;
+extern const pio_pwm_config_t pio_pwm_config;
+extern const software_pwm_config_t software_pwm_config;
+
+/** @brief Requested role when locking one bank. */
+typedef enum {
+    PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR = 0, /**< Bank channels become PWM outputs. */
+    PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR,       /**< Bank channels become PWM inputs. */
+} pwm_driver_config_bank_role_t;
+
+/** @brief Return the configured role of the bank that owns one logical channel; false when unavailable. */
+bool pwm_driver_config_channel_role(uint channel, pwm_driver_config_bank_role_t *role);
+
+/** @brief Return a short name ("HW", "PIO-MON", ...) for the module that owns one logical channel. */
+const char *pwm_driver_config_channel_name(uint channel);
+
+/** @brief Validate board GPIO ownership; run when the bank roles are configured. */
+bool pwm_driver_config_validate(void);
+
+/** @brief Return whether a profile channel accepts one requested frequency. */
+bool pwm_driver_config_frequency_supported(uint channel, uint32_t frequency_hz);
+
+/** @brief Return whether the selected profile is input-monitoring oriented. */
+bool pwm_driver_config_is_monitor(void);
 
 /** @brief Hardware PWM backend channel capacity. */
 #define HW_PWM_COUNT 8
@@ -18,43 +100,6 @@
 
 /** @brief Total logical PWM channel count across all backends. */
 #define PWM_DRIVER_CHANNEL_COUNT PWM_DRIVER_CONFIG_CHANNEL_COUNT
-
-/** @brief Role selected for one fixed PWM bank at startup. */
-typedef pwm_driver_config_bank_role_t pwm_driver_bank_role_t;
-
-/** @brief Complete startup configuration for the three fixed PWM banks. */
-typedef struct {
-    pwm_driver_bank_role_t bank_a_role;              /**< Bank A role. */
-    pwm_driver_bank_role_t bank_b_role;              /**< Bank B role. */
-    pwm_driver_bank_role_t bank_c_role;              /**< Bank C role. */
-    uint8_t i2c_address;                             /**< Running/target 7-bit I2C address. */
-} pwm_driver_config_t;
-
-/** @brief Return the safe default startup configuration. */
-void pwm_driver_config_default(pwm_driver_config_t *config);
-/** @brief Validate roles and I2C address. */
-bool pwm_driver_config_validate_target(const pwm_driver_config_t *config);
-/** @brief Load the persisted target; returns the default when storage is invalid. */
-bool pwm_driver_config_load_target(pwm_driver_config_t *config);
-/** @brief Persist a validated target configuration in flash. */
-bool pwm_driver_config_save_target(const pwm_driver_config_t *config);
-/**
- * @brief Arm Core 1 as the flash-programming lockout victim.
- * @note Core 1 must call this before Core 0 persists configuration. `config save` fails closed until it has.
- */
-void pwm_driver_config_arm_lockout_victim(void);
-/** @brief Return whether Core 1 has armed the flash-programming lockout victim. */
-bool pwm_driver_config_lockout_victim_ready(void);
-/** @brief Publish validated running and target configuration snapshots for transport status. */
-bool pwm_driver_config_init_state(const pwm_driver_config_t *running, const pwm_driver_config_t *target);
-/** @brief Copy the target configuration snapshot. */
-bool pwm_driver_config_get_target(pwm_driver_config_t *config);
-/** @brief Copy the immutable running configuration snapshot. */
-bool pwm_driver_config_get_running(pwm_driver_config_t *config);
-/** @brief Update one target bank without changing running hardware. */
-bool pwm_driver_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_role_t role);
-/** @brief Update the target I2C address without changing the running address. */
-bool pwm_driver_config_set_i2c_address(uint8_t address);
 
 /** @brief Generator output frequency after power-on and after `stop`. */
 #define PWM_DRIVER_STOPPED_FREQ_HZ 0u
@@ -81,10 +126,10 @@ typedef struct {
 
 /**
  * @brief Configure all banks, launch Core 1 backend ownership, and start the PWM runtime.
- * @param config Immutable startup configuration for all three banks.
- * @return `true` when the configuration was accepted and Core 1 was launched.
+ * @param roles Startup role of banks A, B and C.
+ * @return `true` when the roles were accepted and Core 1 was launched.
  */
-bool pwm_driver_init(const pwm_driver_config_t *config);
+bool pwm_driver_init(const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]);
 
 /**
  * @brief Register a Core 0 callback invoked while a mailbox wait is spinning.

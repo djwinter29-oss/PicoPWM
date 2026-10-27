@@ -1,5 +1,6 @@
 #include "app/usb/hid_protocol.h"
 
+#include "app/device_service/device_config.h"
 #include "app/device_service/device_service.h"
 
 #include <assert.h>
@@ -13,7 +14,7 @@ static uint last_channel;
 static uint32_t last_freq;
 static uint8_t last_duty;
 static pwm_driver_config_bank_role_t bank_role;
-static pwm_driver_config_t running_config = {
+static device_config_t running_config = {
     .bank_a_role = PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
     .bank_b_role = PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR,
     .bank_c_role = PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
@@ -24,32 +25,32 @@ const char *device_service_firmware_version(void) {
     return "1.2.3-dev";
 }
 
-bool device_service_config_get_running(pwm_driver_config_t *config) {
+bool device_config_get_running(device_config_t *config) {
     *config = running_config;
     return true;
 }
 
-bool device_service_config_get_target(pwm_driver_config_t *config) {
+bool device_config_get_target(device_config_t *config) {
     *config = running_config;
     return true;
 }
 
-bool device_service_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_role_t role) {
+bool device_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_role_t role) {
     (void)bank;
     bank_role = role;
     return true;
 }
 
-bool device_service_config_save_target(void) {
+bool device_config_save(void) {
     ++saves;
     return save_ok;
 }
 
-bool device_service_config_target_dirty(void) {
+bool device_config_target_dirty(void) {
     return dirty;
 }
 
-bool device_service_config_set_i2c_address(uint8_t address) {
+bool device_config_set_i2c_address(uint8_t address) {
     return address != 0u;
 }
 

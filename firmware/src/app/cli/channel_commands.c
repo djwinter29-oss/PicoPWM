@@ -1,6 +1,6 @@
 #include "app/cli/channel_commands.h"
 
-#include "driver/pwm/pwm_driver_config.h"
+#include "driver/pwm/pwm_driver.h"
 #include "app/device_service/device_service.h"
 #include "driver/pwm/pwm_driver.h"
 

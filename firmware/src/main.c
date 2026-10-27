@@ -8,6 +8,7 @@
 #include "app/cli/pwm_commands.h"
 #include "platform/led.h"
 #include "platform/system.h"
+#include "app/device_service/device_config.h"
 #include "app/device_service/device_service.h"
 #include "driver/i2c/i2c_slave.h"
 #include "driver/pwm/pwm_driver.h"
@@ -37,9 +38,11 @@ int main(void) {
     pwm_commands_init(&pwm_command_session, &shell_transport);
 
     // Configure and launch all three PWM banks before starting Core 1.
-    pwm_driver_config_t pwm_config;
-    pwm_driver_config_load_target(&pwm_config);
-    if (!device_service_config_init(&pwm_config, &pwm_config) || !pwm_driver_init(&pwm_config)) {
+    device_config_t pwm_config;
+    device_config_load_target(&pwm_config);
+    const pwm_driver_config_bank_role_t bank_roles[PWM_DRIVER_CONFIG_BANK_COUNT] = {
+        pwm_config.bank_a_role, pwm_config.bank_b_role, pwm_config.bank_c_role};
+    if (!device_config_init_state(&pwm_config, &pwm_config) || !pwm_driver_init(bank_roles)) {
         system_reboot();
     }
 

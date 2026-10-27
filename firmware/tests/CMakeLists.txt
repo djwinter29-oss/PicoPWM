@@ -42,19 +42,19 @@ target_include_directories(cli_channel_commands_test PRIVATE
 pico_pwm_test_warnings(cli_channel_commands_test)
 add_test(NAME cli_channel_commands COMMAND cli_channel_commands_test)
 
-add_executable(pwm_driver_config_test
-    pwm_driver_config_test.c
+add_executable(device_config_test
+    device_config_test.c
     stubs/hardware/flash.c
-    ${SOURCE_ROOT}/driver/pwm/pwm_driver_config.c
+    ${SOURCE_ROOT}/app/device_service/device_config.c
     ${SOURCE_ROOT}/config/board.c
 )
-target_include_directories(pwm_driver_config_test PRIVATE
+target_include_directories(device_config_test PRIVATE
     ${TEST_STUB_ROOT}
     ${SOURCE_ROOT}
 )
-pico_pwm_test_warnings(pwm_driver_config_test)
-target_compile_definitions(pwm_driver_config_test PRIVATE PICO_PWM_CONFIG_FLASH_OFFSET=0)
-add_test(NAME pwm_driver_config COMMAND pwm_driver_config_test)
+pico_pwm_test_warnings(device_config_test)
+target_compile_definitions(device_config_test PRIVATE PICO_PWM_CONFIG_FLASH_OFFSET=0)
+add_test(NAME device_config COMMAND device_config_test)
 
 add_executable(pio_monitor_decode_test
     pio_monitor_decode_test.c
@@ -73,15 +73,6 @@ target_include_directories(generator_math_test PRIVATE
 )
 pico_pwm_test_warnings(generator_math_test)
 add_test(NAME generator_math COMMAND generator_math_test)
-
-add_executable(pwm_mailbox_test
-    pwm_mailbox_test.c
-)
-target_include_directories(pwm_mailbox_test PRIVATE
-    ${SOURCE_ROOT}
-)
-pico_pwm_test_warnings(pwm_mailbox_test)
-add_test(NAME pwm_mailbox COMMAND pwm_mailbox_test)
 
 add_executable(i2c_write_queue_test
     i2c_write_queue_test.c

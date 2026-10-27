@@ -25,6 +25,7 @@
 
 #include "app/i2c/i2c_control_map.h"
 
+#include "app/device_service/device_config.h"
 #include "app/device_service/device_service.h"
 #include "platform/led.h"
 #include "platform/system.h"
@@ -108,12 +109,12 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
     }
 
     if (reg == I2C_CONTROL_MAP_REG_CONFIG) {
-        pwm_driver_config_t running;
-        pwm_driver_config_t target;
+        device_config_t running;
+        device_config_t target;
         if (response_capacity < 14u) {
             return false;
         }
-        if (!device_service_config_get_running(&running) || !device_service_config_get_target(&target)) {
+        if (!device_config_get_running(&running) || !device_config_get_target(&target)) {
             return false;
         }
         response[0] = 0u;
@@ -212,7 +213,7 @@ pwm_driver_result_t i2c_control_map_execute_write(uint8_t reg, const uint8_t *pa
             return PWM_DRIVER_RESULT_INVALID;
         }
         return (payload[1] == payload[0] &&
-                device_service_config_set_bank((pwm_driver_config_bank_t)payload[0],
+                device_config_set_bank((pwm_driver_config_bank_t)payload[0],
                                                (pwm_driver_config_bank_role_t)payload[2]))
                    ? PWM_DRIVER_RESULT_OK
                    : PWM_DRIVER_RESULT_INVALID;
@@ -222,14 +223,14 @@ pwm_driver_result_t i2c_control_map_execute_write(uint8_t reg, const uint8_t *pa
         if ((payload == NULL) || (payload_len != 1u) || (payload[0] < 0x08u) || (payload[0] > 0x77u)) {
             return PWM_DRIVER_RESULT_INVALID;
         }
-        return device_service_config_set_i2c_address(payload[0]) ? PWM_DRIVER_RESULT_OK : PWM_DRIVER_RESULT_INVALID;
+        return device_config_set_i2c_address(payload[0]) ? PWM_DRIVER_RESULT_OK : PWM_DRIVER_RESULT_INVALID;
     }
 
     if (reg == I2C_CONTROL_MAP_REG_CONFIG_SAVE) {
         if (payload_len != 0u) {
             return PWM_DRIVER_RESULT_INVALID;
         }
-        return device_service_config_save_target() ? PWM_DRIVER_RESULT_OK : PWM_DRIVER_RESULT_INVALID;
+        return device_config_save() ? PWM_DRIVER_RESULT_OK : PWM_DRIVER_RESULT_INVALID;
     }
 
     if (i2c_control_map_is_full_write(reg)) {

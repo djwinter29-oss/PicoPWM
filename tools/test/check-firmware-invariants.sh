@@ -6,7 +6,7 @@ REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 
 PIO_FILE="$REPO_ROOT/firmware/src/driver/pwm/pio/pio_generator.pio"
 DRIVER_FILE="$REPO_ROOT/firmware/src/driver/pwm/pwm_driver.c"
-CONFIG_FILE="$REPO_ROOT/firmware/src/driver/pwm/pwm_driver_config.c"
+CONFIG_FILE="$REPO_ROOT/firmware/src/app/device_service/device_config.c"
 SLAVE_FILE="$REPO_ROOT/firmware/src/driver/i2c/i2c_slave.c"
 
 # The low path must not side-set. A side-set there makes every duty a one-tick pulse.
@@ -33,18 +33,13 @@ if ! grep -q "jmp skip        side 1" "$PIO_FILE"; then
     exit 1
 fi
 
-if ! grep -q "pwm_driver_config_arm_lockout_victim" "$DRIVER_FILE"; then
+if ! grep -q "multicore_lockout_victim_init" "$DRIVER_FILE"; then
     echo "pwm_driver.c: Core 1 must arm the flash lockout victim before reporting ready" >&2
     exit 1
 fi
 
-if ! grep -q "multicore_lockout_victim_init" "$CONFIG_FILE"; then
-    echo "pwm_driver_config.c: lockout arm must call multicore_lockout_victim_init" >&2
-    exit 1
-fi
-
 if ! grep -q "multicore_lockout_start_blocking" "$CONFIG_FILE"; then
-    echo "pwm_driver_config.c: config save must lock out Core 1 around flash programming" >&2
+    echo "device_config.c: config save must lock out Core 1 around flash programming" >&2
     exit 1
 fi
 
@@ -53,41 +48,41 @@ awk '
     /save_and_disable_interrupts/ { disabled = 1 }
     /multicore_lockout_start_blocking/ {
         if (!disabled) {
-            print "pwm_driver_config.c: lock out Core 1 only while interrupts are disabled" > "/dev/stderr"
+            print "device_config.c: lock out Core 1 only while interrupts are disabled" > "/dev/stderr"
             exit 1
         }
         locked = 1
     }
     /flash_range_erase/ {
         if (!disabled || !locked) {
-            print "pwm_driver_config.c: erase flash only with interrupts disabled and Core 1 locked out" > "/dev/stderr"
+            print "device_config.c: erase flash only with interrupts disabled and Core 1 locked out" > "/dev/stderr"
             exit 1
         }
         erased = 1
     }
     /flash_range_program/ {
         if (!erased) {
-            print "pwm_driver_config.c: program flash only after erase, with interrupts still disabled" > "/dev/stderr"
+            print "device_config.c: program flash only after erase, with interrupts still disabled" > "/dev/stderr"
             exit 1
         }
         programmed = 1
     }
     /multicore_lockout_end_blocking/ {
         if (!programmed) {
-            print "pwm_driver_config.c: end the Core 1 lockout after flash programming" > "/dev/stderr"
+            print "device_config.c: end the Core 1 lockout after flash programming" > "/dev/stderr"
             exit 1
         }
     }
     /restore_interrupts/ {
         if (!programmed) {
-            print "pwm_driver_config.c: restore interrupts after flash programming" > "/dev/stderr"
+            print "device_config.c: restore interrupts after flash programming" > "/dev/stderr"
             exit 1
         }
         restored = 1
     }
     END {
         if (!restored) {
-            print "pwm_driver_config.c: config save must disable interrupts around flash programming" > "/dev/stderr"
+            print "device_config.c: config save must disable interrupts around flash programming" > "/dev/stderr"
             exit 1
         }
     }

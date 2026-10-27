@@ -1,7 +1,9 @@
 # PWM Driver Configuration
 
 PicoPWM has one firmware image and one logical channel table, owned entirely
-by `firmware/src/driver/pwm/pwm_driver_config.c`. There is no per-profile source file
+by `firmware/src/driver/pwm/pwm_driver.c`. Persisted settings (bank roles and I2C
+address, two CRC-protected flash slots) live in `firmware/src/app/device_service/device_config.c`
+and are handed to the driver as three roles. There is no per-profile source file
 and no `PICO_PWM_PROFILE` CMake option. Channel roles are stored in the startup
 configuration. The host edits that target, saves it, and applies it by rebooting.
 See [Firmware Configuration](../guides/configuration.md#startup-bank-configuration) for the
@@ -9,12 +11,11 @@ host-facing model.
 
 ## Channel Resolution
 
-`pwm_driver_config.c` owns:
+`pwm_driver.c` owns:
 
 - the per-bank role recorded by `pwm_driver_configure_table()`
 - the per-channel lookups (`pwm_driver_config_channel_role`, `pwm_driver_config_channel_name`),
   the frequency limits (`pwm_driver_config_frequency_supported`) and `pwm_driver_config_validate`
-- startup configuration persistence (flash records)
 
 Each bank is wired to one module: A=`hardware`, B=`pio`, C=`software`. The module reads its
 GPIOs straight from its `board.c` const (`hardware_pwm_config`, `pio_pwm_config`,
@@ -65,8 +66,7 @@ standard Pico board. If a custom board needs a different physical layout:
 2. If the bank/GPIO layout itself needs to change, update the
   `board.c` consts and the bank-to-backend mapping in
   `pwm_driver_backends[][]` and `pwm_driver_configure_table()`.
-3. Add or update firmware host-side tests in `firmware/tests/pwm_driver_config_test.c`
-  and `firmware/tests/CMakeLists.txt`; run them through
+3. Add or update firmware host-side tests in `firmware/tests/` and `firmware/tests/CMakeLists.txt`; run them through
   `tools/test/test-firmware-c.sh`.
 
 All backend implementations are compiled once in the shared firmware target.

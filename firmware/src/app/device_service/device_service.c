@@ -17,44 +17,6 @@ const char *device_service_firmware_version(void) {
     return PICO_PWM_FIRMWARE_VERSION_STR;
 }
 
-bool device_service_config_init(const pwm_driver_config_t *running, const pwm_driver_config_t *target) {
-    return pwm_driver_config_init_state(running, target);
-}
-
-bool device_service_config_get_target(pwm_driver_config_t *config) {
-    return pwm_driver_config_get_target(config);
-}
-
-bool device_service_config_get_running(pwm_driver_config_t *config) {
-    return pwm_driver_config_get_running(config);
-}
-
-bool device_service_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_role_t role) {
-    return pwm_driver_config_set_bank(bank, role);
-}
-
-bool device_service_config_save_target(void) {
-    pwm_driver_config_t target;
-    return pwm_driver_config_get_target(&target) && pwm_driver_config_save_target(&target);
-}
-
-bool device_service_config_set_i2c_address(uint8_t address) {
-    return pwm_driver_config_set_i2c_address(address);
-}
-
-bool device_service_config_target_dirty(void) {
-    pwm_driver_config_t target;
-    pwm_driver_config_t saved;
-
-    if (!pwm_driver_config_get_target(&target)) {
-        return false;
-    }
-    (void)pwm_driver_config_load_target(&saved);
-    return target.bank_a_role != saved.bank_a_role ||
-           target.bank_b_role != saved.bank_b_role || target.bank_c_role != saved.bank_c_role ||
-           target.i2c_address != saved.i2c_address;
-}
-
 void device_service_get_uid(uint8_t uid[8]) {
     pico_unique_board_id_t id;
 

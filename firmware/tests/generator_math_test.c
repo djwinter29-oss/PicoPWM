@@ -1,7 +1,31 @@
-#include "driver/pwm/generator_math.h"
+#include "driver/pwm/hardware/hardware_math.h"
+#include "driver/pwm/pio/pio_math.h"
+#include "driver/pwm/software/software_math.h"
 
 #include <assert.h>
 #include <stddef.h>
+
+/** @brief Count high iterations of the PIO generator's sticky-high countdown. */
+static uint32_t pwm_pio_simulate_high_iterations(uint16_t period_count, uint32_t match) {
+    uint32_t high_iterations = 0u;
+    bool pin_high = false;
+    uint32_t y = period_count;
+
+    while (true) {
+        if (y == match) {
+            pin_high = true;
+        }
+        if (pin_high) {
+            high_iterations++;
+        }
+        if (y == 0u) {
+            break;
+        }
+        y--;
+    }
+
+    return high_iterations;
+}
 
 int main(void) {
     bool high;

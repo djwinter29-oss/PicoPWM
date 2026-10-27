@@ -1,6 +1,7 @@
 #include "app/cli/board_commands.h"
 
-#include "driver/pwm/pwm_driver_config.h"
+#include "driver/pwm/pwm_driver.h"
+#include "app/device_service/device_config.h"
 #include "app/device_service/device_service.h"
 #include "platform/led.h"
 #include "platform/system.h"
@@ -63,7 +64,7 @@ static const char *board_commands_role_name(pwm_driver_config_bank_role_t role) 
 }
 
 static void board_commands_format_config(char *line, size_t size, const char *label,
-                                         const pwm_driver_config_t *config) {
+                                         const device_config_t *config) {
     snprintf(line, size, "%s=i2c=0x%02X A:hw/%s B:pio/%s C:sw/%s", label, (unsigned)config->i2c_address,
              board_commands_role_name(config->bank_a_role), board_commands_role_name(config->bank_b_role),
              board_commands_role_name(config->bank_c_role));
@@ -71,12 +72,12 @@ static void board_commands_format_config(char *line, size_t size, const char *la
 
 bool board_commands_config(void *context, int argc, const char *const *argv) {
     char line[128];
-    pwm_driver_config_t running;
-    pwm_driver_config_t target;
+    device_config_t running;
+    device_config_t target;
 
     if (argc == 1) {
-        device_service_config_get_running(&running);
-        device_service_config_get_target(&target);
+        device_config_get_running(&running);
+        device_config_get_target(&target);
         board_commands_format_config(line, sizeof(line), "running", &running);
         shell_write_line(COMMAND_SHELL, line);
         board_commands_format_config(line, sizeof(line), "target", &target);
@@ -84,7 +85,7 @@ bool board_commands_config(void *context, int argc, const char *const *argv) {
     }
 
     if ((argc == 2) && (strcmp(argv[1], "save") == 0)) {
-        return shell_write_line(COMMAND_SHELL, device_service_config_save_target()
+        return shell_write_line(COMMAND_SHELL, device_config_save()
                                                    ? "OK config saved; reboot required"
                                                    : "ERR config invalid or flash write failed");
     }
@@ -93,7 +94,7 @@ bool board_commands_config(void *context, int argc, const char *const *argv) {
         char *end = NULL;
         unsigned long value = strtoul(argv[2], &end, 0);
         return shell_write_line(COMMAND_SHELL, (end != argv[2] && *end == '\0' && value <= 0x77u && value >= 0x08u &&
-                                                device_service_config_set_i2c_address((uint8_t)value))
+                                                device_config_set_i2c_address((uint8_t)value))
                                                    ? "OK target address updated; save then reboot"
                                                    : "ERR invalid I2C address");
     }
@@ -111,7 +112,7 @@ bool board_commands_config(void *context, int argc, const char *const *argv) {
                                          : (strcmp(argv[3], "mon") == 0) ? PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR
                                                                          : PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR + 1u;
 
-    return shell_write_line(COMMAND_SHELL, device_service_config_set_bank(bank, role)
+    return shell_write_line(COMMAND_SHELL, device_config_set_bank(bank, role)
                                                ? "OK target updated; save then reboot"
                                                : "ERR invalid bank/role");
 }

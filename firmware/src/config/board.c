@@ -4,7 +4,7 @@
  */
 
 #include "driver/i2c/i2c_slave.h"
-#include "driver/pwm/pwm_driver_config.h"
+#include "driver/pwm/pwm_driver.h"
 
 /**
  * @brief I2C slave settings. The slave never drives the bus clock, but the peripheral still needs timing

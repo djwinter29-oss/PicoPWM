@@ -10,9 +10,6 @@
 
 #include <stdint.h>
 
-/** @brief Record the bank roles before Core 1 launches. */
-bool pwm_driver_configure_table(const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]);
-
 /**
  * @brief Accumulate additional pulses from one cached base count and elapsed time.
  * @param pulse_count Cached base pulse count.

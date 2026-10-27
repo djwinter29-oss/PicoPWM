@@ -5,7 +5,6 @@
 
 #include "pwm_driver.h"
 #include "pwm_driver_internal.h"
-#include "pwm_driver_mailbox.h"
 
 #include "platform/system.h"
 
@@ -24,6 +23,123 @@
 #include "hardware/sync.h"
 
 #include "hardware/gpio.h"
+#include "hardware/pwm.h"
+
+#include <string.h>
+
+/** @brief Bank roles chosen at startup; set once before Core 1 launches. */
+static pwm_driver_config_bank_role_t pwm_driver_config_bank_roles[PWM_DRIVER_CONFIG_BANK_COUNT];
+static bool pwm_driver_config_table_configured = false;
+
+/** @brief Return the board GPIO for one channel of a bank. */
+static uint pwm_driver_config_bank_gpio(pwm_driver_config_bank_t bank, uint index) {
+    switch (bank) {
+    case PWM_DRIVER_CONFIG_BANK_A:
+        return hardware_pwm_config.channels[index].gpio;
+    case PWM_DRIVER_CONFIG_BANK_B:
+        return pio_pwm_config.channels[index].gpio;
+    default:
+        return software_pwm_config.channels[index].gpio;
+    }
+}
+
+bool pwm_driver_config_channel_role(uint channel, pwm_driver_config_bank_role_t *role) {
+    if (!pwm_driver_config_table_configured || (role == NULL) || (channel >= PWM_DRIVER_CONFIG_CHANNEL_COUNT)) {
+        return false;
+    }
+    *role = pwm_driver_config_bank_roles[channel / PWM_DRIVER_CONFIG_BANK_SIZE];
+    return true;
+}
+
+const char *pwm_driver_config_channel_name(uint channel) {
+    static const char *const names[PWM_DRIVER_CONFIG_BANK_COUNT][2] = {
+        {"HW", "HW-MON"},
+        {"PIO", "PIO-MON"},
+        {"SW", "SW-MON"},
+    };
+    pwm_driver_config_bank_role_t role;
+
+    return pwm_driver_config_channel_role(channel, &role) ? names[channel / PWM_DRIVER_CONFIG_BANK_SIZE][role] : "?";
+}
+
+bool pwm_driver_config_validate(void) {
+    uint32_t used = 0u;
+
+    for (pwm_driver_config_bank_t bank = PWM_DRIVER_CONFIG_BANK_A; bank < PWM_DRIVER_CONFIG_BANK_COUNT; ++bank) {
+        for (uint i = 0u; i < PWM_DRIVER_CONFIG_BANK_SIZE; ++i) {
+            uint gpio = pwm_driver_config_bank_gpio(bank, i);
+
+            if (gpio >= PWM_DRIVER_CONFIG_GPIO_COUNT || (used & (1u << gpio)) != 0u) {
+                return false;
+            }
+            used |= 1u << gpio;
+
+            if ((gpio == 23u || gpio == 24u) && bank != PWM_DRIVER_CONFIG_BANK_C) {
+                return false;
+            }
+            if (PWM_DRIVER_CONFIG_REQUIRE_HW_CHANNEL_B && bank == PWM_DRIVER_CONFIG_BANK_A &&
+                pwm_gpio_to_channel(gpio) != PWM_CHAN_B) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+bool pwm_driver_config_frequency_supported(uint channel, uint32_t frequency_hz) {
+    pwm_driver_config_bank_role_t role;
+    uint32_t min_hz = 1u;
+    uint32_t max_hz = 1000000u;
+
+    if (!pwm_driver_config_channel_role(channel, &role)) {
+        return false;
+    }
+    if (frequency_hz == 0u) {
+        return true;
+    }
+
+    if (channel / PWM_DRIVER_CONFIG_BANK_SIZE == PWM_DRIVER_CONFIG_BANK_A && role == PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR) {
+        min_hz = 10u;
+    } else if (channel / PWM_DRIVER_CONFIG_BANK_SIZE == PWM_DRIVER_CONFIG_BANK_C) {
+        max_hz = 1000u;
+    }
+
+    return frequency_hz >= min_hz && frequency_hz <= max_hz;
+}
+
+bool pwm_driver_config_is_monitor(void) {
+    for (pwm_driver_config_bank_t bank = PWM_DRIVER_CONFIG_BANK_A; bank < PWM_DRIVER_CONFIG_BANK_COUNT; ++bank) {
+        if (pwm_driver_config_table_configured &&
+            pwm_driver_config_bank_roles[bank] == PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/** @brief Record the bank roles before Core 1 launches; false when already set or invalid. */
+static bool pwm_driver_configure_table(const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]) {
+    if ((roles == NULL) || pwm_driver_config_table_configured) {
+        return false;
+    }
+
+    for (pwm_driver_config_bank_t bank = PWM_DRIVER_CONFIG_BANK_A; bank < PWM_DRIVER_CONFIG_BANK_COUNT; ++bank) {
+        if ((roles[bank] != PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR) &&
+            (roles[bank] != PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR)) {
+            return false;
+        }
+    }
+
+    memcpy(pwm_driver_config_bank_roles, roles, sizeof(pwm_driver_config_bank_roles));
+    pwm_driver_config_table_configured = true;
+    if (!pwm_driver_config_validate()) {
+        pwm_driver_config_table_configured = false;
+        return false;
+    }
+    return true;
+}
+
 
 static inline void pwm_driver_memory_barrier(void) {
 #if defined(__arm__) || defined(__thumb__)
@@ -67,6 +183,14 @@ typedef struct {
 typedef struct {
     bool ok; /**< Indicates whether the backend accepted the command. */
 } pwm_driver_reply_t;
+
+/** @brief Mailbox lifecycle states for the one-slot Core 0/Core 1 command exchange. */
+typedef enum {
+    PWM_DRIVER_MAILBOX_IDLE = 0, /**< No command is pending or waiting for collection. */
+    PWM_DRIVER_MAILBOX_PENDING,  /**< Core 0 published a command that Core 1 has not claimed yet. */
+    PWM_DRIVER_MAILBOX_ACTIVE,   /**< Core 1 claimed the command and is applying it. */
+    PWM_DRIVER_MAILBOX_COMPLETE, /**< Core 1 published a reply for the last admitted command. */
+} pwm_driver_mailbox_state_t;
 
 /** @brief One-slot Core 0/Core 1 mailbox state bundle. */
 typedef struct {
@@ -356,7 +480,7 @@ static bool pwm_driver_core1_heartbeat_ok(void) {
 /** @brief Core 1 main loop that owns backend initialization and mailbox processing. */
 static void pwm_driver_core_main(void) {
     /* Required before Core 0 may call multicore_lockout_start_blocking() from config save. */
-    pwm_driver_config_arm_lockout_victim();
+    multicore_lockout_victim_init();
 
     /* Register the shared GPIO callback before backend initialization arms monitor pins. */
     gpio_set_irq_callback(pwm_driver_monitor_gpio_irq);
@@ -381,21 +505,8 @@ void pwm_driver_set_wait_hook(void (*hook)(void)) {
     pwm_wait_hook = hook;
 }
 
-bool pwm_driver_init(const pwm_driver_config_t *config) {
-    pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT];
-
-    if ((config == NULL) || (pwm_lifecycle != PWM_DRIVER_LIFECYCLE_RESET)) {
-        return false;
-    }
-
-    if (!pwm_driver_config_validate_target(config)) {
-        return false;
-    }
-
-    roles[PWM_DRIVER_CONFIG_BANK_A] = config->bank_a_role;
-    roles[PWM_DRIVER_CONFIG_BANK_B] = config->bank_b_role;
-    roles[PWM_DRIVER_CONFIG_BANK_C] = config->bank_c_role;
-    if (!pwm_driver_configure_table(roles)) {
+bool pwm_driver_init(const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]) {
+    if ((roles == NULL) || (pwm_lifecycle != PWM_DRIVER_LIFECYCLE_RESET) || !pwm_driver_configure_table(roles)) {
         return false;
     }
 
@@ -441,7 +552,7 @@ pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd) {
     }
 
     critical_section_enter_blocking(&pwm_reply_lock);
-    if (!pwm_mailbox_admits_submit(pwm_mailbox.state)) {
+    if (pwm_mailbox.state != PWM_DRIVER_MAILBOX_IDLE && pwm_mailbox.state != PWM_DRIVER_MAILBOX_COMPLETE) {
         critical_section_exit(&pwm_reply_lock);
         return PWM_DRIVER_RESULT_BUSY;
     }
@@ -462,7 +573,6 @@ pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd) {
     do {
         bool timed_out = false;
         bool cancelled = false;
-        pwm_mailbox_timeout_action_t action = PWM_MAILBOX_TIMEOUT_WAIT;
 
         critical_section_enter_blocking(&pwm_reply_lock);
         if (pwm_mailbox.state == PWM_DRIVER_MAILBOX_COMPLETE) {
@@ -472,13 +582,11 @@ pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd) {
             return reply.ok ? PWM_DRIVER_RESULT_OK : PWM_DRIVER_RESULT_APPLY_FAILED;
         }
 
+        /* Still unclaimed at the deadline: drop it. Once Core 1 is ACTIVE, keep waiting for the real result. */
         timed_out = time_reached(deadline);
-        if (timed_out) {
-            action = pwm_mailbox_timeout_action(pwm_mailbox.state);
-            if (action == PWM_MAILBOX_TIMEOUT_CANCEL) {
-                pwm_mailbox.state = PWM_DRIVER_MAILBOX_IDLE;
-                cancelled = true;
-            }
+        if (timed_out && pwm_mailbox.state == PWM_DRIVER_MAILBOX_PENDING) {
+            pwm_mailbox.state = PWM_DRIVER_MAILBOX_IDLE;
+            cancelled = true;
         }
         critical_section_exit(&pwm_reply_lock);
 

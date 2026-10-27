@@ -5,6 +5,7 @@
 
 #include "app/usb/hid_protocol.h"
 
+#include "app/device_service/device_config.h"
 #include "app/device_service/device_service.h"
 
 #include <string.h>
@@ -63,7 +64,7 @@ static void parse_version(const char *text, uint8_t out[3]) {
     }
 }
 
-static void pack_bank_config(uint8_t *out, const pwm_driver_config_t *config) {
+static void pack_bank_config(uint8_t *out, const device_config_t *config) {
     /* Bytes 0-2 are the fixed backend ids (A=HW 0, B=PIO 1, C=SW 2), kept for wire compatibility. */
     out[0] = 0u;
     out[1] = 1u;
@@ -92,17 +93,17 @@ static bool build_identity(uint8_t *payload) {
 }
 
 static bool build_configuration(uint8_t *payload) {
-    pwm_driver_config_t running;
-    pwm_driver_config_t target;
+    device_config_t running;
+    device_config_t target;
 
-    if (!device_service_config_get_running(&running) || !device_service_config_get_target(&target)) {
+    if (!device_config_get_running(&running) || !device_config_get_target(&target)) {
         return false;
     }
     memset(payload, 0, HID_CONFIGURATION_SIZE);
     payload[0] = HID_LAYOUT_VERSION;
     pack_bank_config(&payload[1], &running);
     pack_bank_config(&payload[8], &target);
-    payload[15] = device_service_config_target_dirty() ? 1u : 0u;
+    payload[15] = device_config_target_dirty() ? 1u : 0u;
     put_le32(&payload[17], device_service_system_clock_hz());
     return true;
 }
@@ -188,11 +189,11 @@ static hid_status_t execute(const uint8_t *r) {
 
     switch (operation) {
     case HID_OP_SET_CHANNEL: {
-        pwm_driver_config_t running;
+        device_config_t running;
         uint8_t bank = (uint8_t)(channel / HID_BANK_SIZE);
 
         if (channel >= device_service_channel_count() || arg1 > 100u || flags != 0u ||
-            !device_service_config_get_running(&running)) {
+            !device_config_get_running(&running)) {
             return HID_STATUS_INVALID;
         }
         pwm_driver_config_bank_role_t role = bank == 0u   ? running.bank_a_role
@@ -211,14 +212,14 @@ static hid_status_t execute(const uint8_t *r) {
     case HID_OP_SET_BANK:
         if (channel >= HID_BANK_COUNT || (arg0 & 0xFFFF0000u) != 0u || arg1 != 0u || flags != 0u ||
             (arg0 & 0xFFu) != channel ||
-            !device_service_config_set_bank((pwm_driver_config_bank_t)channel,
+            !device_config_set_bank((pwm_driver_config_bank_t)channel,
                                         (pwm_driver_config_bank_role_t)((arg0 >> 8) & 0xFFu))) {
             return HID_STATUS_INVALID;
         }
         return HID_STATUS_OK;
     case HID_OP_SET_I2C_ADDRESS:
         if (channel != 0u || arg0 > 0xFFu || arg1 != 0u || flags != 0u ||
-            !device_service_config_set_i2c_address((uint8_t)arg0)) {
+            !device_config_set_i2c_address((uint8_t)arg0)) {
             return HID_STATUS_INVALID;
         }
         return HID_STATUS_OK;
@@ -227,7 +228,7 @@ static hid_status_t execute(const uint8_t *r) {
         if (channel != 0u || arg0 != 0u || arg1 != 0u || flags != HID_FLAG_CONFIRM_SAVE) {
             return HID_STATUS_INVALID;
         }
-        return device_service_config_save_target() ? HID_STATUS_OK : HID_STATUS_STORAGE_FAILED;
+        return device_config_save() ? HID_STATUS_OK : HID_STATUS_STORAGE_FAILED;
     default:
         // SET_CLOCK_PROFILE: no profile is in HID_CLOCK_PROFILE_MASK, so every request is invalid.
         return HID_STATUS_INVALID;

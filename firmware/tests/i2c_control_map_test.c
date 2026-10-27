@@ -2,6 +2,7 @@
 
 #include "platform/led.h"
 #include "platform/system.h"
+#include "app/device_service/device_config.h"
 #include "app/device_service/device_service.h"
 
 #include <assert.h>
@@ -22,10 +23,10 @@ const char *device_service_firmware_version(void) {
     return "test";
 }
 
-bool device_service_config_get_running(pwm_driver_config_t *config) {
+bool device_config_get_running(device_config_t *config) {
     if ((config == NULL) || !config_read_ok)
         return false;
-    *config = (pwm_driver_config_t){
+    *config = (device_config_t){
         .bank_a_role = PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
         .bank_b_role = PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
         .bank_c_role = PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
@@ -33,21 +34,21 @@ bool device_service_config_get_running(pwm_driver_config_t *config) {
     return true;
 }
 
-bool device_service_config_get_target(pwm_driver_config_t *config) {
-    return device_service_config_get_running(config);
+bool device_config_get_target(device_config_t *config) {
+    return device_config_get_running(config);
 }
 
-bool device_service_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_role_t role) {
+bool device_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_role_t role) {
     (void)bank;
     (void)role;
     return set_bank_ok;
 }
 
-bool device_service_config_save_target(void) {
+bool device_config_save(void) {
     return save_ok;
 }
 
-bool device_service_config_set_i2c_address(uint8_t address) {
+bool device_config_set_i2c_address(uint8_t address) {
     (void)address;
     return address_ok;
 }

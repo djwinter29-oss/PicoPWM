@@ -53,10 +53,9 @@ The current implementation is split as follows:
 | `firmware/src/app/device_service/device_service.c` | Shared device info, channel reads, and channel write helpers above the Core 1 mailbox boundary |
 | `firmware/src/app/i2c/i2c_control_map.h` | I2C register map definitions and protocol helpers |
 | `firmware/src/app/i2c/i2c_control_map.c` | I2C register encode/decode and deferred write translation into `device_service` |
-| `firmware/src/driver/pwm/pwm_driver.h` | Public wrapper API and backend channel capacity constants |
-| `firmware/src/driver/pwm/pwm_driver.c` | Core 1 launch, mailbox loop, channel routing, shared snapshot |
-| `firmware/src/driver/pwm/pwm_driver_config.h` | Startup configuration, validation, persistence, and channel types |
-| `firmware/src/driver/pwm/pwm_driver_config.c` | Fixed channel mapping and versioned CRC-protected flash storage |
+| `firmware/src/driver/pwm/pwm_driver.h` | Public wrapper API, bank/role types, board GPIO structs and channel capacity constants |
+| `firmware/src/driver/pwm/pwm_driver.c` | Core 1 launch, mailbox loop, bank roles, channel lookups, frequency limits, board GPIO validation, shared snapshot |
+| `firmware/src/app/device_service/device_config.[ch]` | Persisted bank roles and I2C address (CRC-protected flash slots) |
 | `firmware/src/driver/pwm/hardware/hardware_generator.c` | Hardware PWM generator backend |
 | `firmware/src/driver/pwm/hardware/hardware_monitor.c` | Hardware PWM monitor backend |
 | `firmware/src/driver/pwm/pio/pio_generator.c` | PIO generator backend |
@@ -65,7 +64,6 @@ The current implementation is split as follows:
 | `firmware/src/driver/pwm/pio/pio_monitor.pio` | PIO assembly program used by the PIO monitor backend |
 | `firmware/src/driver/pwm/software/software_generator.c` | Software PWM generator backend |
 | `firmware/src/driver/pwm/software/software_monitor.c` | Software PWM monitor backend |
-| `firmware/src/driver/pwm/monitor_gpio_common.h` | Shared GPIO edge-timestamp monitor helpers used by the hardware and software monitor backends |
 
 ## External Interface
 
@@ -83,7 +81,7 @@ pwm_driver_result_t device_service_restore_defaults(void);
 Below that, `pwm` owns the internal cross-core mailbox boundary used by `device_service`:
 
 ```c
-bool pwm_driver_init(const pwm_driver_config_t *config);
+bool pwm_driver_init(const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]);
 bool pwm_driver_is_ready(void);
 ```
 
@@ -241,7 +239,7 @@ The `pwm` wrapper has a small lifecycle state machine.
 ```mermaid
 stateDiagram-v2
     [*] --> Reset
-    Reset --> LaunchRequested: pwm_driver_init(config)
+    Reset --> LaunchRequested: pwm_driver_init(roles)
     LaunchRequested --> InitializingCore1: multicore_launch_core1()
     InitializingCore1 --> BackendInit: Core1 entry
     BackendInit --> Ready: hw init + pio init + sw init complete
@@ -289,7 +287,7 @@ sequenceDiagram
     participant WR as pwm_driver.c
     participant C1 as Core 1
 
-    C0->>WR: pwm_driver_init(config)
+    C0->>WR: pwm_driver_init(roles)
     WR->>WR: init pending mailbox slot
     WR->>WR: init snapshot defaults for the startup bank roles
     WR->>C1: multicore_launch_core1(core_main)
@@ -306,13 +304,11 @@ All selected backends initialize during startup from the supplied configuration.
 sequenceDiagram
     participant Main as Core 0 main
     participant WR as pwm_driver.c
-    participant CFG as pwm_driver_config.c
     participant C1 as Core 1
     participant BE as selected backends
 
-    Main->>WR: pwm_driver_init(config)
-    WR->>CFG: configure all three bank roles
-    CFG-->>WR: validated bank configuration
+    Main->>WR: pwm_driver_init(roles)
+    WR->>WR: record and validate bank roles
     WR->>C1: multicore_launch_core1(core_main)
     C1->>BE: initialize selected backends
     BE-->>C1: success/failure
@@ -825,8 +821,8 @@ I2C writes should continue to defer out of ISR context before they enter `device
 
 ## Startup Bank Configuration
 
-`pwm_driver_config.c` records the per-bank backend and role from
-`pwm_driver_config_t` before Core 1 starts and resolves channels from them. There is no
+`pwm_driver.c` records the per-bank role passed to
+`pwm_driver_init()` before Core 1 starts and resolves channels from them. There is no
 bank-lock mailbox operation; one firmware image reaches all 8 bank-role
 combinations by selecting roles in the startup configuration.
 

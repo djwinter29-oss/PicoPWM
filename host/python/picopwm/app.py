@@ -43,6 +43,19 @@ def _same_secret(presented: str, expected: str) -> bool:
     return hmac.compare_digest(presented, expected)
 
 
+def _request_hostname(value: str) -> str:
+    if value.startswith("["):
+        end = value.find("]")
+        return value[1:end] if end > 1 else value
+    if ":" in value:
+        return value.rsplit(":", 1)[0]
+    return value
+
+
+def _request_is_loopback(value: str) -> bool:
+    return _request_hostname(value).lower() in LOOPBACK_HOSTS
+
+
 def _origin_allowed(origin: str, request_host: str) -> bool:
     if not origin:
         return True
@@ -73,9 +86,11 @@ def create_app(client: PicoPwmHid | None = None, registry: BoardRegistry | None 
 
     @app.before_request
     def guard_request():
+        configured = app.config["PICOPWM_TOKEN"]
+        if not configured and not _request_is_loopback(request.host):
+            return jsonify({"error": "refusing a non-loopback host without PICOPWM_TOKEN"}), 403
         if not _origin_allowed(request.headers.get("Origin", ""), request.host):
             return jsonify({"error": "cross-origin request rejected"}), 403
-        configured = app.config["PICOPWM_TOKEN"]
         if not configured or request.path == "/api/login" or not request.path.startswith("/api"):
             return None
         if _credential_accepted(configured, request.headers.get("Authorization"),

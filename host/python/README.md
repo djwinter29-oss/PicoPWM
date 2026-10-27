@@ -34,7 +34,8 @@ is set. With that token, `/api/*` requires `Authorization: Bearer <token>` or th
 `picopwm_auth` cookie from `POST /api/login` with `{"token": "..."}`. Pages stay
 open so the browser can prompt once. A request whose `Origin` names a different
 host is rejected. Leave the token unset on loopback; the dashboard then accepts
-local API calls with no extra header.
+local API calls with no extra header. Without a token, a request whose `Host` is not
+`127.0.0.1`, `localhost`, or `::1` is rejected, including a page reached by DNS rebinding.
 
 Open <http://127.0.0.1:5000>. The dashboard mirrors the WebHID page: device identity
 and RAM, boot configuration with one confirmed **Save and Reboot**, compact pin

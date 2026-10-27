@@ -80,6 +80,7 @@ For monitor banks, `stop` leaves measured input channels unchanged.
 changes only the target configuration. `config save` writes the validated target
 to flash; use `reboot` to apply it. The save disables interrupts and locks the
 PWM core for one flash sector, so CDC, HID, and I2C stall until it finishes.
-Allow at least one second, and a multi-second budget when the link is already busy.
+The stall ends when the sector program returns or the 5 second watchdog resets the board.
+Allow 2 seconds.
 See [Control Interfaces](README.md) for shared semantics and [I2C Protocol](i2c_protocol.md)
 for the binary register protocol.

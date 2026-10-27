@@ -6,6 +6,9 @@ namespace PicoPwm.Host;
 /// <summary>Loopback bind rules and dashboard credentials for the local management API.</summary>
 public static class DashboardBind
 {
+    public static bool IsLoopbackRequestHost(string? requestHost) =>
+        !string.IsNullOrEmpty(requestHost) && IsLoopback(new HostString(requestHost).Host);
+
     public static bool IsLoopback(string host) =>
         host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase)
         || host.Equals("localhost", StringComparison.OrdinalIgnoreCase)

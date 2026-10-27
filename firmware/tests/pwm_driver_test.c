@@ -51,6 +51,13 @@ static void release_apply(void) {
     atomic_store(&hold_release, 1);
 }
 
+static pwm_driver_result_t nested_result;
+
+static void reenter_apply(void) {
+    nested_result = pwm_driver_set(1u, 1000u, 20u);
+    atomic_store(&hold_release, 1);
+}
+
 static bool test_gen_set(uint bank, uint channel, uint32_t freq_hz, uint8_t duty) {
     pwm_state_t state = {.freq_hz = freq_hz, .duty = duty};
 
@@ -169,6 +176,16 @@ int main(void) {
     pwm_driver_set_wait_hook(release_apply);
     assert(pwm_driver_set(0u, 888u, 10u) == PWM_DRIVER_RESULT_OK);
     expect_state(0u, 888u, 10u);
+    pwm_driver_set_wait_hook(NULL);
+
+    /* A hook that submits another command must fail immediately. Taking the lock again would deadlock. */
+    nested_result = PWM_DRIVER_RESULT_OK;
+    atomic_store(&hold_release, 0);
+    pwm_driver_set_wait_hook(reenter_apply);
+    assert(pwm_driver_set(0u, 888u, 12u) == PWM_DRIVER_RESULT_OK);
+    assert(nested_result == PWM_DRIVER_RESULT_BUSY);
+    expect_state(0u, 888u, 12u);
+    expect_state(1u, 0u, 0u);
     pwm_driver_set_wait_hook(NULL);
 
     assert(pwm_driver_restore_defaults() == PWM_DRIVER_RESULT_OK);

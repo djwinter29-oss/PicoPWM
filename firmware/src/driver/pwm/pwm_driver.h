@@ -103,9 +103,9 @@ bool pwm_driver_config_is_monitor(void);
 
 /** @brief Result codes returned by shared PWM control operations. */
 typedef enum {
-    PWM_DRIVER_RESULT_OK = 0,       /**< The request completed successfully. */
-    PWM_DRIVER_RESULT_BUSY,         /**< Reserved; also the I2C queued-write status. */
-    PWM_DRIVER_RESULT_INVALID,      /**< The caller supplied an invalid channel or value. */
+    PWM_DRIVER_RESULT_OK = 0,  /**< The request completed successfully. */
+    PWM_DRIVER_RESULT_BUSY,    /**< Control API reentered from the apply wait hook; also the I2C queued-write status. */
+    PWM_DRIVER_RESULT_INVALID, /**< The caller supplied an invalid channel or value. */
     PWM_DRIVER_RESULT_UNAVAILABLE,  /**< The requested operation is not available in the current context. */
     PWM_DRIVER_RESULT_TIMEOUT,      /**< The command was still unclaimed at the apply deadline and was cancelled. */
     PWM_DRIVER_RESULT_APPLY_FAILED, /**< The backend rejected the admitted request. */
@@ -137,8 +137,9 @@ bool pwm_driver_startup_failed(void);
 /**
  * @brief Register a Core 0 callback invoked while a mailbox apply is still running.
  * @param hook Callback that may service USB, or `NULL` to clear it.
- * @note The hook runs with the control lock held. It must not parse CDC commands, poll HID actions,
- *       or execute queued I2C writes: those paths submit another mailbox command and would deadlock.
+ * @note The hook runs with the control lock held. Parsing CDC, polling HID actions, or executing queued
+ *       I2C writes submits another mailbox command. That reentry returns @ref PWM_DRIVER_RESULT_BUSY
+ *       instead of taking the lock again.
  */
 void pwm_driver_set_wait_hook(void (*hook)(void));
 

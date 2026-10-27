@@ -136,6 +136,16 @@ PIO_C_FILE="$REPO_ROOT/firmware/src/driver/pwm/pio/pio_generator.c"
 HW_MATH_FILE="$REPO_ROOT/firmware/src/driver/pwm/hardware/hardware_math.h"
 CDC_FILE="$REPO_ROOT/firmware/src/app/usb/usb_cdc.c"
 
+if ! grep -q "pwm_wait_hook_active" "$DRIVER_FILE"; then
+    echo "pwm_driver.c: a wait hook that submits another command must return BUSY" >&2
+    exit 1
+fi
+
+if ! grep -q "gen_publish_state(channel, 0u, 0u)" "$PIO_C_FILE"; then
+    echo "pio_generator.c: a failed FIFO push must publish the stopped pin state" >&2
+    exit 1
+fi
+
 if ! grep -q "pwm_driver_set_wait_hook" "$MAIN_FILE"; then
     echo "main.c: Core 0 must register a PWM-apply wait hook so USB keeps moving" >&2
     exit 1

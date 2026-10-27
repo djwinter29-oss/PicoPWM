@@ -2,10 +2,12 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using PicoPwm.Host;
 
+var webRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+Directory.CreateDirectory(webRoot);
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
     Args = args,
-    WebRootPath = Path.Combine(AppContext.BaseDirectory, "wwwroot"),
+    WebRootPath = webRoot,
 });
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -28,6 +30,14 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 app.Use(async (context, next) =>
 {
+    var configured = Environment.GetEnvironmentVariable("PICOPWM_TOKEN");
+    if (string.IsNullOrEmpty(configured) && !DashboardBind.IsLoopbackRequestHost(context.Request.Host.Value))
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new { error = "refusing a non-loopback host without PICOPWM_TOKEN" });
+        return;
+    }
+
     if (!DashboardBind.OriginAllowed(context.Request.Headers.Origin.ToString(), context.Request.Host.Value ?? ""))
     {
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
@@ -35,7 +45,6 @@ app.Use(async (context, next) =>
         return;
     }
 
-    var configured = Environment.GetEnvironmentVariable("PICOPWM_TOKEN");
     var path = context.Request.Path.Value ?? "";
     var isApi = path.Equals("/api", StringComparison.OrdinalIgnoreCase)
         || path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase);
@@ -132,3 +141,5 @@ record ClockRequest(int Profile, bool AcknowledgeOverclock = false);
 record SaveRequest(bool AcknowledgeOverclock = false);
 record LedRequest(bool? On);
 record BootRequest(int Profile, int Address, int[]? Roles, bool AcknowledgeOverclock = false);
+
+public partial class Program { }

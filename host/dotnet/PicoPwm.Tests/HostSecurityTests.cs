@@ -26,6 +26,11 @@ public sealed class HostSecurityTests
         Assert.False(DashboardBind.CredentialAccepted("secret", null, null));
         Assert.False(DashboardBind.CredentialAccepted("secret", "Bearer other", null));
         Assert.True(DashboardBind.CredentialAccepted("secret", "Bearer secret", null));
+        Assert.True(DashboardBind.IsLoopbackRequestHost("127.0.0.1:5000"));
+        Assert.True(DashboardBind.IsLoopbackRequestHost("[::1]:5000"));
+        Assert.True(DashboardBind.IsLoopbackRequestHost("localhost"));
+        Assert.False(DashboardBind.IsLoopbackRequestHost("evil.example"));
+        Assert.False(DashboardBind.IsLoopbackRequestHost(null));
         Assert.True(DashboardBind.CredentialAccepted("secret", null, DashboardBind.CookieValue("secret")));
         Assert.False(DashboardBind.CredentialAccepted("secret", null, DashboardBind.CookieValue("other")));
     }

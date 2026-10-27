@@ -164,6 +164,8 @@ static bool pwm_has_monitor;
 static absolute_time_t pwm_core1_heartbeat_stamp;
 /** @brief Optional Core 0 callback invoked while a mailbox apply is still running. */
 static void (*pwm_wait_hook)(void);
+/** @brief True while @ref pwm_wait_hook is on the stack, so a nested submit fails instead of deadlocking. */
+static bool pwm_wait_hook_active;
 
 void pwm_driver_set_wait_hook(void (*hook)(void)) {
     pwm_wait_hook = hook;
@@ -464,7 +466,9 @@ pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd) {
 
         system_watchdog_kick();
         if (pwm_wait_hook != NULL) {
+            pwm_wait_hook_active = true;
             pwm_wait_hook();
+            pwm_wait_hook_active = false;
         }
         best_effort_wfe_or_timeout(make_timeout_time_us(1000));
     } while (true);
@@ -490,6 +494,9 @@ pwm_driver_result_t pwm_driver_set(uint channel, uint32_t freq_hz, uint8_t duty)
 
     if (pwm_lifecycle != PWM_DRIVER_LIFECYCLE_READY) {
         return PWM_DRIVER_RESULT_UNAVAILABLE;
+    }
+    if (pwm_wait_hook_active) {
+        return PWM_DRIVER_RESULT_BUSY;
     }
 
     mutex_enter_blocking(&control_api_lock);

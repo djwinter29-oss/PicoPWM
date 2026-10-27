@@ -259,6 +259,9 @@ def test_bind_and_dashboard_reject_remote_and_foreign_callers():
         bind_host("0.0.0.0", "")
 
     _, client = make()
+    open_host = create_app(client).test_client()
+    assert open_host.get("/api/status", headers={"Host": "evil.example"}).status_code == 403
+    assert open_host.get("/api/status").status_code == 200
     http = create_app(client, token="secret").test_client()
     assert http.get("/").status_code == 200
     assert http.get("/api/status", headers={"Origin": "http://evil.example"}).status_code == 403

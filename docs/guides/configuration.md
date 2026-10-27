@@ -98,7 +98,7 @@ running:
 - `config` shows the running and target bank settings. `config set` changes
   one target bank, `config address` changes the target I2C address,
   `config clock <default|150|200|250>` changes the target system clock in MHz
-  (default keeps the SDK clock: 125 MHz on Pico, 150 MHz on Pico 2), and `config save` persists the target. A reboot applies the target. Saving disables interrupts and locks the PWM core for the flash sector erase, so USB and I2C stall until programming finishes.
+  (default keeps the SDK clock: 125 MHz on Pico, 150 MHz on Pico 2), and `config save` persists the target. A reboot applies the target. Saving disables interrupts and locks the PWM core for the flash sector erase, so USB and I2C stall until programming finishes or the 5 second watchdog resets the board. Hosts allow 2 seconds.
 - `set` applies to output-capable channels and returns `ERR unavailable` for
   monitor channels.
 - `stop` drives generator outputs low (`freq = 0 Hz`, `duty = 0%`). Monitor channels are left unchanged.

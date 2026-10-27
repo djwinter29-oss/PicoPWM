@@ -20,7 +20,8 @@ settings listens on `http://127.0.0.1:5000`. A non-loopback URL is refused unles
 `Authorization: Bearer <token>` or the `picopwm_auth` cookie from
 `POST /api/login` with `{"token": "..."}`. The page itself stays open so the
 browser can prompt once. A request whose `Origin` names a different host is
-rejected. Keep board controls on loopback when the token is unset.
+rejected. Without a token, a request whose `Host` is not loopback is rejected as well,
+including a page reached by DNS rebinding. Keep board controls on loopback when the token is unset.
 If only a newer runtime is installed, explicitly opt in to major-version
 roll-forward with `DOTNET_ROLL_FORWARD=Major` or install the .NET 10 ASP.NET Core
 runtime instead.

@@ -14,18 +14,18 @@
 
 /** @brief Feature report IDs. Each usage ID in the descriptor equals its report ID. */
 typedef enum {
-    HID_REPORT_ID_IDENTITY = 1,       /**< Device identity and capabilities, host reads. */
-    HID_REPORT_ID_CONFIGURATION = 2,  /**< Running and target configuration, host reads. */
-    HID_REPORT_ID_BANK_STATUS = 10,   /**< First of three bank status reports (10-12), host reads. */
-    HID_REPORT_ID_ACTION = 20,        /**< Action request (SET) and latest result (GET). */
+    HID_REPORT_ID_IDENTITY = 1,      /**< Device identity and capabilities, host reads. */
+    HID_REPORT_ID_CONFIGURATION = 2, /**< Running and target configuration, host reads. */
+    HID_REPORT_ID_BANK_STATUS = 10,  /**< First of three bank status reports (10-12), host reads. */
+    HID_REPORT_ID_ACTION = 20,       /**< Action request (SET) and latest result (GET). */
 } hid_report_id_t;
 
 /** @brief Payload sizes, excluding the report ID byte. */
 enum {
-    HID_IDENTITY_SIZE = 18,      /**< Report 1 payload bytes. */
-    HID_CONFIGURATION_SIZE = 21, /**< Report 2 payload bytes. */
-    HID_BANK_STATUS_SIZE = 41,   /**< Reports 10-12 payload bytes. */
-    HID_ACTION_SIZE = 12,        /**< Report 20 payload bytes, in both directions. */
+    HID_IDENTITY_SIZE = 18,                      /**< Report 1 payload bytes. */
+    HID_CONFIGURATION_SIZE = 21,                 /**< Report 2 payload bytes. */
+    HID_BANK_STATUS_SIZE = 41,                   /**< Reports 10-12 payload bytes. */
+    HID_ACTION_SIZE = 12,                        /**< Report 20 payload bytes, in both directions. */
     HID_MAX_PAYLOAD_SIZE = HID_BANK_STATUS_SIZE, /**< Largest payload of any report. */
 };
 

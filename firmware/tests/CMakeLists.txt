@@ -123,3 +123,16 @@ target_include_directories(stop_contract_test PRIVATE
 )
 pico_pwm_test_warnings(stop_contract_test)
 add_test(NAME stop_contract COMMAND stop_contract_test)
+
+find_package(Threads REQUIRED)
+add_executable(pwm_driver_test
+    pwm_driver_test.c
+    ${SOURCE_ROOT}/driver/pwm/pwm_driver.c
+)
+target_include_directories(pwm_driver_test PRIVATE
+    ${TEST_ROOT}/stubs_pwm_driver
+    ${SOURCE_ROOT}
+)
+target_link_libraries(pwm_driver_test PRIVATE Threads::Threads)
+pico_pwm_test_warnings(pwm_driver_test)
+add_test(NAME pwm_driver COMMAND pwm_driver_test)

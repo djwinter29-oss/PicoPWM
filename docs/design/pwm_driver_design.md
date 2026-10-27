@@ -290,7 +290,7 @@ sequenceDiagram
     WR->>C1: multicore_launch_core1(core_main)
     C1->>C1: gpio_set_irq_callback(pwm_driver_monitor_gpio_irq)
     C1->>WR: pwm_ready = true
-    C1->>C1: mailbox loop with 1 ms wait
+    C1->>C1: mailbox loop (1 ms wait with monitors, 100 ms without)
 ```
 
 All selected backends initialize during startup from the supplied configuration.
@@ -364,7 +364,7 @@ sequenceDiagram
 
     UI->>CTL: device_get_channel(ch, &state)
     CTL->>WR: pwm_driver_get(ch, &state)
-    WR->>SS: read versioned snapshot
+    WR->>SS: read snapshot under the cache lock
     SS-->>WR: coherent state struct
     WR-->>CTL: pwm_driver_state_t
     CTL-->>UI: coherent state struct
@@ -395,7 +395,7 @@ at the apply deadline.
 
 The mailbox carries control mutations and their result status. It does not
 carry real-time PWM edges or monitor samples; those remain local to Core 1 and
-are exposed through the versioned realized-state snapshot.
+are exposed through the realized-state snapshot.
 
 ### Responsibilities of `pwm_driver.c`
 
@@ -407,7 +407,7 @@ are exposed through the versioned realized-state snapshot.
 4. Mailbox state transitions for the one-slot Core 0/Core 1 command exchange.
 5. Reply publication for the active Core 0 command.
 6. Shared-state publication.
-7. Readback through a versioned snapshot.
+7. Readback through the locked snapshot.
 8. Backend initialization on Core 1 from the startup bank configuration.
 
 ### Logical Routing
@@ -427,23 +427,18 @@ Each descriptor owns:
 
 ### Shared Snapshot Design
 
-Each logical channel has a published record containing:
+Each logical channel has one published `pwm_driver_state_t` (`freq_hz`, `duty`) in a cache guarded by one
+`critical_section_t` (a hardware spinlock plus local interrupt mask, so it is safe across cores and from the
+Core 1 timer ISR). Writers (`pwm_driver_store_applied_state()`) and the reader (`pwm_driver_get()`) hold it only for one
+struct copy, so the pair is never torn and no retry loop exists. The cache is zero (`0 Hz`, `0%`) until a backend
+publishes.
 
-- version
-- `freq_hz`
-- `duty`
+Core 1 refreshes monitor channels about every 1 ms (skipped entirely when no bank is a monitor; the loop then wakes on submit or every 100 ms) but republishes a channel only when its sample changed, so a
+monitor whose value is stable costs one compare per channel.
 
-The writer increments `version` before and after update.
-
-Reader behavior:
-
-1. Read `version_before`.
-2. If odd, retry.
-3. Copy data fields.
-4. Read `version_after`.
-5. Accept only if versions match and are even.
-
-This provides a lock-free coherent snapshot read on Core 0.
+A monitor with no valid sample (signal lost, or nothing captured yet) is published as `0 Hz, 0%`, never as the last
+valid sample. `0 Hz` therefore means "no periodic signal" for a monitor; the duty of a static input is reported by
+backends that can sample the level.
 
 ## Hardware PWM Summary
 
@@ -571,7 +566,11 @@ When enabling or updating a channel, the backend first resolves one target mode:
 Then one internal apply helper performs the full transition for that resolved mode:
 
 1. either drive a static SIO level or program and enable the PIO state machine
-2. publish the resulting realized mode/timing snapshot
+2. publish the resulting realized frequency and duty
+
+The static-output rule (`pwm_generator_resolve_static` in `pwm_math.h`) is shared by the hardware, PIO and software
+generators. The PIO divider and period search (`pwm_pio_find_timing` in `pio_math.h`) is pure integer math covered by
+a host frequency sweep; divider quantization near a divider of 1 bounds the realized error at about 0.2%.
 
 ### Disable Sequence
 
@@ -667,14 +666,14 @@ Protection method:
 
 - `save_and_disable_interrupts()` before update
 - write timing fields and update the active-mask membership
-- publish the coherent realized snapshot while the scheduler cannot run
 - `restore_interrupts()` after update
+- publish the realized snapshot after the update (the timer never changes the published fields)
 
 This keeps the callback from observing partially updated configuration.
 
 ## Snapshot Publication Model
 
-Backends publish state through three helper functions in `pwm_driver.c`.
+Backends publish state through one helper function in `pwm_driver.c`.
 
 ### `pwm_driver_store_applied_state()`
 
@@ -689,23 +688,16 @@ Published fields:
 - realized `freq_hz`
 - realized `duty`
 
-### `pwm_driver_store_applied_state_coherent()`
-
-Used when a backend already owns an interrupt-excluded coherent update boundary and wants to avoid
-re-entering another interrupt-masked region just to publish the snapshot.
-
-Published fields:
-
-- realized `freq_hz`
-- realized `duty`
-
 ## Readback Semantics
 
 The architectural intent is that the `pwm` snapshot is the single source of truth for logical channel state.
 
 Important readback properties:
 
-- values are realized backend values, not merely requested values
+- values are realized backend values, not merely requested values; a requested frequency is rounded to the nearest
+  achievable one, so callers who need the rounding read the value back
+- a static request (zero frequency, `0%` or `100%`) is published as `0 Hz` with a realized duty of `0` or `100`, for
+  every generator backend
 - `stop` disables generator output
 - callers should prefer a single state-struct read when they need coherent multi-field data
 

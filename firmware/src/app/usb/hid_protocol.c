@@ -70,8 +70,8 @@ static void pack_bank_config(uint8_t *out, bool running) {
     out[1] = 1u;
     out[2] = 2u;
     for (uint8_t bank = 0u; bank < PWM_BANK_COUNT; ++bank) {
-        out[3 + bank] = (uint8_t)(running ? device_bank_role((pwm_bank_t)bank)
-                                          : boot_config_get_bank((pwm_bank_t)bank));
+        out[3 + bank] =
+            (uint8_t)(running ? device_bank_role((pwm_bank_t)bank) : boot_config_get_bank((pwm_bank_t)bank));
     }
     out[6] = running ? device_i2c_address() : boot_config_get_i2c_address();
 }
@@ -201,14 +201,12 @@ static hid_status_t execute(const uint8_t *r) {
     case HID_OP_SET_BANK:
         if (channel >= HID_BANK_COUNT || (arg0 & 0xFFFF0000u) != 0u || arg1 != 0u || flags != 0u ||
             (arg0 & 0xFFu) != channel ||
-            !boot_config_set_bank((pwm_bank_t)channel,
-                                        (pwm_role_t)((arg0 >> 8) & 0xFFu))) {
+            !boot_config_set_bank((pwm_bank_t)channel, (pwm_role_t)((arg0 >> 8) & 0xFFu))) {
             return HID_STATUS_INVALID;
         }
         return HID_STATUS_OK;
     case HID_OP_SET_I2C_ADDRESS:
-        if (channel != 0u || arg0 > 0xFFu || arg1 != 0u || flags != 0u ||
-            !boot_config_set_i2c_address((uint8_t)arg0)) {
+        if (channel != 0u || arg0 > 0xFFu || arg1 != 0u || flags != 0u || !boot_config_set_i2c_address((uint8_t)arg0)) {
             return HID_STATUS_INVALID;
         }
         return HID_STATUS_OK;

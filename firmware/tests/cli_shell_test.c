@@ -16,7 +16,7 @@ typedef struct {
 typedef struct {
     shell_t *shell;
     uint32_t command_calls;
-    } test_context_t;
+} test_context_t;
 
 static uint32_t test_read(void *context, uint8_t *data, uint32_t capacity) {
     test_transport_t *transport = context;

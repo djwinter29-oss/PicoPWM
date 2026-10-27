@@ -36,14 +36,14 @@ static boot_config_t current; /**< RAM copy; edited by the setters and persisted
  * previous record; a settings-only record that is re-entered over USB does not justify the extra sector.
  */
 typedef struct {
-    uint32_t magic;                                 /**< BOOT_CONFIG_MAGIC. */
-    uint16_t version;                               /**< BOOT_CONFIG_VERSION. */
-    uint16_t size;                                  /**< sizeof(boot_config_record_t). */
-    uint8_t roles[PWM_BANK_COUNT];    /**< Bank roles indexed by bank. */
-    uint8_t i2c_address;                            /**< 7-bit I2C slave address. */
-    uint8_t sysclk;                                 /**< boot_config_sysclk_t value. */
-    uint8_t reserved[3];                            /**< Zero; pads the CRC to a 4-byte boundary. */
-    uint32_t crc;                                   /**< IEEE CRC-32 of all preceding bytes. */
+    uint32_t magic;                /**< BOOT_CONFIG_MAGIC. */
+    uint16_t version;              /**< BOOT_CONFIG_VERSION. */
+    uint16_t size;                 /**< sizeof(boot_config_record_t). */
+    uint8_t roles[PWM_BANK_COUNT]; /**< Bank roles indexed by bank. */
+    uint8_t i2c_address;           /**< 7-bit I2C slave address. */
+    uint8_t sysclk;                /**< boot_config_sysclk_t value. */
+    uint8_t reserved[3];           /**< Zero; pads the CRC to a 4-byte boundary. */
+    uint32_t crc;                  /**< IEEE CRC-32 of all preceding bytes. */
 } boot_config_record_t;
 
 _Static_assert(sizeof(boot_config_record_t) == 20u && offsetof(boot_config_record_t, crc) == 16u, "record layout");
@@ -68,7 +68,8 @@ static const boot_config_record_t *boot_config_stored(void) {
 
 static bool boot_config_record_valid(const boot_config_record_t *record) {
     return record->magic == BOOT_CONFIG_MAGIC && record->version == BOOT_CONFIG_VERSION &&
-           record->size == sizeof(*record) && record->crc == boot_config_crc32(record, offsetof(boot_config_record_t, crc));
+           record->size == sizeof(*record) &&
+           record->crc == boot_config_crc32(record, offsetof(boot_config_record_t, crc));
 }
 
 static void boot_config_default(boot_config_t *config) {
@@ -83,8 +84,8 @@ static bool boot_config_valid(const boot_config_t *config) {
         if (config->roles[bank] > PWM_ROLE_MONITOR)
             return false;
     }
-    return (unsigned)config->sysclk <= BOOT_CONFIG_SYSCLK_250MHZ &&
-           config->i2c_address >= 0x08u && config->i2c_address <= 0x77u;
+    return (unsigned)config->sysclk <= BOOT_CONFIG_SYSCLK_250MHZ && config->i2c_address >= 0x08u &&
+           config->i2c_address <= 0x77u;
 }
 
 static bool boot_config_read_saved(boot_config_t *config) {

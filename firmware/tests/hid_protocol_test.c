@@ -81,8 +81,9 @@ pwm_driver_result_t device_restore_defaults(void) {
 }
 
 static void send(uint8_t id, uint8_t op, uint8_t channel, uint32_t arg0, uint8_t arg1, uint8_t flags) {
-    uint8_t r[HID_ACTION_SIZE] = {1, id, op, channel, (uint8_t)arg0, (uint8_t)(arg0 >> 8), (uint8_t)(arg0 >> 16),
-                                  (uint8_t)(arg0 >> 24), arg1, flags, 0, 0};
+    uint8_t r[HID_ACTION_SIZE] = {
+        1,    id,    op, channel, (uint8_t)arg0, (uint8_t)(arg0 >> 8), (uint8_t)(arg0 >> 16), (uint8_t)(arg0 >> 24),
+        arg1, flags, 0,  0};
     assert(hid_protocol_submit(r, sizeof(r)));
     hid_protocol_poll();
 }
@@ -96,8 +97,7 @@ static uint8_t result_status(uint8_t id, uint8_t op) {
 
 int main(void) {
     uint8_t p[HID_MAX_PAYLOAD_SIZE];
-    static const uint8_t identity[] = {1, 3, 0, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
-                                       1, 2, 3, 1, 24, 1, 0};
+    static const uint8_t identity[] = {1, 3, 0, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 1, 2, 3, 1, 24, 1, 0};
     static const uint8_t config[] = {1, 0, 1, 2, 0, 1, 0, 0x20, 0, 1, 2, 0, 1, 0, 0x20, 1, 0, 0x80, 0xD1, 0xF0, 0x08};
 
     assert(hid_protocol_get(HID_REPORT_ID_IDENTITY, p, sizeof(p)) == sizeof(identity));

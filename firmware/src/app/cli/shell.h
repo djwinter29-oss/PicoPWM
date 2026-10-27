@@ -92,10 +92,10 @@ typedef struct {
     const char *unknown_message; /**< Fallback message for unmatched commands. */
     shell_unknown_handler_t unknown_handler; /**< Optional unmatched-command callback. */
     void *command_context; /**< Context passed to command callbacks. */
-    EmbeddedCli *cli; /**< embedded-cli instance placed in @ref cli_buffer. */
+    EmbeddedCli *cli;      /**< embedded-cli instance placed in @ref cli_buffer. */
     CLI_UINT cli_buffer[SHELL_CLI_BUFFER_UINTS]; /**< Static backing store for @ref cli. */
-    bool prompted; /**< Indicates the initial prompt has been emitted by embedded-cli. */
-    bool busy; /**< Guards against re-entrant poll or prompt calls. */
+    bool prompted;                               /**< Indicates the initial prompt has been emitted by embedded-cli. */
+    bool busy;                                   /**< Guards against re-entrant poll or prompt calls. */
     bool initialized; /**< Indicates whether @ref shell_init completed successfully. */
 } shell_t;
 

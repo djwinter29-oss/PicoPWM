@@ -11,7 +11,7 @@
 #include "hardware/gpio.h"
 #include "hardware/sync.h"
 #include "hardware/timer.h"
-#include "software_math.h"
+#include "../pwm_math.h"
 
 /** @brief Software PWM scheduler tick period in microseconds. */
 #define SW_PWM_TICK_US 10
@@ -54,17 +54,7 @@ static void sw_gen_publish_state(uint channel) {
     sw_pwm_channel_t *ch = &sw_pwm_channels[channel];
     pwm_driver_state_t state = sw_gen_channel_state(ch);
 
-    pwm_driver_store_applied_state(((uint)PWM_BANK_C * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)),
-                                   &state);
-}
-
-/** @brief Publish one channel's realized software PWM state while the caller already owns interrupt exclusion. */
-static void sw_gen_publish_state_coherent(uint channel) {
-    sw_pwm_channel_t *ch = &sw_pwm_channels[channel];
-    pwm_driver_state_t state = sw_gen_channel_state(ch);
-
-    pwm_driver_store_applied_state_coherent(
-        ((uint)PWM_BANK_C * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)), &state);
+    pwm_driver_store_applied_state(((uint)PWM_BANK_C * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)), &state);
 }
 
 /** @brief Resolve whether one software-PWM request should be handled as a static-output mode. */
@@ -104,8 +94,8 @@ static void sw_gen_start_scheduled_output(uint channel, uint32_t period_ticks, u
     ch->realized_freq_hz = realized_freq_hz;
     ch->realized_duty = realized_duty;
     sw_pwm_active_mask |= (1u << channel);
-    sw_gen_publish_state_coherent(channel);
     restore_interrupts(save);
+    sw_gen_publish_state(channel);
 }
 
 /** @brief Repeating timer callback that advances all active software PWM channels. */

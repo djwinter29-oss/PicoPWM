@@ -27,20 +27,20 @@
 
 /** @brief USB interface numbering used inside the configuration descriptor. */
 typedef enum {
-    ITF_NUM_CDC = 0, /**< CDC control interface number. */
+    ITF_NUM_CDC = 0,  /**< CDC control interface number. */
     ITF_NUM_CDC_DATA, /**< CDC data interface number. */
-    ITF_NUM_HID, /**< HID vendor interface number. */
-    ITF_NUM_TOTAL /**< Total number of interfaces in the configuration. */
+    ITF_NUM_HID,      /**< HID vendor interface number. */
+    ITF_NUM_TOTAL     /**< Total number of interfaces in the configuration. */
 } usb_interface_number_t;
 
 /** @brief USB string descriptor indices used by the device and configuration descriptors. */
 typedef enum {
-    STRID_LANGID = 0, /**< Language ID string descriptor index. */
+    STRID_LANGID = 0,   /**< Language ID string descriptor index. */
     STRID_MANUFACTURER, /**< Manufacturer string descriptor index. */
-    STRID_PRODUCT, /**< Product string descriptor index. */
-    STRID_SERIAL, /**< Serial number string descriptor index. */
-    STRID_CDC, /**< CDC interface string descriptor index. */
-    STRID_HID, /**< HID interface string descriptor index. */
+    STRID_PRODUCT,      /**< Product string descriptor index. */
+    STRID_SERIAL,       /**< Serial number string descriptor index. */
+    STRID_CDC,          /**< CDC interface string descriptor index. */
+    STRID_HID,          /**< HID interface string descriptor index. */
 } usb_string_id_t;
 
 /**
@@ -48,14 +48,10 @@ typedef enum {
  * Report counts are 1=18, 2=21, 10-12=41, 20=12 payload bytes; the usage ID equals the report ID.
  */
 static uint8_t const hid_report_descriptor[] = {
-    0x06, 0x00, 0xFF, 0x09, 0x01, 0xA1, 0x01, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08,
-    0x85, 0x01, 0x95, 0x12, 0x09, 0x01, 0xB1, 0x02,
-    0x85, 0x02, 0x95, 0x15, 0x09, 0x02, 0xB1, 0x02,
-    0x85, 0x0A, 0x95, 0x29, 0x09, 0x0A, 0xB1, 0x02,
-    0x85, 0x0B, 0x95, 0x29, 0x09, 0x0B, 0xB1, 0x02,
-    0x85, 0x0C, 0x95, 0x29, 0x09, 0x0C, 0xB1, 0x02,
-    0x85, 0x14, 0x95, 0x0C, 0x09, 0x14, 0xB1, 0x02,
-    0xC0,
+    0x06, 0x00, 0xFF, 0x09, 0x01, 0xA1, 0x01, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x85, 0x01,
+    0x95, 0x12, 0x09, 0x01, 0xB1, 0x02, 0x85, 0x02, 0x95, 0x15, 0x09, 0x02, 0xB1, 0x02, 0x85, 0x0A,
+    0x95, 0x29, 0x09, 0x0A, 0xB1, 0x02, 0x85, 0x0B, 0x95, 0x29, 0x09, 0x0B, 0xB1, 0x02, 0x85, 0x0C,
+    0x95, 0x29, 0x09, 0x0C, 0xB1, 0x02, 0x85, 0x14, 0x95, 0x0C, 0x09, 0x14, 0xB1, 0x02, 0xC0,
 };
 
 /**
@@ -101,7 +97,7 @@ uint8_t const *tud_descriptor_device_cb(void) {
 /** @brief Endpoint number for CDC data IN traffic. */
 #define EPNUM_CDC_IN    0x82
 /** @brief Endpoint number for the HID interrupt IN endpoint; required by the stack, never used for data. */
-#define EPNUM_HID_IN    0x83
+#define EPNUM_HID_IN 0x83
 /** @brief Total bytes in the one and only USB configuration descriptor. */
 #define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN + (USB_HID_COUNT * TUD_HID_DESC_LEN))
 
@@ -125,12 +121,7 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
 
 /** @brief USB string table backing the TinyUSB string-descriptor callback. */
 static char const *string_desc_arr[] = {
-    (const char[]){0x09, 0x04},
-    USB_STR_MANUFACTURER,
-    USB_STR_PRODUCT,
-    NULL,
-    USB_STR_CDC,
-    USB_STR_HID,
+    (const char[]){0x09, 0x04}, USB_STR_MANUFACTURER, USB_STR_PRODUCT, NULL, USB_STR_CDC, USB_STR_HID,
 };
 
 /** @brief Scratch UTF-16 string descriptor buffer returned by TinyUSB string callbacks. */

@@ -11,6 +11,7 @@
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
 #include "hardware/pwm.h"
+#include "../pwm_math.h"
 #include "hardware_math.h"
 
 /** @brief Cached system clock used by the hardware generator timing search. */
@@ -49,11 +50,6 @@ static void hw_gen_drive_static_level(uint gpio, bool high) {
     gpio_put(gpio, high);
 }
 
-/** @brief Resolve one hardware static-output request to the realized driven level. */
-static uint8_t hw_gen_static_duty(uint8_t duty_percent) {
-    return duty_percent >= 100u ? 100u : 0u;
-}
-
 /** @brief Apply one realized static hardware output state and publish the matching shared snapshot. */
 static void hw_gen_apply_static_state(uint channel, uint8_t realized_duty) {
     uint gpio = hardware_pwm_config.channels[channel].gpio;
@@ -73,8 +69,7 @@ static void hw_gen_publish_state(uint channel, uint32_t realized_freq_hz, uint8_
     state.freq_hz = realized_freq_hz;
     state.duty = realized_duty;
 
-    pwm_driver_store_applied_state(((uint)PWM_BANK_A * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)),
-                                   &state);
+    pwm_driver_store_applied_state(((uint)PWM_BANK_A * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)), &state);
 }
 
 /** @brief Return the smallest supported hardware PWM frequency in Hz for the current clock plan. */
@@ -222,6 +217,7 @@ bool hw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     uint32_t best_top;
     uint16_t best_div_x16;
     uint32_t realized_freq_hz;
+    bool static_high;
     uint8_t static_duty;
 
     if (channel >= PWM_DRIVER_CONFIG_BANK_SIZE)
@@ -233,9 +229,7 @@ bool hw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     uint slice = pwm_gpio_to_slice_num(gpio);
     uint ch = pwm_gpio_to_channel(gpio);
 
-    static_duty = hw_gen_static_duty(duty);
-
-    if (freq_hz == 0u || duty == 0u || duty >= 100u) {
+    if (pwm_generator_resolve_static(freq_hz, duty, &static_high, &static_duty)) {
         hw_gen_apply_static_state(channel, static_duty);
         return true;
     }

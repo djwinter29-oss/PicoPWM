@@ -1,6 +1,6 @@
 #include "driver/pwm/hardware/hardware_math.h"
 #include "driver/pwm/pio/pio_math.h"
-#include "driver/pwm/software/software_math.h"
+#include "driver/pwm/pwm_math.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -27,6 +27,30 @@ static uint32_t pwm_pio_simulate_high_iterations(uint16_t period_count, uint32_t
     return high_iterations;
 }
 
+/** @brief Sweep the PIO timing search and return the worst relative error in ppm; asserts it is realizable. */
+static uint32_t pwm_pio_sweep_worst_ppm(uint32_t sys_clk_hz, uint32_t min_freq_hz) {
+    uint32_t worst_ppm = 0u;
+
+    for (uint64_t freq = min_freq_hz; freq <= 1000000u; freq += freq / 50u + 1u) {
+        uint16_t period = 0u;
+        uint32_t clkdiv = 256u;
+        uint32_t realized;
+        uint32_t error;
+        uint32_t ppm;
+
+        assert(pwm_pio_find_timing(sys_clk_hz, (uint32_t)freq, &period, &clkdiv));
+        assert(period >= 1u && clkdiv >= 256u && clkdiv <= PWM_PIO_MAX_CLKDIV_X256);
+        realized = pwm_pio_realized_freq_hz(sys_clk_hz, period, clkdiv);
+        error = realized > freq ? (uint32_t)(realized - freq) : (uint32_t)(freq - realized);
+        ppm = (uint32_t)((uint64_t)error * 1000000u / freq);
+        if (ppm > worst_ppm) {
+            worst_ppm = ppm;
+        }
+    }
+
+    return worst_ppm;
+}
+
 int main(void) {
     bool high;
     uint8_t realized_duty;
@@ -48,6 +72,19 @@ int main(void) {
     assert(high && realized_duty == 100u);
     assert(!pwm_generator_resolve_static(100u, 50u, &high, &realized_duty));
     assert(!pwm_generator_resolve_static(100u, 50u, NULL, &realized_duty));
+
+    {
+        static const uint32_t clocks[] = {125000000u, 150000000u, 250000000u};
+        uint16_t period;
+        uint32_t clkdiv;
+
+        for (size_t i = 0u; i < sizeof(clocks) / sizeof(clocks[0]); ++i) {
+            /* Divider quantization (1/256 near a divider of 1) bounds the error at about 0.2%. */
+            assert(pwm_pio_sweep_worst_ppm(clocks[i], 1u) < 4000u);
+        }
+        assert(!pwm_pio_find_timing(125000000u, 0u, &period, &clkdiv));
+        assert(!pwm_pio_find_timing(125000000u, 60000000u, &period, &clkdiv));
+    }
 
     /* Sticky-high PIO loop: 1%, 50%, and 99% across short and long periods. */
     static const uint16_t periods[] = {1u, 10u, 100u, 1000u, 65535u};

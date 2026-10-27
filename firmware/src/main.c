@@ -39,8 +39,8 @@ int main(void) {
     pwm_commands_init(&pwm_command_session, &shell_transport);
 
     // Configure and launch all three PWM banks before starting Core 1.
-    const pwm_role_t bank_roles[PWM_BANK_COUNT] = {
-        boot_config_get_bank(PWM_BANK_A), boot_config_get_bank(PWM_BANK_B), boot_config_get_bank(PWM_BANK_C)};
+    const pwm_role_t bank_roles[PWM_BANK_COUNT] = {boot_config_get_bank(PWM_BANK_A), boot_config_get_bank(PWM_BANK_B),
+                                                   boot_config_get_bank(PWM_BANK_C)};
     if (!pwm_driver_init(bank_roles)) {
         system_reboot();
     }

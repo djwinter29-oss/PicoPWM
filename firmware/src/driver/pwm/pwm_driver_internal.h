@@ -41,12 +41,4 @@ pwm_driver_result_t pwm_driver_restore_defaults(void);
  */
 void pwm_driver_store_applied_state(uint channel, const pwm_driver_state_t *state);
 
-/**
- * @brief Publish one newly applied logical channel snapshot when the caller already owns a coherent update boundary.
- * @param channel Logical channel index.
- * @param state Caller-owned realized state snapshot.
- * @note Callers must ensure the source state cannot change while this snapshot is being copied.
- */
-void pwm_driver_store_applied_state_coherent(uint channel, const pwm_driver_state_t *state);
-
 #endif

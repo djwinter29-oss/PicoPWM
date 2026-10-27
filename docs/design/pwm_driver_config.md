@@ -13,7 +13,7 @@ host-facing model.
 
 `pwm_driver.c` owns:
 
-- the per-bank role recorded by `pwm_driver_configure_table()`
+- the per-bank role recorded by `pwm_driver_init()` (validated earlier by `boot_config`)
 - the per-channel lookups (`pwm_driver_config_channel_role`, `pwm_driver_config_channel_name`),
   and the frequency limits (`pwm_driver_config_frequency_supported`)
 
@@ -48,7 +48,7 @@ standard Pico board. If a custom board needs a different physical layout:
 
 1. If the bank/GPIO layout itself needs to change, update the
   `board.c` consts and the bank-to-backend mapping in
-  `pwm_driver_backends[][]` and `pwm_driver_configure_table()`.
+  `pwm_driver_backends[][]`.
 2. Add or update firmware host-side tests in `firmware/tests/` and `firmware/tests/CMakeLists.txt`; run them through
   `tools/test/test-firmware-c.sh`.
 

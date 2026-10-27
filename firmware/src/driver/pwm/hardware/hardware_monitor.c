@@ -103,7 +103,8 @@ static void hw_mon_poll(hw_mon_channel_t *ch) {
                     ((uint64_t)hw_mon_sys_clk_hz * elapsed_us);
 
     ch->sample.freq_hz = ch->edge_freq_hz;
-    ch->sample.duty = (ch->edge_freq_hz == 0u) ? (gpio_get(ch->gpio) ? 100u : 0u) : (duty > 100u ? 100u : (uint8_t)duty);
+    ch->sample.duty =
+        (ch->edge_freq_hz == 0u) ? (gpio_get(ch->gpio) ? 100u : 0u) : (duty > 100u ? 100u : (uint8_t)duty);
     ch->sample_valid = true;
     hw_mon_start_phase(ch, HW_MON_PHASE_EDGES);
 }

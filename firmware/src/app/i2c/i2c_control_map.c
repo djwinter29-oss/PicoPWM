@@ -201,9 +201,7 @@ pwm_driver_result_t i2c_control_map_execute_write(uint8_t reg, const uint8_t *pa
         if ((payload == NULL) || (payload_len != 3u)) {
             return PWM_DRIVER_RESULT_INVALID;
         }
-        return (payload[1] == payload[0] &&
-                boot_config_set_bank((pwm_bank_t)payload[0],
-                                               (pwm_role_t)payload[2]))
+        return (payload[1] == payload[0] && boot_config_set_bank((pwm_bank_t)payload[0], (pwm_role_t)payload[2]))
                    ? PWM_DRIVER_RESULT_OK
                    : PWM_DRIVER_RESULT_INVALID;
     }

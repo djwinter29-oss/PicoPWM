@@ -22,7 +22,8 @@ typedef enum {
     BOOT_CONFIG_SYSCLK_250MHZ = 3,  /**< 250 MHz. */
 } boot_config_sysclk_t;
 
-/** @brief Read the saved settings from flash into RAM; defaults when nothing valid is stored. Returns true when found. */
+/** @brief Read the saved settings from flash into RAM; defaults when nothing valid is stored. Returns true when found.
+ */
 bool boot_config_load(void);
 /**
  * @brief Persist the RAM settings in flash.

@@ -14,8 +14,7 @@
 static bool led_on;
 
 /** @copydoc led_init */
-void led_init(void)
-{
+void led_init(void) {
 #ifdef PICO_DEFAULT_LED_PIN
     gpio_init(PICO_DEFAULT_LED_PIN);
     gpio_put(PICO_DEFAULT_LED_PIN, false);
@@ -25,8 +24,7 @@ void led_init(void)
 }
 
 /** @copydoc led_set */
-void led_set(bool on)
-{
+void led_set(bool on) {
 #ifdef PICO_DEFAULT_LED_PIN
     led_on = on;
     gpio_put(PICO_DEFAULT_LED_PIN, on);
@@ -36,8 +34,7 @@ void led_set(bool on)
 }
 
 /** @copydoc led_read_state */
-bool led_read_state(bool *on)
-{
+bool led_read_state(bool *on) {
     if (on == NULL) {
         return false;
     }

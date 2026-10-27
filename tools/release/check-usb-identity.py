@@ -13,7 +13,7 @@ def _repo_root() -> Path:
 
 
 def _usb_identity(repo_root: Path) -> tuple[int, int]:
-    descriptor_path = repo_root / "firmware" / "src" / "usb" / "usb_descriptors.c"
+    descriptor_path = repo_root / "firmware" / "src" / "app" / "usb" / "usb_descriptors.c"
     source = descriptor_path.read_text(encoding="utf-8")
     values = {}
     for name in ("USB_VID", "USB_PID"):

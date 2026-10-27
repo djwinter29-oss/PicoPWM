@@ -121,9 +121,8 @@ bool channel_commands_get(void *context, int argc, const char *const *argv) {
     if (!device_get_channel((uint)channel, &state)) {
         return shell_write_line(COMMAND_SHELL, "ERR channel unavailable");
     }
-    snprintf(line, sizeof(line), "CH%d: freq=%lu Hz, duty=%u%%, enabled=%s", channel,
-             (unsigned long)state.freq_hz, (unsigned)state.duty,
-             state.freq_hz > 0u ? "yes" : "no");
+    snprintf(line, sizeof(line), "CH%d: freq=%lu Hz, duty=%u%%, enabled=%s", channel, (unsigned long)state.freq_hz,
+             (unsigned)state.duty, state.freq_hz > 0u ? "yes" : "no");
     return shell_write_line(COMMAND_SHELL, line);
 }
 

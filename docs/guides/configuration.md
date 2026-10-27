@@ -101,8 +101,7 @@ running:
   (default keeps the board's 150 MHz), and `config save` persists the target. A reboot applies the target.
 - `set` applies to output-capable channels and returns `ERR unavailable` for
   monitor channels.
-- `stop` drives generator outputs low (`freq = 0 Hz`, `duty = 0%`) and does
-  not clear `pulse_count`. Monitor channels are left unchanged.
+- `stop` drives generator outputs low (`freq = 0 Hz`, `duty = 0%`). Monitor channels are left unchanged.
 - `led` and `reboot` remain board-level commands.
 
 The CLI must not require the host to know which backend owns a logical channel.

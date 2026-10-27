@@ -39,7 +39,6 @@ bool pio_mon_init(void);
  *       `duty = PIO_MON_UNSTABLE_DUTY`.
  * @note If no input transition is observed for more than one second, the monitor reports a
  *       static level as `freq_hz = 0` with `duty = 0` or `100` based on the sampled GPIO.
- * @note `pulse_count` is always `0`.
  */
 bool pio_mon_get(uint channel, pwm_driver_state_t *state);
 

@@ -20,12 +20,4 @@ bool pio_gen_init(void);
  */
 bool pio_gen_set(uint channel, uint32_t freq_hz, uint8_t duty);
 
-/**
- * @brief Finalize one published PIO readback snapshot for Core 0 consumers.
- * @param channel Backend-local PIO generator channel index.
- * @param state Caller-owned snapshot to finalize in place.
- * @param pulse_ref_us Reference timestamp paired with `state->pulse_count`.
- */
-void pio_gen_finalize_readback(uint channel, pwm_driver_state_t *state, uint64_t pulse_ref_us);
-
 #endif

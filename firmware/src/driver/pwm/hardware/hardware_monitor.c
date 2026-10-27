@@ -4,7 +4,7 @@
  *
  * Each bank-A channel uses its slice's counter with the slice-B pin as the input. A slice has
  * one counter, so every channel time-shares two measurement windows on Core 1:
- * 1. edge window: `PWM_DIV_B_RISING` counts rising edges, giving frequency and `pulse_count`;
+ * 1. edge window: `PWM_DIV_B_RISING` counts rising edges, giving frequency;
  * 2. high window: `PWM_DIV_B_HIGH` counts divided sys-clock ticks while the input is high,
  *    giving duty against the measured window time.
  * Counter wraps are accumulated by polling the slice wrap flag on every `hw_mon_get()` call.
@@ -46,7 +46,6 @@ typedef struct {
     uint64_t phase_start_us;   /**< Start time of the current window. */
     uint32_t wraps;            /**< Counter wraps accumulated in the current window. */
     uint32_t edge_freq_hz;     /**< Frequency from the last completed edge window. */
-    uint32_t pulse_count;      /**< Monotonic rising-edge total from power-on. */
     pwm_driver_state_t sample; /**< Last completed measurement. */
     bool sample_valid;         /**< True after the first completed edge and high window pair. */
 } hw_mon_channel_t;
@@ -96,7 +95,6 @@ static void hw_mon_poll(hw_mon_channel_t *ch) {
 
     if (ch->phase == HW_MON_PHASE_EDGES) {
         ch->edge_freq_hz = (uint32_t)((count * 1000000u + elapsed_us / 2u) / elapsed_us);
-        ch->pulse_count += (uint32_t)count;
         hw_mon_start_phase(ch, HW_MON_PHASE_HIGH);
         return;
     }
@@ -106,7 +104,6 @@ static void hw_mon_poll(hw_mon_channel_t *ch) {
 
     ch->sample.freq_hz = ch->edge_freq_hz;
     ch->sample.duty = (ch->edge_freq_hz == 0u) ? (gpio_get(ch->gpio) ? 100u : 0u) : (duty > 100u ? 100u : (uint8_t)duty);
-    ch->sample.pulse_count = ch->pulse_count;
     ch->sample_valid = true;
     hw_mon_start_phase(ch, HW_MON_PHASE_EDGES);
 }

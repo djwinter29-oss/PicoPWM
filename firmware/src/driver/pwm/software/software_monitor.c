@@ -12,8 +12,6 @@
  * - It keeps only the latest exported sample for each channel.
  * - Inputs slower than 1 Hz are intentionally treated as permanent high or low levels rather
  *   than as in-spec PWM measurements.
- * - `pulse_count` increments once per completed observed period, so it reflects accepted
- *   edge-reconstructed cycles rather than hardware-captured edges.
  */
 
 #include "software_monitor.h"
@@ -34,7 +32,6 @@
 /** @brief Runtime state of one software-monitored channel. */
 typedef struct {
     pwm_driver_state_t state; /**< Latest exported sample. */
-    uint32_t pulse_count;     /**< Monotonic count of accepted periods. */
     bool sample_valid;        /**< Whether one full sample has been captured. */
     uint64_t last_edge_us;    /**< Timestamp of the latest edge, used for the static-level timeout. */
     uint64_t last_rise_us;    /**< Timestamp of the latest rising edge. */
@@ -54,7 +51,6 @@ static bool sw_mon_initialized = false;
 static void sw_mon_publish(sw_mon_channel_t *ctx, uint32_t freq_hz, uint8_t duty, bool valid) {
     ctx->state.freq_hz = freq_hz;
     ctx->state.duty = duty;
-    ctx->state.pulse_count = ctx->pulse_count;
     ctx->sample_valid = valid;
 }
 
@@ -68,7 +64,6 @@ static void sw_mon_publish_sample(sw_mon_channel_t *ctx, uint64_t period_us, uin
     uint64_t freq_hz = (1000000u + (period_us / 2u)) / period_us;
     uint32_t duty = (uint32_t)(((uint64_t)high_us * 100u + (period_us / 2u)) / period_us);
 
-    ctx->pulse_count++;
     sw_mon_publish(ctx, freq_hz > UINT32_MAX ? UINT32_MAX : (uint32_t)freq_hz, (uint8_t)(duty > 100u ? 100u : duty),
                    true);
 }
@@ -136,7 +131,6 @@ bool sw_mon_get(uint channel, pwm_driver_state_t *state) {
     if ((time_us_64() - ctx.last_edge_us) >= SW_MON_STATIC_TIMEOUT_US) {
         state->freq_hz = 0u;
         state->duty = gpio_get(software_pwm_config.channels[channel].gpio) ? 100u : 0u;
-        state->pulse_count = ctx.pulse_count;
         return true;
     }
 

@@ -26,7 +26,7 @@
 #include "app/i2c/i2c_control_map.h"
 
 #include "platform/boot_config.h"
-#include "app/device_service/device_service.h"
+#include "device.h"
 #include "platform/led.h"
 #include "platform/system.h"
 
@@ -78,7 +78,7 @@ uint8_t i2c_control_map_expected_write_length(uint8_t reg) {
 
 bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *response, uint8_t response_capacity,
                                    uint8_t *response_len) {
-    pwm_driver_state_t state = {0u, 50u, 0u};
+    pwm_driver_state_t state = {0u, 50u};
     const char *text;
     size_t text_len;
 
@@ -87,7 +87,7 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
     }
 
     if (reg == I2C_CONTROL_MAP_REG_INFO) {
-        text = device_service_device_name();
+        text = device_name();
         text_len = strlen(text) + 1u;
         if (text_len > response_capacity) {
             return false;
@@ -98,7 +98,7 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
     }
 
     if (reg == I2C_CONTROL_MAP_REG_VERSION) {
-        text = device_service_firmware_version();
+        text = device_firmware_version();
         text_len = strlen(text) + 1u;
         if (text_len > response_capacity) {
             return false;
@@ -115,11 +115,11 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
         /* Per bank: fixed backend id (A=HW 0, B=PIO 1, C=SW 2), then role; running banks first, then target. */
         for (uint8_t bank = 0u; bank < PWM_BANK_COUNT; ++bank) {
             response[2u * bank] = bank;
-            response[2u * bank + 1u] = (uint8_t)device_service_bank_role((pwm_bank_t)bank);
+            response[2u * bank + 1u] = (uint8_t)device_bank_role((pwm_bank_t)bank);
             response[6u + 2u * bank] = bank;
             response[6u + 2u * bank + 1u] = (uint8_t)boot_config_get_bank((pwm_bank_t)bank);
         }
-        response[12] = device_service_i2c_address();
+        response[12] = device_i2c_address();
         response[13] = boot_config_get_i2c_address();
         *response_len = 14u;
         return true;
@@ -129,25 +129,24 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
         if (response_capacity < 1u) {
             return false;
         }
-        response[0] = device_service_channel_count();
+        response[0] = device_channel_count();
         *response_len = 1u;
         return true;
     }
 
     if (i2c_control_map_is_channel_read(reg)) {
-        if (response_capacity < 9u) {
+        if (response_capacity < 5u) {
             return false;
         }
         uint channel = (uint)(reg - I2C_CONTROL_MAP_REG_CH_BASE);
-        if (!device_service_get_channel(channel, &state)) {
+        if (!device_get_channel(channel, &state)) {
             response[0] = (uint8_t)PWM_DRIVER_RESULT_UNAVAILABLE;
             *response_len = 1u;
             return true;
         }
         memcpy(response + 0, &state.freq_hz, sizeof(uint32_t));
         memcpy(response + 4, &state.duty, sizeof(uint8_t));
-        memcpy(response + 5, &state.pulse_count, sizeof(uint32_t));
-        *response_len = 9u;
+        *response_len = 5u;
         return true;
     }
 
@@ -177,7 +176,7 @@ pwm_driver_result_t i2c_control_map_execute_write(uint8_t reg, const uint8_t *pa
         if (payload_len != 0u) {
             return PWM_DRIVER_RESULT_INVALID;
         }
-        return device_service_restore_defaults();
+        return device_restore_defaults();
     }
 
     if (reg == I2C_CONTROL_MAP_REG_LED) {
@@ -231,7 +230,7 @@ pwm_driver_result_t i2c_control_map_execute_write(uint8_t reg, const uint8_t *pa
         channel = (uint)(reg - I2C_CONTROL_MAP_REG_SET_BASE);
         memcpy(&value_freq, payload + 0, sizeof(uint32_t));
         memcpy(&value_duty, payload + 4, sizeof(uint8_t));
-        return device_service_set_channel(channel, value_freq, value_duty);
+        return device_set_channel(channel, value_freq, value_duty);
     }
 
     return PWM_DRIVER_RESULT_INVALID;

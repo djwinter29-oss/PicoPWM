@@ -15,21 +15,13 @@ host-facing model.
 
 - the per-bank role recorded by `pwm_driver_configure_table()`
 - the per-channel lookups (`pwm_driver_config_channel_role`, `pwm_driver_config_channel_name`),
-  the frequency limits (`pwm_driver_config_frequency_supported`) and `pwm_driver_config_validate`
+  and the frequency limits (`pwm_driver_config_frequency_supported`)
 
 Each bank is wired to one module: A=`hardware`, B=`pio`, C=`software`. The module reads its
 GPIOs straight from its `board.c` const (`hardware_pwm_config`, `pio_pwm_config`,
 `software_pwm_config`). `pwm_driver.c` initializes the generator or monitor variant once at
 boot according to the bank role and routes `channel / 8` (bank) and `channel % 8` (index) to
 it. A monitor module has no `set`, so writes are refused. There is no stored channel table.
-
-The common validator uses these board-policy compile definitions by default:
-
-- `PWM_DRIVER_CONFIG_GPIO_COUNT=30`
-- `PWM_DRIVER_CONFIG_REQUIRE_HW_CHANNEL_B=1`
-
-A custom board target may override these definitions in its CMake branch when
-its GPIO count or hardware PWM pin policy differs.
 
 ## Fixed Bank GPIO Map and Backend Rules
 
@@ -44,29 +36,20 @@ This map is defined in `config/board.c` and is not configurable at runtime; see
 
 ## Resource Rules
 
-`pwm_driver_config_validate()` (run when the banks are configured) enforces:
-
-- GPIO ownership is unique.
-- Hardware PWM channels are fixed to the 8 slice-B GPIOs; PIO channels are
-  capped at 8 and fixed to the 8 companion slice-A GPIOs.
-- I2C register ranges still cover the advertised logical channel count.
-
-GPIO23 and GPIO24 are optional software-only pins reserved for custom boards.
-They are not part of the fixed SW bank above and must not be claimed by
-hardware PWM or PIO entries.
+The pin map is fixed in `config/board.c` and is not checked at runtime. Hardware PWM uses
+the 8 slice-B GPIOs and PIO uses the 8 companion slice-A GPIOs. GPIO23 and GPIO24 are
+optional software-only pins reserved for custom boards and must not be claimed by hardware
+PWM or PIO entries.
 
 ## Adding a New Backend or Bank Layout
 
 The fixed 3-bank, 8-pins-each layout is not expected to change for the
 standard Pico board. If a custom board needs a different physical layout:
 
-1. Add board-specific compile definitions (`PWM_DRIVER_CONFIG_GPIO_COUNT`,
-   `PWM_DRIVER_CONFIG_REQUIRE_HW_CHANNEL_B`) in a
-   CMake branch, following the existing board-policy pattern.
-2. If the bank/GPIO layout itself needs to change, update the
+1. If the bank/GPIO layout itself needs to change, update the
   `board.c` consts and the bank-to-backend mapping in
   `pwm_driver_backends[][]` and `pwm_driver_configure_table()`.
-3. Add or update firmware host-side tests in `firmware/tests/` and `firmware/tests/CMakeLists.txt`; run them through
+2. Add or update firmware host-side tests in `firmware/tests/` and `firmware/tests/CMakeLists.txt`; run them through
   `tools/test/test-firmware-c.sh`.
 
 All backend implementations are compiled once in the shared firmware target.
@@ -76,4 +59,4 @@ source files unless the bank/backend mapping itself changes.
 
 The USB shell and I2C protocol must remain unchanged when adding a bank
 layout. Unsupported operations should return `PWM_DRIVER_RESULT_UNAVAILABLE`
-through `device_service`.
+through `device`.

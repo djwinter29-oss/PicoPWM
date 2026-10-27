@@ -11,14 +11,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#ifndef PWM_DRIVER_CONFIG_GPIO_COUNT
-#define PWM_DRIVER_CONFIG_GPIO_COUNT 30u
-#endif
-
-#ifndef PWM_DRIVER_CONFIG_REQUIRE_HW_CHANNEL_B
-#define PWM_DRIVER_CONFIG_REQUIRE_HW_CHANNEL_B 1
-#endif
-
 /** @brief Number of logical channels exposed by the selected profile. */
 #define PWM_DRIVER_CONFIG_CHANNEL_COUNT 24u
 
@@ -84,9 +76,6 @@ bool pwm_driver_config_channel_role(uint channel, pwm_role_t *role);
 /** @brief Return a short name ("HW", "PIO-MON", ...) for the module that owns one logical channel. */
 const char *pwm_driver_config_channel_name(uint channel);
 
-/** @brief Validate board GPIO ownership; run when the bank roles are configured. */
-bool pwm_driver_config_validate(void);
-
 /** @brief Return whether a profile channel accepts one requested frequency. */
 bool pwm_driver_config_frequency_supported(uint channel, uint32_t frequency_hz);
 
@@ -109,7 +98,7 @@ bool pwm_driver_config_is_monitor(void);
 /** @brief Result codes returned by shared PWM control operations. */
 typedef enum {
     PWM_DRIVER_RESULT_OK = 0,       /**< The request completed successfully. */
-    PWM_DRIVER_RESULT_BUSY,         /**< Another command was already pending or executing. */
+    PWM_DRIVER_RESULT_BUSY,         /**< Reserved; also the I2C queued-write status. */
     PWM_DRIVER_RESULT_INVALID,      /**< The caller supplied an invalid channel or value. */
     PWM_DRIVER_RESULT_UNAVAILABLE,  /**< The requested operation is not available in the current context. */
     PWM_DRIVER_RESULT_TIMEOUT,      /**< The command was still unclaimed at the apply deadline and was cancelled. */
@@ -118,10 +107,8 @@ typedef enum {
 
 /** @brief Realized logical state snapshot for one PWM channel. */
 typedef struct {
-    uint32_t freq_hz;     /**< Realized output frequency in Hz. */
-    uint8_t duty;         /**< Realized duty cycle in percent in the range `[0, 100]`. */
-    uint32_t pulse_count; /**< Monotonic generated-period count from power-on. Hardware and PIO generators estimate
-                             this from elapsed time; `stop` does not clear it. */
+    uint32_t freq_hz; /**< Realized output frequency in Hz. */
+    uint8_t duty;     /**< Realized duty cycle in percent in the range `[0, 100]`. */
 } pwm_driver_state_t;
 
 /**

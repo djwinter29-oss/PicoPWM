@@ -5,8 +5,7 @@
  * This module owns the PIO-backed PWM generator used for the logical PIO channels
  * exposed by `pwm`. Each backend-local channel is bound to one RP2040 PIO
  * state machine, programs a compact free-running PWM loop, and stores only the
- * realized divider, period, duty, and exported pulse-accounting state needed by
- * the higher-level driver.
+ * realized divider, period, and duty state needed by the higher-level driver.
  *
  * The timing model is intentionally simple: one requested frequency is mapped to a
  * quantized PIO clock divider and loop period, then the realized frequency is
@@ -17,8 +16,6 @@
  * Current limitations:
  * - Realized frequency is quantized by the available divider and loop-count space,
  *   so the applied frequency may differ slightly from the requested frequency.
- * - `pulse_count` is an elapsed-time estimate of generated periods, not a hardware-
- *   observed edge counter.
  * - The backend implements continuous generation only; finite pulse bursts are not
  *   supported by this one-state-machine design.
  */
@@ -50,11 +47,9 @@ enum {
 
 /** @brief Runtime ownership and realized state for one PIO generator channel. */
 typedef struct {
-    uint64_t pulse_ref_us;     /**< Reference timestamp used to accumulate estimated pulse count. */
     PIO pio;                   /**< Owning PIO block for the channel. */
     uint32_t clkdiv_x256;      /**< Quantized PIO clock divider in units of 1/256. */
-    uint32_t pulse_count;      /**< Monotonic generated-period count accumulated at sync points. */
-    uint32_t realized_freq_hz; /**< Cached realized output frequency in Hz used for publication and pulse estimation. */
+    uint32_t realized_freq_hz; /**< Cached realized output frequency in Hz used for publication. */
     uint16_t period_count;     /**< Current period loop count programmed into the PIO generator. */
     uint8_t sm;                /**< Owning state machine index within @ref pio. */
     uint8_t duty_percent;      /**< Realized PIO generator duty in percent. */
@@ -159,34 +154,11 @@ static uint32_t gen_level_from_duty(uint16_t period_count, uint8_t duty_percent)
     return program.match;
 }
 
-/**
- * @brief Return the current pulse count implied by one channel's cached base state.
- * @param ctx Caller-owned realized timing state.
- * @return Current pulse count derived from the cached base count and elapsed time.
- */
-static uint32_t gen_pulse_count_now(const pio_gen_channel_t *ctx) {
-    if (ctx->realized_freq_hz == 0u) {
-        return ctx->pulse_count;
-    }
-
-    return pwm_driver_accumulate_pulse_count(ctx->pulse_count, ctx->realized_freq_hz, ctx->pulse_ref_us, time_us_64());
-}
-
-/** @brief Synchronize one channel's cached pulse count to the current time. */
-static void gen_sync_pulse_count(uint channel) {
-    pio_gen_channel_t *ctx = &pio_channels[channel];
-
-    ctx->pulse_count = gen_pulse_count_now(ctx);
-    ctx->pulse_ref_us = time_us_64();
-}
-
-/** @brief Apply one fully resolved PIO channel mode after synchronizing pulse accounting. */
+/** @brief Apply one fully resolved PIO channel mode. */
 static void gen_apply_mode(uint channel, const pio_gen_realized_target_t *target) {
     if (target == NULL) {
         return;
     }
-
-    gen_sync_pulse_count(channel);
 
     if (target->mode == PIO_GEN_MODE_PWM) {
         gen_enable_channel(channel, target->period_count, target->clkdiv_x256, target->duty_percent);
@@ -262,7 +234,6 @@ static void gen_publish_state(uint channel) {
     pwm_driver_state_t state = {
         .freq_hz = pio_channels[channel].realized_freq_hz,
         .duty = pio_channels[channel].duty_percent,
-        .pulse_count = pio_channels[channel].pulse_count,
     };
 
     pwm_driver_store_applied_state(((uint)PWM_BANK_B * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)),
@@ -458,8 +429,6 @@ bool pio_gen_init(void) {
         pio_channels[i].clkdiv_x256 = 256u;
         pio_channels[i].realized_freq_hz = PWM_DRIVER_STOPPED_FREQ_HZ;
         pio_channels[i].duty_percent = PWM_DRIVER_STOPPED_DUTY_PERCENT;
-        pio_channels[i].pulse_count = 0;
-        pio_channels[i].pulse_ref_us = time_us_64();
 
         generator_program_init(pio_channels[i].pio, pio_channels[i].sm,
                                pio_program_offsets[pio_index(pio_channels[i].pio)],
@@ -484,15 +453,4 @@ bool pio_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     gen_apply_mode(channel, &target);
 
     return true;
-}
-
-/** @copydoc pio_gen_finalize_readback */
-void pio_gen_finalize_readback(uint channel, pwm_driver_state_t *state, uint64_t pulse_ref_us) {
-    if (channel >= PWM_DRIVER_CONFIG_BANK_SIZE || state == NULL ||
-        state->freq_hz == 0u) {
-        return;
-    }
-
-    state->pulse_count =
-        pwm_driver_accumulate_pulse_count(state->pulse_count, state->freq_hz, pulse_ref_us, time_us_64());
 }

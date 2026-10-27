@@ -14,8 +14,6 @@
  * Current limitations:
  * - Each read captures at most one complete PWM period. Intermediate periods and waveform
  *   history are intentionally discarded.
- * - The backend does not provide a reliable received pulse count and always reports
- *   `pulse_count = 0`.
  * - A capture waits up to one second for a complete period before reporting a static level.
  * - The exported frequency and duty cycle are approximate because the conversion ignores
  *   fixed setup and branch overhead around each measured high/low segment.
@@ -76,7 +74,6 @@ static uint8_t pio_mon_sm_for_channel(uint channel) {
 static void pio_mon_publish_state(pio_mon_channel_t *ctx, uint32_t freq_hz, uint8_t duty, bool sample_valid) {
     ctx->state.freq_hz = freq_hz;
     ctx->state.duty = duty;
-    ctx->state.pulse_count = 0u;
     ctx->sample_valid = sample_valid;
 }
 

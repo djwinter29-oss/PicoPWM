@@ -28,7 +28,7 @@ math(EXPR PICO_PWM_CONFIG_FLASH_OFFSET "${PICO_FLASH_SIZE_BYTES} - ${PICO_PWM_CO
 
 add_executable(pico_pwm
     src/main.c
-    src/app/device_service/device_service.c
+    src/device.c
     src/platform/boot_config.c
     src/platform/led.c
     src/platform/system.c

@@ -153,7 +153,7 @@ See [Pinout](docs/guides/pinout.md) for the complete PWM channel and host-interf
 
 Use the `stop` command to apply the configured banks' safe reset behavior.
 Generator banks stop outputs; monitor banks leave measured input channels
-unchanged. `pulse_count` is monotonic from power-on and is not reset by `stop`.
+unchanged.
 
 ---
 
@@ -203,13 +203,12 @@ with their outputs off:
 |----------|-------|
 | Frequency | 0 Hz (off) |
 | Duty | 0% |
-| Pulse count | 0 at power-on; `stop` does not clear it |
 
 No demo channels are configured. Use the USB CDC shell or I2C commands to set
 frequencies and duty cycles. Monitor banks report input state instead of using
 this output-default state.
 
-Use the `stop` command to drive generator outputs low again (`0 Hz`, `0%` duty). `pulse_count` continues accumulating from power-on.
+Use the `stop` command to drive generator outputs low again (`0 Hz`, `0%` duty).
 
 ---
 

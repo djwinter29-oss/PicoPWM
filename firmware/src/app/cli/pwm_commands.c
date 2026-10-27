@@ -24,7 +24,7 @@ static const shell_command_t pwm_commands[] = {
 };
 
 static void pwm_commands_write_help(shell_t *shell) {
-    shell_write_line(shell, "Unified control interface: each channel has freq, duty, pulse_count.");
+    shell_write_line(shell, "Unified control interface: each channel has freq and duty.");
     shell_write_line(shell, "Logical channels and backend assignment are firmware-configured.");
     shell_write_line(shell, NULL);
     shell_write_line(shell, "Commands:");
@@ -32,9 +32,6 @@ static void pwm_commands_write_help(shell_t *shell) {
     for (uint32_t index = 0u; index < (sizeof(pwm_commands) / sizeof(pwm_commands[0])); ++index) {
         shell_write_line(shell, pwm_commands[index].help);
     }
-    shell_write_line(shell, NULL);
-    shell_write_line(shell, "Notes:");
-    shell_write_line(shell, "pulse_count is read-only and accumulates from power-on.");
 }
 
 static bool pwm_commands_unknown(void *context, const char *command_name) {

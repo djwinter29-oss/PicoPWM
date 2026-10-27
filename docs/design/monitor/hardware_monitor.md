@@ -14,7 +14,7 @@ Core 1:
 
 | Window | Slice mode | Result |
 | --- | --- | --- |
-| Edge | `PWM_DIV_B_RISING`, divider 1 | Rising edges counted: `freq_hz = edges / window`, and `pulse_count` accumulates the edges. |
+| Edge | `PWM_DIV_B_RISING`, divider 1 | Rising edges counted: `freq_hz = edges / window`. |
 | High | `PWM_DIV_B_HIGH`, divider 4 | Sys-clock ticks while the input is high: `duty = high_time / window`. |
 
 The 16-bit counter wrap flag is polled on every `hw_mon_get()` call (about every

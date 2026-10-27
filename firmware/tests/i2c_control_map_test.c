@@ -3,7 +3,7 @@
 #include "platform/led.h"
 #include "platform/system.h"
 #include "platform/boot_config.h"
-#include "app/device_service/device_service.h"
+#include "device.h"
 
 #include <assert.h>
 #include <string.h>
@@ -14,11 +14,11 @@ static bool address_ok = true;
 static bool rebooted;
 static int led_calls;
 
-const char *device_service_device_name(void) {
+const char *device_name(void) {
     return "PicoPWM";
 }
 
-const char *device_service_firmware_version(void) {
+const char *device_firmware_version(void) {
     return "test";
 }
 
@@ -31,11 +31,11 @@ uint8_t boot_config_get_i2c_address(void) {
     return 0u;
 }
 
-pwm_role_t device_service_bank_role(pwm_bank_t bank) {
+pwm_role_t device_bank_role(pwm_bank_t bank) {
     return boot_config_get_bank(bank);
 }
 
-uint8_t device_service_i2c_address(void) {
+uint8_t device_i2c_address(void) {
     return boot_config_get_i2c_address();
 }
 
@@ -54,27 +54,27 @@ bool boot_config_set_i2c_address(uint8_t address) {
     return address_ok;
 }
 
-uint8_t device_service_channel_count(void) {
+uint8_t device_channel_count(void) {
     return PWM_DRIVER_CHANNEL_COUNT;
 }
 
-bool device_service_get_channel(uint channel, pwm_driver_state_t *state) {
+bool device_get_channel(uint channel, pwm_driver_state_t *state) {
     if ((channel >= PWM_DRIVER_CHANNEL_COUNT) || (state == NULL) || (channel >= 8u)) {
         return false;
     }
 
-    *state = (pwm_driver_state_t){1000u, 50u, 7u};
+    *state = (pwm_driver_state_t){1000u, 50u};
     return true;
 }
 
-pwm_driver_result_t device_service_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
+pwm_driver_result_t device_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
     (void)channel;
     (void)freq_hz;
     (void)duty;
     return PWM_DRIVER_RESULT_OK;
 }
 
-pwm_driver_result_t device_service_restore_defaults(void) {
+pwm_driver_result_t device_restore_defaults(void) {
     return PWM_DRIVER_RESULT_OK;
 }
 
@@ -113,11 +113,10 @@ static void test_read_responses(void) {
     assert(response[4] == 2u);
 
     assert(i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CH_BASE, 0u, response, sizeof(response), &response_len));
-    assert(response_len == 9u);
+    assert(response_len == 5u);
     assert(response[0] == 0xe8u);
     assert(response[1] == 0x03u);
     assert(response[4] == 50u);
-    assert(response[5] == 7u);
 
     assert(i2c_control_map_read_register((uint8_t)(I2C_CONTROL_MAP_REG_CH_BASE + 8u), 0u, response, sizeof(response),
                                          &response_len));
@@ -162,7 +161,7 @@ static void test_remaining_registers(void) {
     assert(response_len == 1u);
     assert(response[0] == PWM_DRIVER_CHANNEL_COUNT);
     assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CHANNEL_COUNT, 0u, response, 0u, &response_len));
-    assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CH_BASE, 0u, response, 8u, &response_len));
+    assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CH_BASE, 0u, response, 4u, &response_len));
 
     assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CONFIG, 0u, response, 13u, &response_len));
 

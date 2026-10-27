@@ -26,7 +26,6 @@ typedef struct {
     uint32_t counter;              /**< Current tick position within the PWM period. */
     uint32_t realized_freq_hz;     /**< Realized output frequency in Hz. */
     uint8_t realized_duty;         /**< Realized duty in percent in the range `[0, 100]`. */
-    volatile uint32_t pulse_count; /**< Monotonic generated-period count from power-on. */
 } sw_pwm_channel_t;
 
 /** @brief Software PWM runtime state in backend-local channel order. */
@@ -47,7 +46,6 @@ static pwm_driver_state_t sw_gen_channel_state(const sw_pwm_channel_t *ch) {
     return (pwm_driver_state_t){
         .freq_hz = ch->realized_freq_hz,
         .duty = ch->realized_duty,
-        .pulse_count = ch->pulse_count,
     };
 }
 
@@ -66,7 +64,7 @@ static void sw_gen_publish_state_coherent(uint channel) {
     pwm_driver_state_t state = sw_gen_channel_state(ch);
 
     pwm_driver_store_applied_state_coherent(
-        ((uint)PWM_BANK_C * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)), &state, time_us_64());
+        ((uint)PWM_BANK_C * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)), &state);
 }
 
 /** @brief Resolve whether one software-PWM request should be handled as a static-output mode. */
@@ -126,9 +124,6 @@ static bool sw_pwm_tick_callback(repeating_timer_t *rt) {
         ch->counter++;
         if (ch->counter >= ch->period_ticks) {
             ch->counter = 0;
-            ch->pulse_count++;
-            pwm_driver_store_pulse_count(
-                ((uint)PWM_BANK_C * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)), ch->pulse_count);
         }
         gpio_put(ch->gpio, ch->counter < ch->duty_ticks);
     }
@@ -149,7 +144,6 @@ bool sw_gen_init(void) {
         sw_pwm_channels[i].counter = 0u;
         sw_pwm_channels[i].realized_freq_hz = PWM_DRIVER_STOPPED_FREQ_HZ;
         sw_pwm_channels[i].realized_duty = PWM_DRIVER_STOPPED_DUTY_PERCENT;
-        sw_pwm_channels[i].pulse_count = 0;
 
         gpio_init(gpio);
         gpio_set_dir(gpio, GPIO_OUT);

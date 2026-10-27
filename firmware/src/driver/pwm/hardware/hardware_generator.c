@@ -16,15 +16,6 @@
 /** @brief Cached system clock used by the hardware generator timing search. */
 static uint32_t hw_gen_sys_clk_hz = 0u;
 
-/** @brief Elapsed-time pulse accounting for one hardware generator channel. */
-typedef struct {
-    uint32_t pulse_count;      /**< Monotonic base count last synchronized to @ref pulse_ref_us. */
-    uint64_t pulse_ref_us;     /**< Timestamp paired with @ref pulse_count. */
-    uint32_t realized_freq_hz; /**< Realized frequency used to estimate periods since @ref pulse_ref_us. */
-} hw_gen_channel_t;
-
-static hw_gen_channel_t hw_channels[HW_PWM_COUNT];
-
 /** @brief Smallest supported hardware PWM divider in sixteenth-step units. */
 #define HW_GEN_MIN_DIV_X16 16u
 /** @brief Largest supported hardware PWM divider in sixteenth-step units. */
@@ -75,36 +66,12 @@ static void hw_gen_apply_static_state(uint channel, uint8_t realized_duty) {
     hw_gen_publish_state(channel, 0u, realized_duty);
 }
 
-/** @brief Return the pulse count implied by one channel's cached base state. */
-static uint32_t hw_gen_pulse_count_now(const hw_gen_channel_t *ctx) {
-    if (ctx->realized_freq_hz == 0u) {
-        return ctx->pulse_count;
-    }
-
-    return pwm_driver_accumulate_pulse_count(ctx->pulse_count, ctx->realized_freq_hz, ctx->pulse_ref_us, time_us_64());
-}
-
-/**
- * @brief Freeze elapsed periods into the base count before the realized frequency changes.
- * @param channel Backend-local hardware PWM channel index.
- * @param realized_freq_hz Frequency that will be published after this synchronization.
- */
-static void hw_gen_note_realized(uint channel, uint32_t realized_freq_hz) {
-    hw_gen_channel_t *ctx = &hw_channels[channel];
-
-    ctx->pulse_count = hw_gen_pulse_count_now(ctx);
-    ctx->pulse_ref_us = time_us_64();
-    ctx->realized_freq_hz = realized_freq_hz;
-}
-
 /** @brief Publish one hardware backend realized state snapshot into the shared logical cache. */
 static void hw_gen_publish_state(uint channel, uint32_t realized_freq_hz, uint8_t realized_duty) {
     pwm_driver_state_t state;
 
-    hw_gen_note_realized(channel, realized_freq_hz);
     state.freq_hz = realized_freq_hz;
     state.duty = realized_duty;
-    state.pulse_count = hw_channels[channel].pulse_count;
 
     pwm_driver_store_applied_state(((uint)PWM_BANK_A * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)),
                                    &state);
@@ -245,10 +212,6 @@ bool hw_gen_init(void) {
 
         pwm_set_chan_level(slice, ch, 0);
         pwm_set_enabled(slice, false);
-
-        hw_channels[i].pulse_count = 0u;
-        hw_channels[i].pulse_ref_us = time_us_64();
-        hw_channels[i].realized_freq_hz = PWM_DRIVER_STOPPED_FREQ_HZ;
     }
 
     return true;
@@ -299,15 +262,4 @@ bool hw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     hw_gen_publish_state(channel, realized_freq_hz, duty);
 
     return true;
-}
-
-/** @copydoc hw_gen_finalize_readback */
-void hw_gen_finalize_readback(uint channel, pwm_driver_state_t *state, uint64_t pulse_ref_us) {
-    if (channel >= PWM_DRIVER_CONFIG_BANK_SIZE || state == NULL ||
-        state->freq_hz == PWM_DRIVER_STOPPED_FREQ_HZ) {
-        return;
-    }
-
-    state->pulse_count =
-        pwm_driver_accumulate_pulse_count(state->pulse_count, state->freq_hz, pulse_ref_us, time_us_64());
 }

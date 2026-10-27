@@ -9,7 +9,7 @@
 #include "platform/led.h"
 #include "platform/system.h"
 #include "platform/boot_config.h"
-#include "app/device_service/device_service.h"
+#include "device.h"
 #include "driver/i2c/i2c_slave.h"
 #include "driver/pwm/pwm_driver.h"
 #include "app/usb/usb_cdc.h"

@@ -44,7 +44,7 @@ Implemented by `board_commands.*`.
 | `config clock <default\|150\|200\|250>` | Change the target system clock in MHz. | `config clock 200` |
 | `config address <7-bit>` | Change the target I2C address. | `config address 0x42` |
 | `led <on\|off>` | Set the board LED state. | `led on` |
-| `stop` | Hold generator outputs low at 0 Hz and 0% duty. `pulse_count` is not cleared. | `stop` |
+| `stop` | Hold generator outputs low at 0 Hz and 0% duty. | `stop` |
 | `reboot` | Reboot the board. | `reboot` |
 
 ### Shell Commands
@@ -69,12 +69,9 @@ pico> set 0 1000 50
 OK CH0 freq=1000 Hz duty=50%
 
 pico> get 0
-CH0: freq=1000 Hz, duty=50%, pulses=12, enabled=yes
+CH0: freq=1000 Hz, duty=50%, enabled=yes
 ```
 
-`pulse_count` is read-only, monotonic from power-on, and is not reset by
-`stop`. Hardware and PIO generators report the period count implied by elapsed
-time at the realized frequency. That is the count those backends provide.
 The returned frequency and duty values are the realized channel state.
 For generator banks, `stop` disables outputs and restores configured defaults.
 For monitor banks, `stop` leaves measured input channels unchanged.

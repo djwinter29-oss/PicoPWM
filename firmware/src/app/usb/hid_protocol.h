@@ -3,7 +3,7 @@
  * @brief PicoPWM HID feature-report contract; see docs/design/usb/hid-report-reference.md.
  *
  * This layer owns report layouts and the report 20 transaction. It has no TinyUSB dependency and reaches the
- * PWM runtime only through `device_service`.
+ * PWM runtime only through `device`.
  */
 
 #ifndef HID_PROTOCOL_H

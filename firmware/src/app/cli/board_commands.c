@@ -2,7 +2,7 @@
 
 #include "driver/pwm/pwm_driver.h"
 #include "platform/boot_config.h"
-#include "app/device_service/device_service.h"
+#include "device.h"
 #include "platform/led.h"
 #include "platform/system.h"
 #include "driver/pwm/pwm_driver.h"
@@ -40,7 +40,7 @@ bool board_commands_info(void *context, int argc, const char *const *argv) {
         return shell_write_line(COMMAND_SHELL, "ERR usage: info");
     }
 
-    if (!shell_write_line(COMMAND_SHELL, device_service_device_name())) {
+    if (!shell_write_line(COMMAND_SHELL, device_name())) {
         return false;
     }
 
@@ -56,7 +56,7 @@ bool board_commands_version(void *context, int argc, const char *const *argv) {
         return shell_write_line(COMMAND_SHELL, "ERR usage: version");
     }
 
-    return shell_write_line(COMMAND_SHELL, device_service_firmware_version());
+    return shell_write_line(COMMAND_SHELL, device_firmware_version());
 }
 
 static const char *board_commands_role_name(pwm_role_t role) {
@@ -76,8 +76,8 @@ bool board_commands_config(void *context, int argc, const char *const *argv) {
     char line[128];
 
     if (argc == 1) {
-        board_commands_format_config(line, sizeof(line), "running", (unsigned)((device_service_system_clock_hz() + 500000u) / 1000000u),
-                                     device_service_i2c_address(), device_service_bank_role);
+        board_commands_format_config(line, sizeof(line), "running", (unsigned)((device_system_clock_hz() + 500000u) / 1000000u),
+                                     device_i2c_address(), device_bank_role);
         shell_write_line(COMMAND_SHELL, line);
         board_commands_format_config(line, sizeof(line), "target",
                                      boot_config_get_sysclk_mhz() != 0u ? boot_config_get_sysclk_mhz() : SYSTEM_CLOCK / 1000u,
@@ -173,7 +173,7 @@ bool board_commands_stop(void *context, int argc, const char *const *argv) {
         return shell_write_line(COMMAND_SHELL, "ERR usage: stop");
     }
 
-    result = device_service_restore_defaults();
+    result = device_restore_defaults();
     if (result == PWM_DRIVER_RESULT_OK) {
         if (pwm_driver_config_is_monitor()) {
             return shell_write_line(COMMAND_SHELL, "OK monitor channels unchanged");

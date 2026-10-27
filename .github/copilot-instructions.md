@@ -11,7 +11,7 @@ Key repo constraints:
 - Keep Core 1 focused on PWM backend ownership, IRQ handling, timer callbacks, and backend state.
 - Treat `firmware/src/driver/pwm/pwm_driver.c` as the multicore boundary; do not bypass it from higher layers.
 - Treat `pwm_driver_set_freq()` as a command-ingress API and `pwm_driver_get()` as the source of realized channel state.
-- `pulse_count` is monotonic from power-on; `stop` disables output but does not reset counters.
+- `stop` disables generator output.
 
 
 ## Engineering Style

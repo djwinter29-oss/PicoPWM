@@ -22,7 +22,7 @@ flowchart LR
     subgraph Core0[Core 0: control and responses]
         CDC[USB CDC shell]
         I2C[I2C slave]
-        Control[device_service]
+        Control[device]
         Response[Format response]
     end
 
@@ -87,15 +87,6 @@ Each logical channel exposes the same readback model:
 
 - `freq_hz`
 - `duty`
-- `pulse_count`
-
-The field has backend-specific semantics. GPIO monitors count accepted
-edge-reconstructed periods. The PIO monitor reports `0` because it captures one
-period per sample. Hardware and PIO generators publish the period count implied
-by elapsed time at the realized frequency. Those backends do not take a wrap or
-period interrupt; that elapsed-time count is the `pulse_count` the control
-interfaces provide. It is monotonic from power-on, saturates at the counter
-maximum, and does not advance while the output is static.
 
 ### Monitor Measurement Strategy
 
@@ -137,7 +128,7 @@ The hardware PWM bank intentionally uses PWM slice channel B pins so the externa
 ## Runtime Layers
 
 The current firmware is split into four practical layers. The important rule is
-that transport code reaches PWM hardware only through `device_service` and
+that transport code reaches PWM hardware only through `device` and
 `pwm_driver`.
 
 ### 1. Transport Layer
@@ -160,7 +151,7 @@ transfer must provide host-side pacing and retry at the command level.
 
 ### 2. Shared Control Layer
 
-`app/device_service/device_service.*` is the transport-neutral Core 0 API shared by USB CDC and I2C.
+`device.*` is the transport-neutral Core 0 API shared by USB CDC and I2C.
 
 Responsibilities:
 
@@ -228,7 +219,7 @@ from the published snapshot; mutations cross the mailbox boundary:
 sequenceDiagram
     participant Host
     participant Transport as USB CDC or I2C
-    participant Control as device_service
+    participant Control as device
     participant Mailbox as Command mailbox
     participant Router as Core 1 profile router
     participant Backend as Generator or monitor
@@ -256,8 +247,8 @@ Transport-specific details:
 
 - I2C reads can be served directly from the published snapshot or last command status.
 - I2C writes are captured in the ISR, queued, and executed from normal Core 0 polling through the same shared control path used by USB CDC. I2C read responses are also built on Core 0. The ISR holds SCL while a requested response is still being built, and releases it when the read had no request pending.
-- USB commands are parsed by `shell` and the CLI command handlers before they reach `device_service`.
-- I2C commands are decoded by `i2c_slave` and `i2c_control_map` before they reach `device_service`.
+- USB commands are parsed by `shell` and the CLI command handlers before they reach `device`.
+- I2C commands are decoded by `i2c_slave` and `i2c_control_map` before they reach `device`.
 
 This keeps the ISR transport-focused and avoids running backend-affecting logic in interrupt context.
 
@@ -286,10 +277,10 @@ sees coherent realized snapshots.
 
 ## Cross-Core Mutation Boundary
 
-`device_service` is the only public Core 0 mutation facade.
+`device` is the only public Core 0 mutation facade.
 
-- Core 0 transport code enters through `device_service`.
-- `device_service` forwards writes into the internal `pwm` mailbox API.
+- Core 0 transport code enters through `device`.
+- `device` forwards writes into the internal `pwm` mailbox API.
 - Core 1 applies the write to the selected backend.
 - Core 1 publishes the realized state after successful apply.
 - Core 0 waits for the result and reports `ok`, `busy`, `invalid`, `timeout`, `unavailable`, or `apply failed` to the caller.
@@ -303,10 +294,10 @@ The single source of truth for channel state is the snapshot published by `pwm`.
 That means:
 
 - reads report realized backend state, not just the last requested values
-- `device_service` does not keep a second cache
+- `device` does not keep a second cache
 - both USB CDC and I2C observe the same logical channel view
 
-`pulse_count` is monotonic from power-on. `stop` disables generator outputs by driving them low (`freq = 0 Hz`, `duty = 0%`) and does not reset the counter. Hardware and PIO generators publish the elapsed-time period count described above; that is the count those backends can provide without a per-period interrupt. Software generators count completed periods. PIO monitor channels report `0` because they capture one period per sample.
+`stop` disables generator outputs by driving them low (`freq = 0 Hz`, `duty = 0%`).
 
 ## Channel Layout
 

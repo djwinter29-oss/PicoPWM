@@ -1,12 +1,12 @@
 /**
  * @file hid_protocol.c
- * @brief PicoPWM HID report layouts and the report 20 transaction, over `device_service`.
+ * @brief PicoPWM HID report layouts and the report 20 transaction, over `device`.
  */
 
 #include "app/usb/hid_protocol.h"
 
 #include "platform/boot_config.h"
-#include "app/device_service/device_service.h"
+#include "device.h"
 
 #include <string.h>
 
@@ -70,24 +70,24 @@ static void pack_bank_config(uint8_t *out, bool running) {
     out[1] = 1u;
     out[2] = 2u;
     for (uint8_t bank = 0u; bank < PWM_BANK_COUNT; ++bank) {
-        out[3 + bank] = (uint8_t)(running ? device_service_bank_role((pwm_bank_t)bank)
+        out[3 + bank] = (uint8_t)(running ? device_bank_role((pwm_bank_t)bank)
                                           : boot_config_get_bank((pwm_bank_t)bank));
     }
-    out[6] = running ? device_service_i2c_address() : boot_config_get_i2c_address();
+    out[6] = running ? device_i2c_address() : boot_config_get_i2c_address();
 }
 
 static bool build_identity(uint8_t *payload) {
     memset(payload, 0, HID_IDENTITY_SIZE);
     payload[0] = HID_LAYOUT_VERSION;
     payload[1] = HID_PRODUCT_ID;
-    device_service_get_uid(&payload[3]);
-    parse_version(device_service_firmware_version(), &payload[11]);
+    device_get_uid(&payload[3]);
+    parse_version(device_firmware_version(), &payload[11]);
 #ifdef PICO_RP2350
     payload[14] = 2u;
 #else
     payload[14] = 1u;
 #endif
-    payload[15] = device_service_channel_count();
+    payload[15] = device_channel_count();
     payload[16] = HID_CAP_SAVE;
     payload[17] = HID_CLOCK_PROFILE_MASK;
     return true;
@@ -98,7 +98,7 @@ static bool build_configuration(uint8_t *payload) {
     payload[0] = HID_LAYOUT_VERSION;
     pack_bank_config(&payload[1], true);
     pack_bank_config(&payload[8], false);
-    put_le32(&payload[17], device_service_system_clock_hz());
+    put_le32(&payload[17], device_system_clock_hz());
     return true;
 }
 
@@ -107,7 +107,7 @@ static bool build_bank_status(uint8_t bank, uint8_t *payload) {
     for (uint i = 0; i < HID_BANK_SIZE; ++i) {
         pwm_driver_state_t state;
 
-        if (!device_service_get_channel(bank * HID_BANK_SIZE + i, &state)) {
+        if (!device_get_channel(bank * HID_BANK_SIZE + i, &state)) {
             return false;
         }
         put_le32(&payload[1 + i * 5u], state.freq_hz);
@@ -185,19 +185,19 @@ static hid_status_t execute(const uint8_t *r) {
     case HID_OP_SET_CHANNEL: {
         uint8_t bank = (uint8_t)(channel / HID_BANK_SIZE);
 
-        if (channel >= device_service_channel_count() || arg1 > 100u || flags != 0u) {
+        if (channel >= device_channel_count() || arg1 > 100u || flags != 0u) {
             return HID_STATUS_INVALID;
         }
-        if (device_service_bank_role((pwm_bank_t)bank) != PWM_ROLE_GENERATOR) {
+        if (device_bank_role((pwm_bank_t)bank) != PWM_ROLE_GENERATOR) {
             return HID_STATUS_INVALID;
         }
-        return (hid_status_t)device_service_set_channel(channel, arg0, arg1);
+        return (hid_status_t)device_set_channel(channel, arg0, arg1);
     }
     case HID_OP_STOP:
         if (channel != 0u || arg0 != 0u || arg1 != 0u || flags != 0u) {
             return HID_STATUS_INVALID;
         }
-        return (hid_status_t)device_service_restore_defaults();
+        return (hid_status_t)device_restore_defaults();
     case HID_OP_SET_BANK:
         if (channel >= HID_BANK_COUNT || (arg0 & 0xFFFF0000u) != 0u || arg1 != 0u || flags != 0u ||
             (arg0 & 0xFFu) != channel ||

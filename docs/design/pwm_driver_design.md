@@ -49,10 +49,10 @@ The current implementation is split as follows:
 
 | File | Responsibility |
 | ------ | ---------------- |
-| `firmware/src/app/device_service/device_service.h` | Shared Core 0 device API surface used by CDC and I2C |
-| `firmware/src/app/device_service/device_service.c` | Shared device info, channel reads, and channel write helpers above the Core 1 mailbox boundary |
+| `firmware/src/device.h` | Shared Core 0 device API surface used by CDC and I2C |
+| `firmware/src/device.c` | Shared device info, channel reads, and channel write helpers above the Core 1 mailbox boundary |
 | `firmware/src/app/i2c/i2c_control_map.h` | I2C register map definitions and protocol helpers |
-| `firmware/src/app/i2c/i2c_control_map.c` | I2C register encode/decode and deferred write translation into `device_service` |
+| `firmware/src/app/i2c/i2c_control_map.c` | I2C register encode/decode and deferred write translation into `device` |
 | `firmware/src/driver/pwm/pwm_driver.h` | Public wrapper API, bank/role types, board GPIO structs and channel capacity constants |
 | `firmware/src/driver/pwm/pwm_driver.c` | Core 1 launch, mailbox loop, bank roles, channel lookups, frequency limits, board GPIO validation, shared snapshot |
 | `firmware/src/platform/boot_config.[ch]` | Persisted clock profile, bank roles and I2C address (CRC-protected flash record) |
@@ -70,15 +70,15 @@ The current implementation is split as follows:
 The transport-facing control/status layer is:
 
 ```c
-const char *device_service_device_name(void);
-const char *device_service_firmware_version(void);
-uint8_t device_service_channel_count(void);
-bool device_service_get_channel(uint channel, pwm_driver_state_t *state);
-pwm_driver_result_t device_service_set_channel(uint channel, uint32_t freq_hz, uint8_t duty);
-pwm_driver_result_t device_service_restore_defaults(void);
+const char *device_name(void);
+const char *device_firmware_version(void);
+uint8_t device_channel_count(void);
+bool device_get_channel(uint channel, pwm_driver_state_t *state);
+pwm_driver_result_t device_set_channel(uint channel, uint32_t freq_hz, uint8_t duty);
+pwm_driver_result_t device_restore_defaults(void);
 ```
 
-Below that, `pwm` owns the internal cross-core mailbox boundary used by `device_service`:
+Below that, `pwm` owns the internal cross-core mailbox boundary used by `device`:
 
 ```c
 bool pwm_driver_init(const pwm_role_t roles[PWM_BANK_COUNT]);
@@ -99,7 +99,6 @@ The shared state type is:
 typedef struct {
     uint32_t freq_hz;
     uint8_t duty;
-    uint32_t pulse_count;
 } pwm_driver_state_t;
 ```
 
@@ -107,16 +106,15 @@ typedef struct {
 
 Architecturally, `pwm_driver_set()` is an internal command-ingress API.
 
-- Top-level command paths such as the CDC CLI and I2C register map should enter through `device_service`.
+- Top-level command paths such as the CDC CLI and I2C register map should enter through `device`.
 - The I2C write path should continue to defer out of the ISR before it reaches this mailbox API.
 - It is not intended as a general-purpose helper for arbitrary internal call sites.
 - Core 1 callers must not use this API; it returns `PWM_DRIVER_RESULT_UNAVAILABLE` outside the Core 0 command path.
 - Public write callers first pass through the shared Core 0 serialization lock before they compete for mailbox admission.
 - Core 0 waits for Core 1 to finish the backend apply step before returning.
-- The wrapper returns `PWM_DRIVER_RESULT_BUSY` if the caller reaches the mailbox while another write is already pending or in progress.
 - The wrapper returns `PWM_DRIVER_RESULT_INVALID` for invalid channel or unsupported frequency requests.
 - The wrapper returns `PWM_DRIVER_RESULT_UNAVAILABLE` if Core 1 is not ready yet.
-- The wrapper returns `PWM_DRIVER_RESULT_TIMEOUT` when the command is still `PENDING` at the apply deadline. Core 0 cancels that command and it is not applied. If Core 1 has already moved the slot to `ACTIVE`, Core 0 keeps waiting and returns the published result. A stalled Core 1 heartbeat during that wait reboots the board.
+- The wrapper returns `PWM_DRIVER_RESULT_TIMEOUT` when the command is still unclaimed at the apply deadline. Core 0 cancels that command and it is not applied. If Core 1 has already claimed it, Core 0 keeps waiting and returns the published result. A stalled Core 1 heartbeat during that wait reboots the board.
 - The wrapper returns `PWM_DRIVER_RESULT_APPLY_FAILED` if Core 1 accepts the command but the backend rejects it.
 - `pwm_driver_restore_defaults()` has no mailbox command of its own: it calls `pwm_driver_set(ch, 0, 0)` for every generator channel and returns the first failure.
 
@@ -153,7 +151,7 @@ For I2C specifically, the transport layer includes an ISR-facing slave module an
 
 ### 2. Shared Control Layer
 
-Owned by `firmware/src/app/device_service/device_service.c`.
+Owned by `firmware/src/device.c`.
 
 Responsibilities:
 
@@ -272,7 +270,6 @@ stateDiagram-v2
     UpdateRequested --> Enabled: backend apply failed, previous config retained
     Enabled --> Disabled: set_freq(ch, 0, duty)
     Disabled --> Disabled: read state
-    Enabled --> Enabled: pulse_count increments
 ```
 
 This is a logical model. Backend-specific internal state differs by driver.
@@ -315,17 +312,17 @@ sequenceDiagram
     C1->>WR: publish ready state
 ```
 
-### `device_service_set_channel()` to `pwm_driver_set()`
+### `device_set_channel()` to `pwm_driver_set()`
 
 ```mermaid
 sequenceDiagram
     participant CLI as CDC CLI / command layer
-    participant CTL as device_service
+    participant CTL as device
     participant WR as pwm_driver.c
     participant C1 as Core 1 mailbox loop
     participant BE as selected backend
 
-    CLI->>CTL: device_service_set_channel(ch, freq, duty)
+    CLI->>CTL: device_set_channel(ch, freq, duty)
     CTL->>WR: pwm_driver_set(ch, freq, duty)
     WR->>WR: admit one in-flight mailbox command
     WR->>C1: __sev()
@@ -337,16 +334,16 @@ sequenceDiagram
     CTL-->>CLI: result
 ```
 
-### `device_service_restore_defaults()` to `pwm_driver_restore_defaults()`
+### `device_restore_defaults()` to `pwm_driver_restore_defaults()`
 
 ```mermaid
 sequenceDiagram
     participant CLI as CDC CLI / command layer
-    participant CTL as device_service
+    participant CTL as device
     participant WR as pwm_driver.c
     participant C1 as Core 1 mailbox loop
 
-    CLI->>CTL: device_service_restore_defaults()
+    CLI->>CTL: device_restore_defaults()
     CTL->>WR: pwm_driver_restore_defaults()
     loop each generator channel
         WR->>C1: pwm_driver_set(ch, 0, 0)
@@ -361,11 +358,11 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant UI as CLI/I2C status path
-    participant CTL as device_service
+    participant CTL as device
     participant WR as pwm_driver.c
     participant SS as shared snapshot
 
-    UI->>CTL: device_service_get_channel(ch, &state)
+    UI->>CTL: device_get_channel(ch, &state)
     CTL->>WR: pwm_driver_get(ch, &state)
     WR->>SS: read versioned snapshot
     SS-->>WR: coherent state struct
@@ -373,7 +370,7 @@ sequenceDiagram
     CTL-->>UI: coherent state struct
 ```
 
-The coherent higher-layer read boundary is `device_service_get_channel()`, which forwards one channel snapshot from `pwm_driver_get()`.
+The coherent higher-layer read boundary is `device_get_channel()`, which forwards one channel snapshot from `pwm_driver_get()`.
 
 ## Mailbox Command Structure
 
@@ -384,28 +381,17 @@ The wrapper uses one single-slot mailbox record containing:
 - requested frequency for set-channel commands
 - requested duty for set-channel commands
 
-Only one command is admitted at a time. If a second writer arrives while the slot is pending or executing, the wrapper returns `PWM_DRIVER_RESULT_BUSY` immediately.
+Only one command is in flight at a time: the Core 0 serialization lock admits one writer, and Core 0 waits until
+its command is applied, so no `BUSY` result is produced here (`PWM_DRIVER_RESULT_BUSY` remains the I2C queued-write status).
 
-The slot also carries a small lifecycle state enum:
+The slot is one struct of three flags plus the command, all guarded by the reply critical section:
 
-- `IDLE`
-- `PENDING`
-- `ACTIVE`
-- `COMPLETE`
+- `pending`: published by Core 0, not yet claimed. Core 1 clears it when it claims the command.
+- `done`: Core 1 finished applying the command.
+- `ok`: the backend result, valid when `done` is set.
 
-This replaces separate pending, active, and reply-ready booleans and keeps the single-slot mailbox easier to reason about.
-
-The mailbox state, command payload, and reply payload now live together in one small mailbox struct rather than as separate globals.
-
-```mermaid
-stateDiagram-v2
-    [*] --> IDLE
-    IDLE --> PENDING: Core 0 publishes command
-    PENDING --> ACTIVE: Core 1 claims command
-    ACTIVE --> COMPLETE: Core 1 publishes result
-    COMPLETE --> IDLE: Core 0 collects result
-    PENDING --> IDLE: Core 0 cancels an unclaimed command at the apply deadline
-```
+`!pending && !done` therefore means Core 1 is applying the command. Core 0 may cancel only while `pending` is still set,
+at the apply deadline.
 
 The mailbox carries control mutations and their result status. It does not
 carry real-time PWM edges or monitor samples; those remain local to Core 1 and
@@ -438,7 +424,6 @@ Each descriptor owns:
 - backend initialization and channel operations
 - generator `set()` and restore callbacks when the channel is output-capable
 - monitor read callbacks when the channel is input-capable
-- optional backend-owned readback finalizer
 
 ### Shared Snapshot Design
 
@@ -447,15 +432,6 @@ Each logical channel has a published record containing:
 - version
 - `freq_hz`
 - `duty`
-- `pulse_count`
-
-Per-channel readback metadata lives beside that common snapshot cache rather than inside every channel record:
-
-- `pulse_ref_us` for each logical channel
-
-Backends may optionally finalize readback from that metadata after the coherent snapshot copy. The
-hardware and PIO generators use this hook to extrapolate a running `pulse_count` on Core 0 without
-teaching the wrapper which backend owns that policy.
 
 The writer increments `version` before and after update.
 
@@ -481,17 +457,13 @@ The integrated generator backend:
 - accepts integer `freq_hz` and integer duty percent
 - uses one PWM slice per logical hardware channel
 - treats `freq_hz = 0` as a static-output policy case
-- publishes realized `freq_hz`, `duty`, and an elapsed-time `pulse_count`
-- keeps the pulse-estimate base locally and publishes the shared snapshot as the external read model
-
-The hardware generator does not use a wrap IRQ for pulse counting. The slice has no host-readable edge counter, so the published `pulse_count` is the number of whole periods implied by elapsed time at the realized frequency. That is the count this backend provides. The count stops while the output is static.
+- publishes realized `freq_hz` and `duty` as the external read model
 
 The hardware monitor backend:
 
 - measures the same slice-B pins with the PWM slice counters in input mode
-- alternates a rising-edge window (frequency, `pulse_count`) and a high-time window (duty)
+- alternates a rising-edge window (frequency) and a high-time window (duty)
 - refreshes a sample about every 500 ms and is reliable above about 20 Hz
-- accumulates `pulse_count` as the total rising edges counted
 
 For the current hardware timing equations, counter-width limits, divider limits, and the recommended operating range, see [Hardware PWM Generator](generator/hardware_generator.md). For input measurement limits, see [Hardware PWM Monitor](monitor/hardware_monitor.md).
 
@@ -507,15 +479,14 @@ The integrated generator backend:
 - accepts integer `freq_hz` and integer duty percent
 - uses one shared software scheduler tick for the software channel bank
 - treats `freq_hz = 0` and endpoint duties as static-output policy cases
-- publishes realized `freq_hz`, `duty`, and generated `pulse_count`
+- publishes realized `freq_hz` and `duty`
 - owns the software-PWM maximum frequency policy directly in the backend
 
 The software monitor backend:
 
 - measures the same slice-B pins with the PWM slice counters in input mode
-- alternates a rising-edge window (frequency, `pulse_count`) and a high-time window (duty)
+- alternates a rising-edge window (frequency) and a high-time window (duty)
 - refreshes a sample about every 500 ms and is reliable above about 20 Hz
-- accumulates `pulse_count` as the total rising edges counted
 - owns software-monitor channels selected by the active profile
 
 For the current software timing model, target range, and monitor role, see [Software PWM Generator](generator/software_generator.md) and [Software PWM Monitor](monitor/software_monitor.md).
@@ -599,35 +570,14 @@ When enabling or updating a channel, the backend first resolves one target mode:
 
 Then one internal apply helper performs the full transition for that resolved mode:
 
-1. synchronize the cached pulse counter to the current time
-2. either drive a static SIO level or program and enable the PIO state machine
-3. publish the resulting realized mode/timing snapshot
+1. either drive a static SIO level or program and enable the PIO state machine
+2. publish the resulting realized mode/timing snapshot
 
 ### Disable Sequence
 
 There is no separate disable-only apply path now. A disable or endpoint-duty request is handled by
 resolving one static target mode and applying it through the same internal helper used by PWM-mode
 updates.
-
-### Pulse Counting
-
-The PIO backend does not count pulses with a per-period interrupt.
-
-Instead it:
-
-1. stores the last synchronized `pulse_count`
-2. stores the timestamp when that count was synchronized
-3. accumulates additional pulses from elapsed time and realized frequency on update/read boundaries
-4. publishes a refreshed snapshot when configuration changes
-
-For PIO channels, that elapsed-time value is the published `pulse_count`. The state machine does not
-keep an edge counter, and a per-period interrupt would cost Core 1 time at the frequencies this
-backend runs. Whole periods are added from elapsed time and the realized frequency. The count is
-monotonic and saturates at the counter maximum.
-
-When a nonzero-frequency request resolves to `0%` or `100%` duty, the backend treats that as a
-static mode and publishes `realized_freq_hz = 0`. From that point `pulse_count` stops advancing
-until the channel returns to running PWM mode.
 
 ## Software PWM Driver Detailed Design
 
@@ -666,7 +616,6 @@ Each software channel stores:
 - `period_ticks`
 - `duty_ticks`
 - running counter
-- pulse counter
 
 Channel activity is tracked separately by the backend-wide `sw_pwm_active_mask` rather than by a
 per-channel active field.
@@ -677,7 +626,7 @@ For each channel:
 
 1. assign GPIO
 2. clear period and duty tick values
-3. clear counter and pulse counter
+3. clear counter
 4. leave the channel out of the active mask
 5. initialize GPIO as output low
 
@@ -707,9 +656,8 @@ On every timer tick:
 1. iterate through all software channels
 2. skip inactive channels
 3. increment running counter
-4. when counter reaches period, reset counter and increment pulse count
-5. publish pulse count update
-6. drive GPIO high while `counter < duty_ticks`, otherwise low
+4. when counter reaches period, reset counter
+5. drive GPIO high while `counter < duty_ticks`, otherwise low
 
 ### Concurrency Handling
 
@@ -740,7 +688,6 @@ Published fields:
 
 - realized `freq_hz`
 - realized `duty`
-- current `pulse_count`
 
 ### `pwm_driver_store_applied_state_coherent()`
 
@@ -751,15 +698,6 @@ Published fields:
 
 - realized `freq_hz`
 - realized `duty`
-- current `pulse_count`
-
-### `pwm_driver_store_pulse_count()`
-
-Used by:
-
-- software PWM timer callback
-
-Only the `pulse_count` field is updated for these events.
 
 ## Readback Semantics
 
@@ -768,8 +706,7 @@ The architectural intent is that the `pwm` snapshot is the single source of trut
 Important readback properties:
 
 - values are realized backend values, not merely requested values
-- `pulse_count` is monotonic from power-on
-- `stop` disables output but does not reset counters
+- `stop` disables generator output
 - callers should prefer a single state-struct read when they need coherent multi-field data
 
 ## Failure and Boundary Conditions
@@ -794,17 +731,14 @@ Launch-time cache seeding uses the same shared logical default as backend restor
 
 - `freq_hz = 0`
 - `duty = 0`
-- `pulse_count = 0`
 
 ### Mailbox Pressure
 
 The wrapper accepts one in-flight mailbox command at a time.
 
-If another write is already pending or executing on Core 1 when a caller reaches the mailbox admission point, that write attempt gets `PWM_DRIVER_RESULT_BUSY`.
-
 The public write layer also keeps a small Core 0 mutex around the write entry points so only one mailbox submission path can compete for the single-slot command record at a time.
 
-After admission, the caller waits synchronously for the Core 1 reply, up to the apply timeout. If the command is still `PENDING` when that deadline expires, Core 0 cancels it and returns `PWM_DRIVER_RESULT_TIMEOUT`; the command will not be applied. If Core 1 has already moved the slot to `ACTIVE`, Core 0 keeps waiting and returns the published result. A stalled Core 1 heartbeat during that wait reboots the board.
+After admission, the caller waits synchronously for the Core 1 reply, up to the apply timeout. If the command is still unclaimed when that deadline expires, Core 0 cancels it and returns `PWM_DRIVER_RESULT_TIMEOUT`; the command will not be applied. If Core 1 has already claimed it, Core 0 keeps waiting and returns the published result. A stalled Core 1 heartbeat during that wait reboots the board.
 
 Restore-defaults is a loop of per-channel stop requests through the normal setter path.
 
@@ -812,12 +746,12 @@ Restore-defaults is a loop of per-channel stop requests through the normal sette
 
 The current design assumes:
 
-1. Core 0 is the normal producer of `pwm_driver_set()` and `pwm_driver_restore_defaults()` requests through `device_service`.
+1. Core 0 is the normal producer of `pwm_driver_set()` and `pwm_driver_restore_defaults()` requests through `device`.
 2. Backend drivers remain Core 1 implementation details.
 3. CDC CLI and I2C both use the same shared Core 0 control facade.
 4. The shared snapshot is the only read model exposed upward.
 
-I2C writes should continue to defer out of ISR context before they enter `device_service` and the internal `pwm` mailbox boundary.
+I2C writes should continue to defer out of ISR context before they enter `device` and the internal `pwm` mailbox boundary.
 
 ## Startup Bank Configuration
 

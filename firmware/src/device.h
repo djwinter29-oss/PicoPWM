@@ -1,10 +1,10 @@
 /**
- * @file device_service.h
+ * @file device.h
  * @brief Shared Core 0 device API surface for CDC, I2C, and HID transports.
  */
 
-#ifndef DEVICE_SERVICE_H
-#define DEVICE_SERVICE_H
+#ifndef DEVICE_H
+#define DEVICE_H
 
 #include "driver/pwm/pwm_driver.h"
 
@@ -12,25 +12,25 @@
 #include <stdint.h>
 
 /** @brief Return the fixed device name exposed by control/status transports. */
-const char *device_service_device_name(void);
+const char *device_name(void);
 
 /** @brief Return the build-time firmware version exposed by control/status transports. */
-const char *device_service_firmware_version(void);
+const char *device_firmware_version(void);
 
 /** @brief Copy the 8-byte SDK board ID, in the byte order of the USB serial string. */
-void device_service_get_uid(uint8_t uid[8]);
+void device_get_uid(uint8_t uid[8]);
 
 /** @brief Return the running system clock in Hz. */
-uint32_t device_service_system_clock_hz(void);
+uint32_t device_system_clock_hz(void);
 
 /** @brief Role a bank is running with (what the last boot applied). */
-pwm_role_t device_service_bank_role(pwm_bank_t bank);
+pwm_role_t device_bank_role(pwm_bank_t bank);
 
 /** @brief 7-bit I2C address the slave is running with. */
-uint8_t device_service_i2c_address(void);
+uint8_t device_i2c_address(void);
 
 /** @brief Return the logical PWM channel count exposed by the firmware. */
-uint8_t device_service_channel_count(void);
+uint8_t device_channel_count(void);
 
 /**
  * @brief Read one logical channel snapshot.
@@ -38,7 +38,7 @@ uint8_t device_service_channel_count(void);
  * @param state Caller-owned destination for the realized channel state.
  * @return `true` when the channel exists and the state was copied.
  */
-bool device_service_get_channel(uint channel, pwm_driver_state_t *state);
+bool device_get_channel(uint channel, pwm_driver_state_t *state);
 
 /**
  * @brief Apply both frequency and duty to one logical channel.
@@ -47,12 +47,12 @@ bool device_service_get_channel(uint channel, pwm_driver_state_t *state);
  * @param duty Requested duty in percent in the range `[0, 100]`; values above `100` are clamped.
  * @return Result code from the shared PWM control plane.
  */
-pwm_driver_result_t device_service_set_channel(uint channel, uint32_t freq_hz, uint8_t duty);
+pwm_driver_result_t device_set_channel(uint channel, uint32_t freq_hz, uint8_t duty);
 
 /**
  * @brief Restore all logical channels to the shared default state.
  * @return Result code from the shared PWM control plane.
  */
-pwm_driver_result_t device_service_restore_defaults(void);
+pwm_driver_result_t device_restore_defaults(void);
 
 #endif

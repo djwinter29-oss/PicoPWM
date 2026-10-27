@@ -1,7 +1,7 @@
 #include "app/cli/channel_commands.h"
 
 #include "driver/pwm/pwm_driver.h"
-#include "app/device_service/device_service.h"
+#include "device.h"
 #include "driver/pwm/pwm_driver.h"
 
 #include <errno.h>
@@ -88,13 +88,13 @@ static bool channel_commands_write_status_row(shell_t *shell, int channel, const
     char line[96];
     const char *type = pwm_driver_config_channel_name((uint)channel);
 
-    snprintf(line, sizeof(line), "%-2d  %-7s  %-3s  %9lu  %6u  %lu", channel, type, state->freq_hz > 0u ? "ON" : "OFF",
-             (unsigned long)state->freq_hz, (unsigned)state->duty, (unsigned long)state->pulse_count);
+    snprintf(line, sizeof(line), "%-2d  %-7s  %-3s  %9lu  %6u", channel, type, state->freq_hz > 0u ? "ON" : "OFF",
+             (unsigned long)state->freq_hz, (unsigned)state->duty);
     return shell_write_line(shell, line);
 }
 
 static uint8_t channel_commands_channel_count(void) {
-    return device_service_channel_count();
+    return device_channel_count();
 }
 
 static void channel_commands_format_invalid_channel(char *line, size_t line_size, int channel) {
@@ -105,7 +105,7 @@ static void channel_commands_format_invalid_channel(char *line, size_t line_size
 }
 
 bool channel_commands_get(void *context, int argc, const char *const *argv) {
-    pwm_driver_state_t state = {0u, 50u, 0u};
+    pwm_driver_state_t state = {0u, 50u};
     char line[96];
     int channel;
 
@@ -118,11 +118,11 @@ bool channel_commands_get(void *context, int argc, const char *const *argv) {
         return shell_write_line(COMMAND_SHELL, line);
     }
 
-    if (!device_service_get_channel((uint)channel, &state)) {
+    if (!device_get_channel((uint)channel, &state)) {
         return shell_write_line(COMMAND_SHELL, "ERR channel unavailable");
     }
-    snprintf(line, sizeof(line), "CH%d: freq=%lu Hz, duty=%u%%, pulses=%lu, enabled=%s", channel,
-             (unsigned long)state.freq_hz, (unsigned)state.duty, (unsigned long)state.pulse_count,
+    snprintf(line, sizeof(line), "CH%d: freq=%lu Hz, duty=%u%%, enabled=%s", channel,
+             (unsigned long)state.freq_hz, (unsigned)state.duty,
              state.freq_hz > 0u ? "yes" : "no");
     return shell_write_line(COMMAND_SHELL, line);
 }
@@ -148,7 +148,7 @@ bool channel_commands_set(void *context, int argc, const char *const *argv) {
         return shell_write_line(COMMAND_SHELL, "ERR usage: set <ch> <freq> [duty%]");
     }
 
-    result = device_service_set_channel((uint)channel, frequency, duty);
+    result = device_set_channel((uint)channel, frequency, duty);
     if (result == PWM_DRIVER_RESULT_OK) {
         snprintf(line, sizeof(line), "OK CH%d freq=%lu Hz duty=%u%%", channel, (unsigned long)frequency,
                  (unsigned)duty);
@@ -173,10 +173,10 @@ bool channel_commands_status(void *context, int argc, const char *const *argv) {
 
     snprintf(line, sizeof(line), "=== All PWM channels (logical 0..%u) ===", last_channel);
     shell_write_line(COMMAND_SHELL, line);
-    shell_write_line(COMMAND_SHELL, "Ch  Backend  State  Freq(Hz)   Duty(%)   Pulses");
+    shell_write_line(COMMAND_SHELL, "Ch  Backend  State  Freq(Hz)   Duty(%)");
     for (uint8_t channel = 0u; channel < channel_count; ++channel) {
-        state = (pwm_driver_state_t){0u, 50u, 0u};
-        if (!device_service_get_channel(channel, &state)) {
+        state = (pwm_driver_state_t){0u, 50u};
+        if (!device_get_channel(channel, &state)) {
             snprintf(line, sizeof(line), "ERR channel %d unavailable", channel);
             shell_write_line(COMMAND_SHELL, line);
             return false;

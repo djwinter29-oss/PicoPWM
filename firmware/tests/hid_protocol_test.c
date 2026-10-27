@@ -1,7 +1,7 @@
 #include "app/usb/hid_protocol.h"
 
 #include "platform/boot_config.h"
-#include "app/device_service/device_service.h"
+#include "device.h"
 
 #include <assert.h>
 #include <string.h>
@@ -14,7 +14,7 @@ static uint32_t last_freq;
 static uint8_t last_duty;
 static pwm_role_t bank_role;
 
-const char *device_service_firmware_version(void) {
+const char *device_firmware_version(void) {
     return "1.2.3-dev";
 }
 
@@ -26,11 +26,11 @@ uint8_t boot_config_get_i2c_address(void) {
     return 0x20u;
 }
 
-pwm_role_t device_service_bank_role(pwm_bank_t bank) {
+pwm_role_t device_bank_role(pwm_bank_t bank) {
     return boot_config_get_bank(bank);
 }
 
-uint8_t device_service_i2c_address(void) {
+uint8_t device_i2c_address(void) {
     return 0x20u;
 }
 
@@ -49,26 +49,26 @@ bool boot_config_set_i2c_address(uint8_t address) {
     return address != 0u;
 }
 
-void device_service_get_uid(uint8_t uid[8]) {
+void device_get_uid(uint8_t uid[8]) {
     for (uint8_t i = 0; i < 8u; ++i) {
         uid[i] = (uint8_t)(0xA0u + i);
     }
 }
 
-uint32_t device_service_system_clock_hz(void) {
+uint32_t device_system_clock_hz(void) {
     return 0x08F0D180u;
 }
 
-uint8_t device_service_channel_count(void) {
+uint8_t device_channel_count(void) {
     return PWM_DRIVER_CHANNEL_COUNT;
 }
 
-bool device_service_get_channel(uint channel, pwm_driver_state_t *state) {
-    *state = (pwm_driver_state_t){1000u + channel, (uint8_t)channel, 0u};
+bool device_get_channel(uint channel, pwm_driver_state_t *state) {
+    *state = (pwm_driver_state_t){1000u + channel, (uint8_t)channel};
     return true;
 }
 
-pwm_driver_result_t device_service_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
+pwm_driver_result_t device_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
     ++channel_sets;
     last_channel = channel;
     last_freq = freq_hz;
@@ -76,7 +76,7 @@ pwm_driver_result_t device_service_set_channel(uint channel, uint32_t freq_hz, u
     return PWM_DRIVER_RESULT_OK;
 }
 
-pwm_driver_result_t device_service_restore_defaults(void) {
+pwm_driver_result_t device_restore_defaults(void) {
     return PWM_DRIVER_RESULT_OK;
 }
 

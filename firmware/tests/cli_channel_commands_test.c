@@ -1,7 +1,7 @@
 #include "app/cli/channel_commands.h"
 
 #include "driver/pwm/pwm_driver.h"
-#include "app/device_service/device_service.h"
+#include "device.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -30,7 +30,7 @@ const char *pwm_driver_config_channel_name(uint channel) {
     return "HW";
 }
 
-bool device_service_get_channel(uint channel, pwm_driver_state_t *state) {
+bool device_get_channel(uint channel, pwm_driver_state_t *state) {
     if ((channel >= PWM_DRIVER_CONFIG_CHANNEL_COUNT) || (state == NULL) || !get_available) {
         return false;
     }
@@ -39,11 +39,11 @@ bool device_service_get_channel(uint channel, pwm_driver_state_t *state) {
     return true;
 }
 
-uint8_t device_service_channel_count(void) {
+uint8_t device_channel_count(void) {
     return channel_count;
 }
 
-pwm_driver_result_t device_service_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
+pwm_driver_result_t device_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
     (void)channel;
     (void)freq_hz;
     (void)duty;
@@ -97,10 +97,9 @@ static void test_get_and_set_results(void) {
     };
 
     get_available = true;
-    get_state = (pwm_driver_state_t){1000u, 40u, 12u};
+    get_state = (pwm_driver_state_t){1000u, 40u};
     output[0] = '\0';
     assert(channel_commands_get(NULL, 2, get_argv));
-    assert(strstr(output, "pulses=12") != NULL);
     assert(strstr(output, "enabled=yes") != NULL);
 
     get_state.freq_hz = 0u;
@@ -145,7 +144,7 @@ static void test_status_prints_rows(void) {
     const char *argv[] = {"status"};
 
     get_available = true;
-    get_state = (pwm_driver_state_t){10u, 50u, 3u};
+    get_state = (pwm_driver_state_t){10u, 50u};
     assert(channel_commands_status(NULL, 1, argv));
     assert(strstr(output, "ON") != NULL);
 

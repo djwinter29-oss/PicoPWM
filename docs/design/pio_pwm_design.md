@@ -86,7 +86,6 @@ The public logical state uses:
 
 - `freq_hz` as `uint32_t`
 - `duty` as integer percent `0..100`
-- `pulse_count` as a backend-published counter in the unified driver model
 
 ### PIO Program Shape
 
@@ -265,16 +264,6 @@ If no complete pair arrives within one second of capture start, the monitor trea
 
 This static-level timeout is host-side policy in C, not a PIO-side timeout engine.
 
-### Monitor Pulse Count Policy
-
-The monitor backend does not provide a reliable received pulse count.
-
-For that reason it always reports:
-
-- `pulse_count = 0`
-
-This is intentional and documented in the interface contract.
-
 ### Monitor Lifetime Policy
 
 The monitor starts and stops the PIO state machine for each requested sample. It does not retain
@@ -319,7 +308,7 @@ sequenceDiagram
 	Mon->>FIFO: read high/low pair
 	Mon->>Mon: stop SM and decode freq_hz + duty
 	alt accepted
-		Mon->>Caller: freq_hz, duty, pulse_count=0
+		Mon->>Caller: freq_hz, duty
 	else unstable
 		Mon->>Caller: sentinel state, return false
 	end
@@ -351,7 +340,6 @@ sequenceDiagram
 | PIO sample model | free-running period loop | full-period high/low pair |
 | State publication | realized state in backend C | latest best-effort sample in backend C |
 | Static handling | `freq_hz = 0` drives static level | 1-second inactivity maps to static level |
-| Pulse count | supported by unified backend model | intentionally unsupported, always `0` |
 | Lifetime | normal runtime backend | one-period capture per read |
 
 ## Design Positioning

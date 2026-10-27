@@ -31,7 +31,6 @@ Serve the page locally with `tools/host/run-webhid.sh` (default `http://127.0.0.
 
 - Frequency `0` means a static level, not a missing reading. Monitors keep their last values for about one second
   after the input stops.
-- Reports have no pulse counter; use CDC or I2C when an event count is needed.
 - A save erases flash, so HID, CDC, and I2C all pause briefly and software generators are disturbed. Stop software
   generators first. If the result is unconfirmed, disconnect, reconnect, and check the target settings in report 2 before retrying.
 - Clock profiles above 150 MHz are overclocks and require an explicit acknowledgement; only profiles the firmware

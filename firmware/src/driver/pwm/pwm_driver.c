@@ -31,18 +31,6 @@
 static pwm_role_t pwm_driver_config_bank_roles[PWM_BANK_COUNT];
 static bool pwm_driver_config_table_configured = false;
 
-/** @brief Return the board GPIO for one channel of a bank. */
-static uint pwm_driver_config_bank_gpio(pwm_bank_t bank, uint index) {
-    switch (bank) {
-    case PWM_BANK_A:
-        return hardware_pwm_config.channels[index].gpio;
-    case PWM_BANK_B:
-        return pio_pwm_config.channels[index].gpio;
-    default:
-        return software_pwm_config.channels[index].gpio;
-    }
-}
-
 bool pwm_driver_config_channel_role(uint channel, pwm_role_t *role) {
     if (!pwm_driver_config_table_configured || (role == NULL) || (channel >= PWM_DRIVER_CONFIG_CHANNEL_COUNT)) {
         return false;
@@ -60,31 +48,6 @@ const char *pwm_driver_config_channel_name(uint channel) {
     pwm_role_t role;
 
     return pwm_driver_config_channel_role(channel, &role) ? names[channel / PWM_DRIVER_CONFIG_BANK_SIZE][role] : "?";
-}
-
-bool pwm_driver_config_validate(void) {
-    uint32_t used = 0u;
-
-    for (pwm_bank_t bank = PWM_BANK_A; bank < PWM_BANK_COUNT; ++bank) {
-        for (uint i = 0u; i < PWM_DRIVER_CONFIG_BANK_SIZE; ++i) {
-            uint gpio = pwm_driver_config_bank_gpio(bank, i);
-
-            if (gpio >= PWM_DRIVER_CONFIG_GPIO_COUNT || (used & (1u << gpio)) != 0u) {
-                return false;
-            }
-            used |= 1u << gpio;
-
-            if ((gpio == 23u || gpio == 24u) && bank != PWM_BANK_C) {
-                return false;
-            }
-            if (PWM_DRIVER_CONFIG_REQUIRE_HW_CHANNEL_B && bank == PWM_BANK_A &&
-                pwm_gpio_to_channel(gpio) != PWM_CHAN_B) {
-                return false;
-            }
-        }
-    }
-
-    return true;
 }
 
 bool pwm_driver_config_frequency_supported(uint channel, uint32_t frequency_hz) {
@@ -133,10 +96,6 @@ static bool pwm_driver_configure_table(const pwm_role_t roles[PWM_BANK_COUNT]) {
 
     memcpy(pwm_driver_config_bank_roles, roles, sizeof(pwm_driver_config_bank_roles));
     pwm_driver_config_table_configured = true;
-    if (!pwm_driver_config_validate()) {
-        pwm_driver_config_table_configured = false;
-        return false;
-    }
     return true;
 }
 
@@ -168,9 +127,6 @@ typedef bool (*pwm_driver_backend_set_fn_t)(uint channel, uint32_t freq_hz, uint
 typedef bool (*pwm_driver_backend_init_fn_t)(void);
 /** @brief Read one backend-local monitor sample. */
 typedef bool (*pwm_driver_backend_get_fn_t)(uint channel, pwm_driver_state_t *state);
-/** @brief Backend-owned readback finalization signature used by the routing table. */
-typedef void (*pwm_driver_backend_finalize_readback_fn_t)(uint channel, pwm_driver_state_t *state,
-                                                          uint64_t pulse_ref_us);
 
 /** @brief One in-flight cross-core mailbox command record. */
 typedef struct {
@@ -179,24 +135,17 @@ typedef struct {
     uint8_t duty;       /**< Requested duty. */
 } pwm_driver_cmd_t;
 
-/** @brief Reply record published by Core 1 after one mailbox apply attempt. */
+/**
+ * @brief One-slot Core 0/Core 1 mailbox; every field is accessed under @ref pwm_reply_lock.
+ *
+ * Core 0 sets `pending`. Core 1 clears it when it claims the command, so `!pending && !done`
+ * means the command is being applied. Core 0 may only cancel while `pending` is still set.
+ */
 typedef struct {
-    bool ok; /**< Indicates whether the backend accepted the command. */
-} pwm_driver_reply_t;
-
-/** @brief Mailbox lifecycle states for the one-slot Core 0/Core 1 command exchange. */
-typedef enum {
-    PWM_DRIVER_MAILBOX_IDLE = 0, /**< No command is pending or waiting for collection. */
-    PWM_DRIVER_MAILBOX_PENDING,  /**< Core 0 published a command that Core 1 has not claimed yet. */
-    PWM_DRIVER_MAILBOX_ACTIVE,   /**< Core 1 claimed the command and is applying it. */
-    PWM_DRIVER_MAILBOX_COMPLETE, /**< Core 1 published a reply for the last admitted command. */
-} pwm_driver_mailbox_state_t;
-
-/** @brief One-slot Core 0/Core 1 mailbox state bundle. */
-typedef struct {
-    volatile pwm_driver_mailbox_state_t state; /**< Current lifecycle state of the mailbox slot. */
-    pwm_driver_cmd_t cmd;                      /**< Last command published by Core 0 for Core 1 to claim. */
-    pwm_driver_reply_t reply;                  /**< Last reply published by Core 1 for Core 0 to collect. */
+    pwm_driver_cmd_t cmd; /**< Command published by Core 0. */
+    bool pending;         /**< Published and not yet claimed by Core 1. */
+    bool done;            /**< Core 1 finished applying the command. */
+    bool ok;              /**< Backend result, valid when `done` is set. */
 } pwm_driver_mailbox_t;
 
 /** @brief Routing descriptor for one logical backend bank. */
@@ -204,21 +153,14 @@ typedef struct {
     pwm_driver_backend_init_fn_t init;                           /**< Backend initialization callback. */
     pwm_driver_backend_set_fn_t set;                             /**< Backend-local set callback. */
     pwm_driver_backend_get_fn_t get;                             /**< Optional backend-local read callback. */
-    pwm_driver_backend_finalize_readback_fn_t finalize_readback; /**< Optional backend-owned readback finalizer. */
 } pwm_driver_backend_t;
 
 /** @brief Shared realized-state snapshot record for one logical channel. */
 typedef struct {
-    volatile uint32_t version;     /**< Even/odd version counter used for lock-free snapshot reads. */
-    volatile uint32_t freq_hz;     /**< Realized frequency in Hz. */
-    volatile uint8_t duty;         /**< Realized duty in percent in the range `[0, 100]`. */
-    volatile uint32_t pulse_count; /**< Monotonic generated-period count from power-on. */
+    volatile uint32_t version; /**< Even/odd version counter used for lock-free snapshot reads. */
+    volatile uint32_t freq_hz; /**< Realized frequency in Hz. */
+    volatile uint8_t duty;     /**< Realized duty in percent in the range `[0, 100]`. */
 } pwm_driver_shared_state_t;
-
-/** @brief Backend readback metadata paired with the shared snapshot cache. */
-typedef struct {
-    volatile uint64_t pulse_ref_us; /**< Cache timestamp paired with the published pulse counter. */
-} pwm_driver_readback_t;
 
 /** @brief Core 1 loop counter used to detect a stalled backend owner. */
 static volatile uint32_t pwm_core1_heartbeat;
@@ -237,26 +179,19 @@ static mutex_t control_api_lock;
 /** @brief Published realized-state snapshot cache for all logical channels. */
 static pwm_driver_shared_state_t pwm_state_cache[PWM_DRIVER_CHANNEL_COUNT];
 /** @brief Per-channel readback metadata for backend-owned finalization work. */
-static pwm_driver_readback_t pwm_readback[PWM_DRIVER_CHANNEL_COUNT];
 /** @brief One-slot Core 0/Core 1 mailbox shared between submitter and backend owner. */
-static pwm_driver_mailbox_t pwm_mailbox = {
-    .state = PWM_DRIVER_MAILBOX_IDLE,
-};
+static pwm_driver_mailbox_t pwm_mailbox;
 
 /** @brief Backend routing table indexed by `[bank][role]`; each bank owns one fixed module. */
 static const pwm_driver_backend_t pwm_driver_backends[PWM_BANK_COUNT][2] = {
     [PWM_BANK_A] =
         {
-            [PWM_ROLE_GENERATOR] = {.init = hw_gen_init,
-                                                       .set = hw_gen_set,
-                                                       .finalize_readback = hw_gen_finalize_readback},
+            [PWM_ROLE_GENERATOR] = {.init = hw_gen_init, .set = hw_gen_set},
             [PWM_ROLE_MONITOR] = {.init = hw_mon_init, .get = hw_mon_get},
         },
     [PWM_BANK_B] =
         {
-            [PWM_ROLE_GENERATOR] = {.init = pio_gen_init,
-                                                       .set = pio_gen_set,
-                                                       .finalize_readback = pio_gen_finalize_readback},
+            [PWM_ROLE_GENERATOR] = {.init = pio_gen_init, .set = pio_gen_set},
             [PWM_ROLE_MONITOR] = {.init = pio_mon_init, .get = pio_mon_get},
         },
     [PWM_BANK_C] =
@@ -301,75 +236,25 @@ static const pwm_driver_backend_t *pwm_driver_get_backend(uint channel, uint *lo
  */
 static pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd);
 
-/**
- * @brief Publish one versioned snapshot update while the caller already owns the required coherence boundary.
- * @param channel Logical channel index.
- * @param freq_hz Optional realized frequency update; `NULL` keeps the current cached value.
- * @param duty Optional realized duty update; `NULL` keeps the current cached value.
- * @param pulse_count Pulse counter value to publish.
- * @param pulse_ref_us Timestamp paired with @p pulse_count.
- */
-static void pwm_driver_cache_write_coherent(uint channel, const uint32_t *freq_hz, const uint8_t *duty,
-                                            uint32_t pulse_count, uint64_t pulse_ref_us) {
-    pwm_state_cache[channel].version++;
-    if (freq_hz != NULL) {
-        pwm_state_cache[channel].freq_hz = *freq_hz;
-    }
-    if (duty != NULL) {
-        pwm_state_cache[channel].duty = *duty;
-    }
-    pwm_state_cache[channel].pulse_count = pulse_count;
-    pwm_readback[channel].pulse_ref_us = pulse_ref_us;
-    pwm_driver_memory_barrier();
-    pwm_state_cache[channel].version++;
-}
-
-/**
- * @brief Publish one versioned snapshot update into the shared cache.
- * @param channel Logical channel index.
- * @param freq_hz Optional realized frequency update; `NULL` keeps the current cached value.
- * @param duty Optional realized duty update; `NULL` keeps the current cached value.
- * @param pulse_count Pulse counter value to publish.
- * @param pulse_ref_us Timestamp paired with @p pulse_count.
- */
-static void pwm_driver_cache_write(uint channel, const uint32_t *freq_hz, const uint8_t *duty, uint32_t pulse_count,
-                                   uint64_t pulse_ref_us) {
-    uint32_t irq_state;
-
-    if (channel >= PWM_DRIVER_CHANNEL_COUNT) {
-        return;
-    }
-
-    irq_state = save_and_disable_interrupts();
-    pwm_driver_cache_write_coherent(channel, freq_hz, duty, pulse_count, pulse_ref_us);
-    restore_interrupts(irq_state);
-}
-
-/** @copydoc pwm_driver_store_applied_state */
-void pwm_driver_store_applied_state(uint channel, const pwm_driver_state_t *state) {
-    if (state == NULL) {
-        return;
-    }
-
-    pwm_driver_cache_write(channel, &state->freq_hz, &state->duty, state->pulse_count, time_us_64());
-}
-
 /** @copydoc pwm_driver_store_applied_state_coherent */
-void pwm_driver_store_applied_state_coherent(uint channel, const pwm_driver_state_t *state, uint64_t pulse_ref_us) {
+void pwm_driver_store_applied_state_coherent(uint channel, const pwm_driver_state_t *state) {
     if (channel >= PWM_DRIVER_CHANNEL_COUNT || state == NULL) {
         return;
     }
 
-    pwm_driver_cache_write_coherent(channel, &state->freq_hz, &state->duty, state->pulse_count, pulse_ref_us);
+    pwm_state_cache[channel].version++;
+    pwm_state_cache[channel].freq_hz = state->freq_hz;
+    pwm_state_cache[channel].duty = state->duty;
+    pwm_driver_memory_barrier();
+    pwm_state_cache[channel].version++;
 }
 
-/** @copydoc pwm_driver_store_pulse_count */
-void pwm_driver_store_pulse_count(uint channel, uint32_t pulse_count) {
-    if (channel >= PWM_DRIVER_CHANNEL_COUNT) {
-        return;
-    }
+/** @copydoc pwm_driver_store_applied_state */
+void pwm_driver_store_applied_state(uint channel, const pwm_driver_state_t *state) {
+    uint32_t irq_state = save_and_disable_interrupts();
 
-    pwm_driver_cache_write(channel, NULL, NULL, pulse_count, time_us_64());
+    pwm_driver_store_applied_state_coherent(channel, state);
+    restore_interrupts(irq_state);
 }
 
 /**
@@ -424,7 +309,6 @@ static void pwm_driver_cache_defaults(void) {
         pwm_driver_state_t state = {
             .freq_hz = 0u,
             .duty = 0u,
-            .pulse_count = 0,
         };
 
         pwm_state_cache[channel].version = 0;
@@ -437,27 +321,23 @@ static void pwm_driver_process_mailbox(void) {
     pwm_driver_cmd_t cmd;
     bool has_cmd;
 
-    do {
-        critical_section_enter_blocking(&pwm_reply_lock);
-        has_cmd = pwm_mailbox.state == PWM_DRIVER_MAILBOX_PENDING;
-        if (has_cmd) {
-            cmd = pwm_mailbox.cmd;
-            pwm_mailbox.state = PWM_DRIVER_MAILBOX_ACTIVE;
-        }
-        critical_section_exit(&pwm_reply_lock);
+    critical_section_enter_blocking(&pwm_reply_lock);
+    has_cmd = pwm_mailbox.pending;
+    if (has_cmd) {
+        cmd = pwm_mailbox.cmd;
+        pwm_mailbox.pending = false;
+    }
+    critical_section_exit(&pwm_reply_lock);
 
-        if (!has_cmd) {
-            break;
-        }
-
+    if (has_cmd) {
         bool ok = pwm_driver_backend_set(cmd.channel, cmd.freq_hz, cmd.duty);
 
         critical_section_enter_blocking(&pwm_reply_lock);
-        pwm_mailbox.reply.ok = ok;
-        pwm_mailbox.state = PWM_DRIVER_MAILBOX_COMPLETE;
+        pwm_mailbox.ok = ok;
+        pwm_mailbox.done = true;
         critical_section_exit(&pwm_reply_lock);
         __sev();
-    } while (true);
+    }
 }
 
 /** @brief Return false when Core 1 has not advanced its loop counter within the apply timeout. */
@@ -514,9 +394,6 @@ bool pwm_driver_init(const pwm_role_t roles[PWM_BANK_COUNT]) {
     critical_section_init(&pwm_reply_lock);
     mutex_init(&control_api_lock);
     pwm_driver_cache_defaults();
-    pwm_mailbox.state = PWM_DRIVER_MAILBOX_IDLE;
-    pwm_mailbox.cmd = (pwm_driver_cmd_t){0};
-    pwm_mailbox.reply.ok = false;
     multicore_launch_core1(pwm_driver_core_main);
     return true;
 }
@@ -533,7 +410,7 @@ bool pwm_driver_startup_failed(void) {
 /** @copydoc pwm_driver_submit_locked */
 pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd) {
     absolute_time_t deadline;
-    pwm_driver_reply_t reply;
+    bool ok;
 
     if (get_core_num() != 0) {
         return PWM_DRIVER_RESULT_UNAVAILABLE;
@@ -551,16 +428,13 @@ pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd) {
         return PWM_DRIVER_RESULT_INVALID;
     }
 
+    /* ponytail: control_api_lock admits one submitter and the wait below never abandons a claimed command,
+     * so the slot is always free here. A second concurrent submitter would need a BUSY check.
+     */
     critical_section_enter_blocking(&pwm_reply_lock);
-    if (pwm_mailbox.state != PWM_DRIVER_MAILBOX_IDLE && pwm_mailbox.state != PWM_DRIVER_MAILBOX_COMPLETE) {
-        critical_section_exit(&pwm_reply_lock);
-        return PWM_DRIVER_RESULT_BUSY;
-    }
-
-    /* A completed reply left by a previous waiter is stale once a new command is admitted. */
-    pwm_mailbox.state = PWM_DRIVER_MAILBOX_IDLE;
     pwm_mailbox.cmd = *cmd;
-    pwm_mailbox.state = PWM_DRIVER_MAILBOX_PENDING;
+    pwm_mailbox.done = false;
+    pwm_mailbox.pending = true;
     critical_section_exit(&pwm_reply_lock);
 
     __sev();
@@ -575,17 +449,16 @@ pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd) {
         bool cancelled = false;
 
         critical_section_enter_blocking(&pwm_reply_lock);
-        if (pwm_mailbox.state == PWM_DRIVER_MAILBOX_COMPLETE) {
-            reply = pwm_mailbox.reply;
-            pwm_mailbox.state = PWM_DRIVER_MAILBOX_IDLE;
+        if (pwm_mailbox.done) {
+            ok = pwm_mailbox.ok;
             critical_section_exit(&pwm_reply_lock);
-            return reply.ok ? PWM_DRIVER_RESULT_OK : PWM_DRIVER_RESULT_APPLY_FAILED;
+            return ok ? PWM_DRIVER_RESULT_OK : PWM_DRIVER_RESULT_APPLY_FAILED;
         }
 
-        /* Still unclaimed at the deadline: drop it. Once Core 1 is ACTIVE, keep waiting for the real result. */
+        /* Still unclaimed at the deadline: drop it. Once Core 1 has claimed it, keep waiting for the real result. */
         timed_out = time_reached(deadline);
-        if (timed_out && pwm_mailbox.state == PWM_DRIVER_MAILBOX_PENDING) {
-            pwm_mailbox.state = PWM_DRIVER_MAILBOX_IDLE;
+        if (timed_out && pwm_mailbox.pending) {
+            pwm_mailbox.pending = false;
             cancelled = true;
         }
         critical_section_exit(&pwm_reply_lock);
@@ -640,18 +513,10 @@ pwm_driver_result_t pwm_driver_set(uint channel, uint32_t freq_hz, uint8_t duty)
 
 /** @copydoc pwm_driver_get */
 bool pwm_driver_get(uint channel, pwm_driver_state_t *state) {
-    const pwm_driver_backend_t *backend;
-    uint local_channel;
     uint32_t version_before;
     uint32_t version_after;
-    uint64_t pulse_ref_us;
 
-    if (state == NULL) {
-        return false;
-    }
-
-    backend = pwm_driver_get_backend(channel, &local_channel);
-    if (backend == NULL) {
+    if (state == NULL || channel >= PWM_DRIVER_CHANNEL_COUNT) {
         return false;
     }
 
@@ -664,15 +529,9 @@ bool pwm_driver_get(uint channel, pwm_driver_state_t *state) {
         pwm_driver_memory_barrier();
         state->freq_hz = pwm_state_cache[channel].freq_hz;
         state->duty = pwm_state_cache[channel].duty;
-        state->pulse_count = pwm_state_cache[channel].pulse_count;
-        pulse_ref_us = pwm_readback[channel].pulse_ref_us;
         pwm_driver_memory_barrier();
         version_after = pwm_state_cache[channel].version;
     } while ((version_before != version_after) || (version_after & 1u));
-
-    if (backend->finalize_readback != NULL) {
-        backend->finalize_readback(local_channel, state, pulse_ref_us);
-    }
 
     return true;
 }

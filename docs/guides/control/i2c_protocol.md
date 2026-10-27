@@ -42,7 +42,7 @@ below. Channel register ranges use the channel count advertised by
 | `REG_CONFIG_SET` | `0x04` | 4 | 1 | Payload: bank, backend, role; updates target only |
 | `REG_CONFIG_SAVE` | `0x05` | 1 | 1 | Persists target; reboot applies it |
 | `REG_CONFIG_ADDRESS` | `0x06` | 2 | 1 | One-byte target 7-bit I2C address; reboot applies it |
-| `REG_GET_CHk` | `0x10 + k` | 1 | 9 | Channel state: `freq`, `duty`, `pulse_count` |
+| `REG_GET_CHk` | `0x10 + k` | 1 | 5 | Channel state: `freq`, `duty` |
 | `REG_SET_CHk` | `0x30 + k` | 6 | 1 | Five-byte `freq`/`duty` payload; returns status |
 | `REG_STOP_ALL` | `0x90` | 1 | 1 | Profile reset request; returns status |
 | `REG_LED` | `0x91` | 2 | 1 | One-byte LED value; returns status |
@@ -66,13 +66,12 @@ target; the host must issue `REG_REBOOT` before the target becomes running.
 
 ## Channel Property Layout
 
-For `0x10 .. 0x27` (9 bytes, little-endian):
+For `0x10 .. 0x27` (5 bytes, little-endian):
 
 | Byte | Size | Field | Type |
 |------|------|-------|------|
 | 0-3 | 4 | `freq` | `uint32_t` (Hz) |
 | 4 | 1 | `duty` | `uint8_t` (0..100) |
-| 5-8 | 4 | `pulse_count` | `uint32_t` |
 
 ## Write Payload Layouts
 
@@ -115,7 +114,7 @@ Master read:  "PicoPWM" (7 bytes + null terminator = 8 bytes)
 
 ```
 Master write: [0x10]
-Master read:  [freq_le32, duty_u8, pulse_count_le32] (9 bytes)
+Master read:  [freq_le32, duty_u8] (5 bytes)
 ```
 
 **Set channel 0 frequency and duty**
@@ -159,6 +158,5 @@ Master read:  [status]
 - The slave queues up to four writes. A write that arrives while the queue is full is dropped and the register status becomes `PWM_DRIVER_RESULT_UNAVAILABLE` immediately. The master can send that write again. The status byte always tracks the newest attempt for that register.
 - A read with no requested response returns `0x00` and releases SCL. The slave stretches SCL only while a requested response is still being built.
 - `REG_REBOOT` follows the same deferred path, but the device may reset before a later status re-read is possible.
-- `pulse_count` is read-only over I2C. It cannot be set or reset via this interface. Hardware and PIO generators report the period count implied by elapsed time at the realized frequency. That is the count those backends provide.
 - `freq` and `duty` returned over I2C are the realized values published by the PWM driver layer.
 - The public control API now uses integer Hz and integer duty percent rather than float inputs.

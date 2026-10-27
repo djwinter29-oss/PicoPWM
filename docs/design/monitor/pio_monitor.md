@@ -41,8 +41,8 @@ time, while PWM-slice capture would tie measurement to the fixed PWM slice
 routing. A buffered DMA design can be introduced later if continuous capture
 or trend analysis becomes a real requirement.
 
-The PIO monitor always reports `pulse_count = 0`; it measures one period for a
-current frequency/duty result but does not count or accumulate observed periods.
+The PIO monitor measures one period for a current frequency/duty result; it does not
+accumulate observed periods.
 
 ## Measurement Flow
 

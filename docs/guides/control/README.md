@@ -21,8 +21,9 @@ identity, and board-control operations.
 
 - [USB CDC CLI](usb_cdc_cli.md) for interactive text commands and scripts.
 - [I2C Protocol](i2c_protocol.md) for the binary register interface.
-- [USB HID Control Design](../../design/usb/hid_control_design.md) for a proposed
-  WebHID-compatible management interface; it is not implemented yet.
+- [CDC/HID Overview](../../design/usb/cdc-hid-overview.md) and
+  [HID Report Reference](../../design/usb/hid-report-reference.md) for the
+  WebHID-compatible management interface.
 
 See [Firmware Configuration](../configuration.md) for bank behavior and
 [Architecture](../../design/architecture.md) for the shared control path.

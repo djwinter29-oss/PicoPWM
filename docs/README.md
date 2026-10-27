@@ -24,5 +24,5 @@ Architecture and implementation details for contributors:
 - [PIO PWM Design](design/pio_pwm_design.md)
 - [Generator designs](design/generator/)
 - [Monitor designs](design/monitor/)
-- [USB HID Control Design](design/usb/hid_control_design.md) — proposed; not
-  implemented in firmware
+- [CDC/HID Overview](design/usb/cdc-hid-overview.md) and
+  [HID Report Reference](design/usb/hid-report-reference.md)

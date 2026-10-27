@@ -63,7 +63,8 @@ Use the architecture-related pages as follows:
 - [Pinout](../guides/pinout.md) — physical PWM, I2C, and shared-pin mapping
 - [PWM Driver Configuration](pwm_driver_config.md) — fixed channel allocation and capabilities
 - [PWM Driver Design](pwm_driver_design.md) — detailed `pwmdriver` and backend internals
-- [USB HID Control Design](usb/hid_control_design.md) — proposed WebHID management interface; not implemented
+- [CDC/HID Overview](usb/cdc-hid-overview.md) — USB interface roles and HID rules
+- [HID Report Reference](usb/hid-report-reference.md) — HID report layouts and action semantics
 - [Hardware PWM Generator](generator/hardware_generator.md) — hardware output timing and slice constraints
 - [PIO PWM Generator](generator/pio_generator.md) — PIO output timing and state-machine constraints
 - [Software PWM Generator](generator/software_generator.md) — shared timer output generation
@@ -143,9 +144,8 @@ that transport code reaches PWM hardware only through `device_api` and
 Core 0 owns the host-facing transports:
 
 - `usb/usb_cdc.*` for TinyUSB CDC byte transport
-- USB HID is a proposed additional Core 0 management transport; see
-  [USB HID Control Design](usb/hid_control_design.md). It is not currently
-  enabled or part of the runtime.
+- USB HID is an additional Core 0 management transport; see
+  [CDC/HID Overview](usb/cdc-hid-overview.md)
 - `cli/shell.*` for the embedded-cli-backed line editor and command dispatch
 - `cli/pwm_commands.*` for human-readable CLI commands
 - `i2c/i2c_slave.*` for the I2C slave ISR and deferred write scheduling

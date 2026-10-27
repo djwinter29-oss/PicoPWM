@@ -166,7 +166,7 @@ unchanged. `pulse_count` is monotonic from power-on and is not reset by `stop`.
 - [Control Interfaces](docs/guides/control/README.md)
 - [I2C Protocol](docs/guides/control/i2c_protocol.md)
 - [USB CDC CLI](docs/guides/control/usb_cdc_cli.md)
-- [USB HID Control Design](docs/design/usb/hid_control_design.md) (proposed; not implemented)
+- [CDC/HID Overview](docs/design/usb/cdc-hid-overview.md) and [HID Report Reference](docs/design/usb/hid-report-reference.md)
 - [Pinout](docs/guides/pinout.md)
 
 The USB CDC shell uses the [embedded-cli](https://github.com/funbiscuit/embedded-cli)

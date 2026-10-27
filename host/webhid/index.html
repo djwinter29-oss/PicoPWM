@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>PicoPWM Control | WebHID</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="css/dashboard.css?v=26">
+  <link rel="stylesheet" href="css/webhid.css?v=9">
+  <script type="module" src="js/app.mjs?v=1"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="wordmark" href="./" aria-label="PicoPWM WebHID home">
+      <span class="mark">PW</span>
+      <span><strong>PicoPWM</strong>
+        <span class="brand-meta"><small>WebHID</small>
+          <span class="host-version" id="host-version" aria-label="Host application version">0.0.0-debug</span>
+        </span>
+      </span>
+    </a>
+    <div class="connection" id="connection" data-state="disconnected">
+      <span class="connection-light" aria-hidden="true"></span>
+      <span id="connection-label">Disconnected</span>
+      <span class="sample-time" id="sample-time" hidden></span>
+    </div>
+  </header>
+
+  <main>
+    <section class="page-heading">
+      <div><h1>PWM control</h1></div>
+    </section>
+
+    <section aria-labelledby="identity-title">
+      <div class="section-heading">
+        <h2 id="identity-title">Device identity</h2>
+        <div class="actions" aria-label="Connection controls">
+          <button class="button button-secondary" id="connect" type="button" disabled>Connect</button>
+        </div>
+      </div>
+      <div class="summary identity-summary">
+        <div class="summary-item"><span>Product</span><strong id="product-name">--</strong></div>
+        <div class="summary-item"><span>MCU</span><strong id="mcu">--</strong></div>
+        <div class="summary-item"><span>Serial / UID</span><strong id="serial">--</strong></div>
+        <div class="summary-item"><span>Firmware version</span><strong id="firmware">--</strong></div>
+        <div class="summary-item"><span>System clock</span><strong id="system-clock">--</strong></div>
+        <div class="summary-item"><span>Target clock profile</span><strong id="clock-profile">--</strong></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="configuration-title">
+      <div class="section-heading">
+        <h2 id="configuration-title">Board configuration</h2>
+        <div class="actions" aria-label="Configuration controls">
+          <button class="button button-secondary" id="save-configuration" type="button" hidden disabled>Save target</button>
+        </div>
+      </div>
+      <div class="summary configuration-summary">
+        <div class="summary-item"><span>I2C address</span><strong id="i2c-address">--</strong></div>
+      </div>
+      <div class="table-scroll static-map">
+        <table>
+          <caption>Bank roles; target values apply after save and restart</caption>
+          <thead><tr><th scope="col">Bank</th><th scope="col">Running</th><th scope="col">Target</th></tr></thead>
+          <tbody id="bank-config"></tbody>
+        </table>
+      </div>
+      <div class="control-grid">
+        <label>Bank
+          <select id="bank-index" disabled>
+            <option value="0">A</option><option value="1">B</option><option value="2">C</option>
+          </select>
+        </label>
+        <label>Backend
+          <select id="bank-backend" disabled>
+            <option value="0">HW</option><option value="1">PIO</option><option value="2">SW</option>
+          </select>
+        </label>
+        <label>Role
+          <select id="bank-role" disabled>
+            <option value="0">Generator</option><option value="1">Monitor</option>
+          </select>
+        </label>
+        <button class="button button-secondary" id="apply-bank" type="button" disabled>Set bank target</button>
+      </div>
+      <div class="control-grid">
+        <label>I2C address (0-127)
+          <input id="i2c-input" type="number" min="0" max="127" step="1" value="32" disabled>
+        </label>
+        <button class="button button-secondary" id="apply-i2c" type="button" disabled>Set I2C target</button>
+        <label>Clock profile
+          <select id="clock-profile-select" disabled></select>
+        </label>
+        <label class="inline-check"><input id="clock-ack" type="checkbox" disabled>
+          <span>Acknowledge overclock</span></label>
+        <button class="button button-secondary" id="apply-clock" type="button" disabled>Set clock target</button>
+      </div>
+    </section>
+
+    <dialog class="confirmation-dialog" id="save-dialog" aria-labelledby="save-dialog-title">
+      <h2 id="save-dialog-title">Save target configuration?</h2>
+      <p class="configuration-warning">
+        Saving erases and programs flash. The board stops answering HID, CDC, and I2C for a moment, and software
+        generators and monitors are disturbed. Stop software generators first. The saved target applies only after you
+        restart the board; there is no reboot command.
+      </p>
+      <label class="configuration-acknowledgement" id="save-overclock" hidden>
+        <input id="save-unsafe-ack" type="checkbox" disabled>
+        <span>I acknowledge the non-default overclock request.</span>
+      </label>
+      <div class="dialog-actions">
+        <button class="button button-cancel" id="cancel-save" type="button">Cancel</button>
+        <button class="button button-danger" id="confirm-save" type="button" disabled>Save</button>
+      </div>
+    </dialog>
+
+    <section class="channels-section" aria-labelledby="channels-title">
+      <div class="section-heading">
+        <h2 id="channels-title">Channels <span>0&ndash;23</span></h2>
+        <div class="actions"><button class="button button-danger" id="stop-all" type="button" disabled>Stop all</button></div>
+      </div>
+      <div class="control-grid">
+        <label>Channel
+          <input id="set-channel" type="number" min="0" max="23" step="1" value="0" disabled>
+        </label>
+        <label>Frequency (Hz)
+          <input id="set-freq" type="number" min="0" step="1" value="1000" disabled>
+        </label>
+        <label>Duty (%)
+          <input id="set-duty" type="number" min="0" max="100" step="1" value="50" disabled>
+        </label>
+        <button class="button button-secondary" id="apply-channel" type="button" disabled>Set channel</button>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th scope="col">Channel</th><th scope="col">Bank</th><th scope="col">Role</th>
+            <th scope="col">Frequency</th><th scope="col">Duty</th></tr></thead>
+          <tbody id="channel-rows"></tbody>
+        </table>
+      </div>
+      <p class="configuration-message" id="read-errors" role="status" aria-live="polite" data-error="true"></p>
+    </section>
+
+    <footer class="status-line" role="status" aria-live="polite">
+      <span class="status-mark" aria-hidden="true"></span>
+      <span id="status-message">No device selected</span>
+    </footer>
+    <noscript>JavaScript is unavailable.</noscript>
+  </main>
+</body>
+</html>

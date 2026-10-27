@@ -1,5 +1,5 @@
 """Host-side tools for PicoPWM."""
 
-from .client import ChannelState, PicoPWMClient
+from .client import DeviceError, PicoPwmHid
 
-__all__ = ["ChannelState", "PicoPWMClient"]
+__all__ = ["DeviceError", "PicoPwmHid"]

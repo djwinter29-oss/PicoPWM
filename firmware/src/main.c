@@ -5,13 +5,16 @@
 
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
-#include "cli/pwm_commands.h"
-#include "board/led.h"
-#include "board/system.h"
-#include "device_api/device_api.h"
-#include "i2c/i2c_slave.h"
-#include "pwmdriver/pwm_driver.h"
-#include "usb/usb_cdc.h"
+#include "app/cli/pwm_commands.h"
+#include "app/i2c/i2c_control_map.h"
+#include "platform/led.h"
+#include "platform/system.h"
+#include "platform/boot_config.h"
+#include "device.h"
+#include "driver/i2c/i2c_slave.h"
+#include "driver/pwm/pwm_driver.h"
+#include "app/usb/usb_cdc.h"
+#include "app/usb/usb_hid.h"
 
 /**
  * @brief Initialize Core 0 services, launch Core 1 PWM ownership, and run the main loop.
@@ -26,7 +29,8 @@ int main(void) {
     };
     bool usb_was_connected = false;
 
-    // Overclock before any PWM backend caches the system clock for timing calculations.
+    // Load boot settings first: the clock must be set before any PWM backend caches it for timing calculations.
+    boot_config_load();
     (void)system_init_clock();
 
     led_init();
@@ -36,9 +40,9 @@ int main(void) {
     pwm_commands_init(&pwm_command_session, &shell_transport);
 
     // Configure and launch all three PWM banks before starting Core 1.
-    pwm_driver_config_t pwm_config;
-    pwm_driver_config_load_target(&pwm_config);
-    if (!device_api_config_init(&pwm_config, &pwm_config) || !pwm_driver_init(&pwm_config)) {
+    const pwm_role_t bank_roles[PWM_BANK_COUNT] = {boot_config_get_bank(PWM_BANK_A), boot_config_get_bank(PWM_BANK_B),
+                                                   boot_config_get_bank(PWM_BANK_C)};
+    if (!pwm_driver_init(bank_roles)) {
         system_reboot();
     }
 
@@ -55,16 +59,15 @@ int main(void) {
     }
 
     // Core 0: start communication interfaces.
-    i2c_slave_init(pwm_config.i2c_address);
-    pwm_driver_set_wait_hook(i2c_slave_service_reads);
+    i2c_slave_init(boot_config_get_i2c_address(), &i2c_control_map_ops);
 
-    // Core 0 main loop: service USB CDC and I2C.
+    // Core 0 main loop: service USB CDC, USB HID, and I2C.
     while (true) {
         bool usb_connected;
 
         system_watchdog_kick();
-        i2c_slave_service_reads();
         usb_cdc_poll();
+        usb_hid_poll();
         // Detect USB connection events and print the initial CLI help.
         usb_connected = usb_cdc_is_connected();
         if (usb_connected && !usb_was_connected) {

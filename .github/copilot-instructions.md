@@ -1,17 +1,17 @@
 # PicoPWM GitHub Copilot Instructions
 Read [README.md](../README.md) first for product intent, channel map, and user-facing behavior.
 
-Use the top-level docs directly: [docs/control/README.md](../docs/control/README.md) for interface behavior, [docs/architecture.md](../docs/architecture.md) for system structure, source headers under `firmware/src` for C interfaces, and [docs/detail/pwm_driver_design.md](../docs/detail/pwm_driver_design.md) for `pwmdriver` internals.
+Use the docs directly: [docs/guides/control/README.md](../docs/guides/control/README.md) for interface behavior, [docs/design/architecture.md](../docs/design/architecture.md) for system structure, source headers under `firmware/src` for C interfaces, and [docs/design/pwm_driver_design.md](../docs/design/pwm_driver_design.md) for `pwm` internals.
 
-For `pwmdriver` internals, use [docs/detail/pwm_driver_design.md](../docs/detail/pwm_driver_design.md) as the source of truth.
+For `pwm` internals, use [docs/design/pwm_driver_design.md](../docs/design/pwm_driver_design.md) as the source of truth.
 
 Key repo constraints:
 
 - Keep Core 0 focused on CDC CLI, I2C transport, and top-level command handling.
 - Keep Core 1 focused on PWM backend ownership, IRQ handling, timer callbacks, and backend state.
-- Treat `firmware/src/pwmdriver/pwm_driver.c` as the multicore boundary; do not bypass it from higher layers.
+- Treat `firmware/src/driver/pwm/pwm_driver.c` as the multicore boundary; do not bypass it from higher layers.
 - Treat `pwm_driver_set_freq()` as a command-ingress API and `pwm_driver_get()` as the source of realized channel state.
-- `pulse_count` is monotonic from power-on; `stop` disables output but does not reset counters.
+- `stop` disables generator output.
 
 
 ## Engineering Style

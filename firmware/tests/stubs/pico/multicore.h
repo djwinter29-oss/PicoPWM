@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <stdbool.h>
 
-static int test_multicore_lockout_victim_ready;
+extern int test_multicore_lockout_victim_ready;
 
 static inline void multicore_lockout_victim_init(void) {
     test_multicore_lockout_victim_ready = 1;

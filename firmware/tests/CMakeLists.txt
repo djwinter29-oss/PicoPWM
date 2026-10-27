@@ -10,7 +10,7 @@ endif()
 
 set(TEST_ROOT ${CMAKE_CURRENT_LIST_DIR})
 set(SOURCE_ROOT ${CMAKE_CURRENT_LIST_DIR}/../src)
-set(MICRORL_ROOT ${CMAKE_CURRENT_LIST_DIR}/../third_party/microrl)
+set(EMBEDDED_CLI_ROOT ${CMAKE_CURRENT_LIST_DIR}/../third_party/embedded-cli/lib)
 set(TEST_STUB_ROOT ${TEST_ROOT}/stubs)
 
 function(pico_pwm_test_warnings target)
@@ -20,40 +20,41 @@ endfunction()
 
 add_executable(cli_shell_test
     cli_shell_test.c
-    ${SOURCE_ROOT}/cli/shell.c
-    ${MICRORL_ROOT}/microrl.c
+    ${SOURCE_ROOT}/app/cli/shell.c
+    ${EMBEDDED_CLI_ROOT}/src/embedded_cli.c
 )
 target_include_directories(cli_shell_test PRIVATE
     ${SOURCE_ROOT}
-    ${MICRORL_ROOT}
+    ${EMBEDDED_CLI_ROOT}/include
 )
 pico_pwm_test_warnings(cli_shell_test)
 add_test(NAME cli_shell COMMAND cli_shell_test)
 
 add_executable(cli_channel_commands_test
     cli_channel_commands_test.c
-    ${SOURCE_ROOT}/cli/channel_commands.c
+    ${SOURCE_ROOT}/app/cli/channel_commands.c
 )
 target_include_directories(cli_channel_commands_test PRIVATE
     ${TEST_STUB_ROOT}
     ${SOURCE_ROOT}
-    ${MICRORL_ROOT}
+    ${EMBEDDED_CLI_ROOT}/include
 )
 pico_pwm_test_warnings(cli_channel_commands_test)
 add_test(NAME cli_channel_commands COMMAND cli_channel_commands_test)
 
-add_executable(pwm_driver_config_test
-    pwm_driver_config_test.c
+add_executable(boot_config_test
+    boot_config_test.c
     stubs/hardware/flash.c
-    ${SOURCE_ROOT}/pwmdriver/pwm_driver_config.c
+    ${SOURCE_ROOT}/platform/boot_config.c
+    ${SOURCE_ROOT}/config/board.c
 )
-target_include_directories(pwm_driver_config_test PRIVATE
+target_include_directories(boot_config_test PRIVATE
     ${TEST_STUB_ROOT}
     ${SOURCE_ROOT}
 )
-pico_pwm_test_warnings(pwm_driver_config_test)
-target_compile_definitions(pwm_driver_config_test PRIVATE PICO_PWM_CONFIG_FLASH_OFFSET=0)
-add_test(NAME pwm_driver_config COMMAND pwm_driver_config_test)
+pico_pwm_test_warnings(boot_config_test)
+target_compile_definitions(boot_config_test PRIVATE PICO_PWM_CONFIG_FLASH_OFFSET=0)
+add_test(NAME boot_config COMMAND boot_config_test)
 
 add_executable(pio_monitor_decode_test
     pio_monitor_decode_test.c
@@ -73,15 +74,6 @@ target_include_directories(generator_math_test PRIVATE
 pico_pwm_test_warnings(generator_math_test)
 add_test(NAME generator_math COMMAND generator_math_test)
 
-add_executable(pwm_mailbox_test
-    pwm_mailbox_test.c
-)
-target_include_directories(pwm_mailbox_test PRIVATE
-    ${SOURCE_ROOT}
-)
-pico_pwm_test_warnings(pwm_mailbox_test)
-add_test(NAME pwm_mailbox COMMAND pwm_mailbox_test)
-
 add_executable(i2c_write_queue_test
     i2c_write_queue_test.c
 )
@@ -91,18 +83,20 @@ target_include_directories(i2c_write_queue_test PRIVATE
 pico_pwm_test_warnings(i2c_write_queue_test)
 add_test(NAME i2c_write_queue COMMAND i2c_write_queue_test)
 
-add_executable(i2c_irq_gate_test
-    i2c_irq_gate_test.c
+add_executable(i2c_slave_test
+    i2c_slave_test.c
+    ${SOURCE_ROOT}/driver/i2c/i2c_slave.c
 )
-target_include_directories(i2c_irq_gate_test PRIVATE
+target_include_directories(i2c_slave_test PRIVATE
+    ${TEST_STUB_ROOT}
     ${SOURCE_ROOT}
 )
-pico_pwm_test_warnings(i2c_irq_gate_test)
-add_test(NAME i2c_irq_gate COMMAND i2c_irq_gate_test)
+pico_pwm_test_warnings(i2c_slave_test)
+add_test(NAME i2c_slave COMMAND i2c_slave_test)
 
 add_executable(i2c_control_map_test
     i2c_control_map_test.c
-    ${SOURCE_ROOT}/i2c/i2c_control_map.c
+    ${SOURCE_ROOT}/app/i2c/i2c_control_map.c
 )
 target_include_directories(i2c_control_map_test PRIVATE
     ${TEST_STUB_ROOT}
@@ -110,6 +104,17 @@ target_include_directories(i2c_control_map_test PRIVATE
 )
 pico_pwm_test_warnings(i2c_control_map_test)
 add_test(NAME i2c_control_map COMMAND i2c_control_map_test)
+
+add_executable(hid_protocol_test
+    hid_protocol_test.c
+    ${SOURCE_ROOT}/app/usb/hid_protocol.c
+)
+target_include_directories(hid_protocol_test PRIVATE
+    ${TEST_STUB_ROOT}
+    ${SOURCE_ROOT}
+)
+pico_pwm_test_warnings(hid_protocol_test)
+add_test(NAME hid_protocol COMMAND hid_protocol_test)
 
 add_executable(stop_contract_test
     stop_contract_test.c
@@ -120,3 +125,16 @@ target_include_directories(stop_contract_test PRIVATE
 )
 pico_pwm_test_warnings(stop_contract_test)
 add_test(NAME stop_contract COMMAND stop_contract_test)
+
+find_package(Threads REQUIRED)
+add_executable(pwm_driver_test
+    pwm_driver_test.c
+    ${SOURCE_ROOT}/driver/pwm/pwm_driver.c
+)
+target_include_directories(pwm_driver_test PRIVATE
+    ${TEST_ROOT}/stubs_pwm_driver
+    ${SOURCE_ROOT}
+)
+target_link_libraries(pwm_driver_test PRIVATE Threads::Threads)
+pico_pwm_test_warnings(pwm_driver_test)
+add_test(NAME pwm_driver COMMAND pwm_driver_test)

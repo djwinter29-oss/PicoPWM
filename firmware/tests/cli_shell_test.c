@@ -1,4 +1,4 @@
-#include "cli/shell.h"
+#include "app/cli/shell.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -16,7 +16,6 @@ typedef struct {
 typedef struct {
     shell_t *shell;
     uint32_t command_calls;
-    uint32_t completion_calls;
 } test_context_t;
 
 static uint32_t test_read(void *context, uint8_t *data, uint32_t capacity) {
@@ -43,24 +42,14 @@ static bool test_command(void *context, int argc, const char *const *argv) {
     test_context_t *test = context;
 
     assert(argc == 1);
-    assert(strcmp(argv[0], "help") == 0);
+    assert(strcmp(argv[0], "ping") == 0);
     test->command_calls++;
     return shell_write_line(test->shell, "handled");
 }
 
-static char **test_complete(void *context, int argc, const char *const *argv) {
-    static char *matches[] = {(char *)"help", NULL};
-    test_context_t *test = context;
-
-    assert(argc == 1);
-    assert(strcmp(argv[0], "he") == 0);
-    test->completion_calls++;
-    return matches;
-}
-
 static shell_config_t test_config(test_context_t *context, const shell_transport_t *transport) {
     static const shell_command_t commands[] = {
-        {"help", "help", test_command},
+        {"ping", "ping", test_command},
     };
 
     return (shell_config_t){
@@ -69,14 +58,13 @@ static shell_config_t test_config(test_context_t *context, const shell_transport
         .command_count = 1u,
         .unknown_message = "unknown",
         .unknown_handler = NULL,
-        .completion_handler = test_complete,
         .command_context = context,
     };
 }
 
 static void test_independent_sessions_and_line_endings(void) {
-    test_transport_t transport_a = {.input = "help\r"};
-    test_transport_t transport_b = {.input = "help\n"};
+    test_transport_t transport_a = {.input = "ping\r"};
+    test_transport_t transport_b = {.input = "ping\n"};
     shell_t shell_a;
     shell_t shell_b;
     test_context_t context_a = {.shell = &shell_a};
@@ -97,8 +85,31 @@ static void test_independent_sessions_and_line_endings(void) {
     assert(strstr(transport_b.output, "handled\r\n") != NULL);
 }
 
+static bool test_args(void *context, int argc, const char *const *argv) {
+    (void)context;
+    assert(argc == 3);
+    assert(strcmp(argv[0], "set") == 0);
+    assert(strcmp(argv[1], "a") == 0);
+    assert(strcmp(argv[2], "10") == 0);
+    return true;
+}
+
+static void test_arguments(void) {
+    static const shell_command_t commands[] = {{"set", "set", test_args}};
+    test_transport_t transport = {.input = "set a  10\r"};
+    shell_t shell;
+    test_context_t context = {.shell = &shell};
+    shell_transport_t binding = {.read = test_read, .write = test_write, .context = &transport};
+    shell_config_t config = test_config(&context, &binding);
+
+    config.commands = commands;
+    shell_init(&shell, &config);
+    shell_poll(&shell);
+    assert(strstr(transport.output, "unknown") == NULL);
+}
+
 static void test_completion(void) {
-    test_transport_t transport = {.input = "he\t\r"};
+    test_transport_t transport = {.input = "pi\t\r"};
     shell_t shell;
     test_context_t context = {.shell = &shell};
     shell_transport_t binding = {.read = test_read, .write = test_write, .context = &transport};
@@ -107,13 +118,12 @@ static void test_completion(void) {
     shell_init(&shell, &config);
     shell_poll(&shell);
 
-    assert(context.completion_calls == 1u);
     assert(context.command_calls == 1u);
 }
 
 static void test_interleaved_escape_sequences(void) {
     test_transport_t transport_a = {.input = "\033"};
-    test_transport_t transport_b = {.input = "help\r"};
+    test_transport_t transport_b = {.input = "ping\r"};
     shell_t shell_a;
     shell_t shell_b;
     test_context_t context_a = {.shell = &shell_a};
@@ -128,7 +138,7 @@ static void test_interleaved_escape_sequences(void) {
     shell_poll(&shell_a);
     shell_poll(&shell_b);
 
-    transport_a.input = "[Dhelp\r";
+    transport_a.input = "[Dping\r";
     transport_a.input_offset = 0u;
     shell_poll(&shell_a);
 
@@ -216,7 +226,6 @@ static void test_rejected_inputs(void) {
     assert(shell_write_line(&shell, NULL));
 
     config.unknown_handler = test_unknown_handled;
-    config.completion_handler = NULL;
     transport.input = "nope\r";
     transport.input_offset = 0u;
     transport.output_length = 0u;
@@ -242,6 +251,7 @@ static void test_rejected_inputs(void) {
 
 int main(void) {
     test_independent_sessions_and_line_endings();
+    test_arguments();
     test_completion();
     test_interleaved_escape_sequences();
     test_rejected_inputs();

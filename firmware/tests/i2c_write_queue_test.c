@@ -1,4 +1,4 @@
-#include "i2c/i2c_write_queue.h"
+#include "driver/i2c/i2c_write_queue.h"
 
 #include <assert.h>
 #include <string.h>
@@ -22,8 +22,6 @@ int main(void) {
         assert(slot.len == 1u);
         assert(slot.payload[0] == index);
         assert(slot.epoch == index + 1u);
-        assert(i2c_write_status_is_current(slot.epoch, index + 1u));
-        assert(!i2c_write_status_is_current(slot.epoch, index + 2u));
     }
     assert(!i2c_write_queue_pop(&queue, &slot));
     assert(i2c_write_queue_push(&queue, 0x90u, NULL, 0u, 7u));

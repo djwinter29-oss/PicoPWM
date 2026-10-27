@@ -13,11 +13,6 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  PICO_SDK_VERSION: "2.3.0"
-  PICO_SDK_REVISION: "98a542c1a62fb549ffb5d66a3e5892b06276b670"
-  PICO_SDK_PATH: ${{ github.workspace }}/.pico-sdk
-
 jobs:
   format:
     name: Formatting and syntax
@@ -54,16 +49,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Fetch embedded-cli submodule
+        run: git submodule update --init firmware/third_party/embedded-cli
+
       - name: Install test dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends cmake gcovr ninja-build
 
       - name: Run host unit tests
-        run: tools/test/test-firmware-c.sh --build-dir firmware/build/tests-pr
+        run: tools/test/test-firmware-c.sh --build-dir build/tests-pr
 
       - name: Generate host coverage report
-        run: tools/test/coverage-firmware-c.sh --build-dir firmware/build/tests-coverage-pr --output-dir firmware/build/tests-coverage-pr/coverage
+        run: tools/test/coverage-firmware-c.sh --build-dir build/tests-coverage-pr --output-dir build/coverage-pr
 
       - name: Check firmware invariants
         run: tools/test/check-firmware-invariants.sh
@@ -72,36 +70,12 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: pico-pwm-pr-coverage
-          path: firmware/build/tests-coverage-pr/coverage
+          path: build/coverage-pr
           if-no-files-found: error
 
   host-tools:
-    name: Python and .NET host tests
-    runs-on: ubuntu-24.04
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Test Python host
-        working-directory: host/python
-        run: |
-          python -m pip install -e '.[test]'
-          python -m pytest -q
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
-
-      - name: Test .NET host
-        working-directory: host/dotnet
-        run: dotnet test PicoPwm.sln --configuration Release
+    name: Host tests
+    uses: ./.github/workflows/host-validation.yml
 
   firmware:
     name: Firmware (${{ matrix.board }})
@@ -117,23 +91,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          submodules: recursive
 
       - name: Install host build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends cmake ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-dev libstdc++-arm-none-eabi-newlib
-
-      - name: Cache Pico SDK
-        uses: actions/cache@v5
-        with:
-          path: .pico-sdk
-          key: pico-sdk-${{ env.PICO_SDK_VERSION }}-${{ env.PICO_SDK_REVISION }}-${{ runner.os }}
-
-      - name: Setup Pico SDK
-        run: |
-          tools/firmware/setup-sdk-env.sh \
-            --sdk-version "$PICO_SDK_VERSION" \
-            --sdk-revision "$PICO_SDK_REVISION"
 
       - name: Build firmware
         run: tools/firmware/build.sh --board "$BOARD"
@@ -146,9 +110,9 @@ jobs:
         with:
           name: pico-pwm-pr-${{ matrix.board }}
           path: |
-            firmware/build/${{ matrix.board }}/pico_pwm.uf2
-            firmware/build/${{ matrix.board }}/pico_pwm.elf
-            firmware/build/${{ matrix.board }}/pico_pwm.bin
-            firmware/build/${{ matrix.board }}/pico_pwm.hex
-            firmware/build/${{ matrix.board }}/pico_pwm.dis
+            build/${{ matrix.board }}/pico_pwm.uf2
+            build/${{ matrix.board }}/pico_pwm.elf
+            build/${{ matrix.board }}/pico_pwm.bin
+            build/${{ matrix.board }}/pico_pwm.hex
+            build/${{ matrix.board }}/pico_pwm.dis
           if-no-files-found: error

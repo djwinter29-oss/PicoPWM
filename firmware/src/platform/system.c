@@ -1,0 +1,55 @@
+/**
+ * @file system.c
+ * @brief Board-level clock and reboot helpers for PicoPWM.
+ */
+
+#include "platform/system.h"
+
+#include "platform/boot_config.h"
+
+#include "hardware/clocks.h"
+#include "hardware/watchdog.h"
+
+/** @brief Runtime watchdog period in milliseconds. Longer than one flash save. */
+#define SYSTEM_WATCHDOG_TIMEOUT_MS 5000u
+
+/** @brief True when the requested system-clock profile was accepted, or none was requested. */
+static bool system_clock_at_target;
+
+/** @copydoc system_init_clock */
+bool system_init_clock(void) {
+    const uint16_t mhz = boot_config_get_sysclk_mhz();
+
+    /*
+     * PWM backends sample clock_get_hz(clk_sys) during their own init, which runs
+     * after this call. A rejected target therefore changes the realized frequency
+     * base, and divider math still matches the clock that is actually running.
+     */
+    system_clock_at_target = mhz == 0u || set_sys_clock_khz((uint32_t)mhz * 1000u, true);
+    return system_clock_at_target;
+}
+
+/** @copydoc system_clock_is_at_target */
+bool system_clock_is_at_target(void) {
+    return system_clock_at_target;
+}
+
+/** @copydoc system_clock_hz */
+uint32_t system_clock_hz(void) {
+    return clock_get_hz(clk_sys);
+}
+
+/** @copydoc system_watchdog_start */
+void system_watchdog_start(void) {
+    watchdog_enable(SYSTEM_WATCHDOG_TIMEOUT_MS, true);
+}
+
+/** @copydoc system_watchdog_kick */
+void system_watchdog_kick(void) {
+    watchdog_update();
+}
+
+/** @copydoc system_reboot */
+void system_reboot(void) {
+    watchdog_reboot(0u, 0u, 0u);
+}

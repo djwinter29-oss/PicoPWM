@@ -1,80 +1,76 @@
-"""Flask management interface for PicoPWM."""
+"""Flask management interface for PicoPWM, backed by the HID vendor interface."""
 
 from __future__ import annotations
 
 import os
-from typing import Callable
+from pathlib import Path
 
-from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
+from flask import Flask, jsonify, request, send_from_directory
 
-from .backends import CdcTransport, I2cTransport
-from .client import PicoPWMClient
+from .client import DeviceError, PicoPwmHid
+from .transport import open_device
 
 
-def create_app(client: PicoPWMClient | None = None, client_factory: Callable[[], PicoPWMClient] | None = None) -> Flask:
-    app = Flask(__name__)
-    app.config["SECRET_KEY"] = os.environ.get("PICOPWM_SECRET_KEY", "picopwm-local")
-    state = {"client": client, "client_factory": client_factory or build_client}
+def _int(payload: dict, name: str) -> int:
+    value = payload.get(name)
+    if type(value) is not int:
+        raise ValueError(f"{name} must be an integer")
+    return value
 
-    def get_client() -> PicoPWMClient:
-        if state["client"] is None:
-            state["client"] = state["client_factory"]()
-        return state["client"]
+
+def create_app(client: PicoPwmHid | None = None) -> Flask:
+    # Wheels bundle the dashboard as picopwm/web; source checkouts use host/web.
+    web_root = Path(__file__).resolve().parent / "web"
+    if not web_root.is_dir():
+        web_root = Path(__file__).resolve().parents[2] / "web"
+    app = Flask(__name__, static_folder=web_root, static_url_path="")
+    hid = client or PicoPwmHid(lambda: open_device(os.environ.get("PICOPWM_SERIAL"),
+                                                   os.environ.get("PICOPWM_DEVICE_PATH")))
 
     @app.get("/")
     def index():
-        try:
-            channels = get_client().channels()
-            return render_template("index.html", channels=channels, transport=transport_name())
-        except Exception as exc:
-            return render_template("index.html", channels=[], transport=transport_name(), error=str(exc)), 503
+        return send_from_directory(app.static_folder, "index.html")
 
-    @app.post("/channels/<int:channel>")
-    def update_channel(channel: int):
-        try:
-            frequency = int(request.form["frequency_hz"])
-            duty = int(request.form["duty_percent"])
-            get_client().set_channel(channel, frequency, duty)
-            flash(f"Channel {channel} updated", "success")
-        except (KeyError, ValueError) as exc:
-            flash(str(exc) or "Enter a valid frequency and duty", "error")
-        except Exception as exc:
-            flash(f"Channel {channel}: {exc}", "error")
-        return redirect(url_for("index"))
+    @app.get("/api/status")
+    def status():
+        return jsonify(hid.status())
 
-    @app.post("/stop")
-    def stop_all():
+    def action(call):
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "JSON object required"}), 400
         try:
-            get_client().stop_all()
-            flash("All channels stopped", "success")
-        except Exception as exc:
-            flash(f"Stop failed: {exc}", "error")
-        return redirect(url_for("index"))
+            return jsonify(call(payload))
+        except ValueError as error:
+            return jsonify({"error": str(error)}), 400
+        except DeviceError as error:
+            return jsonify({"error": str(error)}), 409
 
-    @app.get("/api/channels")
-    def channel_api():
-        try:
-            return jsonify([channel.as_dict() for channel in get_client().channels()])
-        except Exception as exc:
-            return jsonify({"error": str(exc)}), 503
+    @app.post("/api/channels/<int:channel>")
+    def set_channel(channel: int):
+        return action(lambda p: hid.set_channel(channel, _int(p, "freq_hz"), _int(p, "duty")))
+
+    @app.post("/api/stop")
+    def stop():
+        return action(lambda p: hid.stop())
+
+    @app.post("/api/bank")
+    def bank():
+        return action(lambda p: hid.set_bank(_int(p, "bank"), _int(p, "backend"), _int(p, "role")))
+
+    @app.post("/api/i2c-address")
+    def i2c_address():
+        return action(lambda p: hid.set_i2c_address(_int(p, "address")))
+
+    @app.post("/api/clock-profile")
+    def clock_profile():
+        return action(lambda p: hid.set_clock_profile(_int(p, "profile"), p.get("acknowledge_overclock") is True))
+
+    @app.post("/api/save")
+    def save():
+        return action(lambda p: hid.save_configuration(p.get("acknowledge_overclock") is True))
 
     return app
-
-
-def build_client() -> PicoPWMClient:
-    transport = os.environ.get("PICOPWM_TRANSPORT", "cdc").lower()
-    if transport == "cdc":
-        port = os.environ.get("PICOPWM_CDC_PORT", "/dev/ttyACM0")
-        return PicoPWMClient(CdcTransport(port))
-    if transport == "i2c":
-        address = int(os.environ.get("PICOPWM_I2C_ADDRESS", "0x40"), 0)
-        bus = int(os.environ.get("PICOPWM_I2C_BUS", "1"), 0)
-        return PicoPWMClient(I2cTransport(address=address, bus=bus))
-    raise ValueError("PICOPWM_TRANSPORT must be 'cdc' or 'i2c'")
-
-
-def transport_name() -> str:
-    return os.environ.get("PICOPWM_TRANSPORT", "cdc").upper()
 
 
 def main() -> None:

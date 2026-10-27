@@ -14,11 +14,6 @@ on:
 permissions:
   contents: read
 
-env:
-  PICO_SDK_VERSION: "2.3.0"
-  PICO_SDK_REVISION: "98a542c1a62fb549ffb5d66a3e5892b06276b670"
-  PICO_SDK_PATH: ${{ github.workspace }}/.pico-sdk
-
 jobs:
   format:
     name: Formatting and syntax
@@ -61,10 +56,10 @@ jobs:
           sudo apt-get install -y --no-install-recommends cmake gcovr ninja-build
 
       - name: Run host unit tests
-        run: tools/test/test-firmware-c.sh --build-dir firmware/build/tests-release
+        run: tools/test/test-firmware-c.sh --build-dir build/tests-release
 
       - name: Generate host coverage report
-        run: tools/test/coverage-firmware-c.sh --build-dir firmware/build/tests-coverage-release --output-dir firmware/build/tests-coverage-release/coverage
+        run: tools/test/coverage-firmware-c.sh --build-dir build/tests-coverage-release --output-dir build/coverage-release
 
       - name: Check firmware invariants
         run: tools/test/check-firmware-invariants.sh
@@ -73,36 +68,87 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: pico-pwm-release-coverage
-          path: firmware/build/tests-coverage-release/coverage
+          path: build/coverage-release
           if-no-files-found: error
 
   host-tools:
-    name: Python and .NET host tests
-    runs-on: ubuntu-24.04
+    name: Host tests
+    uses: ./.github/workflows/host-validation.yml
 
+  dotnet-packages:
+    name: Publish .NET Packages
+    needs: host-tools
+    uses: ./.github/workflows/publish-dotnet.yml
+    with:
+      version: ${{ inputs.version || '' }}
+
+  python-package:
+    name: Package Python
+    needs: host-tools
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Resolve host version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -eu
+          VERSION=$(tools/release/resolve-release-version.sh "$EVENT_NAME" "$INPUT_VERSION" "$REF_NAME")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Test Python host
-        working-directory: host/python
+      - name: Build Python wheel
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          python -m pip install -e '.[test]'
-          python -m pytest -q
+          set -eu
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" host/python/pyproject.toml
+          cp -r host/web host/python/picopwm/web
+          python -m pip wheel --no-deps host/python --wheel-dir dist
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - name: Verify installed Python release
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -eu
+          python -m venv build/host-wheel-check
+          build/host-wheel-check/bin/python -m pip install dist/*.whl
+          cd build
+          host-wheel-check/bin/python - <<'PY'
+          from importlib.metadata import version
+          import os
+          from picopwm.app import create_app
+          assert version('picopwm-host') == os.environ['VERSION']
+          assert create_app(object()).test_client().get('/').status_code == 200
+          PY
+
+      - name: Checksum Python wheel
+        run: |
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          dist = Path('dist')
+          files = sorted(dist.glob('*.whl'))
+          assert len(files) == 1, 'Expected exactly one Python wheel'
+          checksums = ''.join(f'{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n' for path in files)
+          (dist / 'SHA256SUMS-python.txt').write_text(checksums, encoding='utf-8')
+          PY
+
+      - name: Upload Python package
+        uses: actions/upload-artifact@v6
         with:
-          dotnet-version: "8.0.x"
-
-      - name: Test .NET host
-        working-directory: host/dotnet
-        run: dotnet test PicoPwm.sln --configuration Release
+          name: release-python
+          path: dist/*
+          if-no-files-found: error
 
   build:
     name: Build (${{ matrix.board }})
@@ -115,6 +161,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          submodules: recursive
 
       - name: Resolve version
         id: version
@@ -133,18 +181,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends cmake ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-dev libstdc++-arm-none-eabi-newlib
 
-      - name: Cache Pico SDK
-        uses: actions/cache@v5
-        with:
-          path: .pico-sdk
-          key: pico-sdk-${{ env.PICO_SDK_VERSION }}-${{ env.PICO_SDK_REVISION }}-${{ runner.os }}
-
-      - name: Setup Pico SDK
-        run: |
-          tools/firmware/setup-sdk-env.sh \
-            --sdk-version "$PICO_SDK_VERSION" \
-            --sdk-revision "$PICO_SDK_REVISION"
-
       - name: Build firmware
         env:
           BOARD: ${{ matrix.board }}
@@ -160,7 +196,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -eu
-          source_dir="firmware/build/${BOARD}"
+          source_dir="build/${BOARD}"
           output_dir="dist/${BOARD}"
           mkdir -p "$output_dir"
           for extension in uf2 elf bin hex dis; do
@@ -178,13 +214,27 @@ jobs:
 
   publish:
     name: Publish GitHub Release
-    needs: [build, format, unit-tests, host-tools]
+    needs: [build, format, unit-tests, host-tools, python-package, dotnet-packages]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      actions: read
+    # Manual runs build artifacts only; tag pushes publish a release.
     if: github.event_name == 'push'
 
     steps:
+      - name: Checkout release gate
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Require successful PR checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: python3 tools/release/require_release_checks.py --sha "$SOURCE_SHA"
+
       - name: Download all board artifacts
         uses: actions/download-artifact@v4
         with:
@@ -199,7 +249,8 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: PicoPWM ${{ github.ref_name }}
-          draft: true
-          files: |
-            dist/**
+          draft: false
+          prerelease: false
+          files: dist/*
+          fail_on_unmatched_files: true
           generate_release_notes: true

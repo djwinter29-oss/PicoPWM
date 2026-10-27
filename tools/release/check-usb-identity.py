@@ -13,7 +13,7 @@ def _repo_root() -> Path:
 
 
 def _usb_identity(repo_root: Path) -> tuple[int, int]:
-    descriptor_path = repo_root / "firmware" / "src" / "usb" / "usb_descriptors.c"
+    descriptor_path = repo_root / "firmware" / "src" / "app" / "usb" / "usb_descriptors.c"
     source = descriptor_path.read_text(encoding="utf-8")
     values = {}
     for name in ("USB_VID", "USB_PID"):
@@ -30,7 +30,7 @@ def main() -> int:
         "--repo-root",
         type=Path,
         default=_repo_root(),
-        help="Repository root containing firmware/src/usb/usb_descriptors.c",
+        help="Repository root containing firmware/src/app/usb/usb_descriptors.c",
     )
     args = parser.parse_args()
 
@@ -40,7 +40,7 @@ def main() -> int:
         parser.error(str(error))
 
     print(f"USB identity {vid:#06x}:{pid:#06x}")
-    if (vid, pid) == (0xCAFE, 0x4010):
+    if (vid, pid) == (0xCAFE, 0x4012):
         print("Using the unallocated lab USB identity reserved for development builds.")
     else:
         print("Allocated USB identity configured.")

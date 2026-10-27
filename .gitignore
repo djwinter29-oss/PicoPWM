@@ -1,6 +1,5 @@
+/build/
 /firmware/build/
-.pico-sdk/
-
 # Firmware build artifacts
 *.uf2
 *.elf
@@ -16,3 +15,6 @@ __pycache__/
 # .NET build artifacts
 host/dotnet/**/bin/
 host/dotnet/**/obj/
+
+# Temporary files
+tmp/

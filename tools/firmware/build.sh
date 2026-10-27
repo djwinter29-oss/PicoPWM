@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # Usage: tools/firmware/build.sh [--board pico|pico2] [--firmware-version VERSION]
-# Builds into build/<board>. The Pico SDK is the firmware/third_party/pico-sdk submodule; CMAKE_GENERATOR picks a generator.
+# Builds into build/<board>. Fresh builds prefer Ninja; CMAKE_GENERATOR overrides the default.
 set -eu
 
 BOARD="${PICO_BOARD:-pico}"
@@ -21,6 +21,12 @@ esac
 
 REPO_ROOT=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 BUILD_DIR="$REPO_ROOT/build/$BOARD"
+
+if [ -z "${CMAKE_GENERATOR:-}" ] && [ ! -f "$BUILD_DIR/CMakeCache.txt" ] &&
+        command -v ninja >/dev/null 2>&1; then
+    CMAKE_GENERATOR=Ninja
+    export CMAKE_GENERATOR
+fi
 
 git -C "$REPO_ROOT" submodule update --init --recursive firmware/third_party
 

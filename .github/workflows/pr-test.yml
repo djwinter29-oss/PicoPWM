@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Install formatting dependencies
         run: |
@@ -47,7 +47,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Fetch embedded-cli submodule
         run: git submodule update --init firmware/third_party/embedded-cli
@@ -90,7 +90,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 

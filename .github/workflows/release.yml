@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Install formatting dependencies
         run: |
@@ -48,7 +48,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Install test dependencies
         run: |
@@ -88,7 +88,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Resolve host version
         id: version
@@ -160,7 +160,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -224,7 +224,7 @@ jobs:
 
     steps:
       - name: Checkout release gate
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false

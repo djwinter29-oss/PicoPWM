@@ -5,13 +5,12 @@
 
 #include "device_service.h"
 
-#include "config/board_config.h"
 #include "pico/unique_id.h"
 #include "platform/system.h"
 #include "driver/pwm/pwm_driver_internal.h"
 
 const char *device_service_device_name(void) {
-    return BOARD_DEVICE_NAME;
+    return "PicoPWM";
 }
 
 const char *device_service_firmware_version(void) {

@@ -51,7 +51,6 @@ The current implementation is split as follows:
 | ------ | ---------------- |
 | `firmware/src/app/device_service/device_service.h` | Shared Core 0 device API surface used by CDC and I2C |
 | `firmware/src/app/device_service/device_service.c` | Shared device info, channel reads, and channel write helpers above the Core 1 mailbox boundary |
-| `firmware/src/config/board_config.h` | Board identity and build-level firmware configuration consumed by `device_service` |
 | `firmware/src/app/i2c/i2c_control_map.h` | I2C register map definitions and protocol helpers |
 | `firmware/src/app/i2c/i2c_control_map.c` | I2C register encode/decode and deferred write translation into `device_service` |
 | `firmware/src/driver/pwm/pwm_driver.h` | Public wrapper API and backend channel capacity constants |

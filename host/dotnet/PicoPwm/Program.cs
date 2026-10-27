@@ -2,20 +2,26 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using PicoPwm.Host;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    WebRootPath = Path.Combine(AppContext.BaseDirectory, "wwwroot"),
+});
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
     options.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.Never;
 });
-builder.Services.AddSingleton(_ => new PicoPwmHid(() => HidDevices.Open(
-    Environment.GetEnvironmentVariable("PICOPWM_SERIAL"), Environment.GetEnvironmentVariable("PICOPWM_DEVICE_PATH"))));
+builder.Services.AddSingleton(_ => new BoardRegistry(HidDevices.Enumerate,
+    board => new PicoPwmHid(() => HidDevices.Open(board.SerialNumber,
+        board.SerialNumber is null ? board.DevicePath : null)),
+    Environment.GetEnvironmentVariable("PICOPWM_SERIAL"), Environment.GetEnvironmentVariable("PICOPWM_DEVICE_PATH")));
 
 var app = builder.Build();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-IResult Act(Func<DashboardStatus> call)
+IResult Act(Func<object> call)
 {
     try
     {
@@ -29,20 +35,43 @@ IResult Act(Func<DashboardStatus> call)
     {
         return Results.Conflict(new { error = error.Message });
     }
+    catch (Exception error) when (error is IOException or InvalidOperationException or UnauthorizedAccessException
+        or NotSupportedException or TimeoutException)
+    {
+        return Results.Problem(error.Message, statusCode: 503);
+    }
 }
 
-app.MapGet("/api/status", (PicoPwmHid hid) => hid.Status());
-app.MapPost("/api/channels/{channel:int}", (int channel, ChannelRequest request, PicoPwmHid hid) =>
-    Act(() => hid.SetChannel(channel, request.FreqHz, request.Duty)));
-app.MapPost("/api/stop", (PicoPwmHid hid) => Act(hid.Stop));
-app.MapPost("/api/bank", (BankRequest request, PicoPwmHid hid) =>
-    Act(() => hid.SetBank(request.Bank, request.Backend, request.Role)));
-app.MapPost("/api/i2c-address", (AddressRequest request, PicoPwmHid hid) =>
-    Act(() => hid.SetI2cAddress(request.Address)));
-app.MapPost("/api/clock-profile", (ClockRequest request, PicoPwmHid hid) =>
-    Act(() => hid.SetClockProfile(request.Profile, request.AcknowledgeOverclock)));
-app.MapPost("/api/save", (SaveRequest request, PicoPwmHid hid) =>
-    Act(() => hid.SaveConfiguration(request.AcknowledgeOverclock)));
+app.MapGet("/api/host", () => new { dashboard_type = ".NET" });
+app.MapGet("/api/boards", (BoardRegistry boards) => Act(() => boards.Boards()));
+app.MapGet("/api/status", (string? board, BoardRegistry boards) => Act(() => board is null
+    ? new DashboardStatus(false, null, null, null, null, [], new string?[3], null)
+    : boards.Client(board).Status()));
+app.MapPost("/api/channels/{channel:int}", (int channel, string? board, ChannelRequest request, BoardRegistry boards) =>
+    Act(() => boards.Client(board).SetChannel(channel, request.FreqHz, request.Duty)));
+app.MapPost("/api/stop", (string? board, BoardRegistry boards) => Act(() => boards.Client(board).Stop()));
+app.MapPost("/api/bank", (string? board, BankRequest request, BoardRegistry boards) =>
+    Act(() => boards.Client(board).SetBank(request.Bank, request.Backend, request.Role)));
+app.MapPost("/api/i2c-address", (string? board, AddressRequest request, BoardRegistry boards) =>
+    Act(() => boards.Client(board).SetI2cAddress(request.Address)));
+app.MapPost("/api/clock-profile", (string? board, ClockRequest request, BoardRegistry boards) =>
+    Act(() => boards.Client(board).SetClockProfile(request.Profile, request.AcknowledgeOverclock)));
+app.MapPost("/api/save", (string? board, SaveRequest request, BoardRegistry boards) =>
+    Act(() => boards.Client(board).SaveConfiguration(request.AcknowledgeOverclock)));
+app.MapPost("/api/led", (string? board, LedRequest request, BoardRegistry boards) =>
+    Act(() => boards.Client(board).SetLed(request.On ?? throw new ArgumentException("on must be a boolean"))));
+app.MapPost("/api/reboot", (string? board, BoardRegistry boards) => Act(() =>
+{
+    boards.Client(board).Reboot();
+    return new { rebooting = true };
+}));
+app.MapPost("/api/save-reboot", (string? board, BootRequest request, BoardRegistry boards) => Act(() =>
+{
+    boards.Client(board).SaveAndReboot(request.Profile, request.Address,
+        request.Roles ?? throw new ArgumentException("roles must be a list of three bank roles"),
+        request.AcknowledgeOverclock);
+    return new { rebooting = true };
+}));
 
 app.Run();
 
@@ -51,3 +80,5 @@ record BankRequest(int Bank, int Backend, int Role);
 record AddressRequest(int Address);
 record ClockRequest(int Profile, bool AcknowledgeOverclock = false);
 record SaveRequest(bool AcknowledgeOverclock = false);
+record LedRequest(bool? On);
+record BootRequest(int Profile, int Address, int[]? Roles, bool AcknowledgeOverclock = false);

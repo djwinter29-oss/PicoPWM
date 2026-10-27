@@ -22,17 +22,29 @@ PicoPWM/
 
 ## Firmware Builds
 
+For CI artifacts, release tags, manual test publishing and repository setup, see
+[Builds and Publishing](docs/guides/releases.md).
+
 The helper builds into `build/<board>` and defaults to `pico`. The Pico SDK
-is always the `firmware/third_party/pico-sdk` submodule; set `CMAKE_GENERATOR` to
-pick a generator:
+is always the `firmware/third_party/pico-sdk` submodule. Fresh builds prefer Ninja
+when `ninja` is on `PATH`; otherwise CMake uses its platform default. Existing
+build directories retain their cached generator. Set `CMAKE_GENERATOR` to
+explicitly pick a generator:
 
 ```sh
 ./tools/firmware/build.sh --board pico
 ./tools/firmware/build.sh --board pico2
+CMAKE_GENERATOR=Ninja ./tools/firmware/build.sh --board pico
 ```
+
+To switch an existing Makefiles build to Ninja, move `build/<board>` aside first
+so CMake configures a fresh build directory. The helper does not delete build state.
 
 Prerequisites: `git`, `cmake`, a build tool and `arm-none-eabi-gcc` on `PATH`. The helper initializes the
 `firmware/third_party` submodules, including the pinned Pico SDK.
+
+Check the helper's generator selection without compiling firmware:
+`python3 tools/test/test_firmware_build.py`.
 
 Outputs: `build/<board>/pico_pwm.uf2` for USB flashing and `pico_pwm.elf` for debug tools. Other flash options are
 `picotool load pico_pwm.uf2` or SWD/OpenOCD with the `.elf`.

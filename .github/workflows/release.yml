@@ -22,6 +22,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Install formatting dependencies
         run: |
@@ -49,6 +51,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Fetch embedded-cli submodule
+        run: git submodule update --init firmware/third_party/embedded-cli
 
       - name: Install test dependencies
         run: |
@@ -80,6 +85,7 @@ jobs:
     needs: host-tools
     uses: ./.github/workflows/publish-dotnet.yml
     with:
+      release_build: true
       version: ${{ inputs.version || '' }}
 
   python-package:
@@ -112,7 +118,10 @@ jobs:
         run: |
           set -eu
           sed -i "s/^version = \".*\"/version = \"$VERSION\"/" host/python/pyproject.toml
-          cp -r host/web host/python/picopwm/web
+          mkdir -p host/python/picopwm/web
+          cp -R host/web/. host/python/picopwm/web/
+          cp host/webhid/css/webhid.css host/python/picopwm/web/css/
+          cp host/webhid/js/view.mjs host/webhid/js/device.mjs host/python/picopwm/web/js/
           python -m pip wheel --no-deps host/python --wheel-dir dist
 
       - name: Verify installed Python release
@@ -128,7 +137,9 @@ jobs:
           import os
           from picopwm.app import create_app
           assert version('picopwm-host') == os.environ['VERSION']
-          assert create_app(object()).test_client().get('/').status_code == 200
+          client = create_app(object()).test_client()
+          for asset in ('/', '/css/webhid.css', '/js/view.mjs', '/js/device.mjs', '/js/client.mjs'):
+              assert client.get(asset).status_code == 200, asset
           PY
 
       - name: Checksum Python wheel

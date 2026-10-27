@@ -23,6 +23,41 @@ void device_get_uid(uint8_t uid[8]);
 /** @brief Return the running system clock in Hz. */
 uint32_t device_system_clock_hz(void);
 
+/**
+ * @brief Schedule a board reboot from Core 0.
+ * @param delay_ms Delay allowing the transport to return its acknowledgement.
+ */
+void device_schedule_reboot(uint32_t delay_ms);
+
+/**
+ * @brief Read the identification LED state.
+ * @param on Receives the current state.
+ * @return True when the board has an LED and the destination is valid.
+ */
+bool device_led_read(bool *on);
+
+/**
+ * @brief Set the identification LED.
+ * @param on Requested LED state.
+ * @return True when the board has an LED.
+ */
+bool device_led_set(bool on);
+
+/** @brief Return static SRAM and reserved core-stack bytes, not live heap/stack usage. */
+uint32_t device_ram_reserved_bytes(void);
+
+/** @brief Return physical SRAM capacity in bytes. */
+uint32_t device_ram_total_bytes(void);
+
+/** @brief Return time since boot in seconds, wrapping after UINT32_MAX seconds. */
+uint32_t device_uptime_seconds(void);
+
+/** @brief Return internal die temperature in millidegrees Celsius, or INT32_MIN on invalid ADC conversion. */
+int32_t device_temperature_millic(void);
+
+/** @brief Return service-work wall time in basis points for Core 0 (0) or Core 1 (1). */
+uint16_t device_service_load(bool core1);
+
 /** @brief Role a bank is running with (what the last boot applied). */
 pwm_role_t device_bank_role(pwm_bank_t bank);
 
@@ -31,6 +66,17 @@ uint8_t device_i2c_address(void);
 
 /** @brief Return the logical PWM channel count exposed by the firmware. */
 uint8_t device_channel_count(void);
+
+/** @brief Board pin assignment; UINT8_MAX denotes an unavailable GPIO. */
+typedef struct {
+    uint8_t channels[PWM_DRIVER_CHANNEL_COUNT]; /**< GPIOs indexed by logical PWM channel. */
+    uint8_t i2c_sda;                            /**< I2C slave SDA GPIO. */
+    uint8_t i2c_scl;                            /**< I2C slave SCL GPIO. */
+    uint8_t led;                                /**< Board LED GPIO, or UINT8_MAX when absent. */
+} device_pin_assignment_t;
+
+/** @brief Copy the compiled board GPIO allocation into a caller-owned destination. */
+void device_get_pin_assignment(device_pin_assignment_t *pins);
 
 /**
  * @brief Read one logical channel snapshot.

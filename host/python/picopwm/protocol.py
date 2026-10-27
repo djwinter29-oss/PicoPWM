@@ -13,6 +13,9 @@ HID_PRODUCT_ID = 0x0003
 
 IDENTITY_REPORT = 1
 CONFIGURATION_REPORT = 2
+MEMORY_REPORT = 3
+RUNTIME_REPORT = 4
+PINS_REPORT = 5
 BANK_STATUS_REPORT = 10
 ACTION_REPORT = 20
 
@@ -21,6 +24,9 @@ BANK_COUNT = 3
 BANK_SIZE = 8
 IDENTITY_SIZE = 18
 CONFIGURATION_SIZE = 21
+MEMORY_SIZE = 9
+RUNTIME_SIZE = 13
+PINS_SIZE = 28
 BANK_STATUS_SIZE = 41
 ACTION_SIZE = 12
 
@@ -30,6 +36,9 @@ OP_SET_BANK = 3
 OP_SET_I2C_ADDRESS = 4
 OP_SAVE_CONFIG = 5
 OP_SET_CLOCK_PROFILE = 6
+OP_SAVE_REBOOT = 7
+OP_SET_LED = 8
+OP_REBOOT = 9
 
 FLAG_CONFIRM_SAVE = 1
 FLAG_ACK_OVERCLOCK = 2
@@ -58,7 +67,7 @@ def decode_identity(payload: bytes) -> dict[str, Any]:
     if product_id != HID_PRODUCT_ID:
         raise ProtocolError(f"unsupported product ID 0x{product_id:04x}")
     mcu, channels, capabilities, profiles = payload[14:18]
-    if (mcu not in (1, 2) or channels != CHANNEL_COUNT or capabilities & ~3 or profiles & ~0x1F
+    if (mcu not in (1, 2) or channels != CHANNEL_COUNT or profiles & ~0x1F
             or bool(capabilities & 2) != bool(profiles) or (profiles and not profiles & 2)):
         raise ProtocolError("invalid identity capabilities")
     return {
@@ -68,6 +77,13 @@ def decode_identity(payload: bytes) -> dict[str, Any]:
         "mcu": {1: "RP2040", 2: "RP2350"}[mcu],
         "channel_count": channels,
         "can_save": bool(capabilities & 1),
+        "can_save_reboot": bool(capabilities & 4),
+        "can_set_led": bool(capabilities & 8),
+        "can_reboot": bool(capabilities & 16),
+        "can_read_memory": bool(capabilities & 32),
+        "can_read_runtime": bool(capabilities & 64),
+        "can_read_pins": bool(capabilities & 128),
+        "board_model": {1: "Pico", 2: "Pico 2"}[mcu],
         "can_set_clock": bool(capabilities & 2),
         "clock_profile_mask": profiles,
     }
@@ -93,7 +109,33 @@ def decode_configuration(payload: bytes) -> dict[str, Any]:
         "target": _bank_configuration(payload, 8),
         "clock_profile": profile,
         "system_clock_hz": clock,
+        "led_on": bool(payload[15] & 1),
     }
+
+
+def decode_memory(payload: bytes) -> dict[str, int]:
+    _check(payload, MEMORY_SIZE, "memory report")
+    reserved, total = struct.unpack_from("<II", payload, 1)
+    if not total or reserved > total:
+        raise ProtocolError("invalid memory report")
+    return {"ram_reserved_bytes": reserved, "ram_total_bytes": total}
+
+
+def decode_runtime(payload: bytes) -> dict[str, Any]:
+    _check(payload, RUNTIME_SIZE, "runtime report")
+    uptime, temperature, core0, core1 = struct.unpack_from("<IiHH", payload, 1)
+    if core0 > 10000 or core1 > 10000:
+        raise ProtocolError("invalid runtime service load")
+    return {"uptime_seconds": uptime, "temperature_c": None if temperature == -2147483648 else temperature / 1000,
+            "core0_load": core0 / 100, "core1_load": core1 / 100}
+
+
+def decode_pins(payload: bytes) -> dict[str, Any]:
+    _check(payload, PINS_SIZE, "pin assignment report")
+    if any(pin > 47 and pin != 255 for pin in payload[1:]):
+        raise ProtocolError("invalid pin assignment report")
+    pins = [None if pin == 255 else pin for pin in payload[1:]]
+    return {"channels": pins[:24], "i2c_sda": pins[24], "i2c_scl": pins[25], "led": pins[26]}
 
 
 def decode_bank_status(payload: bytes, bank: int) -> list[dict[str, int]]:

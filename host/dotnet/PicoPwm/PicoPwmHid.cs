@@ -7,7 +7,8 @@ public sealed class DeviceException(string message) : Exception(message);
 
 public sealed record DashboardStatus(bool Connected, Identity? Identity, string? IdentityError,
     Configuration? Configuration, string? ConfigurationError, ChannelState[] Channels, string?[] BankErrors,
-    string? Error);
+    string? Error, Protocol.Runtime? Runtime = null, string? RuntimeError = null,
+    Pins? Pins = null, string? PinsError = null);
 
 /// <summary>Thread-safe client for one board; opens lazily and reopens after an I/O failure.</summary>
 public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sleep = null, Func<long>? clockMs = null)
@@ -19,6 +20,7 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
     private IFeatureDevice? device;
     private Identity? identity;
     private Configuration? configuration;
+    private Pins? pins;
     private byte transactionId;
 
     public void Close()
@@ -29,6 +31,7 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
             device = null;
             identity = null;
             configuration = null;
+            pins = null;
             try { closing?.Dispose(); } catch (IOException) { }
         }
     }
@@ -37,7 +40,17 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
 
     private byte[] Read(byte report, int size) => Device.Get(report, size);
 
-    private Identity EnsureIdentity() => identity ??= DecodeIdentity(Read(IdentityReport, IdentitySize));
+    private Identity EnsureIdentity()
+    {
+        if (identity is not null) return identity;
+        var current = DecodeIdentity(Read(IdentityReport, IdentitySize));
+        if (current.CanReadMemory)
+        {
+            var memory = DecodeMemory(Read(MemoryReport, MemorySize));
+            current = current with { RamReservedBytes = memory.RamReservedBytes, RamTotalBytes = memory.RamTotalBytes };
+        }
+        return identity = current;
+    }
 
     public DashboardStatus Status()
     {
@@ -47,13 +60,24 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
                 .ToArray();
             var bankErrors = new string?[BankCount];
             string? configurationError = null;
+            Protocol.Runtime? runtime = null;
+            string? runtimeError = null;
+            string? pinsError = null;
             try
             {
                 var current = EnsureIdentity();
-                if (configuration is null)
+                if (current.CanReadPins)
                 {
-                    try { configuration = DecodeConfiguration(Read(ConfigurationReport, ConfigurationSize)); }
-                    catch (InvalidDataException error) { configurationError = error.Message; }
+                    try { pins ??= DecodePins(Read(PinsReport, PinsSize)); }
+                    catch (InvalidDataException error) { pinsError = error.Message; }
+                }
+                configuration = null;
+                try { configuration = DecodeConfiguration(Read(ConfigurationReport, ConfigurationSize)); }
+                catch (InvalidDataException error) { configurationError = error.Message; }
+                if (current.CanReadRuntime)
+                {
+                    try { runtime = DecodeRuntime(Read(RuntimeReport, RuntimeSize)); }
+                    catch (InvalidDataException error) { runtimeError = error.Message; }
                 }
                 for (var bank = 0; bank < BankCount; bank++)
                 {
@@ -64,7 +88,8 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
                     }
                     catch (InvalidDataException error) { bankErrors[bank] = error.Message; }
                 }
-                return new(true, current, null, configuration, configurationError, channels, bankErrors, null);
+                return new(true, current, null, configuration, configurationError, channels, bankErrors, null,
+                    runtime, runtimeError, pins, pinsError);
             }
             catch (InvalidDataException error)
             {
@@ -83,13 +108,15 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
     private void Perform(byte operation, byte channel = 0, uint arg0 = 0, byte arg1 = 0, byte flags = 0)
     {
         var current = EnsureIdentity();
-        if ((operation == OpSaveConfig && !current.CanSave) || (operation == OpSetClockProfile && !current.CanSetClock))
+        if ((operation == OpSaveConfig && !current.CanSave) || (operation == OpSetClockProfile && !current.CanSetClock)
+            || (operation == OpSaveReboot && !current.CanSaveReboot) || (operation == OpSetLed && !current.CanSetLed)
+            || (operation == OpReboot && !current.CanReboot))
             throw new DeviceException("the firmware does not advertise this capability");
         if (DecodeActionResult(Read(ActionReport, ActionSize)).Status == StatusPending)
             throw new DeviceException("a previous command is still pending");
         transactionId = (byte)(transactionId % 255 + 1);
         Device.Set(ActionReport, EncodeActionRequest(transactionId, operation, channel, arg0, arg1, flags));
-        var deadline = clockMs() + (long)(operation == OpSaveConfig ? SaveTimeout : ActionTimeout).TotalMilliseconds;
+        var deadline = clockMs() + (long)(operation is OpSaveConfig or OpSaveReboot ? SaveTimeout : ActionTimeout).TotalMilliseconds;
         for (var first = true; ; first = false)
         {
             var result = DecodeActionResult(Read(ActionReport, ActionSize));
@@ -146,6 +173,55 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
     }
 
     public DashboardStatus Stop() => Run(false, OpStop);
+
+    public DashboardStatus SetLed(bool on) => Run(false, OpSetLed, arg0: on ? 1u : 0u);
+
+    public void Reboot()
+    {
+        lock (gate) RunReboot(OpReboot);
+    }
+
+    private void RunReboot(byte operation, byte flags = 0)
+    {
+        try { Perform(operation, flags: flags); }
+        catch (Exception error) when (error is IOException or InvalidOperationException or InvalidDataException
+            or UnauthorizedAccessException or NotSupportedException or TimeoutException)
+        {
+            throw new DeviceException($"HID transfer failed; outcome is unconfirmed: {error.Message}");
+        }
+        finally { Close(); }
+    }
+
+    public void SaveAndReboot(int profile, int address, int[] roles, bool acknowledgeOverclock)
+    {
+        lock (gate)
+        {
+            var current = EnsureIdentity();
+            if (!current.CanSaveReboot || !current.CanSetClock)
+                throw new DeviceException("update firmware to enable Save and Reboot");
+            if (profile is < 0 or > 4 || (current.ClockProfileMask & 1 << profile) == 0)
+                throw new ArgumentException("choose a clock profile the firmware advertises");
+            if (address is < 8 or > 119 || roles.Length != 3 || roles.Any(role => role is < 0 or > 1))
+                throw new ArgumentException("expected I2C address 8-119 and three bank roles");
+            if (profile > 1 && !acknowledgeOverclock)
+                throw new ArgumentException("acknowledge the overclock first");
+            try
+            {
+                var flags = profile > 1 ? FlagAckOverclock : (byte)0;
+                Perform(OpSetClockProfile, arg0: (uint)profile, flags: flags);
+                Perform(OpSetI2cAddress, arg0: (uint)address);
+                for (byte bank = 0; bank < 3; bank++)
+                    Perform(OpSetBank, bank, (uint)(bank | roles[bank] << 8));
+                RunReboot(OpSaveReboot, (byte)(FlagConfirmSave | flags));
+            }
+            catch (Exception error) when (error is DeviceException or IOException or InvalidOperationException
+                or InvalidDataException or UnauthorizedAccessException or NotSupportedException or TimeoutException)
+            {
+                Close();
+                throw new DeviceException($"Save and Reboot did not complete; target settings may have changed: {error.Message}");
+            }
+        }
+    }
 
     public DashboardStatus SetBank(int bank, int backend, int role)
     {

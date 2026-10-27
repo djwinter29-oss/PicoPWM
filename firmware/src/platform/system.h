@@ -27,4 +27,19 @@ void system_watchdog_kick(void);
 /** @brief Reboot the board through the watchdog reset path. */
 void system_reboot(void);
 
+/**
+ * @brief Schedule a Core 0 reboot while continuing to service USB until the deadline.
+ * @param delay_ms Milliseconds before reboot, allowing the host to receive its result.
+ */
+void system_schedule_reboot(uint32_t delay_ms);
+
+/** @brief Account Core 0 service work, excluding its idle sleep, in microseconds. */
+void system_record_service(uint32_t elapsed_us);
+
+/** @brief Return Core 0 service wall time in basis points of the last measurement window. */
+uint16_t system_service_load(void);
+
+/** @brief Read the internal die-temperature estimate in millidegrees Celsius; not calibrated ambient temperature. */
+int32_t system_temperature_millic(void);
+
 #endif

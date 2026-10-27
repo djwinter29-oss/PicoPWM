@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DEVICE_FILTER, OPERATION, PicoPwmWebHid, decodeActionResult, decodeBankStatus, decodeConfiguration,
-  decodeIdentity, encodeActionRequest, matchesPicoPwm,
+  decodeIdentity, decodePins, decodeRuntime, encodeActionRequest, matchesPicoPwm,
 } from "../js/device.mjs";
 
 const view = bytes => new DataView(Uint8Array.from(bytes).buffer);
@@ -72,14 +72,17 @@ test("device filter requires the vendor usage page", () => {
   assert.ok(!matchesPicoPwm({ vendorId: 0xcafe, productId: 0x4012, collections: [{ usagePage: 1 }] }));
 });
 
-function fakeDevice({ acceptSet = true, pendingPolls = 1 } = {}) {
+function fakeDevice({ acceptSet = true, pendingPolls = 1, capabilities = 3 } = {}) {
   const device = {
     vendorId: 0xcafe, productId: 0x4012, collections: [{ usagePage: 0xff00 }], opened: false,
     sent: [], result: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], pending: 0,
     async open() { this.opened = true; },
     async close() { this.opened = false; },
     async receiveFeatureReport(id) {
-      if (id === 1) return view(identityBytes());
+      if (id === 1) return view(identityBytes({ 16: capabilities }));
+      if (id === 3) return view([1, 0, 0x80, 0, 0, 0, 0x20, 4, 0]);
+      if (id === 4) return view([1, 123, 0, 0, 0, 0x78, 0xEC, 0xFF, 0xFF, 100, 0, 0xC4, 9]);
+      if (id === 5) return view([1, ...Array.from({ length: 24 }, (_, channel) => 47 - channel), 2, 3, 255]);
       if (id === 2) return view(configurationBytes());
       if (id === 20) {
         const result = [...this.result];
@@ -102,6 +105,84 @@ function fakeDevice({ acceptSet = true, pendingPolls = 1 } = {}) {
   return device;
 }
 
+test("save and reboot submits all edited fields before one confirmed save", async () => {
+  const device = fakeDevice({ capabilities: 7, pendingPolls: 0 });
+  const client = await connected(device);
+  assert.equal(client.state.dashboard.identity.can_save_reboot, true);
+  await client.saveAndReboot({ clockProfile: 2, i2cAddress: 64, roles: [1, 0, 1] }, true);
+  assert.deepEqual(device.sent.map(request => request[2]), [6, 4, 3, 3, 3, 7]);
+  assert.equal(device.sent[0][9], 2);
+  assert.equal(device.sent[1][4], 64);
+  assert.deepEqual(device.sent.slice(2, 5).map(request => [request[3], request[4], request[5]]),
+    [[0, 0, 1], [1, 1, 0], [2, 2, 1]]);
+  assert.equal(device.sent[5][9], 3);
+  assert.equal(client.state.phase, "disconnected");
+  assert.match(client.state.message, /rebooting/);
+});
+
+test("board LED and reboot are capability gated and reboot never saves", async () => {
+  const legacy = await connected(fakeDevice());
+  await assert.rejects(legacy.setLed(true), /capability/);
+  await assert.rejects(legacy.reboot(), /capability/);
+  const device = fakeDevice({ capabilities: 31, pendingPolls: 0 });
+  const client = await connected(device);
+  await client.setLed(true);
+  await client.setLed(false);
+  await assert.rejects(client.setLed(1), /LED state/);
+  await client.reboot();
+  assert.deepEqual(device.sent.map(request => request[2]), [8, 8, 9]);
+  assert.deepEqual(device.sent.map(request => request[4]), [1, 0, 0]);
+  assert.equal(device.sent[2][9], 1);
+  assert.equal(client.state.phase, "disconnected");
+  assert.match(client.state.message, /without saving/);
+  const config = configurationBytes();
+  config[15] = 1;
+  assert.equal(decodeConfiguration(view(config)).led_on, true);
+});
+
+test("identity reads firmware RAM only when advertised", async () => {
+  const client = await connected(fakeDevice({ capabilities: 63 }));
+  assert.equal(client.state.dashboard.identity.ram_reserved_bytes, 32768);
+  assert.equal(client.state.dashboard.identity.ram_total_bytes, 270336);
+  assert.equal(client.state.dashboard.identity.board_model, "Pico 2");
+  const legacy = await connected(fakeDevice());
+  assert.equal(legacy.state.dashboard.identity.ram_total_bytes, undefined);
+});
+
+test("runtime decodes signed temperature, uptime, and exact service-load percentages", async () => {
+  const bytes = [1, 123, 0, 0, 0, 0x78, 0xEC, 0xFF, 0xFF, 100, 0, 0xC4, 9];
+  assert.deepEqual(decodeRuntime(view(bytes)),
+    { uptime_seconds: 123, temperature_c: -5, core0_load: 1, core1_load: 25 });
+  const invalid = [...bytes];
+  invalid[9] = 0xff;
+  invalid[10] = 0xff;
+  assert.throws(() => decodeRuntime(view(invalid)), /Invalid runtime/);
+  assert.throws(() => decodeRuntime(view(bytes.slice(1))), /exactly 13/);
+  const missingTemp = [...bytes];
+  missingTemp.splice(5, 4, 0, 0, 0, 0x80);
+  assert.equal(decodeRuntime(view(missingTemp)).temperature_c, null);
+  const client = await connected(fakeDevice({ capabilities: 127 }));
+  assert.equal(client.state.dashboard.runtime.uptime_seconds, 123);
+  assert.equal(client.state.dashboard.runtime_error, null);
+  assert.equal((await connected(fakeDevice())).state.dashboard.runtime, null);
+});
+
+test("save and reboot validates before writing and stops on failures", async () => {
+  const legacy = fakeDevice({ pendingPolls: 0 });
+  const legacyClient = await connected(legacy);
+  const settings = { clockProfile: 2, i2cAddress: 64, roles: [1, 0, 1] };
+  await assert.rejects(legacyClient.saveAndReboot(settings, true), /Update the board firmware/);
+  assert.equal(legacy.sent.length, 0);
+  const device = fakeDevice({ capabilities: 7, pendingPolls: 0, acceptSet: false });
+  const client = await connected(device);
+  await assert.rejects(client.saveAndReboot(settings, false), /Acknowledge/);
+  await assert.rejects(client.saveAndReboot({ ...settings, i2cAddress: 0 }, true), /I2C address/);
+  assert.equal(device.sent.length, 0);
+  await assert.rejects(client.saveAndReboot(settings, true), /not confirmed/);
+  assert.equal(device.sent.length, 1);
+  assert.equal(client.state.phase, "connected");
+});
+
 async function connected(device) {
   const hid = { addEventListener() {}, requestDevice: async () => [device] };
   const client = new PicoPwmWebHid(hid);
@@ -119,6 +200,35 @@ test("connect reads identity, configuration, and all 24 channels", async () => {
   assert.equal(dashboard.channels[23].channel, 23);
   await client.disconnect();
   assert.equal(client.state.phase, "disconnected");
+});
+
+test("pin reports are capability gated, validated, and cleared on disconnect", async () => {
+  const bytes = [1, ...Array.from({ length: 24 }, (_, channel) => channel), 26, 27, 255];
+  assert.equal(decodePins(view(bytes)).led, null);
+  assert.equal(decodePins(view(bytes)).channels[23], 23);
+  assert.throws(() => decodePins(view(bytes.slice(1))), /exactly 28/);
+  const invalid = [...bytes]; invalid[1] = 48;
+  assert.throws(() => decodePins(view(invalid)), /Invalid pin/);
+  const device = fakeDevice({ capabilities: 255 });
+  const client = await connected(device);
+  assert.equal(client.state.dashboard.pins.channels[0], 47);
+  assert.equal(client.state.dashboard.pins.i2c_sda, 2);
+  await client.disconnect();
+  assert.equal(client.state.dashboard.pins, null);
+  const legacy = fakeDevice();
+  const original = legacy.receiveFeatureReport.bind(legacy);
+  legacy.receiveFeatureReport = id => {
+    assert.notEqual(id, 5);
+    return original(id);
+  };
+  assert.equal((await connected(legacy)).state.dashboard.pins, null);
+  const bad = fakeDevice({ capabilities: 255 });
+  const read = bad.receiveFeatureReport.bind(bad);
+  bad.receiveFeatureReport = id => id === 5 ? view(invalid) : read(id);
+  const failed = await connected(bad);
+  assert.equal(failed.state.dashboard.pins, null);
+  assert.match(failed.state.dashboard.pins_error, /Invalid pin/);
+  assert.ok(failed.state.dashboard.identity);
 });
 
 test("setChannel sends a nonzero transaction and waits past PENDING", async () => {

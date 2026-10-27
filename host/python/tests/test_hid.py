@@ -1,4 +1,5 @@
 import pytest
+import struct
 
 from picopwm import protocol as p
 from picopwm.app import create_app
@@ -16,21 +17,25 @@ class FakeDevice:
         self.mode = mode
         self.result = bytes([1, 0, 0, 0] + [0] * 8)
         self.sent = []
+        self.identity = IDENTITY
+        self.closed = False
 
     def get_feature_report(self, report_id, length):
-        payload = {1: IDENTITY, 2: CONFIGURATION, 20: self.result}.get(report_id, BANK)
+        payload = {1: self.identity, 2: CONFIGURATION, 3: struct.pack("<BII", 1, 120000, 532480),
+                   4: struct.pack("<BIiHH", 1, 123, 22900, 1170, 6720),
+                   5: bytes([1, *range(24), 26, 27, 255]), 20: self.result}.get(report_id, BANK)
         return bytes([report_id]) + payload
 
     def send_feature_report(self, data):
         self.sent.append(bytes(data))
         if self.mode == "drop":
             return len(data)
-        status = 6 if self.mode == "pending" else 0
+        status = 6 if self.mode == "pending" else 2 if self.mode == "fail-bank" and data[3] == 3 else 0
         self.result = bytes([1, data[2], data[3], status] + [0] * 8)
         return len(data)
 
     def close(self):
-        pass
+        self.closed = True
 
 
 def make(mode="ok"):
@@ -45,6 +50,9 @@ def test_decoders():
     config = p.decode_configuration(CONFIGURATION)
     assert config["system_clock_hz"] == 150_000_000
     assert p.decode_bank_status(BANK, 1)[0] == {"channel": 8, "freq_hz": 1000, "duty": 50}
+    reboot_identity = bytearray(IDENTITY)
+    reboot_identity[16] = 127
+    assert p.decode_identity(bytes(reboot_identity))["can_save"]
 
 
 def test_decoder_rejects_bad_layout():
@@ -109,3 +117,149 @@ def test_api():
     assert http.post("/api/stop", json={}).status_code == 200
     _, dropping = make("drop")
     assert create_app(dropping).test_client().post("/api/stop", json={}).status_code == 409
+
+
+def modern():
+    device, client = make()
+    identity = bytearray(IDENTITY)
+    identity[16] = 255
+    device.identity = bytes(identity)
+    return device, client
+
+
+def test_telemetry_and_optional_report_validation():
+    _, client = modern()
+    state = client.status()
+    assert state["identity"]["board_model"] == "Pico 2"
+    assert state["identity"]["ram_total_bytes"] == 532480
+    assert state["runtime"] == {"uptime_seconds": 123, "temperature_c": 22.9,
+                                "core0_load": 11.7, "core1_load": 67.2}
+    assert state["configuration"]["led_on"]
+    assert state["pins"] == {"channels": list(range(24)), "i2c_sda": 26, "i2c_scl": 27, "led": None}
+    assert p.decode_identity(bytes([*IDENTITY[:16], 255, IDENTITY[17]]))["can_read_pins"]
+    with pytest.raises(p.ProtocolError):
+        p.decode_pins(bytes([1, 48, *range(23), 26, 27, 25]))
+    with pytest.raises(p.ProtocolError):
+        p.decode_pins(bytes(27))
+    assert p.decode_runtime(struct.pack("<BIiHH", 1, 1, -2147483648, 0, 10000))["temperature_c"] is None
+    with pytest.raises(p.ProtocolError):
+        p.decode_runtime(struct.pack("<BIiHH", 1, 1, 0, 0, 10001))
+    with pytest.raises(p.ProtocolError):
+        p.decode_memory(struct.pack("<BII", 1, 100, 99))
+    _, legacy = make()
+    assert legacy.status()["runtime"] is None
+    assert legacy.status()["pins"] is None
+    with pytest.raises(DeviceError, match="capability"):
+        legacy.set_led(True)
+
+
+def test_save_and_reboot_validates_before_writes_and_orders_commands():
+    device, client = modern()
+    with pytest.raises(ValueError):
+        client.save_and_reboot(2, 64, [0, 1, 1], False)
+    with pytest.raises(ValueError):
+        client.save_and_reboot(0, 120, [0, 1, 1], False)
+    with pytest.raises(ValueError):
+        client.save_and_reboot(0, 64, [0, True, 1], False)
+    assert not device.sent
+    assert client.save_and_reboot(2, 64, [0, 1, 1], True) == {"rebooting": True}
+    assert [data[3] for data in device.sent] == [6, 4, 3, 3, 3, 7]
+    assert device.sent[-1][10] == 3
+    assert device.closed
+
+
+def test_pin_report_errors_are_explicit_and_disconnect_clears_the_map():
+    device, client = modern()
+    original = device.get_feature_report
+
+    def invalid_pins(report_id, length):
+        if report_id == p.PINS_REPORT:
+            return bytes([p.PINS_REPORT, 1, 48, *range(23), 26, 27, 25])
+        return original(report_id, length)
+
+    device.get_feature_report = invalid_pins
+    state = client.status()
+    assert state["connected"] and state["pins"] is None
+    assert "invalid pin" in state["pins_error"]
+    device.get_feature_report = original
+    assert client.status()["pins"]["channels"][23] == 23
+
+    def unplugged(report_id, length):
+        raise OSError("device unplugged")
+
+    device.get_feature_report = unplugged
+    state = client.status()
+    assert not state["connected"] and state["pins"] is None
+
+def test_save_stops_at_first_failure_and_reboot_never_saves():
+    device, client = modern()
+    device.mode = "fail-bank"
+    with pytest.raises(DeviceError, match="target settings may have changed"):
+        client.save_and_reboot(0, 64, [0, 1, 1], False)
+    assert [data[3] for data in device.sent] == [6, 4, 3]
+    device, client = modern()
+    client.reboot()
+    assert [data[3] for data in device.sent] == [9]
+
+
+def test_board_registry_and_routes_keep_selection_pinned():
+    from picopwm.boards import BoardRegistry
+
+    discovered = [{"path": b"/dev/a", "serial_number": "A", "product_string": "PicoPWM"},
+                  {"path": b"/dev/b", "serial_number": "B", "product_string": "PicoPWM"}]
+    devices = {}
+
+    def factory(board):
+        devices[board["serial_number"]] = modern()
+        return devices[board["serial_number"]][1]
+
+    registry = BoardRegistry(discover=lambda: discovered, factory=factory, serial="B")
+    http = create_app(registry=registry).test_client()
+    scan = http.get("/api/boards").json
+    a, b = [board["id"] for board in scan["boards"]]
+    assert scan["default_board_id"] == b
+    assert not http.get("/api/status").json["connected"]
+    assert http.get("/api/status?board=unknown").status_code == 409
+    assert http.get(f"/api/status?board={a}").json["runtime"]["temperature_c"] == 22.9
+    assert http.post(f"/api/led?board={b}", json={"on": True}).status_code == 200
+    assert devices["A"][0].sent == []
+    assert devices["B"][0].sent[-1][3] == 8
+    assert http.post(f"/api/led?board={b}", json={"on": 1}).status_code == 400
+    assert http.post(f"/api/save-reboot?board={b}", json={
+        "profile": 0, "address": 64, "roles": [0, 1, 1]}).status_code == 200
+    assert http.post("/api/reboot", json={}).status_code == 409
+    assert http.get("/api/host").json["dashboard_type"] == "Python"
+    for path in ["/", "/css/webhid.css", "/js/view.mjs", "/js/device.mjs", "/js/client.mjs"]:
+        assert http.get(path).status_code == 200
+    discovered[0]["path"] = b"/dev/new"
+    assert registry.boards()["boards"][0]["id"] == a
+    assert registry.client(a) is devices["A"][1]
+    discovered[:] = []
+    assert not registry.boards()["boards"]
+    assert registry.client(a) is devices["A"][1]
+    registry.close()
+    assert devices["A"][0].closed
+
+
+def test_scan_errors_and_duplicate_serials_are_explicit():
+    from picopwm.boards import BoardRegistry
+
+    registry = BoardRegistry(discover=lambda: [{"path": b"a", "serial_number": "same"},
+                                              {"path": b"b", "serial_number": "same"}])
+    assert "duplicate" in create_app(registry=registry).test_client().get("/api/boards").json["error"]
+
+
+def test_discovery_matches_vendor_usage_or_constrained_picouart_style_fallback(monkeypatch):
+    from picopwm import transport
+    from types import SimpleNamespace
+
+    devices = [
+        {"path": b"usage", "usage_page": p.USAGE_PAGE, "usage": p.USAGE},
+        {"path": b"fallback", "product_string": "PicoPWM USB CDC HID", "interface_number": 2},
+        {"path": b"interface", "interface_number": 2},
+        {"path": b"wrong-usage", "usage_page": 1, "usage": 1, "interface_number": 2},
+        {"path": b"wrong-interface", "product_string": "PicoPWM USB CDC HID", "interface_number": 0},
+        {"path": b"unknown", "product_string": "other", "interface_number": 2},
+    ]
+    monkeypatch.setattr(transport, "hid", SimpleNamespace(enumerate=lambda vid, pid: devices))
+    assert [info["path"] for info in transport.enumerate_devices()] == [b"usage", b"fallback", b"interface"]

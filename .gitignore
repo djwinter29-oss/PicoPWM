@@ -11,6 +11,8 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+/tools/hil/*.egg-info/
+/tools/hil/src/*.egg-info/
 
 # .NET build artifacts
 host/dotnet/**/bin/

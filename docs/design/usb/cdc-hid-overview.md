@@ -5,6 +5,10 @@ PicoPWM exposes one composite USB device with two host-facing interface types:
 - one CDC ACM serial port for the interactive text shell
 - one vendor HID interface for identity, configuration, per-bank channel status, and narrow management actions
 
+The device advertises USB 2.0 and uses the standard composite, CDC ACM, and HID
+drivers on Windows. It does not expose a BOS descriptor; WebHID uses the HID
+interface and does not require WebUSB descriptors.
+
 Use CDC for interactive control. Use HID for browser-based WebHID tools and other HID-capable clients that need
 structured reads. I2C remains the binary controller interface. HID is not a second control model: it reuses the
 shared channel IDs, capability checks, and result codes.
@@ -38,7 +42,10 @@ CDC carries the text shell only; its line behavior is unchanged by HID. Commands
 
 HID carries no shell traffic. It reports device identity, the running and target configuration, and the realized
 state of every channel in three per-bank reports, and it accepts a small set of actions. Configuration changes take
-effect only after save and a restart performed by the user. Board LED and reboot control are out of scope. The
+effect only after save and restart. Capability-gated save-and-reboot combines persistence
+with a restart after the host reads success. Capability-gated standalone reboot
+requires confirmation and never saves; identification LED control is immediate,
+with state readback in configuration report 2. The
 [HID Report Reference](hid-report-reference.md) lists the actions and their rules.
 
 HID readback is a snapshot of

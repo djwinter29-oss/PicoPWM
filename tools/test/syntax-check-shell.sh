@@ -3,6 +3,7 @@ set -eu
 
 for script in \
     tools/host/run-dotnet.sh \
+    tools/host/run-hil.sh \
     tools/host/run-python.sh \
     tools/host/run-webhid.sh \
     tools/firmware/build.sh \

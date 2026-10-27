@@ -18,6 +18,9 @@ done
 printf '%s\n' '=== Python host tests ==='
 "$PYTHON" -m pytest -q "$REPO_ROOT/host/python/tests"
 
+printf '%s\n' '=== HIL runner unit tests (no hardware) ==='
+"$PYTHON" -m unittest discover -s "$REPO_ROOT/tools/hil/tests" -p 'test_*.py'
+
 printf '%s\n' '=== Web and WebHID tests ==='
 "$NODE" --test "$REPO_ROOT"/host/web/tests/*.test.mjs "$REPO_ROOT"/host/webhid/tests/*.test.mjs
 

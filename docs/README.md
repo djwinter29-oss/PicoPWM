@@ -9,6 +9,7 @@ Task-oriented information for building, configuring, connecting, and operating
 PicoPWM:
 
 - [Firmware Configuration](guides/configuration.md)
+- [Builds and Publishing](guides/releases.md)
 - [Pinout](guides/pinout.md)
 - [Control Interfaces](guides/control/README.md)
 - [USB CDC CLI](guides/control/usb_cdc_cli.md)
@@ -26,3 +27,11 @@ Architecture and implementation details for contributors:
 - [Monitor designs](design/monitor/)
 - [CDC/HID Overview](design/usb/cdc-hid-overview.md) and
   [HID Report Reference](design/usb/hid-report-reference.md)
+
+## Tests
+
+Hardware setup and recorded validation results:
+
+- [HIL Test Connections](tests/hil-test-connection.md)
+- [HIL Test Plan](tests/hil-test-plan.md)
+- [HIL Test Records](tests/records/README.md)

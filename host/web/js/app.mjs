@@ -1,111 +1,195 @@
-import { renderDashboard, updateReportAge } from "./view.mjs?v=1";
+import { CLOCK_PROFILES, ROLES } from "./device.mjs?v=6";
+import { renderBootEdits, renderDashboard, updateReportAge } from "./view.mjs?v=12";
+import { PicoPwmHost, request } from "./client.mjs?v=1";
 
 const $ = selector => document.querySelector(selector);
-const connection = $("#connection");
-const statusMessage = $("#status-message");
-const saveButton = $("#save-configuration");
+const boardSelect = $("#board-select");
+const rescanButton = $("#rescan-boards");
 const saveDialog = $("#save-dialog");
+const rebootDialog = $("#reboot-dialog");
+const channelDialog = $("#channel-dialog");
 const saveAcknowledgement = $("#save-unsafe-ack");
-const confirmSave = $("#confirm-save");
-const controls = ["#apply-channel", "#stop-all", "#apply-bank", "#apply-i2c", "#set-channel", "#set-freq",
-  "#set-duty", "#bank-index", "#bank-backend", "#bank-role", "#i2c-input"].map($);
+let editingChannel = null;
+let channelApplying = false;
+let pendingSettings = null;
+let scanning = false;
+let scanError = null;
 
-const state = { dashboard: { connected: false, channels: [], bank_errors: [], updated_at: null }, message: "Waiting for the host service", error: null, busy: false };
-
-function render() {
-  const dashboard = state.dashboard;
-  renderDashboard(dashboard);
-  const ready = dashboard.connected && dashboard.identity && dashboard.configuration && !state.busy;
-  connection.dataset.state = dashboard.connected ? "connected" : "disconnected";
-  $("#connection-label").textContent = dashboard.connected ? "Connected" : "Disconnected";
-  for (const control of controls) control.disabled = !ready;
-  const clockReady = ready && dashboard.identity.can_set_clock;
-  $("#apply-clock").disabled = !clockReady;
-  $("#clock-profile-select").disabled = !clockReady;
-  $("#clock-ack").disabled = !clockReady || Number($("#clock-profile-select").value) <= 1;
-  saveButton.hidden = !dashboard.identity?.can_save;
-  saveButton.disabled = !ready;
-  if (!dashboard.connected && saveDialog.open) saveDialog.close();
-  statusMessage.textContent = state.error ?? state.message;
-  statusMessage.parentElement.dataset.error = String(Boolean(state.error));
+function render(state) {
+  const data = state.dashboard;
+  const connected = ["connected", "writing"].includes(state.phase);
+  const ready = state.phase === "connected" && data.identity && data.configuration;
+  renderDashboard(data, Boolean(ready));
+  $("#connection").dataset.state = connected ? "connected" : "disconnected";
+  $("#connection-label").textContent = connected ? "Connected" : "Disconnected";
+  boardSelect.disabled = state.phase === "writing" || scanning || !boardSelect.options.length
+    || ![...boardSelect.options].some(option => option.value);
+  rescanButton.disabled = state.phase === "writing" || scanning;
+  for (const selector of ["#hw-role", "#pio-role", "#sw-role", "#i2c-input"])
+    $(selector).disabled = !ready;
+  $("#clock-profile-select").disabled = !ready || !data.identity.can_set_clock;
+  const help = !ready ? "Select a board and read its configuration to enable Save and Reboot."
+    : !data.identity.can_save_reboot ? "Update board firmware to enable Save and Reboot."
+      : "Edit the boot settings, then save and reboot to apply them.";
+  $("#settings-help").textContent = help;
+  $("#save-configuration").disabled = !ready || !data.identity.can_save_reboot;
+  $("#save-configuration").title = help;
+  $("#reboot-board").disabled = !ready || !data.identity.can_reboot;
+  const ledAvailable = Boolean(data.identity?.can_set_led && data.configuration);
+  const ledOn = ledAvailable && data.configuration.led_on;
+  $("#toggle-led").disabled = !ready || !ledAvailable;
+  $("#toggle-led").textContent = `Board LED: ${ledAvailable ? ledOn ? "On" : "Off" : "--"}`;
+  $("#toggle-led").dataset.state = ledAvailable ? ledOn ? "on" : "off" : "unknown";
+  $("#toggle-led").setAttribute("aria-pressed", String(Boolean(ledOn)));
+  $("#toggle-led").title = ledAvailable ? `Turn board LED ${ledOn ? "off" : "on"}`
+    : "Board LED unavailable; update firmware if unsupported";
+  $("#apply-channel").disabled = !ready || channelApplying;
+  $("#channel-frequency").disabled = channelApplying;
+  $("#channel-duty").disabled = channelApplying;
+  if (!connected && channelDialog.open) channelDialog.close();
+  if (!ready && rebootDialog.open) rebootDialog.close();
+  if (!ready && saveDialog.open) { saveDialog.close(); pendingSettings = null; }
+  $("#status-message").textContent = scanError ?? state.error ?? state.message;
+  $("#status-message").parentElement.dataset.error = String(Boolean(scanError || state.error));
 }
 
-async function request(path, body) {
-  const response = await fetch(path, body === undefined ? undefined : {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error ?? `Request failed (${response.status})`);
-  return data;
-}
-
-function accept(dashboard, message) {
-  state.dashboard = { ...dashboard, updated_at: dashboard.connected ? new Date().toISOString() : null };
-  state.error = dashboard.error ?? null;
-  state.message = dashboard.connected ? message : "Connect the board; the host service retries every second";
-  render();
-}
-
-async function refresh() {
-  if (state.busy) return;
-  try {
-    accept(await request("/api/status"), "Connected");
-  } catch (error) {
-    state.dashboard = { ...state.dashboard, connected: false };
-    state.error = error.message;
-    render();
-  }
-}
-
-async function run(path, body, message) {
-  state.busy = true;
-  state.error = null;
-  render();
-  try {
-    accept(await request(path, body), message);
-  } catch (error) {
-    state.error = error.message;
-  } finally {
-    state.busy = false;
-    render();
-  }
-}
-
+const client = new PicoPwmHost(render);
 const integer = selector => Number($(selector).value.trim() === "" ? NaN : $(selector).value);
+async function run(action) {
+  try { await action(); }
+  catch (error) { client.update({ error: error.message }); }
+}
 
-$("#apply-channel").addEventListener("click", () =>
-  run(`/api/channels/${integer("#set-channel")}`, { freq_hz: integer("#set-freq"), duty: integer("#set-duty") },
-    "Channel updated"));
-$("#stop-all").addEventListener("click", () => run("/api/stop", {}, "All channels stopped"));
-$("#apply-bank").addEventListener("click", () =>
-  run("/api/bank", { bank: integer("#bank-index"), backend: integer("#bank-backend"), role: integer("#bank-role") },
-    "Bank target updated; save and restart to apply"));
-$("#apply-i2c").addEventListener("click", () =>
-  run("/api/i2c-address", { address: integer("#i2c-input") }, "I2C address target updated"));
-$("#apply-clock").addEventListener("click", () =>
-  run("/api/clock-profile", { profile: integer("#clock-profile-select"), acknowledge_overclock: $("#clock-ack").checked },
-    "Clock profile target updated"));
-$("#clock-profile-select").addEventListener("change", () => {
-  $("#clock-ack").checked = false;
-  render();
+async function rescan() {
+  if (scanning || client.state.phase === "writing") return;
+  scanning = true;
+  render(client.state);
+  try {
+    const result = await request("/api/boards");
+    scanError = null;
+    const selected = client.board;
+    const label = boardSelect.selectedOptions[0]?.textContent ?? selected;
+    boardSelect.replaceChildren();
+    for (const board of result.boards) {
+      const option = document.createElement("option");
+      option.value = board.id;
+      option.textContent = `${board.product_name} / ${board.serial_number || board.device_path}`;
+      boardSelect.append(option);
+    }
+    if (selected && !result.boards.some(board => board.id === selected)) {
+      const missing = document.createElement("option");
+      missing.value = selected;
+      missing.textContent = `${label.replace(/ \(not found\)$/, "")} (not found)`;
+      boardSelect.append(missing);
+    }
+    if (!selected) {
+      const initial = result.boards.find(board => board.id === result.default_board_id);
+      if (initial) client.select(initial.id);
+      else {
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = result.boards.length ? "Select a board" : "No boards found";
+        boardSelect.prepend(placeholder);
+      }
+    }
+    boardSelect.value = client.board ?? "";
+    if (!client.board) client.update({ message: result.boards.length ? "Select a board" : "No boards found; connect a board and Rescan" });
+    await client.refresh();
+  } catch (error) {
+    scanError = `Board scan failed: ${error.message}`;
+  } finally {
+    scanning = false;
+    render(client.state);
+  }
+}
+
+boardSelect.addEventListener("change", () => {
+  if (client.state.phase === "writing" || scanning) return;
+  scanError = null;
+  client.select(boardSelect.value);
+  client.refresh();
 });
-saveButton.addEventListener("click", () => {
-  const overclock = state.dashboard.configuration?.clock_profile > 1;
+rescanButton.addEventListener("click", rescan);
+$(".settings-controls").addEventListener("input", () => renderBootEdits(client.state.dashboard.configuration));
+$(".channel-panels").addEventListener("click", event => {
+  const button = event.target.closest(".channel-value");
+  if (!button || client.state.phase !== "connected") return;
+  const channel = Number(button.dataset.channel);
+  const data = client.state.dashboard;
+  const reading = data.channels.find(entry => entry.channel === channel);
+  const bank = Math.floor(channel / 8);
+  if (!reading || data.configuration?.running.roles[bank] !== 0 || data.bank_errors[bank]
+    || reading.freq_hz === null || reading.duty === null) return;
+  editingChannel = channel;
+  $("#channel-dialog-title").textContent =
+    `${["Hardware PWM", "PIO PWM", "Software PWM"][bank]} - Channel ${channel} - GPIO ${data.pins?.channels[channel] ?? "--"}`;
+  $("#channel-frequency").value = String(reading.freq_hz);
+  $("#channel-duty").value = String(reading.duty);
+  $("#channel-error").textContent = "";
+  channelDialog.showModal();
+  $(button.dataset.field === "duty" ? "#channel-duty" : "#channel-frequency").focus();
+});
+$("#cancel-channel").addEventListener("click", () => channelDialog.close());
+$("#channel-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (editingChannel === null || channelApplying) return;
+  const data = client.state.dashboard;
+  const bank = Math.floor(editingChannel / 8);
+  if (client.state.phase !== "connected" || data.configuration?.running.roles[bank] !== 0 || data.bank_errors[bank]) {
+    $("#channel-error").textContent = "Channel is no longer available for editing. Reconnect and read its status.";
+    return;
+  }
+  channelApplying = true;
+  $("#channel-error").textContent = "";
+  render(client.state);
+  try {
+    await client.setChannel(editingChannel, integer("#channel-frequency"), integer("#channel-duty"));
+    channelDialog.close();
+  } catch (error) {
+    $("#channel-error").textContent = error.message;
+    client.update({ error: error.message });
+  } finally {
+    channelApplying = false;
+    render(client.state);
+  }
+});
+$("#toggle-led").addEventListener("click", () => run(() => client.setLed(!client.state.dashboard.configuration.led_on)));
+$("#reboot-board").addEventListener("click", () => rebootDialog.showModal());
+$("#cancel-reboot").addEventListener("click", () => rebootDialog.close());
+$("#confirm-reboot").addEventListener("click", () => { rebootDialog.close(); run(() => client.reboot()); });
+$("#save-configuration").addEventListener("click", () => {
+  if (!$("#i2c-input").reportValidity()) return;
+  pendingSettings = {
+    clockProfile: integer("#clock-profile-select"), i2cAddress: integer("#i2c-input"),
+    roles: ["hw", "pio", "sw"].map(backend => integer(`#${backend}-role`)),
+  };
+  $("#save-summary").textContent = [
+    `Clock: ${CLOCK_PROFILES[pendingSettings.clockProfile]}`,
+    `I2C: 0x${pendingSettings.i2cAddress.toString(16).padStart(2, "0")}`,
+    ...["HW", "PIO", "SW"].map((backend, bank) => `${backend}: ${ROLES[pendingSettings.roles[bank]]}`),
+  ].join(" / ");
+  const overclock = pendingSettings.clockProfile > 1;
   $("#save-overclock").hidden = !overclock;
   saveAcknowledgement.checked = false;
   saveAcknowledgement.disabled = !overclock;
-  confirmSave.disabled = overclock;
+  $("#confirm-save").disabled = overclock;
   saveDialog.showModal();
 });
-saveAcknowledgement.addEventListener("change", () => { confirmSave.disabled = !saveAcknowledgement.checked; });
-$("#cancel-save").addEventListener("click", () => saveDialog.close());
-confirmSave.addEventListener("click", () => {
-  const acknowledged = saveAcknowledgement.checked;
+saveAcknowledgement.addEventListener("change", () => { $("#confirm-save").disabled = !saveAcknowledgement.checked; });
+$("#cancel-save").addEventListener("click", () => { pendingSettings = null; saveDialog.close(); });
+$("#confirm-save").addEventListener("click", () => {
+  const settings = pendingSettings;
+  if (!settings || client.state.phase !== "connected") return;
+  pendingSettings = null;
   saveDialog.close();
-  run("/api/save", { acknowledge_overclock: acknowledged }, "Target saved; restart the board to apply");
+  run(() => client.saveAndReboot(settings, saveAcknowledgement.checked));
 });
 
-render();
-refresh();
-globalThis.setInterval(refresh, 1000);
-globalThis.setInterval(() => updateReportAge(state.dashboard), 1000);
+render(client.state);
+request("/api/host").then(host => {
+  $("#dashboard-type").textContent = host.dashboard_type;
+  document.title = `PicoPWM Control | ${host.dashboard_type}`;
+}).catch(error => client.update({ error: `Host identity unavailable: ${error.message}` }));
+rescan();
+globalThis.setInterval(() => client.refresh(), 1000);
+globalThis.setInterval(() => updateReportAge(client.state.dashboard), 1000);

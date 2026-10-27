@@ -23,6 +23,18 @@
 #define HID_CAP_SAVE 0x01u
 /** @brief Capability bit 1: the firmware accepts SET_CLOCK_PROFILE. */
 #define HID_CAP_CLOCK 0x02u
+/** @brief Capability bit 2: confirmed save followed by reboot is available. */
+#define HID_CAP_SAVE_REBOOT 0x04u
+/** @brief Capability bit 3: identification LED control and readback. */
+#define HID_CAP_LED 0x08u
+/** @brief Capability bit 4: confirmed reboot without saving. */
+#define HID_CAP_REBOOT 0x10u
+/** @brief Capability bit 5: firmware memory report is available. */
+#define HID_CAP_MEMORY 0x20u
+/** @brief Capability bit 6: runtime telemetry report is available. */
+#define HID_CAP_RUNTIME 0x40u
+/** @brief Capability bit 7: board GPIO allocation report is available. */
+#define HID_CAP_PINS 0x80u
 /** @brief Accepted clock profiles, one bit per @ref boot_config_sysclk_t value (default, 150, 200, 250 MHz). */
 #define HID_CLOCK_PROFILE_MASK 0x0Fu
 /** @brief Report 20 flag bit 1: the caller acknowledges an overclock profile (above 150 MHz). */
@@ -35,6 +47,7 @@ static struct {
     uint8_t transaction_id;           /**< Echo of the latest accepted request. */
     uint8_t operation;                /**< Raw operation byte of the latest accepted request. */
     uint8_t status;                   /**< hid_status_t of the latest accepted request. */
+    bool reboot_scheduled;            /**< Reject new requests until the scheduled reboot. */
 } action;
 
 static uint32_t le32(const uint8_t *p) {
@@ -78,6 +91,7 @@ static void pack_bank_config(uint8_t *out, bool running) {
 }
 
 static bool build_identity(uint8_t *payload) {
+    bool led_on;
     memset(payload, 0, HID_IDENTITY_SIZE);
     payload[0] = HID_LAYOUT_VERSION;
     payload[1] = HID_PRODUCT_ID;
@@ -89,16 +103,24 @@ static bool build_identity(uint8_t *payload) {
     payload[14] = 1u;
 #endif
     payload[15] = device_channel_count();
-    payload[16] = HID_CAP_SAVE | HID_CAP_CLOCK;
+    payload[16] = HID_CAP_SAVE | HID_CAP_CLOCK | HID_CAP_SAVE_REBOOT | HID_CAP_REBOOT | HID_CAP_MEMORY |
+                  HID_CAP_RUNTIME | HID_CAP_PINS;
+    if (device_led_read(&led_on)) {
+        payload[16] |= HID_CAP_LED;
+    }
     payload[17] = HID_CLOCK_PROFILE_MASK;
     return true;
 }
 
 static bool build_configuration(uint8_t *payload) {
+    bool led_on;
     memset(payload, 0, HID_CONFIGURATION_SIZE);
     payload[0] = HID_LAYOUT_VERSION;
     pack_bank_config(&payload[1], true);
     pack_bank_config(&payload[8], false);
+    if (device_led_read(&led_on)) {
+        payload[15] = led_on ? 1u : 0u;
+    }
     payload[16] = (uint8_t)boot_config_get_sysclk();
     put_le32(&payload[17], device_system_clock_hz());
     return true;
@@ -132,6 +154,34 @@ uint16_t hid_protocol_get(uint8_t report_id, uint8_t *payload, uint16_t capacity
     } else if (report_id == HID_REPORT_ID_CONFIGURATION) {
         length = HID_CONFIGURATION_SIZE;
         ok = build_configuration(scratch);
+    } else if (report_id == HID_REPORT_ID_MEMORY) {
+        length = HID_MEMORY_SIZE;
+        scratch[0] = HID_LAYOUT_VERSION;
+        put_le32(&scratch[1], device_ram_reserved_bytes());
+        put_le32(&scratch[5], device_ram_total_bytes());
+        ok = true;
+    } else if (report_id == HID_REPORT_ID_RUNTIME) {
+        length = HID_RUNTIME_SIZE;
+        scratch[0] = HID_LAYOUT_VERSION;
+        put_le32(&scratch[1], device_uptime_seconds());
+        put_le32(&scratch[5], (uint32_t)device_temperature_millic());
+        uint16_t core0 = device_service_load(false);
+        uint16_t core1 = device_service_load(true);
+        scratch[9] = (uint8_t)core0;
+        scratch[10] = (uint8_t)(core0 >> 8);
+        scratch[11] = (uint8_t)core1;
+        scratch[12] = (uint8_t)(core1 >> 8);
+        ok = true;
+    } else if (report_id == HID_REPORT_ID_PINS) {
+        device_pin_assignment_t pins;
+        device_get_pin_assignment(&pins);
+        length = HID_PINS_SIZE;
+        scratch[0] = HID_LAYOUT_VERSION;
+        memcpy(&scratch[1], pins.channels, PWM_DRIVER_CHANNEL_COUNT);
+        scratch[25] = pins.i2c_sda;
+        scratch[26] = pins.i2c_scl;
+        scratch[27] = pins.led;
+        ok = true;
     } else if (report_id >= HID_REPORT_ID_BANK_STATUS && report_id < HID_REPORT_ID_BANK_STATUS + HID_BANK_COUNT) {
         length = HID_BANK_STATUS_SIZE;
         ok = build_bank_status((uint8_t)(report_id - HID_REPORT_ID_BANK_STATUS), scratch);
@@ -150,11 +200,19 @@ uint16_t hid_protocol_get(uint8_t report_id, uint8_t *payload, uint16_t capacity
         return 0u;
     }
     memcpy(payload, scratch, length);
+    if (report_id == HID_REPORT_ID_ACTION &&
+        (action.operation == HID_OP_SAVE_REBOOT || action.operation == HID_OP_REBOOT) &&
+        action.status == HID_STATUS_OK && !action.reboot_scheduled) {
+        action.reboot_scheduled = true;
+        device_schedule_reboot(500u);
+    }
     return length;
 }
 
 bool hid_protocol_submit(const uint8_t *payload, uint16_t length) {
-    if (payload == NULL || length != HID_ACTION_SIZE || action.busy) {
+    if (payload == NULL || length != HID_ACTION_SIZE || action.busy || action.reboot_scheduled ||
+        ((action.operation == HID_OP_SAVE_REBOOT || action.operation == HID_OP_REBOOT) &&
+         action.status == HID_STATUS_OK)) {
         return false;
     }
     memcpy(action.request, payload, HID_ACTION_SIZE);
@@ -181,7 +239,7 @@ static hid_status_t execute(const uint8_t *r) {
     uint8_t arg1 = r[8];
     uint8_t flags = r[9];
 
-    if (r[0] != HID_LAYOUT_VERSION || operation < HID_OP_SET_CHANNEL || operation > HID_OP_SET_CLOCK_PROFILE) {
+    if (r[0] != HID_LAYOUT_VERSION || operation < HID_OP_SET_CHANNEL || operation > HID_OP_REBOOT) {
         return HID_STATUS_UNSUPPORTED;
     }
     if (r[1] == 0u || !reserved_clear(r)) {
@@ -218,10 +276,21 @@ static hid_status_t execute(const uint8_t *r) {
         }
         return HID_STATUS_OK;
     case HID_OP_SAVE_CONFIG:
+    case HID_OP_SAVE_REBOOT:
         if (channel != 0u || arg0 != 0u || arg1 != 0u || flags != (HID_FLAG_CONFIRM_SAVE | overclock_flag())) {
             return HID_STATUS_INVALID;
         }
         return boot_config_save() ? HID_STATUS_OK : HID_STATUS_STORAGE_FAILED;
+    case HID_OP_SET_LED:
+        if (channel != 0u || arg0 > 1u || arg1 != 0u || flags != 0u) {
+            return HID_STATUS_INVALID;
+        }
+        return device_led_set(arg0 != 0u) ? HID_STATUS_OK : HID_STATUS_UNAVAILABLE;
+    case HID_OP_REBOOT:
+        if (channel != 0u || arg0 != 0u || arg1 != 0u || flags != HID_FLAG_CONFIRM_SAVE) {
+            return HID_STATUS_INVALID;
+        }
+        return HID_STATUS_OK;
     default: // HID_OP_SET_CLOCK_PROFILE
         if (channel != 0u || arg0 > BOOT_CONFIG_SYSCLK_250MHZ || arg1 != 0u ||
             flags != ((arg0 > BOOT_CONFIG_SYSCLK_150MHZ) ? HID_FLAG_ACK_OVERCLOCK : 0u) ||

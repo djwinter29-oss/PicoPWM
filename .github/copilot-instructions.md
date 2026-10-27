@@ -13,6 +13,23 @@ Key repo constraints:
 - Treat `pwm_driver_set_freq()` as a command-ingress API and `pwm_driver_get()` as the source of realized channel state.
 - `stop` disables generator output.
 
+## HIL Validation
+
+- For changes affecting PWM generation/monitoring, CDC commands or HIL tooling, run
+  `python3 -m unittest discover -s tools/hil/tests -p 'test_*.py'` for hardware-free runner regression checks.
+- For hardware-affecting changes, run the CDC HIL subset when a board and fixture are available and the operator
+  confirms the port, board, flashed artifact and permission to drive outputs:
+  `tools/host/run-hil.sh --port <CDC_PORT> --board <pico|pico2> --firmware <FLASHED_ARTIFACT> --confirm-fixture`.
+  The launcher creates its venv and installs the editable HIL project.
+- Follow the [HIL connection guide](../docs/tests/hil-test-connection.md) and
+  [test plan](../docs/tests/hil-test-plan.md). Require exactly one running generator bank and two monitor banks;
+  never change roles, save flash, reboot or rewire automatically to make a run possible.
+- The runner replaces `docs/tests/records/latest.md`. Preserve an existing record under a dated filename before
+  rerunning if it must be retained. Inspect the new outcome, failed checks and cleanup status; a nonzero exit is
+  a failure, and unexecuted checks are not passes.
+- If hardware or operator confirmation is unavailable, report HIL as not run with the reason. Never fabricate
+  records or claim full qualification from unit tests or the CDC loopback subset. Instrument checks, other
+  transports and the other generator-bank passes remain separate validation.
 
 ## Engineering Style
 

@@ -7,15 +7,16 @@
   <title>PicoPWM Control | Web</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="css/dashboard.css?v=26">
-  <link rel="stylesheet" href="css/web.css?v=1">
-  <script type="module" src="js/app.mjs?v=1"></script>
+  <link rel="stylesheet" href="css/webhid.css?v=19">
+  <link rel="stylesheet" href="css/web.css?v=2">
+  <script type="module" src="js/app.mjs?v=3"></script>
 </head>
 <body>
   <header class="topbar">
-    <a class="wordmark" href="./" aria-label="PicoPWM Web home">
+    <a class="wordmark" href="./" aria-label="PicoPWM dashboard home">
       <span class="mark">PW</span>
       <span><strong>PicoPWM</strong>
-        <span class="brand-meta"><small>Web</small>
+        <span class="brand-meta"><small id="dashboard-type">Web</small>
           <span class="host-version" id="host-version" aria-label="Host application version">0.0.0-debug</span>
         </span>
       </span>
@@ -26,122 +27,189 @@
       <span class="sample-time" id="sample-time" hidden></span>
     </div>
   </header>
-
   <main>
     <section class="page-heading">
       <div><h1>PWM control</h1></div>
     </section>
-
     <section aria-labelledby="identity-title">
       <div class="section-heading">
         <h2 id="identity-title">Device identity</h2>
+        <div class="actions" aria-label="Connection controls">
+          <select id="board-select" aria-label="Board attached to this server" disabled>
+            <option value="">Scanning boards...</option>
+          </select>
+          <button class="button button-led" id="rescan-boards" type="button">Rescan</button>
+          <button class="button button-led" id="toggle-led" type="button" data-state="unknown"
+            aria-pressed="false" title="Connect to read the board LED state" disabled>Board LED: --</button>
+        </div>
       </div>
       <div class="summary identity-summary">
         <div class="summary-item"><span>Product</span><strong id="product-name">--</strong></div>
-        <div class="summary-item"><span>MCU</span><strong id="mcu">--</strong></div>
+        <div class="summary-item"><span>Board model</span><strong id="board-model">--</strong></div>
         <div class="summary-item"><span>Serial / UID</span><strong id="serial">--</strong></div>
-        <div class="summary-item"><span>Firmware version</span><strong id="firmware">--</strong></div>
         <div class="summary-item"><span>System clock</span><strong id="system-clock">--</strong></div>
-        <div class="summary-item"><span>Target clock profile</span><strong id="clock-profile">--</strong></div>
+        <div class="summary-item"><span>Firmware RAM reserved / total</span><strong id="ram-usage"
+          title="Static SRAM and reserved core stacks / physical SRAM; not live heap or stack usage">--</strong></div>
+        <div class="summary-item"><span>Firmware version</span><strong id="firmware">--</strong></div>
       </div>
     </section>
-
     <section aria-labelledby="configuration-title">
       <div class="section-heading">
-        <h2 id="configuration-title">Board configuration</h2>
+        <h2 id="configuration-title">Boot configuration <span id="boot-edits" role="status" hidden></span></h2>
         <div class="actions" aria-label="Configuration controls">
-          <button class="button button-secondary" id="save-configuration" type="button" hidden disabled>Save target</button>
+          <button class="button button-secondary" id="save-configuration" type="button" aria-describedby="settings-help" disabled>Save and Reboot</button>
+          <button class="button button-danger" id="reboot-board" type="button" disabled>Reboot board</button>
         </div>
       </div>
-      <div class="summary configuration-summary">
-        <div class="summary-item"><span>I2C address</span><strong id="i2c-address">--</strong></div>
-      </div>
-      <div class="table-scroll static-map">
-        <table>
-          <caption>Bank roles; target values apply after save and restart</caption>
-          <thead><tr><th scope="col">Bank</th><th scope="col">Running</th><th scope="col">Target</th></tr></thead>
-          <tbody id="bank-config"></tbody>
-        </table>
-      </div>
-      <div class="control-grid">
-        <label>Bank
-          <select id="bank-index" disabled>
-            <option value="0">A</option><option value="1">B</option><option value="2">C</option>
-          </select>
-        </label>
-        <label>Backend
-          <select id="bank-backend" disabled>
-            <option value="0">HW</option><option value="1">PIO</option><option value="2">SW</option>
-          </select>
-        </label>
-        <label>Role
-          <select id="bank-role" disabled>
-            <option value="0">Generator</option><option value="1">Monitor</option>
-          </select>
-        </label>
-        <button class="button button-secondary" id="apply-bank" type="button" disabled>Set bank target</button>
-      </div>
-      <div class="control-grid">
-        <label>I2C address (0-127)
-          <input id="i2c-input" type="number" min="0" max="127" step="1" value="32" disabled>
-        </label>
-        <button class="button button-secondary" id="apply-i2c" type="button" disabled>Set I2C target</button>
-        <label>Clock profile
+      <p class="settings-note" id="settings-help">Edit the boot settings, then save and reboot to apply them.</p>
+      <div class="settings-controls" aria-describedby="settings-help">
+        <div class="setting">
+          <label for="clock-profile-select">Clock profile</label>
           <select id="clock-profile-select" disabled></select>
-        </label>
-        <label class="inline-check"><input id="clock-ack" type="checkbox" disabled>
-          <span>Acknowledge overclock</span></label>
-        <button class="button button-secondary" id="apply-clock" type="button" disabled>Set clock target</button>
+        </div>
+        <div class="setting">
+          <label for="i2c-input">I2C address (decimal)</label>
+          <input id="i2c-input" type="number" min="8" max="119" step="1" required disabled>
+        </div>
+        <div class="setting">
+          <label for="hw-role">Hardware PWM role (Channels 0-7)</label>
+          <select id="hw-role" disabled><option value="1">Monitor</option><option value="0">Generator</option></select>
+        </div>
+        <div class="setting">
+          <label for="pio-role">PIO PWM role (Channels 8-15)</label>
+          <select id="pio-role" disabled><option value="1">Monitor</option><option value="0">Generator</option></select>
+        </div>
+        <div class="setting">
+          <label for="sw-role">Software PWM role (Channels 16-23)</label>
+          <select id="sw-role" disabled><option value="1">Monitor</option><option value="0">Generator</option></select>
+        </div>
       </div>
+      <details class="pin-map-disclosure">
+        <summary>Pin assignment</summary>
+        <p>GPIO assignments reported by the connected board. GPIO numbers are not physical header pin numbers.
+          Signals are 3.3 V only; I2C requires external pull-ups.</p>
+        <p id="pins-message" role="status">Connect a board to read its pin assignment.</p>
+        <div class="pin-tables">
+          <table id="hw-pins">
+            <caption>Hardware PWM</caption>
+            <thead><tr><th scope="col">Channel</th><th scope="col">GPIO</th></tr></thead>
+            <tbody id="hw-pin-rows"></tbody>
+          </table>
+          <table id="pio-pins">
+            <caption>PIO PWM</caption>
+            <thead><tr><th scope="col">Channel</th><th scope="col">GPIO</th></tr></thead>
+            <tbody id="pio-pin-rows"></tbody>
+          </table>
+          <table id="sw-pins">
+            <caption>Software PWM</caption>
+            <thead><tr><th scope="col">Channel</th><th scope="col">GPIO</th></tr></thead>
+            <tbody id="sw-pin-rows"></tbody>
+          </table>
+          <table>
+            <caption>Board functions</caption>
+            <thead><tr><th scope="col">Function</th><th scope="col">GPIO</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">I2C SDA</th><td id="pin-i2c_sda">--</td></tr>
+              <tr><th scope="row">I2C SCL</th><td id="pin-i2c_scl">--</td></tr>
+              <tr><th scope="row">Board LED</th><td id="pin-led">--</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
     </section>
-
+    <dialog class="confirmation-dialog" id="reboot-dialog" aria-labelledby="reboot-dialog-title">
+      <h2 id="reboot-dialog-title">Reboot board?</h2>
+      <p>The board will restart and USB will disconnect. Unsaved settings will not be saved.
+        PWM outputs will be interrupted. The host will reconnect to the selected board after restart.</p>
+      <div class="dialog-actions">
+        <button class="button button-cancel" id="cancel-reboot" type="button" autofocus>Cancel</button>
+        <button class="button button-danger" id="confirm-reboot" type="button">Reboot board</button>
+      </div>
+    </dialog>
     <dialog class="confirmation-dialog" id="save-dialog" aria-labelledby="save-dialog-title">
-      <h2 id="save-dialog-title">Save target configuration?</h2>
+      <h2 id="save-dialog-title">Save and Reboot?</h2>
+      <p id="save-summary"></p>
       <p class="configuration-warning">
         Saving erases and programs flash. The board stops answering HID, CDC, and I2C for a moment, and software
-        generators and monitors are disturbed. Stop software generators first. The saved target applies only after you
-        restart the board; there is no reboot command.
+        generators and monitors are disturbed. Stop software generators first.
+        The board will restart and USB will disconnect. The host will reconnect to verify the applied settings.
       </p>
       <label class="configuration-acknowledgement" id="save-overclock" hidden>
         <input id="save-unsafe-ack" type="checkbox" disabled>
         <span>I acknowledge the non-default overclock request.</span>
       </label>
       <div class="dialog-actions">
-        <button class="button button-cancel" id="cancel-save" type="button">Cancel</button>
-        <button class="button button-danger" id="confirm-save" type="button" disabled>Save</button>
+        <button class="button button-cancel" id="cancel-save" type="button" autofocus>Cancel</button>
+        <button class="button button-danger" id="confirm-save" type="button" disabled>Save and Reboot</button>
       </div>
     </dialog>
-
+    <section aria-labelledby="runtime-title">
+      <div class="section-heading"><h2 id="runtime-title">Runtime status</h2></div>
+      <div class="summary runtime-summary">
+        <div class="summary-item"><span>Uptime</span><strong id="uptime">--</strong></div>
+        <div class="summary-item" title="Internal die-temperature estimate using nominal 3.3 V ADC reference; not calibrated ambient temperature">
+          <span>Board temperature</span><strong id="temperature">--</strong>
+        </div>
+        <div class="summary-item" title="Service-work wall time divided by the measurement window; not CPU utilization. Excludes idle waits and IRQ work outside service passes.">
+          <span>Service load (Core 0 / Core 1)</span><strong id="service-load">--</strong>
+        </div>
+      </div>
+      <p class="configuration-message" id="runtime-message" role="status" aria-live="polite"></p>
+    </section>
     <section class="channels-section" aria-labelledby="channels-title">
       <div class="section-heading">
-        <h2 id="channels-title">Channels <span>0&ndash;23</span></h2>
-        <div class="actions"><button class="button button-danger" id="stop-all" type="button" disabled>Stop all</button></div>
+        <h2 id="channels-title">PWM control and monitoring <span>0&ndash;23</span></h2>
+        <span class="channel-edit-hint">Click generator values to edit</span>
       </div>
-      <div class="control-grid">
-        <label>Channel
-          <input id="set-channel" type="number" min="0" max="23" step="1" value="0" disabled>
-        </label>
-        <label>Frequency (Hz)
-          <input id="set-freq" type="number" min="0" step="1" value="1000" disabled>
-        </label>
-        <label>Duty (%)
-          <input id="set-duty" type="number" min="0" max="100" step="1" value="50" disabled>
-        </label>
-        <button class="button button-secondary" id="apply-channel" type="button" disabled>Set channel</button>
-      </div>
-      <div class="table-scroll">
-        <table>
-          <thead><tr><th scope="col">Channel</th><th scope="col">Bank</th><th scope="col">Role</th>
-            <th scope="col">Frequency</th><th scope="col">Duty</th></tr></thead>
-          <tbody id="channel-rows"></tbody>
-        </table>
+      <div class="channel-panels">
+        <div class="table-scroll">
+          <table>
+            <caption>Hardware PWM <span id="hw-running-role">--</span></caption>
+            <thead><tr><th scope="col">Channel</th><th scope="col" title="GPIO number, not physical header pin">GPIO</th><th scope="col">Frequency</th><th scope="col">Duty</th></tr></thead>
+            <tbody id="hw-channel-rows"></tbody>
+          </table>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <caption>PIO PWM <span id="pio-running-role">--</span></caption>
+            <thead><tr><th scope="col">Channel</th><th scope="col" title="GPIO number, not physical header pin">GPIO</th><th scope="col">Frequency</th><th scope="col">Duty</th></tr></thead>
+            <tbody id="pio-channel-rows"></tbody>
+          </table>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <caption>Software PWM <span id="sw-running-role">--</span></caption>
+            <thead><tr><th scope="col">Channel</th><th scope="col" title="GPIO number, not physical header pin">GPIO</th><th scope="col">Frequency</th><th scope="col">Duty</th></tr></thead>
+            <tbody id="sw-channel-rows"></tbody>
+          </table>
+        </div>
       </div>
       <p class="configuration-message" id="read-errors" role="status" aria-live="polite" data-error="true"></p>
     </section>
-
+    <dialog class="confirmation-dialog" id="channel-dialog" aria-labelledby="channel-dialog-title"
+      aria-describedby="channel-dialog-note">
+      <form id="channel-form">
+        <h2 id="channel-dialog-title">Edit channel</h2>
+        <p id="channel-dialog-note">Values start from the current realized output, which may differ from the
+          requested frequency due to hardware rounding. Apply changes the live output immediately; no save or reboot.</p>
+        <div class="control-grid">
+          <label>Frequency (Hz)
+            <input id="channel-frequency" type="number" min="0" max="4294967295" step="1" required autofocus>
+          </label>
+          <label>Duty (%)
+            <input id="channel-duty" type="number" min="0" max="100" step="1" required>
+          </label>
+        </div>
+        <p class="configuration-message" id="channel-error" role="alert" data-error="true"></p>
+        <div class="dialog-actions">
+          <button class="button button-cancel" id="cancel-channel" type="button">Cancel</button>
+          <button class="button button-secondary" id="apply-channel" type="submit">Apply</button>
+        </div>
+      </form>
+    </dialog>
     <footer class="status-line" role="status" aria-live="polite">
       <span class="status-mark" aria-hidden="true"></span>
-      <span id="status-message">No device selected</span>
+      <span id="status-message">Scanning boards...</span>
     </footer>
     <noscript>JavaScript is unavailable.</noscript>
   </main>

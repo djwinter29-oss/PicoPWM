@@ -30,6 +30,20 @@
 /** @brief Bank roles chosen at startup; set once before Core 1 launches. */
 static pwm_role_t pwm_driver_config_bank_roles[PWM_BANK_COUNT];
 
+uint8_t pwm_driver_channel_gpio(uint channel) {
+    uint index = channel % PWM_DRIVER_CONFIG_BANK_SIZE;
+    switch (channel / PWM_DRIVER_CONFIG_BANK_SIZE) {
+    case PWM_BANK_A:
+        return (uint8_t)hardware_pwm_config.channels[index].gpio;
+    case PWM_BANK_B:
+        return (uint8_t)pio_pwm_config.channels[index].gpio;
+    case PWM_BANK_C:
+        return (uint8_t)software_pwm_config.channels[index].gpio;
+    default:
+        return UINT8_MAX;
+    }
+}
+
 bool pwm_driver_config_channel_role(uint channel, pwm_role_t *role) {
     if ((role == NULL) || (channel >= PWM_DRIVER_CONFIG_CHANNEL_COUNT)) {
         return false;
@@ -136,6 +150,12 @@ typedef struct {
 
 /** @brief Core 1 loop counter used to detect a stalled backend owner. */
 static volatile uint32_t pwm_core1_heartbeat;
+/** @brief Core 1-published service work fraction in basis points; one aligned atomic read on Core 0. */
+static volatile uint32_t pwm_core1_service_load;
+
+uint16_t pwm_driver_service_load(void) {
+    return (uint16_t)pwm_core1_service_load;
+}
 /** @brief Last Core 1 heartbeat observed by a Core 0 mailbox wait. */
 static uint32_t pwm_core1_heartbeat_seen;
 /** @brief True when any bank runs as a monitor, so Core 1 must poll samples. */
@@ -310,15 +330,36 @@ static void pwm_driver_core_main(void) {
 
     pwm_lifecycle = PWM_DRIVER_LIFECYCLE_READY;
 
+    absolute_time_t service_window = get_absolute_time();
+    uint64_t service_busy_us = 0u;
     while (true) {
+        absolute_time_t service_start = get_absolute_time();
         pwm_core1_heartbeat++;
         pwm_driver_memory_barrier();
         pwm_driver_process_mailbox();
         if (pwm_has_monitor) {
             pwm_driver_refresh_monitor_state();
         }
-        /* Generator-only boards need no sample polling; submits wake Core 1 with SEV. */
-        best_effort_wfe_or_timeout(make_timeout_time_us(pwm_has_monitor ? 1000 : 100000));
+        absolute_time_t now = get_absolute_time();
+        service_busy_us += (uint64_t)absolute_time_diff_us(service_start, now);
+        uint64_t window_us = (uint64_t)absolute_time_diff_us(service_window, now);
+        if (window_us >= 1000000u) {
+            uint64_t load = service_busy_us * 10000u / window_us;
+            pwm_core1_service_load = (uint32_t)(load > 10000u ? 10000u : load);
+            service_busy_us = 0u;
+            service_window = now;
+        }
+        /* SDK alarm setup can wake early. Keep the deadline unless a command needs service. */
+        absolute_time_t idle_deadline = make_timeout_time_us(pwm_has_monitor ? 1000 : 100000);
+        while (!time_reached(idle_deadline)) {
+            best_effort_wfe_or_timeout(idle_deadline);
+            critical_section_enter_blocking(&pwm_lock);
+            bool pending = pwm_mailbox.pending;
+            critical_section_exit(&pwm_lock);
+            if (pending) {
+                break;
+            }
+        }
     }
 }
 

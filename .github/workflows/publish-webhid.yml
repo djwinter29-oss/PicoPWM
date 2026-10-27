@@ -10,6 +10,11 @@ on:
         description: "Published release tag in vMAJOR.MINOR.PATCH form, for example v1.2.3"
         required: false
         type: string
+      test_publish:
+        description: Deploy the selected branch commit to the live Pages URL instead of a release tag
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -39,6 +44,7 @@ jobs:
 
       - name: Validate published release
         id: release
+        if: github.event_name != 'workflow_dispatch' || !inputs.test_publish
         env:
           RELEASE_TAG: ${{ github.event.workflow_run.head_branch || inputs.tag }}
           GH_TOKEN: ${{ github.token }}
@@ -51,6 +57,7 @@ jobs:
 
       - name: Require successful tests
         id: checks
+        if: github.event_name != 'workflow_dispatch' || !inputs.test_publish
         env:
           RELEASE_TAG: ${{ github.event.workflow_run.head_branch || inputs.tag }}
           SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -76,7 +83,7 @@ jobs:
 
       - name: Stamp WebHID version
         env:
-          HOST_VERSION: ${{ steps.release.outputs.version }}
+          HOST_VERSION: ${{ inputs.test_publish && format('0.0.0-test.{0}.{1}', github.run_id, github.run_attempt) || steps.release.outputs.version }}
         run: |
           node --input-type=module - <<'JS'
           import { readFileSync, writeFileSync } from 'node:fs';

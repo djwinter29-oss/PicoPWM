@@ -64,6 +64,7 @@ int main(void) {
     // Core 0 main loop: service USB CDC, USB HID, and I2C.
     while (true) {
         bool usb_connected;
+        absolute_time_t service_start = get_absolute_time();
 
         system_watchdog_kick();
         usb_cdc_poll();
@@ -76,6 +77,7 @@ int main(void) {
         usb_was_connected = usb_connected;
         pwm_commands_poll(&pwm_command_session);
         i2c_slave_poll();
+        system_record_service((uint32_t)absolute_time_diff_us(service_start, get_absolute_time()));
         sleep_us(100);
     }
 

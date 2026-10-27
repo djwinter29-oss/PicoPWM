@@ -81,7 +81,7 @@ The Python and .NET hosts talk to the board over USB HID.
 | Control it | [Control interfaces](docs/guides/control/README.md), [USB CDC CLI](docs/guides/control/usb_cdc_cli.md), [I2C protocol](docs/guides/control/i2c_protocol.md) |
 | Understand the design | [Architecture](docs/design/architecture.md), [PWM driver design](docs/design/pwm_driver_design.md), [generators](docs/design/generator/) and [monitors](docs/design/monitor/) |
 | Write a HID host | [CDC/HID overview](docs/design/usb/cdc-hid-overview.md), [HID report reference](docs/design/usb/hid-report-reference.md) |
-| Build, test and release | [BUILD_STRUCTURE.md](BUILD_STRUCTURE.md), [documentation index](docs/README.md) |
+| Build, test and release | [Build structure](BUILD_STRUCTURE.md), [Builds and publishing](docs/guides/releases.md) |
 | Contribute | [Contributing](CONTRIBUTING.md), [Code of Conduct](CODE_OF_CONDUCT.md), [Security](SECURITY.md) |
 
 Related projects: [PicoUart](https://github.com/djwinter29-oss/PicoUart) (six USB serial ports) and

@@ -10,7 +10,7 @@ The ranges are the convention shared with PicoUart and PicoForge; the assignment
 
 | IDs | Generic role | PicoPWM assignments |
 | --- | ------------ | ------------------- |
-| `1`-`9` | Device information and monitoring | `1` Identity, `2` Board Configuration; `3`-`9` unassigned. |
+| `1`-`9` | Device information and monitoring | `1` Identity, `2` Board Configuration, `3` Firmware Memory, `4` Runtime Status; `5`-`9` unassigned. |
 | `10`-`19` | Application monitoring | Three Bank Status reports, addressed as `10 + bank`; `13`-`19` unassigned. |
 | `20`-`29` | Device and application control | `20` Board Action & Result; `21`-`29` unassigned. |
 | `30`-`255` | Unassigned expansion | None. |
@@ -46,7 +46,7 @@ because VID/PID alone are not an allocated identity.
 | Controller register access | I2C | Binary register map; unchanged by HID. |
 | Identity, configuration, channel status | HID reports 1, 2, 10-12 | Read-only; realized state from `device`, no HID shadow cache. |
 | Channel set and stop | HID report 20 | Same `device` path as CDC and I2C. |
-| Bank, I2C address, clock profile, save | HID report 20 | Target configuration only; takes effect after save and restart. |
+| Bank, I2C address, clock profile, save | HID report 20 | Target configuration only; takes effect after save and restart. Optional save-and-reboot applies the saved target. |
 
 HID does not call `pwm`, backends, or `platform/system.*` directly.
 
@@ -56,6 +56,9 @@ HID does not call `pwm`, backends, or `platform/system.*` directly.
 | --------- | ---- | ---- | --------- | ------: | ------- |
 | `1` | Device Identity & Capabilities | Feature | Host reads | 18 bytes | Identity, firmware version, capabilities. |
 | `2` | Board Configuration | Feature | Host reads | 21 bytes | Running and target configuration, clock profile. |
+| `3` | Firmware Memory | Feature | Host reads | 9 bytes | Static SRAM reservation and physical capacity. |
+| `4` | Runtime Status | Feature | Host reads | 13 bytes | Uptime, internal temperature estimate, service load. |
+| `5` | Pin Assignment | Feature | Host reads | 28 bytes | 24 channel GPIOs, I2C SDA/SCL, board LED GPIO. |
 | `10`-`12` | Bank Status — Bank A–C | Feature | Host reads | 41 bytes | Realized frequency and duty of the bank's 8 channels. |
 | `20` | Board Action & Result | Feature | Host reads/writes | 12 bytes | SET submits one action; GET returns the latest result in the same length. |
 
@@ -79,8 +82,66 @@ Feature report, host reads, 18-byte payload.
 | 13 | 1 | `firmware_patch` | Firmware version patch. |
 | 14 | 1 | `mcu` | `1` RP2040, `2` RP2350. |
 | 15 | 1 | `channel_count` | From `device_channel_count()`; `24` (three banks of eight). |
-| 16 | 1 | `capabilities` | Bit 0 config save, bit 1 clock profile; bits 2-7 reserved and zero. A host treats a cleared bit as the feature being absent: without bit 0 it sends no `SAVE_CONFIG`; without bit 1 it sends no `SET_CLOCK_PROFILE` and ignores `clock_profile` in report 2 (`clock_profile_mask` is then zero). |
+| 16 | 1 | `capabilities` | Bit 0 config save, bit 1 clock profile, bit 2 save-and-reboot, bit 3 LED control/readback, bit 4 standalone reboot, bit 5 firmware memory report, bit 6 runtime report, bit 7 pin assignment report. A host sends no operation whose capability is absent. Without bit 1, `clock_profile_mask` is zero. LED capability is absent on boards without a default LED. |
 | 17 | 1 | `clock_profile_mask` | Bit *n* set when clock profile *n* (0-4) is accepted by this firmware build on this MCU; bits 5-7 zero. Profile `1` is always set. This firmware sends `0x0F`. The running I2C address is read from report 2. |
+
+## Report ID 3: Firmware Memory
+
+Feature report, host reads, 9-byte payload; available only with identity capability
+bit 5. Byte 0 is layout version 1. Bytes 1-4 are little-endian `ram_reserved_bytes`;
+bytes 5-8 are little-endian `ram_total_bytes`.
+
+Reserved bytes include the main SRAM image through `__bss_end__`, scratch X/Y data,
+and both core stacks reserved by the linker. Total bytes are physical SRAM (264 KiB
+on Pico, 520 KiB on Pico 2). These are not live heap/stack usage or free-memory values.
+The WebHID identity panel uses these values and names the supported standard board
+from its MCU (RP2040 = Pico, RP2350 = Pico 2).
+
+## Report ID 4: Runtime Status
+
+Feature report, 13 bytes, available with identity capability bit 6:
+
+| Offset | Size | Meaning |
+| -----: | ---: | ------- |
+| 0 | 1 | Layout version 1. |
+| 1 | 4 | Unsigned uptime in seconds since boot. |
+| 5 | 4 | Signed internal die-temperature estimate in millidegrees Celsius; `INT32_MIN` means invalid ADC reading. |
+| 9 | 2 | Core 0 service load in basis points (0-10000). |
+| 11 | 2 | Core 1 service load in basis points (0-10000). |
+
+Integers are little-endian. Temperature uses the SDK's nominal 3.3 V reference and
+sensor slope, is not calibrated, and is not ambient temperature. Core 0 owns ADC
+initialization and temperature reads; no PWM GPIO is switched into ADC mode.
+Service load is measured service-pass wall time divided by an approximately
+one-second window, excluding idle sleep/WFE. It is not CPU utilization: interrupt
+work outside those passes is not counted, and flash/lockout delays can affect it.
+Core 1 publishes only its aligned load value through the PWM driver boundary;
+Core 0 owns USB telemetry. Load is initially zero until the first window completes.
+
+## Report ID 5: Pin Assignment
+
+Feature report, 28 bytes, available only with identity capability bit 7:
+
+| Offset | Size | Meaning |
+| -----: | ---: | ------- |
+| 0 | 1 | Layout version 1. |
+| 1 | 24 | GPIO numbers for logical channels 0-23, in channel order. |
+| 25 | 1 | I2C slave SDA GPIO. |
+| 26 | 1 | I2C slave SCL GPIO. |
+| 27 | 1 | Board LED GPIO. |
+
+Each GPIO is 0-47, or `255` when unavailable (including a board without a GPIO LED).
+These are GPIO numbers, not physical header pins. The report is built through
+`device_get_pin_assignment()`: PWM assignments come through the PWM driver boundary
+from the compiled board configuration, I2C from its board configuration, and LED
+from the SDK board definition. It does not change pins or access Core 1 runtime state.
+
+WebHID, Python and .NET read this report only when advertised, cache it for the
+connection, and clear it on disconnect/board switch. The collapsed pin map,
+monitoring GPIO column, and generator dialog all use the same reported values.
+Invalid reports produce an explicit pin-map error without inventing a fallback.
+Older firmware shows `--` and update guidance, not a hard-coded board map.
+Earlier host releases that reject identity bit 7 must be updated for this firmware.
 
 ## Report ID 2: Board Configuration
 
@@ -93,7 +154,7 @@ Running values come from the live modules (`device_bank_role()`, `device_i2c_add
 | 0 | 1 | `version` | Layout version, `1`. |
 | 1 | 7 | `running` | Bytes 0-2 Bank A/B/C backend, bytes 3-5 Bank A/B/C role, byte 6 7-bit I2C address. Values are the `pwm_driver_config` bank enums below. |
 | 8 | 7 | `target` | Same layout; takes effect only after save and restart. |
-| 15 | 1 | reserved | Zero; hosts ignore it. |
+| 15 | 1 | `led_state` | Bit 0 identification LED on; bits 1-7 zero. Valid only with identity capability bit 3; older firmware returns zero here. |
 | 16 | 1 | `clock_profile` | Target system clock request (profile table below). Always a valid, accepted profile. Takes effect after save and restart. |
 | 17 | 4 | `system_clock_hz` | Running `clk_sys`, from `system_clock_hz()`; separate from the request. |
 
@@ -101,8 +162,8 @@ Bank enums: backend `0` HW, `1` PIO, `2` SW. The backend is fixed per bank (A is
 not stored by the firmware; it is reported as a constant and a `SET_BANK` with any other value is rejected (the I2C `REG_CONFIG_SET` carries only bank and role); role `0` generator, `1` monitor.
 
 The target is changed and saved through report 20, never by writing report 2. A saved target takes effect only after
-the device restarts. HID provides no reboot, so the host asks the user to power-cycle or reset the board, then
-rereads reports 1 and 2. A host that lost the connection during a save rereads report 2 after the restart and compares
+the device restarts. Hosts may use capability-gated `SAVE_REBOOT`, or ask the user to power-cycle or reset after
+`SAVE_CONFIG`, then reread reports 1 and 2. A host that lost the connection during a save rereads report 2 after the restart and compares
 `running` with the expected values.
 
 ### System Clock Profile
@@ -170,7 +231,7 @@ length because a report ID has a single descriptor length.
 | 3 | 1 | `channel` | Channel for `SET_CHANNEL`, or bank index for `SET_BANK`. |
 | 4 | 4 | `arg0` | `freq_hz` for `SET_CHANNEL`; for `SET_BANK`, byte 0 backend and byte 1 role (enums under report 2) applied to the bank in `channel`; I2C address for `SET_I2C_ADDRESS`; profile for `SET_CLOCK_PROFILE`. Unused bytes zero. |
 | 8 | 1 | `arg1` | Duty percent `[0, 100]` for `SET_CHANNEL`. |
-| 9 | 1 | `flags` | Bit 0 confirms save; bit 1 acknowledges unsafe overclock. Bits 2-7 zero. |
+| 9 | 1 | `flags` | Bit 0 confirms save or standalone reboot; bit 1 acknowledges unsafe overclock. Bits 2-7 zero. |
 | 10 | 2 | reserved | Zero. |
 
 | Op | Name | Maps to |
@@ -181,6 +242,9 @@ length because a report ID has a single descriptor length.
 | 4 | `SET_I2C_ADDRESS` | `boot_config_set_i2c_address()`; `arg0` low byte is the 7-bit address. |
 | 5 | `SAVE_CONFIG` | `boot_config_save()`; requires flag bit 0, plus bit 1 when the target clock profile is above `1`. Persists only; it does not restart the device. See Save Cost. |
 | 6 | `SET_CLOCK_PROFILE` | Sets the target clock profile from `arg0` low byte; profiles above `1` require flag bit 1. |
+| 7 | `SAVE_REBOOT` | Same validation and persistence as `SAVE_CONFIG`; requires capability bit 2. After a successful save, the first full result read schedules a reboot in 500 ms through `device`. New actions are rejected while awaiting the result read or reboot. Storage failure never schedules a reboot. |
+| 8 | `SET_LED` | Requires capability bit 3; `arg0` is 0 (off) or 1 (on); all other fields and flags zero. Uses `device_led_set()`; returns `UNAVAILABLE` on a board without an LED. Read back report 2 to verify. |
+| 9 | `REBOOT` | Requires capability bit 4 and explicit user confirmation (flag bit 0); all other fields zero. No save occurs. Like `SAVE_REBOOT`, the first full successful result read schedules restart in 500 ms and new actions are rejected until reboot. |
 
 Operation validity, checked before any side effect; every failure returns `INVALID` and changes nothing:
 
@@ -189,13 +253,15 @@ Operation validity, checked before any side effect; every failure returns `INVAL
 - `STOP`: `channel`, `arg0`, and `arg1` are zero.
 - `SET_BANK`: `channel` is `0`-`2`, and the backend/role pair is allowed for that bank.
 - `SET_I2C_ADDRESS`: the address is accepted by `boot_config_set_i2c_address()`.
-- `SAVE_CONFIG`: flag bit 0 set (and bit 1 for an overclock target), and no other fields set.
+- `SAVE_CONFIG`, `SAVE_REBOOT`: flag bit 0 set (and bit 1 for an overclock target), and no other fields set.
 - `SET_CLOCK_PROFILE`: the profile is set in `clock_profile_mask`.
+- `SET_LED`: `arg0` is 0 or 1; all other fields zero.
+- `REBOOT`: flag bit 0 set, all other fields zero; never persists target changes.
 - Unused fields and reserved bits are zero; a nonzero value is `INVALID`.
 
 ### Save Cost
 
-`SAVE_CONFIG` erases and programs flash. The SDK flash routines do not pause the other core, so firmware locks out
+`SAVE_CONFIG` and `SAVE_REBOOT` erase and program flash. The SDK flash routines do not pause the other core, so firmware locks out
 Core 1 for the erase and program (`multicore_lockout_start_blocking()`). While locked out, Core 1 services nothing:
 software-backend edges and monitor sampling are delayed. Hosts stop software generators and ignore monitor readings
 before submitting `SAVE_CONFIG`, and resume once a final status arrives.

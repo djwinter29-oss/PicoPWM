@@ -59,7 +59,7 @@ rejects the request.
 Use the architecture-related pages as follows:
 
 - [Architecture](architecture.md) — system structure, layer boundaries, and request flow
-- [Firmware Configuration](../guides/configuration.md) — startup bank configuration, channel tables, and capability rules
+- [Firmware Configuration](../guides/configuration.md) — startup bank configuration and channel rules
 - [Pinout](../guides/pinout.md) — physical PWM, I2C, and shared-pin mapping
 - [PWM Driver Configuration](pwm_driver_config.md) — fixed channel allocation and capabilities
 - [PWM Driver Design](pwm_driver_design.md) — detailed `pwm` and backend internals
@@ -121,8 +121,9 @@ and recovery paths without providing history or a better user-visible result.
 
 CPU GPIO polling was rejected because it spends CPU time waiting and becomes
 less reliable as frequency increases. GPIO edge interrupts remain appropriate
-for the slower banks. PWM-slice input capture was rejected because it would
-couple measurement to PWM slice routing and complicate the fixed bank model.
+for the software bank. The hardware bank measures with the PWM slice counters in
+input mode (time-shared edge and high-time windows); because bank A is already
+fixed to the slice-B pins, this does not complicate the fixed bank model.
 
 PIO one-period capture is the resulting compromise: PIO provides accurate
 high/low timing for a complete period, while direct FIFO reads keep resource
@@ -181,8 +182,8 @@ Responsibilities:
 
 ### 4. Configuration and Backend Layer
 
-The PWM driver configuration owns the logical channel table and capability
-validation. Core 1 then dispatches each configured channel to its selected
+The PWM driver configuration resolves logical channels from the bank choice and
+`board.c` and validates them. Core 1 then dispatches each configured channel to its selected
 backend.
 
 Core 1 owns the backend implementations:

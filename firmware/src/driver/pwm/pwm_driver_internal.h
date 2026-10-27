@@ -10,9 +10,8 @@
 
 #include <stdint.h>
 
-/** @brief Populate the fixed channel table before Core 1 launches. */
-bool pwm_driver_configure_table(const pwm_driver_config_bank_backend_t backends[PWM_DRIVER_CONFIG_BANK_COUNT],
-                                const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]);
+/** @brief Record the bank roles before Core 1 launches. */
+bool pwm_driver_configure_table(const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]);
 
 /**
  * @brief Accumulate additional pulses from one cached base count and elapsed time.
@@ -37,11 +36,6 @@ static inline uint32_t pwm_driver_accumulate_pulse_count(uint32_t pulse_count, u
 
     return (uint32_t)total_pulses;
 }
-
-/** @brief Resolve a profile backend-local channel to its configured GPIO. */
-uint pwm_driver_get_gpio(pwm_driver_config_backend_t backend, uint backend_channel);
-/** @brief Resolve a backend-local channel to its logical profile channel. */
-uint pwm_driver_get_logical_channel(pwm_driver_config_backend_t backend, uint backend_channel);
 
 /**
  * @brief Submit one cross-core logical channel update.

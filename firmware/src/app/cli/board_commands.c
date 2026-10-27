@@ -58,22 +58,15 @@ bool board_commands_version(void *context, int argc, const char *const *argv) {
     return shell_write_line(COMMAND_SHELL, device_service_firmware_version());
 }
 
-static const char *board_commands_backend_name(pwm_driver_config_bank_backend_t backend) {
-    return backend == PWM_DRIVER_CONFIG_BANK_BACKEND_HW    ? "hw"
-           : backend == PWM_DRIVER_CONFIG_BANK_BACKEND_PIO ? "pio"
-                                                           : "sw";
-}
-
 static const char *board_commands_role_name(pwm_driver_config_bank_role_t role) {
     return role == PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR ? "gen" : "mon";
 }
 
 static void board_commands_format_config(char *line, size_t size, const char *label,
                                          const pwm_driver_config_t *config) {
-    snprintf(line, size, "%s=i2c=0x%02X A:%s/%s B:%s/%s C:%s/%s", label, (unsigned)config->i2c_address,
-             board_commands_backend_name(config->bank_a_backend), board_commands_role_name(config->bank_a_role),
-             board_commands_backend_name(config->bank_b_backend), board_commands_role_name(config->bank_b_role),
-             board_commands_backend_name(config->bank_c_backend), board_commands_role_name(config->bank_c_role));
+    snprintf(line, size, "%s=i2c=0x%02X A:hw/%s B:pio/%s C:sw/%s", label, (unsigned)config->i2c_address,
+             board_commands_role_name(config->bank_a_role), board_commands_role_name(config->bank_b_role),
+             board_commands_role_name(config->bank_c_role));
 }
 
 bool board_commands_config(void *context, int argc, const char *const *argv) {
@@ -105,26 +98,22 @@ bool board_commands_config(void *context, int argc, const char *const *argv) {
                                                    : "ERR invalid I2C address");
     }
 
-    if ((argc != 5) || (strcmp(argv[1], "set") != 0)) {
+    if ((argc != 4) || (strcmp(argv[1], "set") != 0)) {
         return shell_write_line(COMMAND_SHELL,
-                                "ERR usage: config [set <a|b|c> <hw|pio|sw> <gen|mon>|address <7-bit>|save]");
+                                "ERR usage: config [set <a|b|c> <gen|mon>|address <7-bit>|save]");
     }
 
     pwm_driver_config_bank_t bank = (strcmp(argv[2], "a") == 0)   ? PWM_DRIVER_CONFIG_BANK_A
                                     : (strcmp(argv[2], "b") == 0) ? PWM_DRIVER_CONFIG_BANK_B
                                     : (strcmp(argv[2], "c") == 0) ? PWM_DRIVER_CONFIG_BANK_C
                                                                   : PWM_DRIVER_CONFIG_BANK_COUNT;
-    pwm_driver_config_bank_backend_t backend = (strcmp(argv[3], "hw") == 0)    ? PWM_DRIVER_CONFIG_BANK_BACKEND_HW
-                                               : (strcmp(argv[3], "pio") == 0) ? PWM_DRIVER_CONFIG_BANK_BACKEND_PIO
-                                               : (strcmp(argv[3], "sw") == 0)  ? PWM_DRIVER_CONFIG_BANK_BACKEND_SW
-                                                                               : PWM_DRIVER_CONFIG_BANK_BACKEND_SW + 1u;
-    pwm_driver_config_bank_role_t role = (strcmp(argv[4], "gen") == 0)   ? PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR
-                                         : (strcmp(argv[4], "mon") == 0) ? PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR
+    pwm_driver_config_bank_role_t role = (strcmp(argv[3], "gen") == 0)   ? PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR
+                                         : (strcmp(argv[3], "mon") == 0) ? PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR
                                                                          : PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR + 1u;
 
-    return shell_write_line(COMMAND_SHELL, device_service_config_set_bank(bank, backend, role)
+    return shell_write_line(COMMAND_SHELL, device_service_config_set_bank(bank, role)
                                                ? "OK target updated; save then reboot"
-                                               : "ERR invalid bank/backend/role");
+                                               : "ERR invalid bank/role");
 }
 
 bool board_commands_led(void *context, int argc, const char *const *argv) {

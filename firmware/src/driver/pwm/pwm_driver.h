@@ -24,9 +24,6 @@ typedef pwm_driver_config_bank_role_t pwm_driver_bank_role_t;
 
 /** @brief Complete startup configuration for the three fixed PWM banks. */
 typedef struct {
-    pwm_driver_config_bank_backend_t bank_a_backend; /**< Bank A backend family: HW or SW. */
-    pwm_driver_config_bank_backend_t bank_b_backend; /**< Bank B backend family: PIO or SW. */
-    pwm_driver_config_bank_backend_t bank_c_backend; /**< Bank C backend family: SW only. */
     pwm_driver_bank_role_t bank_a_role;              /**< Bank A role. */
     pwm_driver_bank_role_t bank_b_role;              /**< Bank B role. */
     pwm_driver_bank_role_t bank_c_role;              /**< Bank C role. */
@@ -35,7 +32,7 @@ typedef struct {
 
 /** @brief Return the safe default startup configuration. */
 void pwm_driver_config_default(pwm_driver_config_t *config);
-/** @brief Validate backend and role combinations for the fixed A/B/C map. */
+/** @brief Validate roles and I2C address. */
 bool pwm_driver_config_validate_target(const pwm_driver_config_t *config);
 /** @brief Load the persisted target; returns the default when storage is invalid. */
 bool pwm_driver_config_load_target(pwm_driver_config_t *config);
@@ -55,8 +52,7 @@ bool pwm_driver_config_get_target(pwm_driver_config_t *config);
 /** @brief Copy the immutable running configuration snapshot. */
 bool pwm_driver_config_get_running(pwm_driver_config_t *config);
 /** @brief Update one target bank without changing running hardware. */
-bool pwm_driver_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_backend_t backend,
-                                pwm_driver_config_bank_role_t role);
+bool pwm_driver_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_role_t role);
 /** @brief Update the target I2C address without changing the running address. */
 bool pwm_driver_config_set_i2c_address(uint8_t address);
 

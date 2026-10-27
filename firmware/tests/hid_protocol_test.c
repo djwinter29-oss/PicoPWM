@@ -12,12 +12,8 @@ static int channel_sets;
 static uint last_channel;
 static uint32_t last_freq;
 static uint8_t last_duty;
-static pwm_driver_config_bank_backend_t bank_backend;
 static pwm_driver_config_bank_role_t bank_role;
 static pwm_driver_config_t running_config = {
-    .bank_a_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_HW,
-    .bank_b_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_PIO,
-    .bank_c_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_SW,
     .bank_a_role = PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
     .bank_b_role = PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR,
     .bank_c_role = PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
@@ -38,12 +34,10 @@ bool device_service_config_get_target(pwm_driver_config_t *config) {
     return true;
 }
 
-bool device_service_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_backend_t backend,
-                                pwm_driver_config_bank_role_t role) {
+bool device_service_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_role_t role) {
     (void)bank;
-    bank_backend = backend;
     bank_role = role;
-    return backend <= PWM_DRIVER_CONFIG_BANK_BACKEND_SW;
+    return true;
 }
 
 bool device_service_config_save_target(void) {
@@ -138,7 +132,9 @@ int main(void) {
     assert(result_status(11, HID_OP_STOP) == HID_STATUS_OK);
 
     send(12, HID_OP_SET_BANK, 1, 1u | (1u << 8), 0, 0);
-    assert(result_status(12, HID_OP_SET_BANK) == HID_STATUS_OK && bank_backend == 1 && bank_role == 1);
+    assert(result_status(12, HID_OP_SET_BANK) == HID_STATUS_OK && bank_role == 1);
+    send(40, HID_OP_SET_BANK, 1, 2u, 0, 0);
+    assert(result_status(40, HID_OP_SET_BANK) == HID_STATUS_INVALID);
     send(13, HID_OP_SET_I2C_ADDRESS, 0, 0x21, 0, 0);
     assert(result_status(13, HID_OP_SET_I2C_ADDRESS) == HID_STATUS_OK);
     send(14, HID_OP_SET_I2C_ADDRESS, 0, 0x100, 0, 0);

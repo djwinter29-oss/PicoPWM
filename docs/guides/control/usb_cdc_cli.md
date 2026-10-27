@@ -39,7 +39,7 @@ Implemented by `board_commands.*`.
 | `info` | Show the device type. | `info` |
 | `version` | Show the build-time firmware version. | `version` |
 | `config` | Show running and target Bank A/B/C settings. | `config` |
-| `config set <a|b|c> <hw|pio|sw> <gen|mon>` | Change one target bank. | `config set a hw gen` |
+| `config set <a|b|c> <gen|mon>` | Change one target bank role. | `config set a gen` |
 | `config save` | Persist target settings; reboot to apply. | `config save` |
 | `config address <7-bit>` | Change the target I2C address. | `config address 0x42` |
 | `led <on\|off>` | Set the board LED state. | `led on` |

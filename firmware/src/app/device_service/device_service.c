@@ -29,9 +29,8 @@ bool device_service_config_get_running(pwm_driver_config_t *config) {
     return pwm_driver_config_get_running(config);
 }
 
-bool device_service_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_backend_t backend,
-                                pwm_driver_config_bank_role_t role) {
-    return pwm_driver_config_set_bank(bank, backend, role);
+bool device_service_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_role_t role) {
+    return pwm_driver_config_set_bank(bank, role);
 }
 
 bool device_service_config_save_target(void) {
@@ -51,8 +50,7 @@ bool device_service_config_target_dirty(void) {
         return false;
     }
     (void)pwm_driver_config_load_target(&saved);
-    return target.bank_a_backend != saved.bank_a_backend || target.bank_b_backend != saved.bank_b_backend ||
-           target.bank_c_backend != saved.bank_c_backend || target.bank_a_role != saved.bank_a_role ||
+    return target.bank_a_role != saved.bank_a_role ||
            target.bank_b_role != saved.bank_b_role || target.bank_c_role != saved.bank_c_role ||
            target.i2c_address != saved.i2c_address;
 }

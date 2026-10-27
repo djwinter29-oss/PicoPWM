@@ -90,7 +90,7 @@ static void pio_mon_reset_channel(pio_mon_channel_t *ctx) {
 /** @brief Publish a permanent-high or permanent-low level after prolonged inactivity. */
 static void pio_mon_publish_static_level(uint channel) {
     pio_mon_channel_t *ctx = &pio_mon_channels[channel];
-    bool high = gpio_get(pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR, channel));
+    bool high = gpio_get(pio_pwm_config.channels[channel].gpio);
 
     pio_mon_publish_state(ctx, 0u, high ? 100u : 0u, true);
 }
@@ -165,10 +165,10 @@ bool pio_mon_init(void) {
         pio_mon_program_offsets[1] = pio_add_program(pio1, &monitor_program);
     }
 
-    for (uint channel = 0; channel < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR);
+    for (uint channel = 0; channel < PWM_DRIVER_CONFIG_BANK_SIZE;
          channel++) {
         pio_mon_channel_t *ctx = &pio_mon_channels[channel];
-        uint pin = pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR, channel);
+        uint pin = pio_pwm_config.channels[channel].gpio;
         uint8_t program_offset;
 
         ctx->pio = pio_mon_pio_for_channel(channel);
@@ -189,7 +189,7 @@ bool pio_mon_init(void) {
 /** @copydoc pio_mon_get */
 bool pio_mon_get(uint channel, pwm_driver_state_t *state) {
     if (!pio_mon_initialized ||
-        channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR) || state == NULL) {
+        channel >= PWM_DRIVER_CONFIG_BANK_SIZE || state == NULL) {
         return false;
     }
 

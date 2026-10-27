@@ -7,67 +7,47 @@ configuration. The host edits that target, saves it, and applies it by rebooting
 See [Firmware Configuration](../guides/configuration.md#startup-bank-configuration) for the
 host-facing model.
 
-## Channel Table Ownership
+## Channel Resolution
 
 `pwm_driver_config.c` owns:
 
-- the runtime `pwm_driver_config_channels[PWM_DRIVER_CONFIG_CHANNEL_COUNT]` table, which
-  starts fully `DISABLED` at boot
-- the fixed GPIO assignment for each bank (`pwm_driver_config_bank_gpio`)
-- `pwm_driver_config_configure()`, which fills in all bank entries from the
-  startup roles, using the channel-entry macros in
-  `firmware/src/driver/pwm/pwm_driver_table.h`
-- the shared lookup/validation helpers (`pwm_driver_config_get_channel`, `pwm_driver_config_get_gpio`,
-  `pwm_driver_config_validate`, etc.)
+- the per-bank role recorded by `pwm_driver_configure_table()`
+- the per-channel lookups (`pwm_driver_config_channel_role`, `pwm_driver_config_channel_name`),
+  the frequency limits (`pwm_driver_config_frequency_supported`) and `pwm_driver_config_validate`
+- startup configuration persistence (flash records)
 
-Do not add channel-routing or persistence logic outside `pwm_driver_config.c`; that file
-is the single source of truth for the channel table.
-
-## Channel Entry
-
-Each entry (built by the macros in `channel_table.h`) defines:
-
-| Field | Requirement |
-| --- | --- |
-| `backend` | Generator or monitor backend implementation. |
-| `direction` | `OUTPUT`, `INPUT`, or `DISABLED`. |
-| `gpio` | Fixed per-bank GPIO (see below); ignored while `DISABLED`. |
-| `backend_channel` | Local index accepted by the backend (0..7 within a bank). |
-| `capabilities` | At least `READ` or `SET` as appropriate. |
-| `min_frequency_hz` | Minimum generated or measurable nonzero frequency. |
-| `max_frequency_hz` | Maximum generated or measurable frequency. |
-| `accuracy_ppm` | Expected generation or measurement accuracy. |
+Each bank is wired to one module: A=`hardware`, B=`pio`, C=`software`. The module reads its
+GPIOs straight from its `board.c` const (`hardware_pwm_config`, `pio_pwm_config`,
+`software_pwm_config`). `pwm_driver.c` initializes the generator or monitor variant once at
+boot according to the bank role and routes `channel / 8` (bank) and `channel % 8` (index) to
+it. A monitor module has no `set`, so writes are refused. There is no stored channel table.
 
 The common validator uses these board-policy compile definitions by default:
 
 - `PWM_DRIVER_CONFIG_GPIO_COUNT=30`
-- `PWM_DRIVER_CONFIG_RESERVED_GPIO_MASK` reserving I2C1 GPIO `26/27` and LED GPIO `25`
 - `PWM_DRIVER_CONFIG_REQUIRE_HW_CHANNEL_B=1`
 
 A custom board target may override these definitions in its CMake branch when
-its GPIO count, reserved pins, or hardware PWM pin policy differs.
+its GPIO count or hardware PWM pin policy differs.
 
 ## Fixed Bank GPIO Map and Backend Rules
 
 | Bank | Logical channels | GPIOs |
 | --- | --- | --- |
-| Bank A | 0..7 | `1, 3, 5, 7, 9, 11, 13, 15` (slice-B); HW or SW backend |
-| Bank B | 8..15 | `0, 2, 4, 6, 8, 10, 12, 14` (companion slice-A); PIO or SW backend |
+| Bank A | 0..7 | `1, 3, 5, 7, 9, 11, 13, 15` (slice-B); HW backend |
+| Bank B | 8..15 | `0, 2, 4, 6, 8, 10, 12, 14` (companion slice-A); PIO backend |
 | Bank C | 16..23 | `16, 17, 18, 19, 20, 21, 22, 28`; SW backend only |
 
-This map is fixed in `pwm_driver_config.c` and is not configurable at runtime; see
+This map is defined in `config/board.c` and is not configurable at runtime; see
 [Pinout](../guides/pinout.md) for the physical rationale.
 
 ## Resource Rules
 
-`pwm_driver_config_validate_table()` (and by extension every locked bank) enforces:
+`pwm_driver_config_validate()` (run when the banks are configured) enforces:
 
 - GPIO ownership is unique.
-- Input and output direction matches the backend.
 - Hardware PWM channels are fixed to the 8 slice-B GPIOs; PIO channels are
   capped at 8 and fixed to the 8 companion slice-A GPIOs.
-- Generator requests stay within the profile frequency envelope.
-- Monitor limits describe the actual measurement capability.
 - I2C register ranges still cover the advertised logical channel count.
 
 GPIO23 and GPIO24 are optional software-only pins reserved for custom boards.
@@ -80,12 +60,11 @@ The fixed 3-bank, 8-pins-each layout is not expected to change for the
 standard Pico board. If a custom board needs a different physical layout:
 
 1. Add board-specific compile definitions (`PWM_DRIVER_CONFIG_GPIO_COUNT`,
-   `PWM_DRIVER_CONFIG_RESERVED_GPIO_MASK`, `PWM_DRIVER_CONFIG_REQUIRE_HW_CHANNEL_B`) in a
+   `PWM_DRIVER_CONFIG_REQUIRE_HW_CHANNEL_B`) in a
    CMake branch, following the existing board-policy pattern.
-2. If the bank/GPIO layout itself needs to change, update
-  `pwm_driver_config_bank_gpio` and the bank-to-backend mapping in
-  `pwm_driver_config_fill_bank()`/`pwm_driver_config_configure()` — both stay inside
-  `pwm_driver_config.c`.
+2. If the bank/GPIO layout itself needs to change, update the
+  `board.c` consts and the bank-to-backend mapping in
+  `pwm_driver_backends[][]` and `pwm_driver_configure_table()`.
 3. Add or update firmware host-side tests in `firmware/tests/pwm_driver_config_test.c`
   and `firmware/tests/CMakeLists.txt`; run them through
   `tools/test/test-firmware-c.sh`.

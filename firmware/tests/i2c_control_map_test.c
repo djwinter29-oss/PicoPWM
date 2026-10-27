@@ -26,9 +26,6 @@ bool device_service_config_get_running(pwm_driver_config_t *config) {
     if ((config == NULL) || !config_read_ok)
         return false;
     *config = (pwm_driver_config_t){
-        .bank_a_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_HW,
-        .bank_b_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_PIO,
-        .bank_c_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_SW,
         .bank_a_role = PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
         .bank_b_role = PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
         .bank_c_role = PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
@@ -40,10 +37,8 @@ bool device_service_config_get_target(pwm_driver_config_t *config) {
     return device_service_config_get_running(config);
 }
 
-bool device_service_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_backend_t backend,
-                                pwm_driver_config_bank_role_t role) {
+bool device_service_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_role_t role) {
     (void)bank;
-    (void)backend;
     (void)role;
     return set_bank_ok;
 }
@@ -111,9 +106,9 @@ static void test_read_responses(void) {
 
     assert(i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CONFIG, 0u, response, sizeof(response), &response_len));
     assert(response_len == 14u);
-    assert(response[0] == PWM_DRIVER_CONFIG_BANK_BACKEND_HW);
-    assert(response[2] == PWM_DRIVER_CONFIG_BANK_BACKEND_PIO);
-    assert(response[4] == PWM_DRIVER_CONFIG_BANK_BACKEND_SW);
+    assert(response[0] == 0u);
+    assert(response[2] == 1u);
+    assert(response[4] == 2u);
 
     assert(i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CH_BASE, 0u, response, sizeof(response), &response_len));
     assert(response_len == 9u);
@@ -148,7 +143,7 @@ static void test_remaining_registers(void) {
     const uint8_t led_on[] = {1u};
     const uint8_t led_off[] = {0u};
     const uint8_t led_bad[] = {2u};
-    const uint8_t bank_payload[] = {0u, PWM_DRIVER_CONFIG_BANK_BACKEND_HW, PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR};
+    const uint8_t bank_payload[] = {0u, 0u, PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR};
     const uint8_t address_payload[] = {0x41u};
     const uint8_t address_low[] = {0x01u};
     uint8_t extra = 1u;

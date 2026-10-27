@@ -97,8 +97,8 @@ Backed by `device_service_config_get_running()` and `device_service_config_get_t
 | 16 | 1 | `clock_profile` | Target system clock request (profile table below). Always a valid, accepted profile. Takes effect after save and restart. |
 | 17 | 4 | `system_clock_hz` | Running `clk_sys`, from `system_clock_hz()`; separate from the request. |
 
-Bank enums, as in `pwm_driver_config.h`: backend `0` HW, `1` PIO, `2` SW (Bank A takes HW or SW, Bank B PIO or SW,
-Bank C SW only); role `0` generator, `1` monitor.
+Bank enums: backend `0` HW, `1` PIO, `2` SW. The backend is fixed per bank (A is HW, B is PIO, C is SW) and is
+not stored by the firmware; it is reported as a constant and a `SET_BANK`/`CONFIG_SET` with any other value is rejected; role `0` generator, `1` monitor.
 
 The target is changed and saved through report 20, never by writing report 2. A saved target takes effect only after
 the device restarts. HID provides no reboot, so the host asks the user to power-cycle or reset the board, then

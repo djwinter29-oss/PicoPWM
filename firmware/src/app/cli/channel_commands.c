@@ -86,8 +86,7 @@ static bool channel_commands_parse_u8(const char *text, uint8_t *value_out) {
 
 static bool channel_commands_write_status_row(shell_t *shell, int channel, const pwm_driver_state_t *state) {
     char line[96];
-    const pwm_driver_config_channel_t *profile = pwm_driver_config_get_channel((uint)channel);
-    const char *type = (profile == NULL) ? "?" : pwm_driver_config_backend_name(profile->backend);
+    const char *type = pwm_driver_config_channel_name((uint)channel);
 
     snprintf(line, sizeof(line), "%-2d  %-7s  %-3s  %9lu  %6u  %lu", channel, type, state->freq_hz > 0u ? "ON" : "OFF",
              (unsigned long)state->freq_hz, (unsigned)state->duty, (unsigned long)state->pulse_count);

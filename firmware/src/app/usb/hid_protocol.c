@@ -64,9 +64,10 @@ static void parse_version(const char *text, uint8_t out[3]) {
 }
 
 static void pack_bank_config(uint8_t *out, const pwm_driver_config_t *config) {
-    out[0] = (uint8_t)config->bank_a_backend;
-    out[1] = (uint8_t)config->bank_b_backend;
-    out[2] = (uint8_t)config->bank_c_backend;
+    /* Bytes 0-2 are the fixed backend ids (A=HW 0, B=PIO 1, C=SW 2), kept for wire compatibility. */
+    out[0] = 0u;
+    out[1] = 1u;
+    out[2] = 2u;
     out[3] = (uint8_t)config->bank_a_role;
     out[4] = (uint8_t)config->bank_b_role;
     out[5] = (uint8_t)config->bank_c_role;
@@ -209,8 +210,8 @@ static hid_status_t execute(const uint8_t *r) {
         return (hid_status_t)device_service_restore_defaults();
     case HID_OP_SET_BANK:
         if (channel >= HID_BANK_COUNT || (arg0 & 0xFFFF0000u) != 0u || arg1 != 0u || flags != 0u ||
+            (arg0 & 0xFFu) != channel ||
             !device_service_config_set_bank((pwm_driver_config_bank_t)channel,
-                                        (pwm_driver_config_bank_backend_t)(arg0 & 0xFFu),
                                         (pwm_driver_config_bank_role_t)((arg0 >> 8) & 0xFFu))) {
             return HID_STATUS_INVALID;
         }

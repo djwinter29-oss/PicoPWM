@@ -33,8 +33,9 @@ flash when that victim is not armed, so Core 0 cannot block forever inside the
 multicore lockout.
 
 Each bank is configured independently, so `2^3 = 8` role combinations are
-reachable in one firmware image. Backend-family choices are constrained:
-Bank A allows HW or SW, Bank B allows PIO or SW, and Bank C allows SW only.
+reachable in one firmware image. Each bank is pinned to one backend family: Bank A is HW, Bank B is PIO, and
+Bank C is SW. Only the role (generator or monitor) is selectable; a request for
+any other backend is rejected.
 
 | HW bank (GPIO 1,3,5,7,9,11,13,15) | PIO bank (GPIO 0,2,4,6,8,10,12,14) | SW bank (GPIO 16,17,18,19,20,21,22,28) |
 | --- | --- | --- |

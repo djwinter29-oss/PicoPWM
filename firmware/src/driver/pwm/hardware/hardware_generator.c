@@ -65,7 +65,7 @@ static uint8_t hw_gen_static_duty(uint8_t duty_percent) {
 
 /** @brief Apply one realized static hardware output state and publish the matching shared snapshot. */
 static void hw_gen_apply_static_state(uint channel, uint8_t realized_duty) {
-    uint gpio = pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR, channel);
+    uint gpio = hardware_pwm_config.channels[channel].gpio;
     uint slice = pwm_gpio_to_slice_num(gpio);
     uint ch = pwm_gpio_to_channel(gpio);
 
@@ -106,7 +106,7 @@ static void hw_gen_publish_state(uint channel, uint32_t realized_freq_hz, uint8_
     state.duty = realized_duty;
     state.pulse_count = hw_channels[channel].pulse_count;
 
-    pwm_driver_store_applied_state(pwm_driver_get_logical_channel(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR, channel),
+    pwm_driver_store_applied_state(((uint)PWM_DRIVER_CONFIG_BANK_A * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)),
                                    &state);
 }
 
@@ -231,8 +231,8 @@ static bool hw_gen_find_timing(uint32_t freq_hz, uint32_t *best_top, uint16_t *b
 bool hw_gen_init(void) {
     hw_gen_sys_clk_hz = clock_get_hz(clk_sys);
 
-    for (int i = 0; i < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR); i++) {
-        uint gpio = pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR, i);
+    for (int i = 0; i < PWM_DRIVER_CONFIG_BANK_SIZE; i++) {
+        uint gpio = hardware_pwm_config.channels[i].gpio;
         hw_gen_bind_pwm_pin(gpio);
 
         uint slice = pwm_gpio_to_slice_num(gpio);
@@ -261,12 +261,12 @@ bool hw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     uint32_t realized_freq_hz;
     uint8_t static_duty;
 
-    if (channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR))
+    if (channel >= PWM_DRIVER_CONFIG_BANK_SIZE)
         return false;
     if (duty > 100u)
         duty = 100u;
 
-    uint gpio = pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR, channel);
+    uint gpio = hardware_pwm_config.channels[channel].gpio;
     uint slice = pwm_gpio_to_slice_num(gpio);
     uint ch = pwm_gpio_to_channel(gpio);
 
@@ -301,19 +301,9 @@ bool hw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     return true;
 }
 
-/** @copydoc hw_gen_restore_defaults */
-bool hw_gen_restore_defaults(void) {
-    for (uint channel = 0; channel < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR);
-         channel++) {
-        hw_gen_apply_static_state(channel, PWM_DRIVER_STOPPED_DUTY_PERCENT);
-    }
-
-    return true;
-}
-
 /** @copydoc hw_gen_finalize_readback */
 void hw_gen_finalize_readback(uint channel, pwm_driver_state_t *state, uint64_t pulse_ref_us) {
-    if (channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR) || state == NULL ||
+    if (channel >= PWM_DRIVER_CONFIG_BANK_SIZE || state == NULL ||
         state->freq_hz == PWM_DRIVER_STOPPED_FREQ_HZ) {
         return;
     }

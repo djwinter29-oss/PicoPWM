@@ -24,9 +24,9 @@ profiles.
 
 | Bank | Logical channels | GPIOs | Allowed backend families |
 |---|---:|---|---|
-| Bank A | 0..7 | GPIO `1,3,5,7,9,11,13,15` | HW generator/monitor or SW generator/monitor |
-| Bank B | 8..15 | GPIO `0,2,4,6,8,10,12,14` | PIO generator/monitor or SW generator/monitor |
-| Bank C | 16..23 | GPIO `16,17,18,19,20,21,22,28` | SW generator or SW monitor only |
+| Bank A | 0..7 | GPIO `1,3,5,7,9,11,13,15` | HW generator or monitor |
+| Bank B | 8..15 | GPIO `0,2,4,6,8,10,12,14` | PIO generator or monitor |
+| Bank C | 16..23 | GPIO `16,17,18,19,20,21,22,28` | SW generator or monitor |
 
 The startup `pwm_driver_config_t` selects one backend family and one role for
 each bank. The mapping cannot be changed at runtime.

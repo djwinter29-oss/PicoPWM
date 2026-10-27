@@ -4,7 +4,6 @@
  */
 
 #include "pwm_driver_config.h"
-#include "pwm_driver_table.h"
 #include "pwm_driver.h"
 
 #include "platform/system.h"
@@ -17,7 +16,7 @@
 #include <string.h>
 
 #define PWM_DRIVER_CONFIG_MAGIC 0x50434F4Eu
-#define PWM_DRIVER_CONFIG_VERSION 1u
+#define PWM_DRIVER_CONFIG_VERSION 2u
 #define PWM_DRIVER_CONFIG_SLOT_COUNT 2u
 #ifndef PICO_PWM_CONFIG_FLASH_OFFSET
 #error "PICO_PWM_CONFIG_FLASH_OFFSET must be provided by the firmware build"
@@ -29,7 +28,6 @@ static pwm_driver_config_t pwm_driver_config_target;
 typedef struct {
     uint32_t magic;
     uint32_t version;
-    uint8_t backends[PWM_DRIVER_CONFIG_BANK_COUNT];
     uint8_t roles[PWM_DRIVER_CONFIG_BANK_COUNT];
     uint8_t i2c_address;
     uint32_t generation;
@@ -51,9 +49,6 @@ void pwm_driver_config_default(pwm_driver_config_t *config) {
     if (config == NULL)
         return;
     *config = (pwm_driver_config_t){
-        .bank_a_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_HW,
-        .bank_b_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_PIO,
-        .bank_c_backend = PWM_DRIVER_CONFIG_BANK_BACKEND_SW,
         .bank_a_role = PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR,
         .bank_b_role = PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR,
         .bank_c_role = PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR,
@@ -64,12 +59,8 @@ void pwm_driver_config_default(pwm_driver_config_t *config) {
 bool pwm_driver_config_validate_target(const pwm_driver_config_t *config) {
     if (config == NULL)
         return false;
-    return (config->bank_a_backend <= PWM_DRIVER_CONFIG_BANK_BACKEND_SW) &&
-           (config->bank_b_backend <= PWM_DRIVER_CONFIG_BANK_BACKEND_SW) &&
-           (config->bank_c_backend == PWM_DRIVER_CONFIG_BANK_BACKEND_SW) &&
-           (config->bank_a_backend != PWM_DRIVER_CONFIG_BANK_BACKEND_PIO) &&
-           (config->bank_b_backend != PWM_DRIVER_CONFIG_BANK_BACKEND_HW) &&
-           (config->bank_a_role <= PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR) &&
+    /* Each bank is pinned to one backend; only its role is selectable. */
+    return (config->bank_a_role <= PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR) &&
            (config->bank_b_role <= PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR) &&
            (config->bank_c_role <= PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR) && (config->i2c_address >= 0x08u) &&
            (config->i2c_address <= 0x77u);
@@ -98,9 +89,6 @@ bool pwm_driver_config_load_target(pwm_driver_config_t *config) {
     record =
         (first_valid && (!second_valid || (int32_t)(first->generation - second->generation) >= 0)) ? first : second;
 
-    candidate.bank_a_backend = (pwm_driver_config_bank_backend_t)record->backends[PWM_DRIVER_CONFIG_BANK_A];
-    candidate.bank_b_backend = (pwm_driver_config_bank_backend_t)record->backends[PWM_DRIVER_CONFIG_BANK_B];
-    candidate.bank_c_backend = (pwm_driver_config_bank_backend_t)record->backends[PWM_DRIVER_CONFIG_BANK_C];
     candidate.bank_a_role = (pwm_driver_config_bank_role_t)record->roles[PWM_DRIVER_CONFIG_BANK_A];
     candidate.bank_b_role = (pwm_driver_config_bank_role_t)record->roles[PWM_DRIVER_CONFIG_BANK_B];
     candidate.bank_c_role = (pwm_driver_config_bank_role_t)record->roles[PWM_DRIVER_CONFIG_BANK_C];
@@ -130,9 +118,6 @@ bool pwm_driver_config_save_target(const pwm_driver_config_t *config) {
     }
     record.magic = PWM_DRIVER_CONFIG_MAGIC;
     record.version = PWM_DRIVER_CONFIG_VERSION;
-    record.backends[PWM_DRIVER_CONFIG_BANK_A] = (uint8_t)config->bank_a_backend;
-    record.backends[PWM_DRIVER_CONFIG_BANK_B] = (uint8_t)config->bank_b_backend;
-    record.backends[PWM_DRIVER_CONFIG_BANK_C] = (uint8_t)config->bank_c_backend;
     record.roles[PWM_DRIVER_CONFIG_BANK_A] = (uint8_t)config->bank_a_role;
     record.roles[PWM_DRIVER_CONFIG_BANK_B] = (uint8_t)config->bank_b_role;
     record.roles[PWM_DRIVER_CONFIG_BANK_C] = (uint8_t)config->bank_c_role;
@@ -201,23 +186,18 @@ bool pwm_driver_config_get_running(pwm_driver_config_t *config) {
     return true;
 }
 
-bool pwm_driver_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_backend_t backend,
-                                pwm_driver_config_bank_role_t role) {
+bool pwm_driver_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_role_t role) {
     pwm_driver_config_t candidate = pwm_driver_config_target;
-    if ((bank >= PWM_DRIVER_CONFIG_BANK_COUNT) || (backend > PWM_DRIVER_CONFIG_BANK_BACKEND_SW) ||
-        (role > PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR))
+    if ((bank >= PWM_DRIVER_CONFIG_BANK_COUNT) || (role > PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR))
         return false;
     switch (bank) {
     case PWM_DRIVER_CONFIG_BANK_A:
-        candidate.bank_a_backend = backend;
         candidate.bank_a_role = role;
         break;
     case PWM_DRIVER_CONFIG_BANK_B:
-        candidate.bank_b_backend = backend;
         candidate.bank_b_role = role;
         break;
     case PWM_DRIVER_CONFIG_BANK_C:
-        candidate.bank_c_backend = backend;
         candidate.bank_c_role = role;
         break;
     default:
@@ -238,133 +218,58 @@ bool pwm_driver_config_set_i2c_address(uint8_t address) {
     return true;
 }
 
-/**
- * @brief Runtime logical channel table.
- *
- * All channels start `DISABLED` at boot. Each bank's 8 channels are filled in
- * once by `pwm_driver_configure_table()` before Core 1 starts.
- */
-static pwm_driver_config_channel_t pwm_driver_config_channels[PWM_DRIVER_CONFIG_CHANNEL_COUNT] = {
-    [0 ... PWM_DRIVER_CONFIG_CHANNEL_COUNT - 1] = {.direction = PWM_DRIVER_CONFIG_DIRECTION_DISABLED},
-};
+/** @brief Bank roles chosen at startup; set once before Core 1 launches. */
+static pwm_driver_config_bank_role_t pwm_driver_config_bank_roles[PWM_DRIVER_CONFIG_BANK_COUNT];
 static bool pwm_driver_config_table_configured = false;
 
-const pwm_driver_config_channel_t *pwm_driver_config_get_channel(uint channel) {
-    if (channel >= PWM_DRIVER_CONFIG_CHANNEL_COUNT) {
-        return NULL;
+/** @brief Return the board GPIO for one channel of a bank. */
+static uint pwm_driver_config_bank_gpio(pwm_driver_config_bank_t bank, uint index) {
+    switch (bank) {
+    case PWM_DRIVER_CONFIG_BANK_A:
+        return hardware_pwm_config.channels[index].gpio;
+    case PWM_DRIVER_CONFIG_BANK_B:
+        return pio_pwm_config.channels[index].gpio;
+    default:
+        return software_pwm_config.channels[index].gpio;
     }
-
-    return &pwm_driver_config_channels[channel];
 }
 
-bool pwm_driver_config_get_gpio(pwm_driver_config_backend_t backend, uint backend_channel, uint *gpio_out) {
-    if (gpio_out == NULL) {
+bool pwm_driver_config_channel_role(uint channel, pwm_driver_config_bank_role_t *role) {
+    if (!pwm_driver_config_table_configured || (role == NULL) || (channel >= PWM_DRIVER_CONFIG_CHANNEL_COUNT)) {
         return false;
     }
-
-    for (uint channel = 0u; channel < PWM_DRIVER_CONFIG_CHANNEL_COUNT; ++channel) {
-        const pwm_driver_config_channel_t *profile = &pwm_driver_config_channels[channel];
-        if (profile->direction != PWM_DRIVER_CONFIG_DIRECTION_DISABLED && profile->backend == backend &&
-            profile->backend_channel == backend_channel) {
-            *gpio_out = profile->gpio;
-            return true;
-        }
-    }
-
-    return false;
+    *role = pwm_driver_config_bank_roles[channel / PWM_DRIVER_CONFIG_BANK_SIZE];
+    return true;
 }
 
-bool pwm_driver_config_get_logical_channel(pwm_driver_config_backend_t backend, uint backend_channel,
-                                           uint *channel_out) {
-    if (channel_out == NULL) {
-        return false;
-    }
+const char *pwm_driver_config_channel_name(uint channel) {
+    static const char *const names[PWM_DRIVER_CONFIG_BANK_COUNT][2] = {
+        {"HW", "HW-MON"},
+        {"PIO", "PIO-MON"},
+        {"SW", "SW-MON"},
+    };
+    pwm_driver_config_bank_role_t role;
 
-    for (uint channel = 0u; channel < PWM_DRIVER_CONFIG_CHANNEL_COUNT; ++channel) {
-        const pwm_driver_config_channel_t *profile = &pwm_driver_config_channels[channel];
-        if (profile->direction != PWM_DRIVER_CONFIG_DIRECTION_DISABLED && profile->backend == backend &&
-            profile->backend_channel == backend_channel) {
-            *channel_out = channel;
-            return true;
-        }
-    }
-
-    return false;
+    return pwm_driver_config_channel_role(channel, &role) ? names[channel / PWM_DRIVER_CONFIG_BANK_SIZE][role] : "?";
 }
 
-uint pwm_driver_config_backend_channel_count(pwm_driver_config_backend_t backend) {
-    uint count = 0u;
+bool pwm_driver_config_validate(void) {
+    uint32_t used = 0u;
 
-    for (uint channel = 0u; channel < PWM_DRIVER_CONFIG_CHANNEL_COUNT; ++channel) {
-        count += (pwm_driver_config_channels[channel].direction != PWM_DRIVER_CONFIG_DIRECTION_DISABLED &&
-                  pwm_driver_config_channels[channel].backend == backend)
-                     ? 1u
-                     : 0u;
-    }
+    for (pwm_driver_config_bank_t bank = PWM_DRIVER_CONFIG_BANK_A; bank < PWM_DRIVER_CONFIG_BANK_COUNT; ++bank) {
+        for (uint i = 0u; i < PWM_DRIVER_CONFIG_BANK_SIZE; ++i) {
+            uint gpio = pwm_driver_config_bank_gpio(bank, i);
 
-    return count;
-}
-
-bool pwm_driver_config_validate_table(const pwm_driver_config_channel_t *channels, uint count) {
-    if (channels == NULL || count != PWM_DRIVER_CONFIG_CHANNEL_COUNT) {
-        return false;
-    }
-
-    for (uint channel = 0u; channel < count; ++channel) {
-        const pwm_driver_config_channel_t *profile = &channels[channel];
-
-        if (profile->backend > PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR) {
-            return false;
-        }
-        if (profile->direction == PWM_DRIVER_CONFIG_DIRECTION_DISABLED) {
-            if (profile->capabilities != 0u) {
+            if (gpio >= PWM_DRIVER_CONFIG_GPIO_COUNT || (used & (1u << gpio)) != 0u) {
                 return false;
             }
-            continue;
-        }
-        if (profile->gpio >= PWM_DRIVER_CONFIG_GPIO_COUNT ||
-            (profile->gpio < 32u && (PWM_DRIVER_CONFIG_RESERVED_GPIO_MASK & (1u << profile->gpio)) != 0u)) {
-            return false;
-        }
-        if ((profile->gpio == 23u || profile->gpio == 24u) &&
-            (profile->backend != PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR &&
-             profile->backend != PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR)) {
-            return false;
-        }
-        if (profile->max_frequency_hz < profile->min_frequency_hz || profile->accuracy_ppm == 0u) {
-            return false;
-        }
-        if ((profile->direction == PWM_DRIVER_CONFIG_DIRECTION_OUTPUT) &&
-            (profile->backend >= PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR ||
-             (profile->capabilities & (PWM_DRIVER_CONFIG_CAP_READ | PWM_DRIVER_CONFIG_CAP_SET)) !=
-                 (PWM_DRIVER_CONFIG_CAP_READ | PWM_DRIVER_CONFIG_CAP_SET))) {
-            return false;
-        }
-        if ((profile->direction == PWM_DRIVER_CONFIG_DIRECTION_INPUT) &&
-            (profile->backend < PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR ||
-             (profile->capabilities & PWM_DRIVER_CONFIG_CAP_SET) != 0u ||
-             (profile->capabilities & PWM_DRIVER_CONFIG_CAP_READ) == 0u)) {
-            return false;
-        }
-        if ((profile->backend == PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR ||
-             profile->backend == PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR) &&
-            ((profile->backend_channel >= 8u) ||
-             (PWM_DRIVER_CONFIG_REQUIRE_HW_CHANNEL_B && pwm_gpio_to_channel(profile->gpio) != PWM_CHAN_B))) {
-            return false;
-        }
-        if ((profile->backend == PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR ||
-             profile->backend == PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR) &&
-            profile->backend_channel >= 8u) {
-            return false;
-        }
+            used |= 1u << gpio;
 
-        for (uint other = channel + 1u; other < count; ++other) {
-            const pwm_driver_config_channel_t *candidate = &channels[other];
-            if (candidate->direction != PWM_DRIVER_CONFIG_DIRECTION_DISABLED && candidate->gpio == profile->gpio) {
+            if ((gpio == 23u || gpio == 24u) && bank != PWM_DRIVER_CONFIG_BANK_C) {
                 return false;
             }
-            if (candidate->direction != PWM_DRIVER_CONFIG_DIRECTION_DISABLED &&
-                candidate->backend == profile->backend && candidate->backend_channel == profile->backend_channel) {
+            if (PWM_DRIVER_CONFIG_REQUIRE_HW_CHANNEL_B && bank == PWM_DRIVER_CONFIG_BANK_A &&
+                pwm_gpio_to_channel(gpio) != PWM_CHAN_B) {
                 return false;
             }
         }
@@ -373,78 +278,39 @@ bool pwm_driver_config_validate_table(const pwm_driver_config_channel_t *channel
     return true;
 }
 
-bool pwm_driver_config_validate(void) {
-    return pwm_driver_config_validate_table(pwm_driver_config_channels, PWM_DRIVER_CONFIG_CHANNEL_COUNT);
-}
-
 bool pwm_driver_config_frequency_supported(uint channel, uint32_t frequency_hz) {
-    const pwm_driver_config_channel_t *profile = pwm_driver_config_get_channel(channel);
+    pwm_driver_config_bank_role_t role;
+    uint32_t min_hz = 1u;
+    uint32_t max_hz = 1000000u;
 
-    if (profile == NULL || frequency_hz == 0u) {
-        return profile != NULL && frequency_hz == 0u;
+    if (!pwm_driver_config_channel_role(channel, &role)) {
+        return false;
+    }
+    if (frequency_hz == 0u) {
+        return true;
     }
 
-    return frequency_hz >= profile->min_frequency_hz && frequency_hz <= profile->max_frequency_hz;
+    if (channel / PWM_DRIVER_CONFIG_BANK_SIZE == PWM_DRIVER_CONFIG_BANK_A && role == PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR) {
+        min_hz = 10u;
+    } else if (channel / PWM_DRIVER_CONFIG_BANK_SIZE == PWM_DRIVER_CONFIG_BANK_C) {
+        max_hz = 1000u;
+    }
+
+    return frequency_hz >= min_hz && frequency_hz <= max_hz;
 }
 
 bool pwm_driver_config_is_monitor(void) {
-    return pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR) != 0u ||
-           pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR) != 0u ||
-           pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR) != 0u;
-}
-
-const char *pwm_driver_config_backend_name(pwm_driver_config_backend_t backend) {
-    switch (backend) {
-    case PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR:
-        return "HW";
-    case PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR:
-        return "PIO";
-    case PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR:
-        return "SW";
-    case PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR:
-        return "HW-MON";
-    case PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR:
-        return "PIO-MON";
-    case PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR:
-        return "SW-MON";
-    default:
-        return "?";
-    }
-}
-
-/** @brief Fill one bank's 8 channel entries for the resolved backend and role. */
-static void pwm_driver_config_fill_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_backend_t backend,
-                                        pwm_driver_config_bank_role_t role) {
-    uint base = (uint)bank * PWM_DRIVER_CONFIG_BANK_SIZE;
-    bool generator = (role == PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR);
-
-    for (uint i = 0u; i < PWM_DRIVER_CONFIG_BANK_SIZE; ++i) {
-        uint gpio = pwm_board_bank_gpio[bank][i];
-
-        switch (backend) {
-        case PWM_DRIVER_CONFIG_BANK_BACKEND_HW:
-            pwm_driver_config_channels[base + i] =
-                generator ? (pwm_driver_config_channel_t)PWM_DRIVER_CONFIG_HW_GENERATOR_CHANNEL(gpio, i)
-                          : (pwm_driver_config_channel_t)PWM_DRIVER_CONFIG_HW_MONITOR_CHANNEL(gpio, i);
-            break;
-        case PWM_DRIVER_CONFIG_BANK_BACKEND_PIO:
-            pwm_driver_config_channels[base + i] =
-                generator ? (pwm_driver_config_channel_t)PWM_DRIVER_CONFIG_PIO_GENERATOR_CHANNEL(gpio, i)
-                          : (pwm_driver_config_channel_t)PWM_DRIVER_CONFIG_PIO_MONITOR_CHANNEL(gpio, i);
-            break;
-        case PWM_DRIVER_CONFIG_BANK_BACKEND_SW:
-        default:
-            pwm_driver_config_channels[base + i] =
-                generator ? (pwm_driver_config_channel_t)PWM_DRIVER_CONFIG_SW_GENERATOR_CHANNEL(gpio, i)
-                          : (pwm_driver_config_channel_t)PWM_DRIVER_CONFIG_SW_MONITOR_CHANNEL(gpio, i);
-            break;
+    for (pwm_driver_config_bank_t bank = PWM_DRIVER_CONFIG_BANK_A; bank < PWM_DRIVER_CONFIG_BANK_COUNT; ++bank) {
+        if (pwm_driver_config_table_configured &&
+            pwm_driver_config_bank_roles[bank] == PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR) {
+            return true;
         }
     }
+    return false;
 }
 
-bool pwm_driver_configure_table(const pwm_driver_config_bank_backend_t backends[PWM_DRIVER_CONFIG_BANK_COUNT],
-                                const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]) {
-    if ((backends == NULL) || (roles == NULL) || pwm_driver_config_table_configured) {
+bool pwm_driver_configure_table(const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT]) {
+    if ((roles == NULL) || pwm_driver_config_table_configured) {
         return false;
     }
 
@@ -453,21 +319,13 @@ bool pwm_driver_configure_table(const pwm_driver_config_bank_backend_t backends[
             (roles[bank] != PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR)) {
             return false;
         }
-        if ((backends[bank] > PWM_DRIVER_CONFIG_BANK_BACKEND_SW) ||
-            (bank == PWM_DRIVER_CONFIG_BANK_A && backends[bank] == PWM_DRIVER_CONFIG_BANK_BACKEND_PIO) ||
-            (bank == PWM_DRIVER_CONFIG_BANK_B && backends[bank] == PWM_DRIVER_CONFIG_BANK_BACKEND_HW) ||
-            (bank == PWM_DRIVER_CONFIG_BANK_C && backends[bank] != PWM_DRIVER_CONFIG_BANK_BACKEND_SW)) {
-            return false;
-        }
     }
 
-    for (pwm_driver_config_bank_t bank = PWM_DRIVER_CONFIG_BANK_A; bank < PWM_DRIVER_CONFIG_BANK_COUNT; ++bank) {
-        pwm_driver_config_fill_bank(bank, backends[bank], roles[bank]);
-    }
-
+    memcpy(pwm_driver_config_bank_roles, roles, sizeof(pwm_driver_config_bank_roles));
+    pwm_driver_config_table_configured = true;
     if (!pwm_driver_config_validate()) {
+        pwm_driver_config_table_configured = false;
         return false;
     }
-    pwm_driver_config_table_configured = true;
     return true;
 }

@@ -64,17 +64,9 @@ int main(void) {
 
     /* Startup roles populate the fixed channel table before the driver launches Core 1. */
     assert(!pwm_driver_config_is_monitor());
-    assert(pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR) == 0u);
-    assert(strcmp(pwm_driver_config_backend_name(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR), "HW") == 0);
-    assert(strcmp(pwm_driver_config_backend_name(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR), "PIO") == 0);
-    assert(strcmp(pwm_driver_config_backend_name(PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR), "SW") == 0);
-    assert(strcmp(pwm_driver_config_backend_name(PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR), "HW-MON") == 0);
-    assert(strcmp(pwm_driver_config_backend_name(PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR), "PIO-MON") == 0);
-    assert(strcmp(pwm_driver_config_backend_name(PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR), "SW-MON") == 0);
-    assert(strcmp(pwm_driver_config_backend_name((pwm_driver_config_backend_t)99u), "?") == 0);
+    assert(strcmp(pwm_driver_config_channel_name(0u), "?") == 0);
     assert(!pwm_driver_config_frequency_supported(99u, 1u));
-    assert(!pwm_driver_config_get_gpio(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR, 0u, NULL));
-    assert(!pwm_driver_config_get_logical_channel(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR, 0u, NULL));
+    assert(!pwm_driver_config_channel_role(0u, NULL));
 
     pwm_driver_config_default(NULL);
     assert(!pwm_driver_config_validate_target(NULL));
@@ -86,18 +78,11 @@ int main(void) {
     assert(!pwm_driver_config_get_target(NULL));
     assert(!pwm_driver_config_init_state(NULL, NULL));
     assert(pwm_driver_config_set_i2c_address(0x41u));
-    assert(pwm_driver_config_set_bank(PWM_DRIVER_CONFIG_BANK_A, PWM_DRIVER_CONFIG_BANK_BACKEND_HW,
-                                      PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR));
-    assert(pwm_driver_config_set_bank(PWM_DRIVER_CONFIG_BANK_B, PWM_DRIVER_CONFIG_BANK_BACKEND_PIO,
-                                      PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR));
-    assert(pwm_driver_config_set_bank(PWM_DRIVER_CONFIG_BANK_C, PWM_DRIVER_CONFIG_BANK_BACKEND_SW,
-                                      PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR));
-    assert(!pwm_driver_config_set_bank(PWM_DRIVER_CONFIG_BANK_COUNT, PWM_DRIVER_CONFIG_BANK_BACKEND_HW,
-                                       PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR));
-    assert(!pwm_driver_config_set_bank(PWM_DRIVER_CONFIG_BANK_C, PWM_DRIVER_CONFIG_BANK_BACKEND_HW,
-                                       PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR));
-    assert(!pwm_driver_config_set_bank(PWM_DRIVER_CONFIG_BANK_A, PWM_DRIVER_CONFIG_BANK_BACKEND_HW,
-                                       (pwm_driver_config_bank_role_t)9u));
+    assert(pwm_driver_config_set_bank(PWM_DRIVER_CONFIG_BANK_A, PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR));
+    assert(pwm_driver_config_set_bank(PWM_DRIVER_CONFIG_BANK_B, PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR));
+    assert(pwm_driver_config_set_bank(PWM_DRIVER_CONFIG_BANK_C, PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR));
+    assert(!pwm_driver_config_set_bank(PWM_DRIVER_CONFIG_BANK_COUNT, PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR));
+    assert(!pwm_driver_config_set_bank(PWM_DRIVER_CONFIG_BANK_A, (pwm_driver_config_bank_role_t)9u));
 
     /* Configure all three banks at startup. */
     const pwm_driver_config_bank_role_t roles[PWM_DRIVER_CONFIG_BANK_COUNT] = {
@@ -105,171 +90,39 @@ int main(void) {
         PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR,
         PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
     };
-    const pwm_driver_config_bank_backend_t backends[PWM_DRIVER_CONFIG_BANK_COUNT] = {
-        PWM_DRIVER_CONFIG_BANK_BACKEND_HW,
-        PWM_DRIVER_CONFIG_BANK_BACKEND_PIO,
-        PWM_DRIVER_CONFIG_BANK_BACKEND_SW,
-    };
-    assert(!pwm_driver_configure_table(NULL, roles));
-    assert(!pwm_driver_configure_table(backends, NULL));
+    assert(!pwm_driver_configure_table(NULL));
     {
         pwm_driver_config_bank_role_t bad_roles[PWM_DRIVER_CONFIG_BANK_COUNT] = {
             (pwm_driver_config_bank_role_t)9u,
             PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR,
             PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR,
         };
-        assert(!pwm_driver_configure_table(backends, bad_roles));
+        assert(!pwm_driver_configure_table(bad_roles));
     }
-    {
-        pwm_driver_config_bank_backend_t invalid_backends[PWM_DRIVER_CONFIG_BANK_COUNT] = {
-            PWM_DRIVER_CONFIG_BANK_BACKEND_PIO,
-            PWM_DRIVER_CONFIG_BANK_BACKEND_PIO,
-            PWM_DRIVER_CONFIG_BANK_BACKEND_SW,
-        };
-        assert(!pwm_driver_configure_table(invalid_backends, roles));
-        invalid_backends[0] = PWM_DRIVER_CONFIG_BANK_BACKEND_HW;
-        invalid_backends[1] = PWM_DRIVER_CONFIG_BANK_BACKEND_HW;
-        assert(!pwm_driver_configure_table(invalid_backends, roles));
-        invalid_backends[1] = PWM_DRIVER_CONFIG_BANK_BACKEND_PIO;
-        invalid_backends[2] = PWM_DRIVER_CONFIG_BANK_BACKEND_HW;
-        assert(!pwm_driver_configure_table(invalid_backends, roles));
-    }
-    assert(pwm_driver_configure_table(backends, roles));
+    assert(pwm_driver_configure_table(roles));
 
     {
-        const pwm_driver_config_channel_t *profile = pwm_driver_config_get_channel(0u);
-        assert(profile->gpio == 1u);
-        assert(profile->backend == PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR);
-        assert(profile->backend_channel == 0u);
-        assert(profile->min_frequency_hz > 0u);
-        assert(profile->max_frequency_hz >= profile->min_frequency_hz);
-        assert(profile->accuracy_ppm > 0u);
+        pwm_driver_config_bank_role_t role;
+        assert(pwm_driver_config_channel_role(0u, &role) && role == PWM_DRIVER_CONFIG_BANK_ROLE_GENERATOR);
+        assert(pwm_driver_config_channel_role(8u, &role) && role == PWM_DRIVER_CONFIG_BANK_ROLE_MONITOR);
+        assert(!pwm_driver_config_channel_role(PWM_DRIVER_CONFIG_CHANNEL_COUNT, &role));
+        assert(strcmp(pwm_driver_config_channel_name(0u), "HW") == 0);
+        assert(strcmp(pwm_driver_config_channel_name(8u), "PIO-MON") == 0);
+        assert(strcmp(pwm_driver_config_channel_name(16u), "SW") == 0);
+        assert(strcmp(pwm_driver_config_channel_name(PWM_DRIVER_CONFIG_CHANNEL_COUNT), "?") == 0);
         assert(pwm_driver_config_frequency_supported(0u, 0u));
-        assert(pwm_driver_config_frequency_supported(0u, profile->min_frequency_hz));
-        assert(pwm_driver_config_frequency_supported(0u, profile->max_frequency_hz));
-        assert(!pwm_driver_config_frequency_supported(0u, profile->max_frequency_hz + 1u));
-        assert(!pwm_driver_config_frequency_supported(0u, profile->min_frequency_hz - 1u));
-
-        uint gpio = 0u;
-        assert(pwm_driver_config_get_gpio(profile->backend, profile->backend_channel, &gpio));
-        assert(gpio == profile->gpio);
-
-        uint channel = 0u;
-        assert(pwm_driver_config_get_logical_channel(profile->backend, profile->backend_channel, &channel));
-        assert(channel == 0u);
-    }
-    /* PIO bank is configured as monitor: fixed companion slice-A GPIOs, channels 8..15. */
-    {
-        const pwm_driver_config_channel_t *profile = pwm_driver_config_get_channel(8u);
-        assert(profile->gpio == 0u);
-        assert(profile->backend == PWM_DRIVER_CONFIG_BACKEND_PIO_MONITOR);
-        assert(profile->direction == PWM_DRIVER_CONFIG_DIRECTION_INPUT);
-    }
-
-    /* SW bank is configured as generator: remaining GPIOs, channels 16..23. */
-    {
-        const pwm_driver_config_channel_t *profile = pwm_driver_config_get_channel(16u);
-        assert(profile->gpio == 16u);
-        assert(profile->backend == PWM_DRIVER_CONFIG_BACKEND_SW_GENERATOR);
+        assert(pwm_driver_config_frequency_supported(0u, 10u));
+        assert(pwm_driver_config_frequency_supported(0u, 1000000u));
+        assert(!pwm_driver_config_frequency_supported(0u, 1000001u));
+        assert(!pwm_driver_config_frequency_supported(0u, 9u));
+        assert(pwm_driver_config_frequency_supported(16u, 1000u));
+        assert(!pwm_driver_config_frequency_supported(16u, 1001u));
     }
 
     assert(pwm_driver_config_validate());
-    assert(pwm_driver_config_get_channel(PWM_DRIVER_CONFIG_CHANNEL_COUNT) == NULL);
 
-    {
-        pwm_driver_config_channel_t invalid[PWM_DRIVER_CONFIG_CHANNEL_COUNT];
-        for (uint channel = 0u; channel < PWM_DRIVER_CONFIG_CHANNEL_COUNT; ++channel) {
-            invalid[channel] = *pwm_driver_config_get_channel(channel);
-        }
-
-        invalid[0].backend = (pwm_driver_config_backend_t)99u;
-        assert(!pwm_driver_config_validate_table(invalid, PWM_DRIVER_CONFIG_CHANNEL_COUNT));
-        invalid[0] = *pwm_driver_config_get_channel(0u);
-
-        invalid[0].direction = PWM_DRIVER_CONFIG_DIRECTION_DISABLED;
-        invalid[0].capabilities = PWM_DRIVER_CONFIG_CAP_READ;
-        assert(!pwm_driver_config_validate_table(invalid, PWM_DRIVER_CONFIG_CHANNEL_COUNT));
-        invalid[0] = *pwm_driver_config_get_channel(0u);
-
-        invalid[0].direction = PWM_DRIVER_CONFIG_DIRECTION_INPUT;
-        invalid[0].backend = PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR;
-        invalid[0].capabilities = 0u;
-        assert(!pwm_driver_config_validate_table(invalid, PWM_DRIVER_CONFIG_CHANNEL_COUNT));
-        invalid[0] = *pwm_driver_config_get_channel(0u);
-
-        invalid[1].gpio = invalid[0].gpio;
-        assert(!pwm_driver_config_validate_table(invalid, PWM_DRIVER_CONFIG_CHANNEL_COUNT));
-        invalid[1] = *pwm_driver_config_get_channel(1u);
-        invalid[0].gpio = 23u;
-        invalid[0].backend = PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR;
-        assert(!pwm_driver_config_validate_table(invalid, PWM_DRIVER_CONFIG_CHANNEL_COUNT));
-        invalid[0] = *pwm_driver_config_get_channel(0u);
-
-        invalid[0].gpio = 25u;
-        assert(!pwm_driver_config_validate_table(invalid, PWM_DRIVER_CONFIG_CHANNEL_COUNT));
-        invalid[0] = *pwm_driver_config_get_channel(0u);
-
-        invalid[0].gpio = 30u;
-        assert(!pwm_driver_config_validate_table(invalid, PWM_DRIVER_CONFIG_CHANNEL_COUNT));
-        invalid[0] = *pwm_driver_config_get_channel(0u);
-
-        invalid[0].max_frequency_hz = 0u;
-        assert(!pwm_driver_config_validate_table(invalid, PWM_DRIVER_CONFIG_CHANNEL_COUNT));
-        invalid[0] = *pwm_driver_config_get_channel(0u);
-
-        invalid[0].accuracy_ppm = 0u;
-        assert(!pwm_driver_config_validate_table(invalid, PWM_DRIVER_CONFIG_CHANNEL_COUNT));
-        invalid[0] = *pwm_driver_config_get_channel(0u);
-
-        invalid[0].backend = PWM_DRIVER_CONFIG_BACKEND_HW_MONITOR;
-        assert(!pwm_driver_config_validate_table(invalid, PWM_DRIVER_CONFIG_CHANNEL_COUNT));
-        invalid[0] = *pwm_driver_config_get_channel(0u);
-
-        invalid[0].gpio = 2u;
-        assert(!pwm_driver_config_validate_table(invalid, PWM_DRIVER_CONFIG_CHANNEL_COUNT));
-        invalid[0] = *pwm_driver_config_get_channel(0u);
-
-        invalid[0].backend_channel = 8u;
-        assert(!pwm_driver_config_validate_table(invalid, PWM_DRIVER_CONFIG_CHANNEL_COUNT));
-        invalid[0] = *pwm_driver_config_get_channel(0u);
-
-        invalid[8].backend_channel = 8u;
-        assert(!pwm_driver_config_validate_table(invalid, PWM_DRIVER_CONFIG_CHANNEL_COUNT));
-        invalid[8] = *pwm_driver_config_get_channel(8u);
-
-        invalid[8].capabilities = PWM_DRIVER_CONFIG_CAP_READ | PWM_DRIVER_CONFIG_CAP_SET;
-        assert(!pwm_driver_config_validate_table(invalid, PWM_DRIVER_CONFIG_CHANNEL_COUNT));
-        invalid[8] = *pwm_driver_config_get_channel(8u);
-
-        invalid[8].direction = PWM_DRIVER_CONFIG_DIRECTION_INPUT;
-        invalid[8].backend = PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR;
-        invalid[8].capabilities = PWM_DRIVER_CONFIG_CAP_READ;
-        assert(!pwm_driver_config_validate_table(invalid, PWM_DRIVER_CONFIG_CHANNEL_COUNT));
-        invalid[8] = *pwm_driver_config_get_channel(8u);
-
-        invalid[1].backend = invalid[0].backend;
-        invalid[1].backend_channel = invalid[0].backend_channel;
-        assert(!pwm_driver_config_validate_table(invalid, PWM_DRIVER_CONFIG_CHANNEL_COUNT));
-        invalid[1] = *pwm_driver_config_get_channel(1u);
-
-        invalid[23].direction = PWM_DRIVER_CONFIG_DIRECTION_DISABLED;
-        invalid[23].capabilities = 0u;
-        assert(pwm_driver_config_validate_table(invalid, PWM_DRIVER_CONFIG_CHANNEL_COUNT));
-
-        assert(!pwm_driver_config_validate_table(NULL, PWM_DRIVER_CONFIG_CHANNEL_COUNT));
-        assert(!pwm_driver_config_validate_table(invalid, PWM_DRIVER_CONFIG_CHANNEL_COUNT - 1u));
-    }
-
-    assert(!pwm_driver_configure_table(backends, roles));
+    assert(!pwm_driver_configure_table(roles));
     assert(pwm_driver_config_is_monitor());
-    {
-        uint gpio = 0u;
-        uint channel = 0u;
-
-        assert(!pwm_driver_config_get_gpio(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR, 9u, &gpio));
-        assert(!pwm_driver_config_get_logical_channel(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR, 9u, &channel));
-        assert(pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR) == 8u);
-    }
 
     return 0;
 }

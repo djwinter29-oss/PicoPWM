@@ -18,9 +18,17 @@ const i2c_board_config_t i2c_board_config = {
     .clock_hz = 400000u,
 };
 
-/** @brief PWM pin sets; see docs/guides/pinout.md. */
-const uint pwm_board_bank_gpio[PWM_DRIVER_CONFIG_BANK_COUNT][PWM_DRIVER_CONFIG_BANK_SIZE] = {
-    [PWM_DRIVER_CONFIG_BANK_A] = {1u, 3u, 5u, 7u, 9u, 11u, 13u, 15u},  /* HW: slice-B GPIOs */
-    [PWM_DRIVER_CONFIG_BANK_B] = {0u, 2u, 4u, 6u, 8u, 10u, 12u, 14u},  /* PIO: companion slice-A GPIOs */
-    [PWM_DRIVER_CONFIG_BANK_C] = {16u, 17u, 18u, 19u, 20u, 21u, 22u, 28u}, /* SW: any free GPIO */
+/** @brief Bank A hardware PWM settings; see docs/guides/pinout.md. */
+const hardware_pwm_config_t hardware_pwm_config = {
+    .channels = {{1u}, {3u}, {5u}, {7u}, {9u}, {11u}, {13u}, {15u}},
+};
+
+/** @brief Bank B PIO PWM settings. */
+const pio_pwm_config_t pio_pwm_config = {
+    .channels = {{0u}, {2u}, {4u}, {6u}, {8u}, {10u}, {12u}, {14u}},
+};
+
+/** @brief Bank C software PWM settings. */
+const software_pwm_config_t software_pwm_config = {
+    .channels = {{16u}, {17u}, {18u}, {19u}, {20u}, {21u}, {22u}, {28u}},
 };

@@ -1,14 +1,9 @@
 /**
- * @file monitor.h
- * @brief Standalone Core 1 hardware-pin PWM monitor backend for the logical `pwm` layer.
+ * @file hardware_monitor.h
+ * @brief Hardware PWM-slice input monitor for the logical `pwm` layer.
  *
- * This module measures the configured hardware monitor channel bank and reports approximate
- * frequency and duty cycle using the existing `pwm_driver_state_t` shape.
- *
- * This monitor is intentionally limited to low-frequency, best-effort observation. It uses
- * one software GPIO interrupt per edge plus microsecond timestamps, so it is not suitable
- * for high-rate PWM monitoring and should not be treated as a peer to the PIO monitor for
- * kHz-to-MHz measurement work.
+ * Measures the bank-A slice-B pins with the PWM slice counters in input mode and reports
+ * frequency, duty and `pulse_count` using the existing `pwm_driver_state_t` shape.
  */
 
 #ifndef PWMDRIVER_HW_MONITOR_H
@@ -16,38 +11,18 @@
 
 #include "../pwm_driver.h"
 
-/** @brief Sentinel frequency returned when the hardware monitor cannot publish a sane sample. */
-#define HW_MON_UNSTABLE_FREQ_HZ 0x0fffffffu
-/** @brief Sentinel duty returned when the hardware monitor cannot publish a sane sample. */
-#define HW_MON_UNSTABLE_DUTY 0u
-/** @brief Return whether one exported hardware-monitor state is the unstable sentinel. */
-#define HW_MON_IS_UNSTABLE(state_value)                                                                                \
-    ((state_value).freq_hz == HW_MON_UNSTABLE_FREQ_HZ && (state_value).duty == HW_MON_UNSTABLE_DUTY)
-
-/** @brief Initialize the standalone hardware monitor module and arm all hardware-channel input pins.
- *
- * Repeated calls are ignored after the first successful initialization.
- */
+/** @brief Claim the 8 slice-B input pins and start their measurement windows; repeated calls are ignored. */
 bool hw_mon_init(void);
 
-/** @brief Forward one shared GPIO edge event to the hardware monitor bank. */
-void hw_mon_handle_gpio_irq(uint gpio, uint32_t events);
-
 /**
- * @brief Read the latest exported monitor state for one backend-local hardware channel.
- * @param channel Backend-local hardware monitor channel index.
- * @param state Caller-owned destination for the latest exported state.
- * @return `true` when the returned state is a stable PWM measurement or a stable static level.
- *         Returns `false` before the first stable sample and when the exported state is the
- *         unstable sentinel.
- * @note The monitor timestamps GPIO edges in microseconds and derives one period from
- *       consecutive rising edges plus one high width from the falling edge between them.
- * @note This is a low-frequency, best-effort monitor only. Use the PIO monitor for serious
- *       higher-rate PWM measurement.
- * @note If no input transition is observed for more than one second, the monitor reports a
- *       static level as `freq_hz = 0` with `duty = 0` or `100` based on the sampled GPIO.
- * @note `pulse_count` increments once per completed observed period reconstructed from
- *       rising/falling/rising edge sequences.
+ * @brief Poll one channel's windows and return its latest completed measurement.
+ * @param channel Bank-local channel index.
+ * @param state Caller-owned destination for the latest sample.
+ * @return `false` before the first completed edge and high window pair, otherwise `true`.
+ * @note Core 1 only. Each channel alternates a 250 ms rising-edge window (frequency, `pulse_count`)
+ *       and a 250 ms high-time window (duty), so a sample refreshes about every 500 ms and the
+ *       monitor is reliable above about 20 Hz. A static input reports `freq_hz = 0` with duty
+ *       `0` or `100` from the sampled GPIO level.
  */
 bool hw_mon_get(uint channel, pwm_driver_state_t *state);
 

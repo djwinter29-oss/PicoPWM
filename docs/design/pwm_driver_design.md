@@ -17,7 +17,7 @@ This document is implementation-oriented and follows the current firmware under 
 
 The `pwm` subsystem provides one logical channel service. The default
 profile currently exposes 24 channels, but backend ownership and direction are
-intended to come from a profile channel table rather than fixed ID ranges.
+resolved from the startup bank configuration and `config/board.c`.
 
 It is responsible for:
 
@@ -57,7 +57,6 @@ The current implementation is split as follows:
 | `firmware/src/driver/pwm/pwm_driver.c` | Core 1 launch, mailbox loop, channel routing, shared snapshot |
 | `firmware/src/driver/pwm/pwm_driver_config.h` | Startup configuration, validation, persistence, and channel types |
 | `firmware/src/driver/pwm/pwm_driver_config.c` | Fixed channel mapping and versioned CRC-protected flash storage |
-| `firmware/src/driver/pwm/pwm_driver_table.h` | Backend capability and timing descriptors used to populate channel entries |
 | `firmware/src/driver/pwm/hardware/hardware_generator.c` | Hardware PWM generator backend |
 | `firmware/src/driver/pwm/hardware/hardware_monitor.c` | Hardware PWM monitor backend |
 | `firmware/src/driver/pwm/pio/pio_generator.c` | PIO generator backend |
@@ -121,7 +120,7 @@ Architecturally, `pwm_driver_set()` is an internal command-ingress API.
 - The wrapper returns `PWM_DRIVER_RESULT_UNAVAILABLE` if Core 1 is not ready yet.
 - The wrapper returns `PWM_DRIVER_RESULT_TIMEOUT` when the command is still `PENDING` at the apply deadline. Core 0 cancels that command and it is not applied. If Core 1 has already moved the slot to `ACTIVE`, Core 0 keeps waiting and returns the published result. A stalled Core 1 heartbeat during that wait reboots the board.
 - The wrapper returns `PWM_DRIVER_RESULT_APPLY_FAILED` if Core 1 accepts the command but the backend rejects it.
-- `pwm_driver_restore_defaults()` uses the same mailbox path but applies one bulk restore-defaults command on Core 1 instead of 24 separate round trips.
+- `pwm_driver_restore_defaults()` has no mailbox command of its own: it calls `pwm_driver_set(ch, 0, 0)` for every generator channel and returns the first failure.
 
 ## Current Default Mapping
 
@@ -130,8 +129,8 @@ selects its backend family and role:
 
 | Logical Channel | Backend when locked as generator | Backend when locked as monitor |
 | ----------------- | --------- | ----------------------- |
-| `0..7` (Bank A) | HW or SW generator | HW or SW monitor |
-| `8..15` (Bank B) | PIO or SW generator | PIO or SW monitor |
+| `0..7` (Bank A) | HW generator | HW monitor |
+| `8..15` (Bank B) | PIO generator | PIO monitor |
 | `16..23` (Bank C) | SW generator only | SW monitor only |
 
 The physical mapping and slice assignments are documented in
@@ -313,7 +312,7 @@ sequenceDiagram
 
     Main->>WR: pwm_driver_init(config)
     WR->>CFG: configure all three bank roles
-    CFG-->>WR: validated channel table
+    CFG-->>WR: validated bank configuration
     WR->>C1: multicore_launch_core1(core_main)
     C1->>BE: initialize selected backends
     BE-->>C1: success/failure
@@ -350,17 +349,13 @@ sequenceDiagram
     participant CTL as device_service
     participant WR as pwm_driver.c
     participant C1 as Core 1 mailbox loop
-    participant HW as HW backend
-    participant PIO as PIO backend
-    participant SW as SW backend
 
     CLI->>CTL: device_service_restore_defaults()
     CTL->>WR: pwm_driver_restore_defaults()
-    WR->>C1: admitted mailbox command
-    C1->>HW: hw_gen_restore_defaults()
-    C1->>PIO: pio_gen_restore_defaults()
-    C1->>SW: sw_gen_restore_defaults()
-    C1->>WR: publish apply result
+    loop each generator channel
+        WR->>C1: pwm_driver_set(ch, 0, 0)
+        C1->>WR: publish apply result
+    end
     WR-->>CTL: result
     CTL-->>CLI: result
 ```
@@ -435,8 +430,10 @@ are exposed through the versioned realized-state snapshot.
 
 ### Logical Routing
 
-Routing is performed by the runtime channel table. Each logical channel maps
-to a backend, direction, GPIO, backend-local index, and capability set. The
+Routing is resolved on demand: `channel / 8` selects the fixed module
+(A=hardware, B=pio, C=software), the startup role selects its generator or
+monitor variant, `channel % 8` is the module-local index, and each module reads
+its GPIOs from its `board.c` const. There is no stored table. The
 default profile currently exposes 24 channels, but higher layers must not
 infer backend ownership from a channel-number range.
 
@@ -495,10 +492,10 @@ The hardware generator does not use a wrap IRQ for pulse counting. The slice has
 
 The hardware monitor backend:
 
-- observes the same GPIO bank with one edge interrupt per transition
-- reconstructs frequency and duty from microsecond timestamps
-- is intentionally low-frequency and best-effort only
-- increments `pulse_count` once per completed observed period
+- measures the same slice-B pins with the PWM slice counters in input mode
+- alternates a rising-edge window (frequency, `pulse_count`) and a high-time window (duty)
+- refreshes a sample about every 500 ms and is reliable above about 20 Hz
+- accumulates `pulse_count` as the total rising edges counted
 
 For the current hardware timing equations, counter-width limits, divider limits, and the recommended operating range, see [Hardware PWM Generator](generator/hardware_generator.md). For input measurement limits, see [Hardware PWM Monitor](monitor/hardware_monitor.md).
 
@@ -519,10 +516,10 @@ The integrated generator backend:
 
 The software monitor backend:
 
-- observes the same GPIO bank with one edge interrupt per transition
-- reconstructs frequency and duty from microsecond timestamps
-- is intentionally low-frequency and best-effort only
-- increments `pulse_count` once per completed observed period
+- measures the same slice-B pins with the PWM slice counters in input mode
+- alternates a rising-edge window (frequency, `pulse_count`) and a high-time window (duty)
+- refreshes a sample about every 500 ms and is reliable above about 20 Hz
+- accumulates `pulse_count` as the total rising edges counted
 - owns software-monitor channels selected by the active profile
 
 For the current software timing model, target range, and monitor role, see [Software PWM Generator](generator/software_generator.md) and [Software PWM Monitor](monitor/software_monitor.md).
@@ -813,7 +810,7 @@ The public write layer also keeps a small Core 0 mutex around the write entry po
 
 After admission, the caller waits synchronously for the Core 1 reply, up to the apply timeout. If the command is still `PENDING` when that deadline expires, Core 0 cancels it and returns `PWM_DRIVER_RESULT_TIMEOUT`; the command will not be applied. If Core 1 has already moved the slot to `ACTIVE`, Core 0 keeps waiting and returns the published result. A stalled Core 1 heartbeat during that wait reboots the board.
 
-Restore-defaults uses the same mailbox path, but Core 1 now fans out through backend-native reset helpers rather than re-entering the normal per-channel public setter path.
+Restore-defaults is a loop of per-channel stop requests through the normal setter path.
 
 ## Design Constraints and Assumptions
 
@@ -828,8 +825,8 @@ I2C writes should continue to defer out of ISR context before they enter `device
 
 ## Startup Bank Configuration
 
-`pwm_driver_config_channels` is a runtime table owned by `pwm_driver_config.c` and is
-fully populated from `pwm_driver_config_t` before Core 1 starts. There is no
+`pwm_driver_config.c` records the per-bank backend and role from
+`pwm_driver_config_t` before Core 1 starts and resolves channels from them. There is no
 bank-lock mailbox operation; one firmware image reaches all 8 bank-role
 combinations by selecting roles in the startup configuration.
 

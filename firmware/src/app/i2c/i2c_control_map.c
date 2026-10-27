@@ -116,17 +116,17 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
         if (!device_service_config_get_running(&running) || !device_service_config_get_target(&target)) {
             return false;
         }
-        response[0] = (uint8_t)running.bank_a_backend;
+        response[0] = 0u;
         response[1] = (uint8_t)running.bank_a_role;
-        response[2] = (uint8_t)running.bank_b_backend;
+        response[2] = 1u;
         response[3] = (uint8_t)running.bank_b_role;
-        response[4] = (uint8_t)running.bank_c_backend;
+        response[4] = 2u;
         response[5] = (uint8_t)running.bank_c_role;
-        response[6] = (uint8_t)target.bank_a_backend;
+        response[6] = 0u;
         response[7] = (uint8_t)target.bank_a_role;
-        response[8] = (uint8_t)target.bank_b_backend;
+        response[8] = 1u;
         response[9] = (uint8_t)target.bank_b_role;
-        response[10] = (uint8_t)target.bank_c_backend;
+        response[10] = 2u;
         response[11] = (uint8_t)target.bank_c_role;
         response[12] = running.i2c_address;
         response[13] = target.i2c_address;
@@ -211,9 +211,9 @@ pwm_driver_result_t i2c_control_map_execute_write(uint8_t reg, const uint8_t *pa
         if ((payload == NULL) || (payload_len != 3u)) {
             return PWM_DRIVER_RESULT_INVALID;
         }
-        return device_service_config_set_bank((pwm_driver_config_bank_t)payload[0],
-                                          (pwm_driver_config_bank_backend_t)payload[1],
-                                          (pwm_driver_config_bank_role_t)payload[2])
+        return (payload[1] == payload[0] &&
+                device_service_config_set_bank((pwm_driver_config_bank_t)payload[0],
+                                               (pwm_driver_config_bank_role_t)payload[2]))
                    ? PWM_DRIVER_RESULT_OK
                    : PWM_DRIVER_RESULT_INVALID;
     }

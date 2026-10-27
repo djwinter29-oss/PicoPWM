@@ -265,7 +265,7 @@ static void gen_publish_state(uint channel) {
         .pulse_count = pio_channels[channel].pulse_count,
     };
 
-    pwm_driver_store_applied_state(pwm_driver_get_logical_channel(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR, channel),
+    pwm_driver_store_applied_state(((uint)PWM_DRIVER_CONFIG_BANK_B * PWM_DRIVER_CONFIG_BANK_SIZE + (uint)(channel)),
                                    &state);
 }
 
@@ -389,7 +389,7 @@ static void gen_timing_self_check(void) {
 static void gen_drive_level(uint channel, bool high) {
     PIO pio = pio_channels[channel].pio;
     uint sm = pio_channels[channel].sm;
-    uint pin = pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR, channel);
+    uint pin = pio_pwm_config.channels[channel].gpio;
 
     pio_sm_set_enabled(pio, sm, false);
     pio_sm_clear_fifos(pio, sm);
@@ -409,7 +409,7 @@ static void gen_enable_channel(uint channel, uint16_t period_count, uint32_t clk
     pio_gen_channel_t *ctx = &pio_channels[channel];
     PIO pio = ctx->pio;
     uint sm = ctx->sm;
-    uint pin = pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR, channel);
+    uint pin = pio_pwm_config.channels[channel].gpio;
     uint16_t clkdiv_int;
     uint8_t clkdiv_frac;
     uint32_t level = gen_level_from_duty(period_count, duty_percent);
@@ -450,7 +450,7 @@ bool pio_gen_init(void) {
 
     gen_timing_self_check();
 
-    for (int i = 0; i < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR); i++) {
+    for (int i = 0; i < PWM_DRIVER_CONFIG_BANK_SIZE; i++) {
         pio_channels[i].pio = pio_for_channel(i);
         pio_channels[i].sm = sm_for_channel(i);
         pio_channels[i].mode = PIO_GEN_MODE_DISABLED;
@@ -463,7 +463,7 @@ bool pio_gen_init(void) {
 
         generator_program_init(pio_channels[i].pio, pio_channels[i].sm,
                                pio_program_offsets[pio_index(pio_channels[i].pio)],
-                               pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR, i));
+                               pio_pwm_config.channels[i].gpio);
         gen_drive_level(i, false);
     }
 
@@ -474,7 +474,7 @@ bool pio_gen_init(void) {
 bool pio_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     pio_gen_realized_target_t target;
 
-    if (channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR))
+    if (channel >= PWM_DRIVER_CONFIG_BANK_SIZE)
         return false;
 
     if (!gen_resolve_target(freq_hz, duty, &target)) {
@@ -486,22 +486,9 @@ bool pio_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     return true;
 }
 
-/** @copydoc pio_gen_restore_defaults */
-bool pio_gen_restore_defaults(void) {
-    for (uint channel = 0; channel < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR);
-         channel++) {
-        pio_gen_realized_target_t target;
-
-        hard_assert(gen_resolve_target(0u, 0u, &target));
-        gen_apply_mode(channel, &target);
-    }
-
-    return true;
-}
-
 /** @copydoc pio_gen_finalize_readback */
 void pio_gen_finalize_readback(uint channel, pwm_driver_state_t *state, uint64_t pulse_ref_us) {
-    if (channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_PIO_GENERATOR) || state == NULL ||
+    if (channel >= PWM_DRIVER_CONFIG_BANK_SIZE || state == NULL ||
         state->freq_hz == 0u) {
         return;
     }

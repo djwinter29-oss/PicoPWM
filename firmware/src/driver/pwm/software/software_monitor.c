@@ -59,7 +59,7 @@ void sw_mon_handle_gpio_irq(uint gpio, uint32_t events) {
 /** @brief Read one channel state under interrupt exclusion and apply static-level fallback when idle. */
 static bool sw_mon_read_channel(uint channel, pwm_driver_state_t *state) {
     return pwm_gpio_mon_read_channel(channel, state, sw_mon_channels, SW_MON_STATIC_TIMEOUT_US,
-                                     PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR);
+                                     software_pwm_config.channels[channel].gpio);
 }
 
 /** @copydoc sw_mon_init */
@@ -68,9 +68,9 @@ bool sw_mon_init(void) {
         return true;
     }
 
-    for (uint channel = 0; channel < pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR);
+    for (uint channel = 0; channel < PWM_DRIVER_CONFIG_BANK_SIZE;
          channel++) {
-        uint pin = pwm_driver_get_gpio(PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR, channel);
+        uint pin = software_pwm_config.channels[channel].gpio;
 
         pwm_gpio_mon_init_pin(pin);
         sw_mon_gpio_to_channel[pin] = (int8_t)channel;
@@ -86,7 +86,7 @@ bool sw_mon_init(void) {
 /** @copydoc sw_mon_get */
 bool sw_mon_get(uint channel, pwm_driver_state_t *state) {
     if (!sw_mon_initialized ||
-        channel >= pwm_driver_config_backend_channel_count(PWM_DRIVER_CONFIG_BACKEND_SW_MONITOR) || state == NULL) {
+        channel >= PWM_DRIVER_CONFIG_BANK_SIZE || state == NULL) {
         return false;
     }
 

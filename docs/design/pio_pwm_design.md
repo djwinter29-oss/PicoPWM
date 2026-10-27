@@ -36,10 +36,10 @@ The alternatives were considered as follows:
 | Design | Consideration | Decision |
 |--------|---------------|----------|
 | CPU GPIO polling | Lowest hardware complexity, but consumes CPU time and becomes unreliable at higher frequencies. | Not selected for PIO monitoring. |
-| GPIO edge interrupts | Simple and effective for slow signals, but interrupt latency limits higher-rate accuracy. | Used by hardware/software monitor banks. |
+| GPIO edge interrupts | Simple and effective for slow signals, but interrupt latency limits higher-rate accuracy. | Used by the software monitor bank. |
 | PIO one-period capture | Measures a complete period in hardware, emits exactly two FIFO words, and matches latest-value reads. | Selected. |
 | PIO continuous capture with DMA | Good for continuous high-rate streams and history, but unnecessary when only one latest result is retained; adds DMA allocation, coherence, and lifetime handling. | Rejected for current requirements. |
-| PWM-slice input capture | Efficient hardware timing, but couples monitoring to PWM slice/channel routing and weakens the fixed bank model. | Rejected. |
+| PWM-slice input capture | Efficient hardware counting with no per-edge CPU cost; one counter per slice means edge and high-time windows are time-shared. | Used by the hardware monitor bank (bank A is already fixed to the slice-B pins). |
 
 DMA should be reconsidered only if the requirements expand to continuous
 sampling, waveform history, trend analysis, or guaranteed capture while Core 1

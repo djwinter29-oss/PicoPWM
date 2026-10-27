@@ -23,7 +23,4 @@ bool sw_gen_init(void);
  */
 bool sw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty);
 
-/** @brief Restore the software PWM backend channels to the shared logical default state. */
-bool sw_gen_restore_defaults(void);
-
 #endif

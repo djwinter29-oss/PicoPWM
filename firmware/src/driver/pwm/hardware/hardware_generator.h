@@ -20,9 +20,6 @@ bool hw_gen_init(void);
  */
 bool hw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty);
 
-/** @brief Restore the hardware PWM backend channels to the shared logical default state. */
-bool hw_gen_restore_defaults(void);
-
 /**
  * @brief Fold elapsed hardware-generator periods into one published snapshot.
  * @param channel Backend-local hardware PWM channel index.

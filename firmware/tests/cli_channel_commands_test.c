@@ -25,20 +25,8 @@ bool shell_write_line(shell_t *shell, const char *text) {
     return true;
 }
 
-const pwm_driver_config_channel_t *pwm_driver_config_get_channel(uint channel) {
-    static const pwm_driver_config_channel_t profile = {
-        .backend = PWM_DRIVER_CONFIG_BACKEND_HW_GENERATOR,
-        .direction = PWM_DRIVER_CONFIG_DIRECTION_OUTPUT,
-        .gpio = 1u,
-        .backend_channel = 0u,
-        .capabilities = PWM_DRIVER_CONFIG_CAP_READ | PWM_DRIVER_CONFIG_CAP_SET,
-    };
-
-    return (channel < PWM_DRIVER_CONFIG_CHANNEL_COUNT) ? &profile : NULL;
-}
-
-const char *pwm_driver_config_backend_name(pwm_driver_config_backend_t backend) {
-    (void)backend;
+const char *pwm_driver_config_channel_name(uint channel) {
+    (void)channel;
     return "HW";
 }
 

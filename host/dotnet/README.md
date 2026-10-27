@@ -7,7 +7,7 @@ implements it in `firmware/src/usb`.
 
 ## Requirements
 
-- .NET 8 SDK, or a newer SDK with the .NET 8 ASP.NET Core runtime
+- .NET 10 SDK, or a newer SDK with the .NET 10 ASP.NET Core runtime
 - HID access to the board (on Linux, a udev rule or access to `/dev/hidraw*`)
 
 From the repository root, `tools/host/run-dotnet.sh` runs the host. Set `PICOPWM_SERIAL`
@@ -16,11 +16,11 @@ The launcher restores NuGet dependencies and builds before starting. Set
 `PICOPWM_PORT` / `PICOPWM_HOST` (default `127.0.0.1:5000`), `ASPNETCORE_URLS`, or
 pass `--urls` to choose another listening address. Keep board controls on loopback.
 If only a newer runtime is installed, explicitly opt in to major-version
-roll-forward with `DOTNET_ROLL_FORWARD=Major` or install the .NET 8 ASP.NET Core
+roll-forward with `DOTNET_ROLL_FORWARD=Major` or install the .NET 10 ASP.NET Core
 runtime instead.
 
 ```sh
-DOTNET_ROLL_FORWARD=Major PICOPWM_PORT=5002 tools/host/run-dotnet.sh
+PICOPWM_PORT=5002 tools/host/run-dotnet.sh
 ```
 
 ```sh

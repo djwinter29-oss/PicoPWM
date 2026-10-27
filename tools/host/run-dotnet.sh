@@ -12,7 +12,7 @@ Usage: tools/host/run-dotnet.sh [dotnet application arguments...]
 
 Run the .NET web host. Requires the .NET SDK; set DOTNET to select its executable.
 Restores NuGet dependencies and builds the host before starting.
-Requires the .NET 8 ASP.NET Core runtime, or an explicit DOTNET_ROLL_FORWARD policy.
+Requires the .NET 10 ASP.NET Core runtime, or an explicit DOTNET_ROLL_FORWARD policy.
 The host talks to the board over USB HID; optionally set PICOPWM_SERIAL or
 PICOPWM_DEVICE_PATH to preselect a board.
 Set PICOPWM_HOST / PICOPWM_PORT (defaults 127.0.0.1:5000), ASPNETCORE_URLS,
@@ -26,13 +26,13 @@ if ! command -v "$DOTNET_EXE" >/dev/null 2>&1; then
     echo ".NET SDK executable not found: $DOTNET_EXE; install the .NET SDK or set DOTNET." >&2
     exit 1
 fi
-if [ -z "$("$DOTNET_EXE" --list-sdks)" ]; then
-    echo ".NET SDK not found; install the .NET 8 SDK or newer." >&2
+if ! "$DOTNET_EXE" --list-sdks | awk -F. '$1 >= 10 { found = 1 } END { exit !found }'; then
+    echo ".NET 10 SDK or newer not found; install it or set DOTNET to its executable." >&2
     exit 1
 fi
 if [ -z "${DOTNET_ROLL_FORWARD:-}" ] &&
-    ! "$DOTNET_EXE" --list-runtimes | grep -q '^Microsoft.AspNetCore.App 8\.'; then
-    echo "The .NET 8 ASP.NET Core runtime is missing. Install it, or explicitly set DOTNET_ROLL_FORWARD=Major to use a newer installed runtime." >&2
+    ! "$DOTNET_EXE" --list-runtimes | grep -q '^Microsoft.AspNetCore.App 10\.'; then
+    echo "The .NET 10 ASP.NET Core runtime is missing. Install it, or explicitly set DOTNET_ROLL_FORWARD=Major to use a newer installed runtime." >&2
     exit 1
 fi
 ASPNETCORE_URLS="${ASPNETCORE_URLS:-http://${PICOPWM_HOST:-127.0.0.1}:${PICOPWM_PORT:-5000}}"

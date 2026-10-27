@@ -12,32 +12,35 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class RunDotnetTests(unittest.TestCase):
     def test_runtime_checks_and_port(self):
-        for policy in ("", "Major"):
-            with self.subTest(policy=policy), tempfile.TemporaryDirectory() as temporary:
+        cases = [("10", "10", "", True), ("10", "11", "", False),
+                 ("10", "11", "Major", True), ("8", "10", "", False)]
+        for sdk, runtime, policy, succeeds in cases:
+            with self.subTest(sdk=sdk, runtime=runtime, policy=policy), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 executable = root / "dotnet"
                 executable.write_text(
                     '#!/bin/sh\n'
                     'case "$1" in\n'
-                    '  --list-sdks) echo "10.0.113 [/sdk]" ;;\n'
-                    '  --list-runtimes) echo "Microsoft.AspNetCore.App 10.0.13 [/runtime]" ;;\n'
+                    '  --list-sdks) echo "$SDK.0.113 [/sdk]" ;;\n'
+                    '  --list-runtimes) echo "Microsoft.AspNetCore.App $RUNTIME.0.13 [/runtime]" ;;\n'
                     '  run) printf "%s\\n%s\\n" "$ASPNETCORE_URLS" "$*" > "$CALLS" ;;\n'
                     'esac\n'
                 )
                 executable.chmod(0o755)
                 calls = root / "calls"
                 env = {**os.environ, "DOTNET": str(executable), "DOTNET_ROLL_FORWARD": policy,
-                       "PICOPWM_PORT": "5002", "PICOPWM_HOST": "127.0.0.1", "CALLS": str(calls)}
+                       "PICOPWM_PORT": "5002", "PICOPWM_HOST": "127.0.0.1", "CALLS": str(calls),
+                       "SDK": sdk, "RUNTIME": runtime}
                 env.pop("ASPNETCORE_URLS", None)
                 result = subprocess.run(
                     ["sh", str(ROOT / "tools/host/run-dotnet.sh")], env=env, capture_output=True, text=True)
-                if policy:
+                if succeeds:
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertIn("http://127.0.0.1:5002", calls.read_text())
                     self.assertIn("--no-launch-profile --", calls.read_text())
                 else:
                     self.assertNotEqual(result.returncode, 0)
-                    self.assertIn("runtime is missing", result.stderr)
+                    self.assertIn("runtime is missing" if sdk == "10" else "SDK or newer not found", result.stderr)
                     self.assertFalse(calls.exists())
 
 

@@ -91,11 +91,6 @@ static void test_expected_lengths(void) {
     assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_LED) == 2u);
     assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_SET_BASE) == 6u);
     assert(i2c_control_map_expected_write_length(0xffu) == 0u);
-    assert(i2c_control_map_is_status_select(1u, 6u));
-    assert(i2c_control_map_is_status_select(1u, 2u));
-    assert(!i2c_control_map_is_status_select(1u, 1u));
-    assert(!i2c_control_map_is_status_select(6u, 6u));
-    assert(!i2c_control_map_is_status_select(0u, 6u));
 }
 
 static void test_read_responses(void) {
@@ -144,7 +139,7 @@ static void test_remaining_registers(void) {
     const uint8_t led_on[] = {1u};
     const uint8_t led_off[] = {0u};
     const uint8_t led_bad[] = {2u};
-    const uint8_t bank_payload[] = {0u, 0u, PWM_ROLE_MONITOR};
+    const uint8_t bank_payload[] = {0u, PWM_ROLE_MONITOR};
     const uint8_t address_payload[] = {0x41u};
     const uint8_t address_low[] = {0x01u};
     uint8_t extra = 1u;
@@ -175,7 +170,6 @@ static void test_remaining_registers(void) {
     assert(response[0] == PWM_DRIVER_RESULT_BUSY);
     assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_STOP_ALL, 0u, response, 0u, &response_len));
     assert(!i2c_control_map_read_register(0xffu, 0u, response, sizeof(response), &response_len));
-    assert(response[0] == PWM_DRIVER_RESULT_INVALID);
     assert(!i2c_control_map_read_register(0xffu, 0u, response, 0u, &response_len));
 
     assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_VERSION) == 1u);
@@ -184,7 +178,7 @@ static void test_remaining_registers(void) {
     assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_STOP_ALL) == 1u);
     assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_REBOOT) == 1u);
     assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_CONFIG_SAVE) == 1u);
-    assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_CONFIG_SET) == 4u);
+    assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_CONFIG_SET) == 3u);
     assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_CONFIG_ADDRESS) == 2u);
 
     assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_STOP_ALL, &extra, 1u) == PWM_DRIVER_RESULT_INVALID);
@@ -200,12 +194,12 @@ static void test_remaining_registers(void) {
     assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_REBOOT, NULL, 0u) == PWM_DRIVER_RESULT_OK);
     assert(rebooted);
 
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_SET, bank_payload, 2u) ==
+    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_SET, bank_payload, 1u) ==
            PWM_DRIVER_RESULT_INVALID);
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_SET, NULL, 3u) == PWM_DRIVER_RESULT_INVALID);
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_SET, bank_payload, 3u) == PWM_DRIVER_RESULT_OK);
+    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_SET, NULL, 2u) == PWM_DRIVER_RESULT_INVALID);
+    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_SET, bank_payload, 2u) == PWM_DRIVER_RESULT_OK);
     set_bank_ok = false;
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_SET, bank_payload, 3u) ==
+    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_SET, bank_payload, 2u) ==
            PWM_DRIVER_RESULT_INVALID);
     set_bank_ok = true;
 

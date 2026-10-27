@@ -13,7 +13,7 @@
 /** @brief Runtime watchdog period in milliseconds. Longer than one flash save. */
 #define SYSTEM_WATCHDOG_TIMEOUT_MS 5000u
 
-/** @brief True when the requested system-clock target was accepted. */
+/** @brief True when the requested system-clock profile was accepted, or none was requested. */
 static bool system_clock_at_target;
 
 /** @copydoc system_init_clock */
@@ -25,7 +25,7 @@ bool system_init_clock(void) {
      * after this call. A rejected target therefore changes the realized frequency
      * base, and divider math still matches the clock that is actually running.
      */
-    system_clock_at_target = set_sys_clock_khz(mhz != 0u ? (uint32_t)mhz * 1000u : SYSTEM_CLOCK, true);
+    system_clock_at_target = mhz == 0u || set_sys_clock_khz((uint32_t)mhz * 1000u, true);
     return system_clock_at_target;
 }
 

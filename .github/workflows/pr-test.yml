@@ -13,9 +13,6 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  PICO_SDK_PATH: ${{ github.workspace }}/firmware/third_party/pico-sdk
-
 jobs:
   format:
     name: Formatting and syntax

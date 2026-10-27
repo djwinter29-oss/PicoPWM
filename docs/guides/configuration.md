@@ -25,8 +25,8 @@ default `A=HW/monitor`, `B=PIO/monitor`, `C=SW/monitor` configuration.
 
 The target record (`firmware/src/platform/boot_config.c`) contains a magic
 value, format version, size, clock profile, role/address values, and a CRC-32.
-It lives in one flash sector at the start of the reserved final 8 KiB. The
-firmware link step rejects images that overlap this reserved area. Power loss
+It lives in the final 4 KiB flash sector. The linker script excludes that
+sector from the program region, so an image that would overlap it fails to link. Power loss
 during a save falls back to the defaults. Core 1 arms the flash
 lockout victim before it reports ready. `config save` fails instead of erasing
 flash when that victim is not armed, so Core 0 cannot block forever inside the
@@ -98,7 +98,7 @@ running:
 - `config` shows the running and target bank settings. `config set` changes
   one target bank, `config address` changes the target I2C address,
   `config clock <default|150|200|250>` changes the target system clock in MHz
-  (default keeps the board's 150 MHz), and `config save` persists the target. A reboot applies the target.
+  (default keeps the SDK clock: 125 MHz on Pico, 150 MHz on Pico 2), and `config save` persists the target. A reboot applies the target.
 - `set` applies to output-capable channels and returns `ERR unavailable` for
   monitor channels.
 - `stop` drives generator outputs low (`freq = 0 Hz`, `duty = 0%`). Monitor channels are left unchanged.

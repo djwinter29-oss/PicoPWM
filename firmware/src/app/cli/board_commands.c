@@ -7,6 +7,8 @@
 #include "platform/system.h"
 #include "driver/pwm/pwm_driver.h"
 
+#include "hardware/clocks.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -80,7 +82,7 @@ bool board_commands_config(void *context, int argc, const char *const *argv) {
         shell_write_line(COMMAND_SHELL, line);
         board_commands_format_config(line, sizeof(line), "target",
                                      boot_config_get_sysclk_mhz() != 0u ? boot_config_get_sysclk_mhz()
-                                                                        : SYSTEM_CLOCK / 1000u,
+                                                                        : SYS_CLK_KHZ / 1000u,
                                      boot_config_get_i2c_address(), boot_config_get_bank);
         return shell_write_line(COMMAND_SHELL, line);
     }

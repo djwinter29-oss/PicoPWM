@@ -130,6 +130,10 @@ bool sw_gen_init(void) {
             return false;
         }
     }
+    // The tick must run on the core that calls sw_gen_init; fail here rather than race silently.
+    if (alarm_pool_core_num(sw_pwm_pool) != get_core_num()) {
+        return false;
+    }
 
     for (uint i = 0u; i < PWM_DRIVER_CONFIG_BANK_SIZE; i++) {
         uint gpio = software_pwm_config.channels[i].gpio;

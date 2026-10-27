@@ -40,6 +40,17 @@ bool boot_config_set_bank(pwm_bank_t bank, pwm_role_t role) {
     return true;
 }
 
+static boot_config_sysclk_t sysclk;
+
+boot_config_sysclk_t boot_config_get_sysclk(void) {
+    return sysclk;
+}
+
+bool boot_config_set_sysclk(boot_config_sysclk_t profile) {
+    sysclk = profile;
+    return true;
+}
+
 bool boot_config_save(void) {
     ++saves;
     return save_ok;
@@ -97,7 +108,8 @@ static uint8_t result_status(uint8_t id, uint8_t op) {
 
 int main(void) {
     uint8_t p[HID_MAX_PAYLOAD_SIZE];
-    static const uint8_t identity[] = {1, 3, 0, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 1, 2, 3, 1, 24, 1, 0};
+    static const uint8_t identity[] = {1,    3,    0, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5,
+                                       0xA6, 0xA7, 1, 2,    3,    1,    24,   3,    0x0F};
     static const uint8_t config[] = {1, 0, 1, 2, 0, 1, 0, 0x20, 0, 1, 2, 0, 1, 0, 0x20, 1, 0, 0x80, 0xD1, 0xF0, 0x08};
 
     assert(hid_protocol_get(HID_REPORT_ID_IDENTITY, p, sizeof(p)) == sizeof(identity));
@@ -143,8 +155,22 @@ int main(void) {
     save_ok = false;
     send(17, HID_OP_SAVE_CONFIG, 0, 0, 0, 1);
     assert(result_status(17, HID_OP_SAVE_CONFIG) == HID_STATUS_STORAGE_FAILED);
-    send(18, HID_OP_SET_CLOCK_PROFILE, 0, 0, 0, 0);
+
+    // Profiles above 150 MHz need the overclock flag, and a save then needs it too.
+    send(18, HID_OP_SET_CLOCK_PROFILE, 0, 1, 0, 0);
+    assert(result_status(18, HID_OP_SET_CLOCK_PROFILE) == HID_STATUS_OK && sysclk == BOOT_CONFIG_SYSCLK_150MHZ);
+    send(18, HID_OP_SET_CLOCK_PROFILE, 0, 3, 0, 0);
+    assert(result_status(18, HID_OP_SET_CLOCK_PROFILE) == HID_STATUS_INVALID && sysclk == BOOT_CONFIG_SYSCLK_150MHZ);
+    send(18, HID_OP_SET_CLOCK_PROFILE, 0, 4, 0, 2);
     assert(result_status(18, HID_OP_SET_CLOCK_PROFILE) == HID_STATUS_INVALID);
+    send(18, HID_OP_SET_CLOCK_PROFILE, 0, 3, 0, 2);
+    assert(result_status(18, HID_OP_SET_CLOCK_PROFILE) == HID_STATUS_OK && sysclk == BOOT_CONFIG_SYSCLK_250MHZ);
+    assert(hid_protocol_get(HID_REPORT_ID_CONFIGURATION, p, sizeof(p)) == sizeof(config) && p[16] == 3u);
+    save_ok = true;
+    send(19, HID_OP_SAVE_CONFIG, 0, 0, 0, 1);
+    assert(result_status(19, HID_OP_SAVE_CONFIG) == HID_STATUS_INVALID && saves == 2);
+    send(19, HID_OP_SAVE_CONFIG, 0, 0, 0, 3);
+    assert(result_status(19, HID_OP_SAVE_CONFIG) == HID_STATUS_OK && saves == 3);
 
     // A request is PENDING until polled, and a second SET is dropped meanwhile.
     uint8_t r[HID_ACTION_SIZE] = {1, 20, HID_OP_STOP};

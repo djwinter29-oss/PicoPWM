@@ -9,24 +9,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/** @brief Board-family string exposed to host-side status and test code. */
-#if defined(PICO_RP2350A) || defined(PICO_RP2350B)
-#define SYSTEM_BOARD_FAMILY "pico2"
-#else
-#define SYSTEM_BOARD_FAMILY "pico"
-#endif
-
-/** @brief Nominal system clock target in kHz for the current board family. */
-#if defined(PICO_RP2350A) || defined(PICO_RP2350B)
-#define SYSTEM_CLOCK 150000u
-#else
-#define SYSTEM_CLOCK 150000u
-#endif
-
-/** @brief Configure the system clock from the boot configuration (SYSTEM_CLOCK when unset). */
+/** @brief Apply the saved system-clock profile; with none saved, keep the SDK default (SYS_CLK_KHZ). */
 bool system_init_clock(void);
 
-/** @brief Return true when the nominal system-clock target was applied. */
+/** @brief Return true when the saved profile was applied, or none was requested. */
 bool system_clock_is_at_target(void);
 
 /** @brief Return the system clock frequency the backends should use, in Hz. */

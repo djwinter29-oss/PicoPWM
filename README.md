@@ -47,7 +47,7 @@ The current firmware exposes:
 - The pinned Pico SDK is a recursive Git submodule at
   `firmware/third_party/pico-sdk`. Initialize it with
   `git submodule update --init --recursive` if it is not present; the build
-  helper does this automatically and defaults `PICO_SDK_PATH` to it.
+  helper does this automatically. The build always uses this SDK.
 
 ### Build
 
@@ -123,7 +123,6 @@ The matching C# ASP.NET Core host is available under
 
 ### Troubleshooting
 
-- Confirm `PICO_SDK_PATH` is visible to the shell running CMake.
 - Confirm `arm-none-eabi-gcc` is on your `PATH`.
 - If the Pico SDK checkout is incomplete, run `git submodule update --init --recursive` inside the SDK.
 - If USB CDC does not enumerate, reconnect the cable and confirm it supports data.

@@ -8,6 +8,7 @@ PIO_FILE="$REPO_ROOT/firmware/src/driver/pwm/pio/pio_generator.pio"
 DRIVER_FILE="$REPO_ROOT/firmware/src/driver/pwm/pwm_driver.c"
 CONFIG_FILE="$REPO_ROOT/firmware/src/platform/boot_config.c"
 SLAVE_FILE="$REPO_ROOT/firmware/src/driver/i2c/i2c_slave.c"
+SLAVE_HW_FILE="$REPO_ROOT/firmware/src/driver/i2c/i2c_slave_hw.c"
 SW_GEN_FILE="$REPO_ROOT/firmware/src/driver/pwm/software/software_generator.c"
 
 # The low path must not side-set. A side-set there makes every duty a one-tick pulse.
@@ -95,52 +96,37 @@ awk '
     }
 ' "$CONFIG_FILE"
 
-if ! grep -q "clr_tx_abrt" "$SLAVE_FILE"; then
-    echo "i2c_slave.c: ISR must clear TX_ABRT so a master NACK releases the FIFO" >&2
+if ! grep -q "clr_tx_abrt" "$SLAVE_HW_FILE"; then
+    echo "i2c_slave_hw.c: events must clear TX_ABRT so a master NACK releases the FIFO" >&2
     exit 1
 fi
 
-if ! grep -q "I2C_IC_INTR_MASK_M_TX_ABRT_BITS" "$SLAVE_FILE"; then
-    echo "i2c_slave.c: TX_ABRT must be unmasked so a master NACK enters the ISR" >&2
+if ! grep -q "I2C_IC_INTR_MASK_M_TX_ABRT_BITS" "$SLAVE_HW_FILE"; then
+    echo "i2c_slave_hw.c: TX_ABRT must be unmasked so a master NACK enters the ISR" >&2
     exit 1
 fi
 
-if grep -q "hw->clr_intr" "$SLAVE_FILE"; then
-    echo "i2c_slave.c: clr_intr drops STOP_DET and RD_REQ that arrive after the status sample" >&2
+if grep -q "hw->clr_intr" "$SLAVE_HW_FILE"; then
+    echo "i2c_slave_hw.c: clr_intr drops STOP_DET and RD_REQ that arrive after the status sample" >&2
     exit 1
 fi
 
-if ! grep -q "rxflr" "$SLAVE_FILE"; then
+if ! grep -q "rxflr" "$SLAVE_HW_FILE" || ! grep -q "i2c_slave_hw_rx_pop" "$SLAVE_FILE"; then
     echo "i2c_slave.c: ISR must drain every queued RX byte before handling STOP" >&2
     exit 1
 fi
 
-if ! grep -q "i2c_control_map_is_status_select" "$SLAVE_FILE"; then
+if ! grep -q "is_status_select" "$SLAVE_FILE"; then
     echo "i2c_slave.c: a one-byte write to a longer command must select status instead of queueing" >&2
     exit 1
 fi
 
-if ! grep -q "i2c_irq_gate_should_refresh" "$SLAVE_FILE"; then
-    echo "i2c_slave.c: a new read must refresh a consumed status buffer" >&2
+if ! grep "I2C_IC_INTR_MASK_M_TX_EMPTY_BITS" "$SLAVE_HW_FILE" | grep -q "enabled"; then
+    echo "i2c_slave_hw.c: TX_EMPTY mask must follow the enabled flag" >&2
     exit 1
 fi
 
-if ! grep -q "i2c_irq_gate_on_read_request" "$SLAVE_FILE"; then
-    echo "i2c_slave.c: ISR must call i2c_irq_gate_on_read_request" >&2
-    exit 1
-fi
-
-if ! grep -q "i2c_irq_gate_on_tx_empty" "$SLAVE_FILE"; then
-    echo "i2c_slave.c: ISR must call i2c_irq_gate_on_tx_empty" >&2
-    exit 1
-fi
-
-if ! grep "I2C_IC_INTR_MASK_M_TX_EMPTY_BITS" "$SLAVE_FILE" | grep -q "tx_empty_unmasked"; then
-    echo "i2c_slave.c: TX_EMPTY mask must follow tx_empty_unmasked" >&2
-    exit 1
-fi
-
-if grep "I2C_IC_INTR_MASK_M_TX_EMPTY_BITS" "$SLAVE_FILE" | grep -v "tx_empty_unmasked" | grep -q .; then
-    echo "i2c_slave.c: TX_EMPTY must stay masked unless tx_empty_unmasked" >&2
+if grep "I2C_IC_INTR_MASK_M_TX_EMPTY_BITS" "$SLAVE_HW_FILE" | grep -v "enabled" | grep -q .; then
+    echo "i2c_slave_hw.c: TX_EMPTY must stay masked unless a read still has bytes to send" >&2
     exit 1
 fi

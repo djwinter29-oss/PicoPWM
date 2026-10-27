@@ -106,7 +106,7 @@ $$
 
 ### Current Clock Plan and Supported Envelope
 
-The current firmware startup attempts to run `clk_sys` at `150 MHz` and may fall back to `125 MHz` if that clock plan is not accepted by the board.
+The firmware keeps the SDK default `clk_sys` (`125 MHz` on Pico, `150 MHz` on Pico 2) unless a saved profile raises it; a rejected profile also leaves the SDK default running.
 
 Some board-level helper paths in this repository also show a `200 MHz` clock plan, so it is useful to show that case as a reference point too.
 

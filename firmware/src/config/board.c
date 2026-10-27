@@ -3,7 +3,7 @@
  * @brief Board-level pin allocation and peripheral settings for the standard Pico board.
  */
 
-#include "driver/i2c/i2c_slave.h"
+#include "driver/i2c/i2c_slave_hw.h"
 #include "driver/pwm/pwm_driver.h"
 
 /**

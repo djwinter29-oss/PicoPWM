@@ -6,6 +6,7 @@
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
 #include "app/cli/pwm_commands.h"
+#include "app/i2c/i2c_control_map.h"
 #include "platform/led.h"
 #include "platform/system.h"
 #include "platform/boot_config.h"
@@ -58,15 +59,13 @@ int main(void) {
     }
 
     // Core 0: start communication interfaces.
-    i2c_slave_init(boot_config_get_i2c_address());
-    pwm_driver_set_wait_hook(i2c_slave_service_reads);
+    i2c_slave_init(boot_config_get_i2c_address(), &i2c_control_map_ops);
 
     // Core 0 main loop: service USB CDC, USB HID, and I2C.
     while (true) {
         bool usb_connected;
 
         system_watchdog_kick();
-        i2c_slave_service_reads();
         usb_cdc_poll();
         usb_hid_poll();
         // Detect USB connection events and print the initial CLI help.

@@ -22,18 +22,16 @@ PicoPWM/
 
 ## Firmware Builds
 
-The helper defaults to `build/`; selecting a board or profile places that
-build in a named subdirectory:
+The helper builds into `build/<board>` and defaults to `pico`. The Pico SDK
+is always the `firmware/third_party/pico-sdk` submodule; set `CMAKE_GENERATOR` to
+pick a generator:
 
 ```sh
 ./tools/firmware/build.sh --board pico
 ./tools/firmware/build.sh --board pico2
-./tools/firmware/build.sh --profile my-build
 ```
 
-These commands produce build directories under `build/`. The `--profile`
-option only names a build directory; channel roles are selected in the startup
-configuration. See
+Channel roles are selected in the startup configuration. See
 [Firmware Configuration](docs/guides/configuration.md#startup-bank-configuration).
 
 Host-side firmware tests use the same root build directory:

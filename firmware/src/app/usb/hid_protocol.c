@@ -21,11 +21,12 @@
 #define HID_BANK_SIZE 8u
 /** @brief Capability bit 0: the firmware can save its configuration. */
 #define HID_CAP_SAVE 0x01u
-/**
- * @brief Accepted clock profiles. Zero keeps capability bit 1 cleared: this build has no stored clock profile, so
- *        hosts send no SET_CLOCK_PROFILE and ignore report 2 `clock_profile`.
- */
-#define HID_CLOCK_PROFILE_MASK 0x00u
+/** @brief Capability bit 1: the firmware accepts SET_CLOCK_PROFILE. */
+#define HID_CAP_CLOCK 0x02u
+/** @brief Accepted clock profiles, one bit per @ref boot_config_sysclk_t value (default, 150, 200, 250 MHz). */
+#define HID_CLOCK_PROFILE_MASK 0x0Fu
+/** @brief Report 20 flag bit 1: the caller acknowledges an overclock profile (above 150 MHz). */
+#define HID_FLAG_ACK_OVERCLOCK 0x02u
 
 /** @brief Single pending-request slot and the latest device-global result. */
 static struct {
@@ -88,7 +89,7 @@ static bool build_identity(uint8_t *payload) {
     payload[14] = 1u;
 #endif
     payload[15] = device_channel_count();
-    payload[16] = HID_CAP_SAVE;
+    payload[16] = HID_CAP_SAVE | HID_CAP_CLOCK;
     payload[17] = HID_CLOCK_PROFILE_MASK;
     return true;
 }
@@ -98,6 +99,7 @@ static bool build_configuration(uint8_t *payload) {
     payload[0] = HID_LAYOUT_VERSION;
     pack_bank_config(&payload[1], true);
     pack_bank_config(&payload[8], false);
+    payload[16] = (uint8_t)boot_config_get_sysclk();
     put_le32(&payload[17], device_system_clock_hz());
     return true;
 }
@@ -167,6 +169,11 @@ static bool reserved_clear(const uint8_t *r) {
     return r[10] == 0u && r[11] == 0u;
 }
 
+/** @brief Acknowledgement flag a save must carry while the target clock is an overclock. */
+static uint8_t overclock_flag(void) {
+    return boot_config_get_sysclk() > BOOT_CONFIG_SYSCLK_150MHZ ? HID_FLAG_ACK_OVERCLOCK : 0u;
+}
+
 static hid_status_t execute(const uint8_t *r) {
     uint8_t operation = r[2];
     uint8_t channel = r[3];
@@ -211,14 +218,17 @@ static hid_status_t execute(const uint8_t *r) {
         }
         return HID_STATUS_OK;
     case HID_OP_SAVE_CONFIG:
-        // No stored clock profile exists, so the overclock acknowledgement bit is never valid here.
-        if (channel != 0u || arg0 != 0u || arg1 != 0u || flags != HID_FLAG_CONFIRM_SAVE) {
+        if (channel != 0u || arg0 != 0u || arg1 != 0u || flags != (HID_FLAG_CONFIRM_SAVE | overclock_flag())) {
             return HID_STATUS_INVALID;
         }
         return boot_config_save() ? HID_STATUS_OK : HID_STATUS_STORAGE_FAILED;
-    default:
-        // SET_CLOCK_PROFILE: no profile is in HID_CLOCK_PROFILE_MASK, so every request is invalid.
-        return HID_STATUS_INVALID;
+    default: // HID_OP_SET_CLOCK_PROFILE
+        if (channel != 0u || arg0 > BOOT_CONFIG_SYSCLK_250MHZ || arg1 != 0u ||
+            flags != ((arg0 > BOOT_CONFIG_SYSCLK_150MHZ) ? HID_FLAG_ACK_OVERCLOCK : 0u) ||
+            !boot_config_set_sysclk((boot_config_sysclk_t)arg0)) {
+            return HID_STATUS_INVALID;
+        }
+        return HID_STATUS_OK;
     }
 }
 

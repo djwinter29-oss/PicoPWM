@@ -80,7 +80,7 @@ Feature report, host reads, 18-byte payload.
 | 14 | 1 | `mcu` | `1` RP2040, `2` RP2350. |
 | 15 | 1 | `channel_count` | From `device_channel_count()`; `24` (three banks of eight). |
 | 16 | 1 | `capabilities` | Bit 0 config save, bit 1 clock profile; bits 2-7 reserved and zero. A host treats a cleared bit as the feature being absent: without bit 0 it sends no `SAVE_CONFIG`; without bit 1 it sends no `SET_CLOCK_PROFILE` and ignores `clock_profile` in report 2 (`clock_profile_mask` is then zero). |
-| 17 | 1 | `clock_profile_mask` | The current firmware ships bit 1 and this mask cleared (no stored clock profile yet). Bit *n* set when clock profile *n* (0-4) is accepted by this firmware build on this MCU; bits 5-7 zero. Profile `1` is always set. The running I2C address is read from report 2. |
+| 17 | 1 | `clock_profile_mask` | Bit *n* set when clock profile *n* (0-4) is accepted by this firmware build on this MCU; bits 5-7 zero. Profile `1` is always set. This firmware sends `0x0F`. The running I2C address is read from report 2. |
 
 ## Report ID 2: Board Configuration
 
@@ -98,7 +98,7 @@ Running values come from the live modules (`device_bank_role()`, `device_i2c_add
 | 17 | 4 | `system_clock_hz` | Running `clk_sys`, from `system_clock_hz()`; separate from the request. |
 
 Bank enums: backend `0` HW, `1` PIO, `2` SW. The backend is fixed per bank (A is HW, B is PIO, C is SW) and is
-not stored by the firmware; it is reported as a constant and a `SET_BANK`/`CONFIG_SET` with any other value is rejected; role `0` generator, `1` monitor.
+not stored by the firmware; it is reported as a constant and a `SET_BANK` with any other value is rejected (the I2C `REG_CONFIG_SET` carries only bank and role); role `0` generator, `1` monitor.
 
 The target is changed and saved through report 20, never by writing report 2. A saved target takes effect only after
 the device restarts. HID provides no reboot, so the host asks the user to power-cycle or reset the board, then
@@ -107,43 +107,32 @@ rereads reports 1 and 2. A host that lost the connection during a save rereads r
 
 ### System Clock Profile
 
-PicoPWM raises `clk_sys` to 150 MHz at boot by default. The choice is
-configurable, reusing PicoUart's profile IDs so hosts share one table:
+The clock profile is the `sysclk` value of the flash configuration record, shared with the CDC `config clock`
+command. Profile IDs match PicoUart's table so hosts share one mapping:
 
 | Profile | Requested `clk_sys` | Notes |
 | ------: | ------------------- | ----- |
-| `0` | SDK default | No reconfiguration (125 MHz RP2040, 150 MHz RP2350). |
-| `1` | 150 MHz | PicoPWM default; used when storage is invalid or erased. |
+| `0` | SDK default | No reconfiguration (125 MHz RP2040, 150 MHz RP2350); used when storage is invalid or erased. |
+| `1` | 150 MHz | |
 | `2` | 200 MHz | Overclock. |
 | `3` | 250 MHz | Overclock. |
-| `4` | 280 MHz | Overclock; may not be reliable on every board. Set in `clock_profile_mask` only where the MCU build accepts it. |
-| `5`-`255` | Unassigned | Invalid. |
+| `4`-`255` | Unassigned | Invalid. |
 
 Rules:
 
-- Profiles `2`-`4` are not qualified for every MCU or board. A profile's `clock_profile_mask` bit is set only for an
-  MCU build where it has been validated on hardware; the table is an allocation of IDs, not a guarantee.
-- The profile is a request, not the running clock. Hosts display
-  `clock_profile` and `system_clock_hz` separately and never infer one from
-  the other. A request for a profile absent from `clock_profile_mask` returns
-  `INVALID` and changes nothing; a stored profile that is invalid or no longer
-  accepted is treated as profile `1` at boot.
-- The clock is applied by `system_init_clock()` before any PWM backend
-  caches `clk_sys`, so it can only change at boot. HID never reclocks a
-  running device; backend timing, frequency limits, and realized frequencies
-  are derived from the clock actually applied.
-- Profiles above `1` are overclocks. `SET_CLOCK_PROFILE` and a `SAVE_CONFIG`
-  that would persist one require the unsafe-overclock acknowledgement flag;
-  without it the request returns `INVALID` and changes nothing. Saving is not
-  a stability qualification and needs exact-board validation. If a saved profile prevents boot, hold BOOTSEL while
-  connecting USB (the ROM bootloader does not depend on the flashed clock) and reflash; erasing flash restores
-  profile `1`.
-- The stored profile lives in the configuration sector under its own layout
-  version. Sectors without the field load as profile `1`, and the profile is
-  read before `system_init_clock()`.
-- The profile is read and written through a `device` clock-profile accessor that the firmware must add alongside
-  the other configuration functions; `system_clock_hz()` already provides the running clock. HID does not call
-  `platform/system.*` directly, and CDC and I2C can expose the same accessor later.
+- `clock_profile` in report 2 is `boot_config_get_sysclk()`: the target profile, including unsaved changes made by
+  `SET_CLOCK_PROFILE` or the CDC command. `clock_profile_mask` is `0x0F` and capability bit 1 is set.
+- The profile is a request, not the running clock. Hosts display `clock_profile` and `system_clock_hz` separately
+  and never infer one from the other. A profile above `3` returns `INVALID` and changes nothing.
+- The clock is applied by `system_init_clock()` from the saved record before any PWM backend caches `clk_sys`, so
+  it changes only after save and restart. HID never reclocks a running device.
+- Profiles above `1` are overclocks. `SET_CLOCK_PROFILE` for one, and a `SAVE_CONFIG` while the target profile is
+  one, require the unsafe-overclock acknowledgement flag; without it the request returns `INVALID` and changes
+  nothing. Other requests must not set the flag. Saving is not a stability qualification and needs exact-board
+  validation. If a saved profile prevents boot, hold BOOTSEL while connecting USB and reflash; erasing flash
+  restores profile `0`.
+- HID reads and writes the profile through `boot_config_get_sysclk()` and `boot_config_set_sysclk()`, the same
+  calls the CDC command uses.
 
 ## Reports 10-12: Bank Status
 
@@ -299,10 +288,10 @@ Hex blocks are payloads without the transport report ID. Assume channel 3 is a g
 01 03 01 02 00 00 00 00 00 00 00 00
 ```
 
-**Report 2 (illustrative values) with Bank A HW, B PIO, C SW (all generators), I2C `0x20`, target equal to running, clock profile 1, 150 MHz:**
+**Report 2 (illustrative values) with Bank A HW, B PIO, C SW (all generators), I2C `0x20`, target equal to running, clock profile 0, 150 MHz:**
 
 ```text
-01 00 01 02 00 00 00 20 00 01 02 00 00 00 20 00 01 80 D1 F0 08
+01 00 01 02 00 00 00 20 00 01 02 00 00 00 20 00 00 80 D1 F0 08
 ```
 
 **Report 10 with channel 0 at 1000 Hz and 50%, others stopped:**

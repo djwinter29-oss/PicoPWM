@@ -1,12 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 
-# Set PICO_SDK_PATH in the environment or pass -DPICO_SDK_PATH=... to CMake.
-if(NOT DEFINED PICO_SDK_PATH AND DEFINED ENV{PICO_SDK_PATH})
-    set(PICO_SDK_PATH "$ENV{PICO_SDK_PATH}")
-endif()
-if(NOT DEFINED PICO_SDK_PATH OR PICO_SDK_PATH STREQUAL "")
-    message(FATAL_ERROR "PICO_SDK_PATH must point to an installed Pico SDK")
-endif()
+# The SDK is pinned by the firmware/third_party/pico-sdk submodule.
+set(PICO_SDK_PATH "${CMAKE_CURRENT_LIST_DIR}/third_party/pico-sdk" CACHE INTERNAL "")
 include("${PICO_SDK_PATH}/external/pico_sdk_import.cmake")
 
 project(PicoPWM C CXX ASM)
@@ -14,17 +9,10 @@ project(PicoPWM C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
-set(PICO_PWM_FIRMWARE_VERSION "0.0.0-dev" CACHE STRING "Firmware version string exposed over CDC and I2C")
+set(PICO_PWM_FIRMWARE_VERSION "0.0.0-dev" CACHE STRING "Firmware version string exposed over CDC, I2C and HID; releases pass the tag version")
+include(${CMAKE_CURRENT_LIST_DIR}/version.cmake)
 
 pico_sdk_init()
-
-set(PICO_PWM_CONFIG_STORAGE_SIZE 8192)
-if(PICO_FLASH_SIZE_BYTES LESS PICO_PWM_CONFIG_STORAGE_SIZE)
-    message(FATAL_ERROR
-        "PicoPWM requires at least ${PICO_PWM_CONFIG_STORAGE_SIZE} bytes of reserved flash storage; "
-        "reported flash size is ${PICO_FLASH_SIZE_BYTES}")
-endif()
-math(EXPR PICO_PWM_CONFIG_FLASH_OFFSET "${PICO_FLASH_SIZE_BYTES} - ${PICO_PWM_CONFIG_STORAGE_SIZE}")
 
 add_executable(pico_pwm
     src/main.c
@@ -51,6 +39,7 @@ add_executable(pico_pwm
     src/app/usb/hid_protocol.c
     src/app/usb/usb_descriptors.c
     src/driver/i2c/i2c_slave.c
+    src/driver/i2c/i2c_slave_hw.c
 )
 
 pico_generate_pio_header(pico_pwm
@@ -79,7 +68,7 @@ target_link_libraries(pico_pwm hardware_dma hardware_flash)
 
 target_compile_definitions(pico_pwm PRIVATE
     PICO_PWM_FIRMWARE_VERSION_STR="${PICO_PWM_FIRMWARE_VERSION}"
-    PICO_PWM_CONFIG_FLASH_OFFSET=${PICO_PWM_CONFIG_FLASH_OFFSET}
+    PICO_PWM_BCD_DEVICE=${PICO_PWM_BCD_DEVICE}u
 )
 
 target_include_directories(pico_pwm PRIVATE
@@ -93,10 +82,4 @@ pico_enable_stdio_usb(pico_pwm 0)
 pico_enable_stdio_uart(pico_pwm 0)
 
 pico_add_extra_outputs(pico_pwm)
-
-add_custom_command(TARGET pico_pwm POST_BUILD
-    COMMAND ${CMAKE_COMMAND}
-        -DPICO_PWM_BINARY="$<TARGET_FILE_DIR:pico_pwm>/pico_pwm.bin"
-        -DPICO_PWM_FLASH_LIMIT=${PICO_PWM_CONFIG_FLASH_OFFSET}
-        -P ${CMAKE_CURRENT_LIST_DIR}/check_config_flash_overlap.cmake
-)
+include(${CMAKE_CURRENT_LIST_DIR}/config-storage.cmake)

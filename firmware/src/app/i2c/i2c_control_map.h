@@ -6,6 +6,7 @@
 #ifndef I2C_CONTROL_MAP_H
 #define I2C_CONTROL_MAP_H
 
+#include "driver/i2c/i2c_slave.h"
 #include "driver/pwm/pwm_driver.h"
 
 #include <stdbool.h>
@@ -16,12 +17,13 @@ typedef enum {
     I2C_CONTROL_MAP_REG_INFO = 0x00u,          /**< Read-only register returning the fixed device name string. */
     I2C_CONTROL_MAP_REG_VERSION = 0x01u,       /**< Read-only register returning the fixed firmware version string. */
     I2C_CONTROL_MAP_REG_CHANNEL_COUNT = 0x02u, /**< Read-only register returning the logical channel count. */
-    I2C_CONTROL_MAP_REG_CONFIG = 0x03u,      /**< Read-only target configuration: backend/role for Banks A, B, and C. */
-    I2C_CONTROL_MAP_REG_CONFIG_SET = 0x04u,  /**< Write target bank configuration: bank, backend, role. */
+    I2C_CONTROL_MAP_REG_CONFIG =
+        0x03u, /**< Read-only configuration: running and target backend/role pairs plus I2C addresses. */
+    I2C_CONTROL_MAP_REG_CONFIG_SET = 0x04u,  /**< Write target bank configuration: bank, role. */
     I2C_CONTROL_MAP_REG_CONFIG_SAVE = 0x05u, /**< Write command persisting target configuration for the next reboot. */
     I2C_CONTROL_MAP_REG_CONFIG_ADDRESS = 0x06u, /**< Write target I2C address: one 7-bit payload byte. */
     I2C_CONTROL_MAP_REG_CH_BASE =
-        0x10u, /**< Base register for 24 channel snapshot reads, one 9-byte record per channel. */
+        0x10u, /**< Base register for 24 channel snapshot reads, one 5-byte record per channel. */
     I2C_CONTROL_MAP_REG_SET_BASE = 0x30u, /**< Base register for full channel write commands carrying freq and duty. */
     I2C_CONTROL_MAP_REG_STOP_ALL = 0x90u, /**< Register used to request stop-all and to read the last command result. */
     I2C_CONTROL_MAP_REG_LED =
@@ -45,22 +47,13 @@ bool i2c_control_map_is_write_register(uint8_t reg);
 uint8_t i2c_control_map_expected_write_length(uint8_t reg);
 
 /**
- * @brief A one-byte write to a longer command selects that register for a status read.
- * @param received_len Bytes captured in the current write, including the register byte.
- * @param expected_len Full write length required to execute the command.
- */
-static inline bool i2c_control_map_is_status_select(uint8_t received_len, uint8_t expected_len) {
-    return received_len == 1u && expected_len > 1u;
-}
-
-/**
  * @brief Build the current I2C read response for one register.
  * @param reg I2C register or command byte.
  * @param last_status Last completed write status tracked by the transport.
  * @param response Caller-owned destination buffer.
  * @param response_capacity Capacity of @p response in bytes.
  * @param response_len Caller-owned destination for the response byte count.
- * @return `true` when the register is supported and the response was built.
+ * @return `true` when the register is supported and the response was built. On `false` the response is untouched.
  */
 bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *response, uint8_t response_capacity,
                                    uint8_t *response_len);
@@ -73,5 +66,8 @@ bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *re
  * @return Result code from the shared PWM control plane.
  */
 pwm_driver_result_t i2c_control_map_execute_write(uint8_t reg, const uint8_t *payload, uint8_t payload_len);
+
+/** @brief This register map expressed as the callbacks `i2c_slave_init()` expects. */
+extern const i2c_slave_ops_t i2c_control_map_ops;
 
 #endif

@@ -38,7 +38,7 @@
 
 /** @brief Runtime ownership and last sample state for one PIO monitor channel. */
 typedef struct {
-    pwm_state_t state;  /**< Latest exported monitor state. */
+    pwm_state_t state;         /**< Latest exported monitor state. */
     uint64_t capture_start_us; /**< Timestamp when the current one-period capture started. */
     bool sample_valid;         /**< Indicates whether one full PWM period has been captured. */
     bool capture_active;       /**< Indicates that the PIO state machine is capturing one period. */

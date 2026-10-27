@@ -140,7 +140,7 @@ Core 0 owns the host-facing transports:
   [CDC/HID Overview](usb/cdc-hid-overview.md)
 - `app/cli/shell.*` for the embedded-cli-backed line editor and command dispatch
 - `app/cli/pwm_commands.*` for human-readable CLI commands
-- `driver/i2c/i2c_slave.*` for the I2C slave ISR and deferred write scheduling
+- `driver/i2c/i2c_slave.*` for the I2C slave ISR, read responses, and deferred write scheduling; `i2c_slave_hw.*` is its SDK-facing peripheral port
 - `app/i2c/i2c_control_map.*` for the I2C register map and payload translation
 
 USB CDC uses bounded 128-byte receive and 256-byte transmit queues. When a
@@ -246,7 +246,7 @@ sequenceDiagram
 Transport-specific details:
 
 - I2C reads can be served directly from the published snapshot or last command status.
-- I2C writes are captured in the ISR, queued, and executed from normal Core 0 polling through the same shared control path used by USB CDC. I2C read responses are also built on Core 0. The ISR holds SCL while a requested response is still being built, and releases it when the read had no request pending.
+- I2C writes are captured in the ISR, queued, and executed from normal Core 0 polling through the same shared control path used by USB CDC. I2C read responses are built in the ISR from non-blocking getters when a read starts, so SCL is never stretched.
 - USB commands are parsed by `shell` and the CLI command handlers before they reach `device`.
 - I2C commands are decoded by `i2c_slave` and `i2c_control_map` before they reach `device`.
 
@@ -329,7 +329,7 @@ flowchart TD
 
 In ordered form:
 
-1. Core 0 raises the system clock target to 150 MHz when possible.
+1. Core 0 applies the saved system-clock profile, if any; otherwise the SDK default clock stays.
 2. Core 0 initializes the board LED helper.
 3. Core 0 initializes TinyUSB CDC and the CLI transport binding.
 4. Core 0 initializes and launches Core 1 with `pwm_driver_init(roles)`.

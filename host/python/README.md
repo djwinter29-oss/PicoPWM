@@ -3,7 +3,7 @@
 This package provides a Python HID client and a Flask management interface for the
 firmware's 24 logical channels over the USB HID vendor interface (VID `0xCAFE`, PID
 `0x4012`; see [hid-report-reference.md](../../docs/design/usb/hid-report-reference.md)).
-The firmware implements this interface in `firmware/src/usb`; this build ships with the clock-profile capability cleared.
+The firmware implements this interface in `firmware/src/usb`.
 
 ## Install
 

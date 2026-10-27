@@ -119,12 +119,6 @@ typedef struct {
 bool pwm_driver_init(const pwm_role_t roles[PWM_BANK_COUNT]);
 
 /**
- * @brief Register a Core 0 callback invoked while a mailbox wait is spinning.
- * @param hook Callback used to keep other Core 0 work moving, or `NULL` to clear it.
- */
-void pwm_driver_set_wait_hook(void (*hook)(void));
-
-/**
  * @brief Return whether Core 1 started the PWM mailbox runtime.
  * @return `true` once the driver has initialized the configured backends and
  *         can accept channel commands.

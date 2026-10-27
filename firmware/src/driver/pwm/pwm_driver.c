@@ -30,6 +30,20 @@
 /** @brief Bank roles chosen at startup; set once before Core 1 launches. */
 static pwm_role_t pwm_driver_config_bank_roles[PWM_BANK_COUNT];
 
+uint8_t pwm_driver_channel_gpio(uint channel) {
+    uint index = channel % PWM_DRIVER_CONFIG_BANK_SIZE;
+    switch (channel / PWM_DRIVER_CONFIG_BANK_SIZE) {
+    case PWM_BANK_A:
+        return (uint8_t)hardware_pwm_config.channels[index].gpio;
+    case PWM_BANK_B:
+        return (uint8_t)pio_pwm_config.channels[index].gpio;
+    case PWM_BANK_C:
+        return (uint8_t)software_pwm_config.channels[index].gpio;
+    default:
+        return UINT8_MAX;
+    }
+}
+
 bool pwm_driver_config_channel_role(uint channel, pwm_role_t *role) {
     if ((role == NULL) || (channel >= PWM_DRIVER_CONFIG_CHANNEL_COUNT)) {
         return false;

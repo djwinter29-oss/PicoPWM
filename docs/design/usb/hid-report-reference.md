@@ -58,6 +58,7 @@ HID does not call `pwm`, backends, or `platform/system.*` directly.
 | `2` | Board Configuration | Feature | Host reads | 21 bytes | Running and target configuration, clock profile. |
 | `3` | Firmware Memory | Feature | Host reads | 9 bytes | Static SRAM reservation and physical capacity. |
 | `4` | Runtime Status | Feature | Host reads | 13 bytes | Uptime, internal temperature estimate, service load. |
+| `5` | Pin Assignment | Feature | Host reads | 28 bytes | 24 channel GPIOs, I2C SDA/SCL, board LED GPIO. |
 | `10`-`12` | Bank Status — Bank A–C | Feature | Host reads | 41 bytes | Realized frequency and duty of the bank's 8 channels. |
 | `20` | Board Action & Result | Feature | Host reads/writes | 12 bytes | SET submits one action; GET returns the latest result in the same length. |
 
@@ -81,7 +82,7 @@ Feature report, host reads, 18-byte payload.
 | 13 | 1 | `firmware_patch` | Firmware version patch. |
 | 14 | 1 | `mcu` | `1` RP2040, `2` RP2350. |
 | 15 | 1 | `channel_count` | From `device_channel_count()`; `24` (three banks of eight). |
-| 16 | 1 | `capabilities` | Bit 0 config save, bit 1 clock profile, bit 2 save-and-reboot, bit 3 LED control/readback, bit 4 standalone reboot, bit 5 firmware memory report, bit 6 runtime report; bit 7 reserved and zero. A host sends no operation whose capability is absent. Without bit 1, `clock_profile_mask` is zero. LED capability is absent on boards without a default LED. |
+| 16 | 1 | `capabilities` | Bit 0 config save, bit 1 clock profile, bit 2 save-and-reboot, bit 3 LED control/readback, bit 4 standalone reboot, bit 5 firmware memory report, bit 6 runtime report, bit 7 pin assignment report. A host sends no operation whose capability is absent. Without bit 1, `clock_profile_mask` is zero. LED capability is absent on boards without a default LED. |
 | 17 | 1 | `clock_profile_mask` | Bit *n* set when clock profile *n* (0-4) is accepted by this firmware build on this MCU; bits 5-7 zero. Profile `1` is always set. This firmware sends `0x0F`. The running I2C address is read from report 2. |
 
 ## Report ID 3: Firmware Memory
@@ -116,6 +117,31 @@ one-second window, excluding idle sleep/WFE. It is not CPU utilization: interrup
 work outside those passes is not counted, and flash/lockout delays can affect it.
 Core 1 publishes only its aligned load value through the PWM driver boundary;
 Core 0 owns USB telemetry. Load is initially zero until the first window completes.
+
+## Report ID 5: Pin Assignment
+
+Feature report, 28 bytes, available only with identity capability bit 7:
+
+| Offset | Size | Meaning |
+| -----: | ---: | ------- |
+| 0 | 1 | Layout version 1. |
+| 1 | 24 | GPIO numbers for logical channels 0-23, in channel order. |
+| 25 | 1 | I2C slave SDA GPIO. |
+| 26 | 1 | I2C slave SCL GPIO. |
+| 27 | 1 | Board LED GPIO. |
+
+Each GPIO is 0-47, or `255` when unavailable (including a board without a GPIO LED).
+These are GPIO numbers, not physical header pins. The report is built through
+`device_get_pin_assignment()`: PWM assignments come through the PWM driver boundary
+from the compiled board configuration, I2C from its board configuration, and LED
+from the SDK board definition. It does not change pins or access Core 1 runtime state.
+
+WebHID, Python and .NET read this report only when advertised, cache it for the
+connection, and clear it on disconnect/board switch. The collapsed pin map,
+monitoring GPIO column, and generator dialog all use the same reported values.
+Invalid reports produce an explicit pin-map error without inventing a fallback.
+Older firmware shows `--` and update guidance, not a hard-coded board map.
+Earlier host releases that reject identity bit 7 must be updated for this firmware.
 
 ## Report ID 2: Board Configuration
 

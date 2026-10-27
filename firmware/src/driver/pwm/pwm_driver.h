@@ -76,6 +76,9 @@ typedef enum {
 /** @brief Return the configured role of the bank that owns one logical channel; false when unavailable. */
 bool pwm_driver_config_channel_role(uint channel, pwm_role_t *role);
 
+/** @brief Return the board-configured channel GPIO, or UINT8_MAX for an invalid channel. */
+uint8_t pwm_driver_channel_gpio(uint channel);
+
 /** @brief Return a short name ("HW", "PIO-MON", ...) for the module that owns one logical channel. */
 const char *pwm_driver_config_channel_name(uint channel);
 

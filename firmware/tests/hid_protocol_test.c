@@ -18,6 +18,15 @@ static int reboots;
 static bool led_on;
 static bool led_available = true;
 
+void device_get_pin_assignment(device_pin_assignment_t *pins) {
+    for (uint channel = 0; channel < PWM_DRIVER_CHANNEL_COUNT; ++channel) {
+        pins->channels[channel] = (uint8_t)channel;
+    }
+    pins->i2c_sda = 26u;
+    pins->i2c_scl = 27u;
+    pins->led = led_available ? 25u : UINT8_MAX;
+}
+
 uint32_t device_ram_reserved_bytes(void) {
     return 32768u;
 }
@@ -151,7 +160,7 @@ static uint8_t result_status(uint8_t id, uint8_t op) {
 int main(void) {
     uint8_t p[HID_MAX_PAYLOAD_SIZE];
     static const uint8_t identity[] = {1,    3,    0, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5,
-                                       0xA6, 0xA7, 1, 2,    3,    1,    24,   127,  0x0F};
+                                       0xA6, 0xA7, 1, 2,    3,    1,    24,   255,  0x0F};
     static const uint8_t config[] = {1, 0, 1, 2, 0, 1, 0, 0x20, 0, 1, 2, 0, 1, 0, 0x20, 1, 0, 0x80, 0xD1, 0xF0, 0x08};
 
     assert(hid_protocol_get(HID_REPORT_ID_IDENTITY, p, sizeof(p)) == sizeof(identity));
@@ -164,6 +173,12 @@ int main(void) {
     assert(hid_protocol_get(HID_REPORT_ID_RUNTIME, p, sizeof(p)) == sizeof(runtime));
     assert(memcmp(p, runtime, sizeof(runtime)) == 0);
     assert(hid_protocol_get(HID_REPORT_ID_RUNTIME, p, sizeof(runtime) - 1) == 0u);
+    assert(hid_protocol_get(HID_REPORT_ID_PINS, p, sizeof(p)) == HID_PINS_SIZE);
+    assert(p[0] == 1u && p[25] == 26u && p[26] == 27u && p[27] == 25u);
+    for (uint channel = 0; channel < PWM_DRIVER_CHANNEL_COUNT; ++channel) {
+        assert(p[channel + 1] == channel);
+    }
+    assert(hid_protocol_get(HID_REPORT_ID_PINS, p, HID_PINS_SIZE - 1) == 0u);
     assert(hid_protocol_get(HID_REPORT_ID_IDENTITY, p, 17) == 0u);
     assert(hid_protocol_get(HID_REPORT_ID_CONFIGURATION, p, sizeof(p)) == sizeof(config));
     assert(p[0] == 1u && p[15] == 0u && memcmp(&p[1], &config[1], 7) == 0 && memcmp(&p[17], &config[17], 4) == 0);
@@ -258,7 +273,8 @@ int main(void) {
     led_available = false;
     send(28, HID_OP_SET_LED, 0, 1, 0, 0);
     assert(result_status(28, HID_OP_SET_LED) == HID_STATUS_UNAVAILABLE);
-    assert(hid_protocol_get(HID_REPORT_ID_IDENTITY, p, sizeof(p)) == HID_IDENTITY_SIZE && p[16] == 119u);
+    assert(hid_protocol_get(HID_REPORT_ID_IDENTITY, p, sizeof(p)) == HID_IDENTITY_SIZE && p[16] == 247u);
+    assert(hid_protocol_get(HID_REPORT_ID_PINS, p, sizeof(p)) == HID_PINS_SIZE && p[27] == UINT8_MAX);
     int saved_before_reboot = saves;
     send(29, HID_OP_REBOOT, 0, 0, 0, 0);
     assert(result_status(29, HID_OP_REBOOT) == HID_STATUS_INVALID && reboots == 1);

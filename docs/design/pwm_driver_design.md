@@ -18,6 +18,9 @@ This document is implementation-oriented and follows the current firmware under 
 The `pwm` subsystem provides one logical channel service. The default
 profile currently exposes 24 channels, but backend ownership and direction are
 resolved from the startup bank configuration and `config/board.c`.
+`pwm_driver_channel_gpio()` exposes only this immutable allocation through the
+driver boundary, allowing the Core 0 device facade to build HID pin reports
+without accessing backend runtime state or duplicating the map in hosts.
 
 It is responsible for:
 

@@ -33,6 +33,8 @@
 #define HID_CAP_MEMORY 0x20u
 /** @brief Capability bit 6: runtime telemetry report is available. */
 #define HID_CAP_RUNTIME 0x40u
+/** @brief Capability bit 7: board GPIO allocation report is available. */
+#define HID_CAP_PINS 0x80u
 /** @brief Accepted clock profiles, one bit per @ref boot_config_sysclk_t value (default, 150, 200, 250 MHz). */
 #define HID_CLOCK_PROFILE_MASK 0x0Fu
 /** @brief Report 20 flag bit 1: the caller acknowledges an overclock profile (above 150 MHz). */
@@ -101,8 +103,8 @@ static bool build_identity(uint8_t *payload) {
     payload[14] = 1u;
 #endif
     payload[15] = device_channel_count();
-    payload[16] =
-        HID_CAP_SAVE | HID_CAP_CLOCK | HID_CAP_SAVE_REBOOT | HID_CAP_REBOOT | HID_CAP_MEMORY | HID_CAP_RUNTIME;
+    payload[16] = HID_CAP_SAVE | HID_CAP_CLOCK | HID_CAP_SAVE_REBOOT | HID_CAP_REBOOT | HID_CAP_MEMORY |
+                  HID_CAP_RUNTIME | HID_CAP_PINS;
     if (device_led_read(&led_on)) {
         payload[16] |= HID_CAP_LED;
     }
@@ -169,6 +171,16 @@ uint16_t hid_protocol_get(uint8_t report_id, uint8_t *payload, uint16_t capacity
         scratch[10] = (uint8_t)(core0 >> 8);
         scratch[11] = (uint8_t)core1;
         scratch[12] = (uint8_t)(core1 >> 8);
+        ok = true;
+    } else if (report_id == HID_REPORT_ID_PINS) {
+        device_pin_assignment_t pins;
+        device_get_pin_assignment(&pins);
+        length = HID_PINS_SIZE;
+        scratch[0] = HID_LAYOUT_VERSION;
+        memcpy(&scratch[1], pins.channels, PWM_DRIVER_CHANNEL_COUNT);
+        scratch[25] = pins.i2c_sda;
+        scratch[26] = pins.i2c_scl;
+        scratch[27] = pins.led;
         ok = true;
     } else if (report_id >= HID_REPORT_ID_BANK_STATUS && report_id < HID_REPORT_ID_BANK_STATUS + HID_BANK_COUNT) {
         length = HID_BANK_STATUS_SIZE;

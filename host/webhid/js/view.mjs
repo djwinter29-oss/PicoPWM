@@ -1,10 +1,4 @@
-import { CLOCK_PROFILES, ROLES } from "./device.mjs?v=5";
-
-export const CHANNEL_GPIOS = [
-  1, 3, 5, 7, 9, 11, 13, 15,
-  0, 2, 4, 6, 8, 10, 12, 14,
-  16, 17, 18, 19, 20, 21, 22, 28,
-];
+import { CLOCK_PROFILES, ROLES } from "./device.mjs?v=6";
 
 function setText(selector, text) {
   document.querySelector(selector).textContent = text ?? "--";
@@ -109,7 +103,7 @@ function renderChannels(data, editable) {
   for (const channel of data.channels) {
     const bank = Math.floor(channel.channel / 8);
     const row = document.createElement("tr");
-    row.append(cell(String(channel.channel)), cell(String(CHANNEL_GPIOS[channel.channel])),
+    row.append(cell(String(channel.channel)), cell(String(data.pins?.channels[channel.channel] ?? "--")),
       cell(formatFrequency(channel.freq_hz), channel.freq_hz === null ? "number missing" : "number"),
       cell(channel.duty === null ? "--" : `${channel.duty}%`, channel.duty === null ? "number missing" : "number"));
     if (editable && data.configuration?.running.roles[bank] === 0 && !data.bank_errors[bank]
@@ -135,6 +129,30 @@ function renderChannels(data, editable) {
   }
 }
 
+function renderPins(data) {
+  for (const [bank, backend] of ["hw", "pio", "sw"].entries()) {
+    const body = document.querySelector(`#${backend}-pin-rows`);
+    body.replaceChildren();
+    for (let index = 0; index < 8; index++) {
+      const channel = bank * 8 + index;
+      const row = document.createElement("tr");
+      const label = document.createElement("th");
+      label.scope = "row";
+      label.textContent = String(channel);
+      row.append(label, cell(String(data.pins?.channels[channel] ?? "--")));
+      body.append(row);
+    }
+  }
+  for (const pin of ["i2c_sda", "i2c_scl", "led"]) {
+    setText(`#pin-${pin}`, data.pins?.[pin]);
+  }
+  setText("#pins-message", data.pins_error ?? (data.pins ? "" : data.identity
+    ? data.identity.can_read_pins ? "Waiting for pin assignment from device."
+      : "Update board firmware to read pin assignment over HID."
+    : "Connect a board to read its pin assignment."));
+  document.querySelector("#pins-message").dataset.error = String(Boolean(data.pins_error));
+}
+
 export function renderDashboard(data, editable = false) {
   const identity = data.identity;
   setText("#product-name", identity ? "PicoPWM" : null);
@@ -152,6 +170,7 @@ export function renderDashboard(data, editable = false) {
     ?? (identity && !identity.can_read_runtime ? "Update board firmware to enable runtime telemetry." : ""));
   document.querySelector("#runtime-message").dataset.error = String(Boolean(data.runtime_error));
   renderConfiguration(data);
+  renderPins(data);
   renderBootEdits(data.configuration);
   renderChannels(data, editable);
   const problems = [data.identity_error, data.configuration_error, ...data.bank_errors].filter(Boolean);

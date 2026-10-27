@@ -52,10 +52,13 @@ from the live configuration; it does not claim that the target is saved. The
 protocol does not report the running clock profile, so that notice does not infer
 clock-profile differences from measured clock speed.
 
-Expand **Pin assignment** below the boot settings to see the fixed channel-to-GPIO
-mapping, I2C signals, and board LED pin for Pico and Pico 2. It is collapsed by
-default and available without connecting a device. Numbers are GPIO IDs, not
-physical header pin numbers.
+Expand **Pin assignment** below the boot settings to see the connected board's
+channel-to-GPIO mapping, I2C signals, and board LED pin, read over HID report 5.
+It is collapsed by default. The monitoring GPIO column and generator dialog use
+the same reported map. Numbers are GPIO IDs, not physical header pin numbers;
+unavailable pins show `--`. No map is assumed while disconnected or on older
+firmware without the capability; update firmware to enable readback. Invalid
+reports show an explicit error. The map is cached only for the current connection.
 
 **Board LED** beside Connect toggles the identification LED and shows its readback
 state. **Reboot board** beside Save and Reboot opens a confirmation dialog and

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DEVICE_FILTER, OPERATION, PicoPwmWebHid, decodeActionResult, decodeBankStatus, decodeConfiguration,
-  decodeIdentity, decodeRuntime, encodeActionRequest, matchesPicoPwm,
+  decodeIdentity, decodePins, decodeRuntime, encodeActionRequest, matchesPicoPwm,
 } from "../js/device.mjs";
 
 const view = bytes => new DataView(Uint8Array.from(bytes).buffer);
@@ -82,6 +82,7 @@ function fakeDevice({ acceptSet = true, pendingPolls = 1, capabilities = 3 } = {
       if (id === 1) return view(identityBytes({ 16: capabilities }));
       if (id === 3) return view([1, 0, 0x80, 0, 0, 0, 0x20, 4, 0]);
       if (id === 4) return view([1, 123, 0, 0, 0, 0x78, 0xEC, 0xFF, 0xFF, 100, 0, 0xC4, 9]);
+      if (id === 5) return view([1, ...Array.from({ length: 24 }, (_, channel) => 47 - channel), 2, 3, 255]);
       if (id === 2) return view(configurationBytes());
       if (id === 20) {
         const result = [...this.result];
@@ -199,6 +200,35 @@ test("connect reads identity, configuration, and all 24 channels", async () => {
   assert.equal(dashboard.channels[23].channel, 23);
   await client.disconnect();
   assert.equal(client.state.phase, "disconnected");
+});
+
+test("pin reports are capability gated, validated, and cleared on disconnect", async () => {
+  const bytes = [1, ...Array.from({ length: 24 }, (_, channel) => channel), 26, 27, 255];
+  assert.equal(decodePins(view(bytes)).led, null);
+  assert.equal(decodePins(view(bytes)).channels[23], 23);
+  assert.throws(() => decodePins(view(bytes.slice(1))), /exactly 28/);
+  const invalid = [...bytes]; invalid[1] = 48;
+  assert.throws(() => decodePins(view(invalid)), /Invalid pin/);
+  const device = fakeDevice({ capabilities: 255 });
+  const client = await connected(device);
+  assert.equal(client.state.dashboard.pins.channels[0], 47);
+  assert.equal(client.state.dashboard.pins.i2c_sda, 2);
+  await client.disconnect();
+  assert.equal(client.state.dashboard.pins, null);
+  const legacy = fakeDevice();
+  const original = legacy.receiveFeatureReport.bind(legacy);
+  legacy.receiveFeatureReport = id => {
+    assert.notEqual(id, 5);
+    return original(id);
+  };
+  assert.equal((await connected(legacy)).state.dashboard.pins, null);
+  const bad = fakeDevice({ capabilities: 255 });
+  const read = bad.receiveFeatureReport.bind(bad);
+  bad.receiveFeatureReport = id => id === 5 ? view(invalid) : read(id);
+  const failed = await connected(bad);
+  assert.equal(failed.state.dashboard.pins, null);
+  assert.match(failed.state.dashboard.pins_error, /Invalid pin/);
+  assert.ok(failed.state.dashboard.identity);
 });
 
 test("setChannel sends a nonzero transaction and waits past PENDING", async () => {

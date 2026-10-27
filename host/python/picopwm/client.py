@@ -34,12 +34,14 @@ class PicoPwmHid:
         self._device: Any = None
         self._identity: dict[str, Any] | None = None
         self._configuration: dict[str, Any] | None = None
+        self._pins: dict[str, Any] | None = None
         self._transaction_id = 0
 
     def close(self) -> None:
         with self._lock:
             device, self._device = self._device, None
             self._identity = self._configuration = None
+            self._pins = None
             if device is not None:
                 try:
                     device.close()
@@ -78,10 +80,18 @@ class PicoPwmHid:
                 "configuration_error": None, "channels": _blank_channels(),
                 "bank_errors": [None] * p.BANK_COUNT, "error": None,
                 "runtime": None, "runtime_error": None,
+                "pins": None, "pins_error": None,
             }
             try:
                 state["identity"] = self._ensure_identity()
                 state["connected"] = True
+                if self._identity["can_read_pins"]:
+                    try:
+                        if self._pins is None:
+                            self._pins = p.decode_pins(self._read(p.PINS_REPORT, p.PINS_SIZE))
+                        state["pins"] = self._pins
+                    except p.ProtocolError as error:
+                        state["pins_error"] = str(error)
                 self._configuration = None
                 try:
                     self._configuration = p.decode_configuration(
@@ -103,10 +113,10 @@ class PicoPwmHid:
                         state["bank_errors"][bank] = str(error)
             except p.ProtocolError as error:
                 self.close()
-                state.update(connected=False, identity=None, identity_error=str(error), error=str(error))
+                state.update(connected=False, identity=None, pins=None, identity_error=str(error), error=str(error))
             except (OSError, RuntimeError) as error:
                 self.close()
-                state.update(connected=False, identity=None, error=str(error))
+                state.update(connected=False, identity=None, pins=None, error=str(error))
             return state
 
     def _perform(self, operation: int, **fields: int) -> None:

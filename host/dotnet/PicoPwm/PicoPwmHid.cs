@@ -7,7 +7,8 @@ public sealed class DeviceException(string message) : Exception(message);
 
 public sealed record DashboardStatus(bool Connected, Identity? Identity, string? IdentityError,
     Configuration? Configuration, string? ConfigurationError, ChannelState[] Channels, string?[] BankErrors,
-    string? Error, Protocol.Runtime? Runtime = null, string? RuntimeError = null);
+    string? Error, Protocol.Runtime? Runtime = null, string? RuntimeError = null,
+    Pins? Pins = null, string? PinsError = null);
 
 /// <summary>Thread-safe client for one board; opens lazily and reopens after an I/O failure.</summary>
 public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sleep = null, Func<long>? clockMs = null)
@@ -19,6 +20,7 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
     private IFeatureDevice? device;
     private Identity? identity;
     private Configuration? configuration;
+    private Pins? pins;
     private byte transactionId;
 
     public void Close()
@@ -29,6 +31,7 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
             device = null;
             identity = null;
             configuration = null;
+            pins = null;
             try { closing?.Dispose(); } catch (IOException) { }
         }
     }
@@ -59,9 +62,15 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
             string? configurationError = null;
             Protocol.Runtime? runtime = null;
             string? runtimeError = null;
+            string? pinsError = null;
             try
             {
                 var current = EnsureIdentity();
+                if (current.CanReadPins)
+                {
+                    try { pins ??= DecodePins(Read(PinsReport, PinsSize)); }
+                    catch (InvalidDataException error) { pinsError = error.Message; }
+                }
                 configuration = null;
                 try { configuration = DecodeConfiguration(Read(ConfigurationReport, ConfigurationSize)); }
                 catch (InvalidDataException error) { configurationError = error.Message; }
@@ -80,7 +89,7 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
                     catch (InvalidDataException error) { bankErrors[bank] = error.Message; }
                 }
                 return new(true, current, null, configuration, configurationError, channels, bankErrors, null,
-                    runtime, runtimeError);
+                    runtime, runtimeError, pins, pinsError);
             }
             catch (InvalidDataException error)
             {

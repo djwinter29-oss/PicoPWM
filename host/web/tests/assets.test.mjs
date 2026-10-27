@@ -1,13 +1,26 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, posix, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const html = readFileSync(join(root, "index.html"), "utf8");
 const shared = new Set(["css/webhid.css", "js/view.mjs", "js/device.mjs"]);
-const asset = path => join(shared.has(path) ? resolve(root, "../webhid") : root, path);
+const asset = path => {
+  const key = posix.normalize(path.replaceAll("\\", "/"));
+  return join(shared.has(key) ? resolve(root, "../webhid") : root, key);
+};
+
+test("shared asset lookup handles Windows separators and relative import segments", () => {
+  for (const path of shared) {
+    const windowsPath = win32.join(win32.dirname(path), `./${win32.basename(path)}`);
+    const expected = join(resolve(root, "../webhid"), path);
+    assert.equal(asset(windowsPath), expected);
+    assert.equal(asset(`${posix.dirname(path)}/./${posix.basename(path)}`), expected);
+    assert.ok(existsSync(expected), path);
+  }
+});
 
 test("HTML references only host assets or canonical WebHID presentation assets", () => {
   for (const match of html.matchAll(/(?:href|src)="([^"]+)"/g)) {

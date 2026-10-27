@@ -52,7 +52,7 @@ export function decodeIdentity(report) {
   const channels = data.getUint8(15);
   const capabilities = data.getUint8(16);
   const profiles = data.getUint8(17);
-  if (![1, 2].includes(mcu) || channels !== CHANNEL_COUNT || capabilities & ~0x7f || profiles & ~0x1f
+  if (![1, 2].includes(mcu) || channels !== CHANNEL_COUNT || profiles & ~0x1f
     || Boolean(capabilities & 2) !== Boolean(profiles) || profiles && !(profiles & 2)) {
     throw new Error("Invalid identity capabilities");
   }
@@ -69,6 +69,7 @@ export function decodeIdentity(report) {
     can_reboot: Boolean(capabilities & 16),
     can_read_memory: Boolean(capabilities & 32),
     can_read_runtime: Boolean(capabilities & 64),
+    can_read_pins: Boolean(capabilities & 128),
     board_model: { 1: "Pico", 2: "Pico 2" }[mcu],
     can_set_clock: Boolean(capabilities & 2),
     clock_profile_mask: profiles,
@@ -114,6 +115,16 @@ export function decodeRuntime(report) {
     core0_load: core0 / 100,
     core1_load: core1 / 100,
   };
+}
+
+export function decodePins(report) {
+  const data = payload(report, 28, "Pin assignment report", 5);
+  const pins = Array.from({ length: 27 }, (_, index) => data.getUint8(index + 1));
+  if (data.getUint8(0) !== 1 || pins.some(pin => pin > 47 && pin !== 255)) {
+    throw new Error("Invalid pin assignment report");
+  }
+  const values = pins.map(pin => pin === 255 ? null : pin);
+  return { channels: values.slice(0, 24), i2c_sda: values[24], i2c_scl: values[25], led: values[26] };
 }
 
 export function decodeBankStatus(report, reportId) {
@@ -169,6 +180,8 @@ function emptyDashboard() {
     configuration_error: null,
     runtime: null,
     runtime_error: null,
+    pins: null,
+    pins_error: null,
     channels: emptyChannels(),
     bank_errors: Array(BANK_COUNT).fill(null),
     action_result: null,
@@ -279,6 +292,15 @@ export class PicoPwmWebHid {
     }
   }
 
+  async readPins() {
+    if (!this.state.dashboard.identity?.can_read_pins) return;
+    try {
+      this.patch({ pins: decodePins(await this.readFeature(5)), pins_error: null });
+    } catch (error) {
+      if (this.device) this.patch({ pins: null, pins_error: error.message });
+    }
+  }
+
   async readBanks() {
     for (let bank = 0; bank < BANK_COUNT; bank++) {
       const reportId = 10 + bank;
@@ -308,6 +330,7 @@ export class PicoPwmWebHid {
     this.busy = true;
     try {
       if (!this.state.dashboard.identity) await this.readIdentity();
+      if (!this.state.dashboard.pins) await this.readPins();
       await this.readConfiguration();
       await this.readRuntime();
       await this.readBanks();

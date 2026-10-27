@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CHANNEL_GPIOS, formatUptime, renderBootEdits, renderDashboard } from "../js/view.mjs";
+import { formatUptime, renderBootEdits, renderDashboard } from "../js/view.mjs";
 
 test("runtime uptime formatting handles second, minute, and day boundaries", () => {
   assert.equal(formatUptime(0), "0h 0m 0s");
@@ -32,6 +32,8 @@ test("settings initialize from target, preserve edits during polling, and refres
   try {
     const data = {
       identity: { clock_profile_mask: 0x1f },
+      pins: { channels: Array.from({ length: 24 }, (_, channel) => 47 - channel),
+        i2c_sda: 2, i2c_scl: 3, led: null },
       configuration: {
         system_clock_hz: 125_000_000,
         clock_profile: 0,
@@ -53,7 +55,9 @@ test("settings initialize from target, preserve edits during polling, and refres
       assert.equal(rows.length, 8);
       assert.equal(rows[0].children.length, 4);
       rows.forEach((row, index) => {
-        assert.equal(row.children[1].textContent, String(CHANNEL_GPIOS[bank * 8 + index]));
+        assert.equal(row.children[1].textContent, String(data.pins.channels[bank * 8 + index]));
+        const pinRow = elements.get(`#${backend}-pin-rows`).children[index];
+        assert.equal(pinRow.children[1].textContent, row.children[1].textContent);
       });
       assert.equal(rows[0].children[0].textContent, String(bank * 8));
       assert.equal(rows[7].children[0].textContent, String(bank * 8 + 7));
@@ -72,6 +76,8 @@ test("settings initialize from target, preserve edits during polling, and refres
     assert.equal(elements.get("#i2c-input").value, "65");
     assert.equal(elements.get("#clock-profile-select").value, "0");
     assert.equal(elements.get("#boot-edits").textContent, "Target differs from running");
+    assert.equal(elements.get("#pin-i2c_sda").textContent, 2);
+    assert.equal(elements.get("#pin-led").textContent, "--");
     data.configuration.running.roles[0] = 0;
     renderDashboard(data, true);
     const generatorRow = elements.get("#hw-channel-rows").children[0];
@@ -106,6 +112,7 @@ test("settings initialize from target, preserve edits during polling, and refres
 
     data.configuration = null;
     data.identity = null;
+    data.pins = null;
     renderDashboard(data);
     assert.equal(elements.get("#hw-role").value, "");
     assert.equal(elements.get("#i2c-input").value, "");
@@ -113,6 +120,15 @@ test("settings initialize from target, preserve edits during polling, and refres
     assert.equal(elements.get("#boot-edits").hidden, true);
     assert.equal(elements.get("#hw-running-role").textContent, "--");
     assert.equal(elements.get("#hw-running-role").dataset.role, "unknown");
+    assert.equal(elements.get("#hw-channel-rows").children[0].children[1].textContent, "--");
+    assert.equal(elements.get("#hw-pin-rows").children[0].children[1].textContent, "--");
+    assert.match(elements.get("#pins-message").textContent, /Connect a board/);
+    data.identity = { clock_profile_mask: 0 };
+    renderDashboard(data);
+    assert.match(elements.get("#pins-message").textContent, /Update board firmware/);
+    data.pins_error = "Invalid pin assignment report";
+    renderDashboard(data);
+    assert.match(elements.get("#pins-message").textContent, /Invalid pin assignment/);
   } finally {
     if (previous === undefined) delete globalThis.document;
     else globalThis.document = previous;

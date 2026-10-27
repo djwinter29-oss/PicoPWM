@@ -33,6 +33,9 @@ configuration with confirmed **Save and Reboot**, compact pin assignment, uptime
 temperature and per-core service load, LED/reboot controls, and three eight-channel
 tables. Generator frequency/duty values open an editing dialog; monitors are read-only.
 Unsupported firmware features are disabled with update guidance.
+Pin assignment, monitoring GPIOs and dialog GPIOs use the connected board's
+capability-gated HID pin report, never a hard-coded host map. Unavailable pins show
+`--`; older firmware shows update guidance and invalid reports show an error.
 
 The PicoUart-style board selector scans boards attached to this server and offers
 **Rescan**. Each page keeps its own selection. Reconnects stay pinned to the selected
@@ -48,7 +51,8 @@ The API is the same as the Python host (snake_case, as in the HID report layouts
 
 - `GET /api/boards` lists board IDs, products, serials, paths and `default_board_id`
 - `GET /api/host` identifies the .NET dashboard
-- `GET /api/status?board={id}` returns identity, configuration, runtime, and all 24 channels, or
+- `GET /api/status?board={id}` returns identity, configuration, runtime, `pins`
+  (`channels`, `i2c_sda`, `i2c_scl`, `led`), `pins_error`, and all 24 channels, or
   `connected: false` with an `error`
 - All actions require `?board={id}` from the scan. Status without a selection does
   not open a device; missing/unknown selections are rejected for commands.

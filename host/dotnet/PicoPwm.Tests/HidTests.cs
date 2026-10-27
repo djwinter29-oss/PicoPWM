@@ -16,13 +16,17 @@ public sealed class HidTests
         public List<byte[]> Sent = [];
         public byte[] IdentityReport = Identity;
         public bool Closed;
+        public bool InvalidPins;
+        public bool Unplugged;
 
-        public byte[] Get(byte reportId, int size) => reportId switch
+        public byte[] Get(byte reportId, int size) => Unplugged ? throw new IOException("device unplugged") : reportId switch
         {
             Protocol.IdentityReport => IdentityReport,
             Protocol.ConfigurationReport => Configuration,
             Protocol.MemoryReport => [1, 0xC0, 0xD4, 1, 0, 0, 0x20, 8, 0],
             Protocol.RuntimeReport => [1, 123, 0, 0, 0, 0x74, 0x59, 0, 0, 0x92, 4, 0x40, 0x1A],
+            Protocol.PinsReport => InvalidPins ? new byte[28] :
+                [1, .. Enumerable.Range(0, 24).Select(pin => (byte)pin), 26, 27, 255],
             Protocol.ActionReport => Result,
             _ => Bank,
         };
@@ -115,7 +119,7 @@ public sealed class HidTests
     {
         var (device, client) = Make(mode);
         device.IdentityReport = (byte[])Identity.Clone();
-        device.IdentityReport[16] = 127;
+        device.IdentityReport[16] = 255;
         return (device, client);
     }
 
@@ -127,6 +131,14 @@ public sealed class HidTests
         Assert.Equal(532480u, status.Identity?.RamTotalBytes);
         Assert.Equal(new Protocol.Runtime(123, 22.9, 11.7, 67.2), status.Runtime);
         Assert.True(status.Configuration?.LedOn);
+        Assert.True(status.Identity?.CanReadPins);
+        Assert.Equal(23, status.Pins?.Channels[23]);
+        Assert.Equal(26, status.Pins?.I2cSda);
+        Assert.Null(status.Pins?.Led);
+        Assert.Null(Make().Item2.Status().Pins);
+        Assert.Throws<InvalidDataException>(() => Protocol.DecodePins(new byte[27]));
+        Assert.Throws<InvalidDataException>(() => Protocol.DecodePins(
+            [1, 48, .. Enumerable.Repeat((byte)0, 26)]));
         Assert.Null(Make().Item2.Status().Runtime);
         Assert.Throws<DeviceException>(() => Make().Item2.SetLed(true));
         Assert.Throws<InvalidDataException>(() => Protocol.DecodeMemory([1, 100, 0, 0, 0, 99, 0, 0, 0]));
@@ -147,7 +159,25 @@ public sealed class HidTests
         Assert.Equal(22.9, root.GetProperty("runtime").GetProperty("temperature_c").GetDouble());
         Assert.Equal(11.7, root.GetProperty("runtime").GetProperty("core0_load").GetDouble());
         Assert.True(root.GetProperty("configuration").GetProperty("led_on").GetBoolean());
+        Assert.Equal(26, root.GetProperty("pins").GetProperty("i2c_sda").GetInt32());
         Assert.Equal(32, root.GetProperty("configuration").GetProperty("target").GetProperty("i2c_address").GetInt32());
+    }
+
+    [Fact]
+    public void PinErrorsAreExplicitAndDisconnectClearsTheMap()
+    {
+        var (device, client) = Modern();
+        device.InvalidPins = true;
+        var state = client.Status();
+        Assert.True(state.Connected);
+        Assert.Null(state.Pins);
+        Assert.Contains("pin assignment report", state.PinsError);
+        device.InvalidPins = false;
+        Assert.Equal(23, client.Status().Pins?.Channels[23]);
+        device.Unplugged = true;
+        state = client.Status();
+        Assert.False(state.Connected);
+        Assert.Null(state.Pins);
     }
 
     [Fact]

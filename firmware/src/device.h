@@ -67,6 +67,17 @@ uint8_t device_i2c_address(void);
 /** @brief Return the logical PWM channel count exposed by the firmware. */
 uint8_t device_channel_count(void);
 
+/** @brief Board pin assignment; UINT8_MAX denotes an unavailable GPIO. */
+typedef struct {
+    uint8_t channels[PWM_DRIVER_CHANNEL_COUNT]; /**< GPIOs indexed by logical PWM channel. */
+    uint8_t i2c_sda;                            /**< I2C slave SDA GPIO. */
+    uint8_t i2c_scl;                            /**< I2C slave SCL GPIO. */
+    uint8_t led;                                /**< Board LED GPIO, or UINT8_MAX when absent. */
+} device_pin_assignment_t;
+
+/** @brief Copy the compiled board GPIO allocation into a caller-owned destination. */
+void device_get_pin_assignment(device_pin_assignment_t *pins);
+
 /**
  * @brief Read one logical channel snapshot.
  * @param channel Logical channel index.

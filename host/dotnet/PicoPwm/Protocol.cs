@@ -11,8 +11,8 @@ public static class Protocol
     public const ushort HidProductId = 3;
 
     public const byte IdentityReport = 1, ConfigurationReport = 2, BankStatusReport = 10, ActionReport = 20;
-    public const byte MemoryReport = 3, RuntimeReport = 4;
-    public const int MemorySize = 9, RuntimeSize = 13;
+    public const byte MemoryReport = 3, RuntimeReport = 4, PinsReport = 5;
+    public const int MemorySize = 9, RuntimeSize = 13, PinsSize = 28;
     public const int ChannelCount = 24, BankCount = 3, BankSize = 8;
     public const int IdentitySize = 18, ConfigurationSize = 21, BankStatusSize = 41, ActionSize = 12;
 
@@ -27,7 +27,7 @@ public static class Protocol
     public sealed record Identity(int ProductId, string SerialNumber, string FirmwareVersion, string Mcu,
         int ChannelCount, bool CanSave, bool CanSetClock, int ClockProfileMask,
         bool CanSaveReboot, bool CanSetLed, bool CanReboot, bool CanReadMemory, bool CanReadRuntime,
-        string BoardModel, uint? RamReservedBytes = null, uint? RamTotalBytes = null);
+        string BoardModel, uint? RamReservedBytes = null, uint? RamTotalBytes = null, bool CanReadPins = false);
 
     public sealed record BankConfiguration(int[] Backends, int[] Roles, int I2cAddress);
 
@@ -36,6 +36,7 @@ public static class Protocol
 
     public sealed record Memory(uint RamReservedBytes, uint RamTotalBytes);
     public sealed record Runtime(uint UptimeSeconds, double? TemperatureC, double Core0Load, double Core1Load);
+    public sealed record Pins(int?[] Channels, int? I2cSda, int? I2cScl, int? Led);
 
     public sealed record ChannelState(int Channel, uint? FreqHz, int? Duty);
 
@@ -56,13 +57,14 @@ public static class Protocol
         if (product != HidProductId)
             throw new InvalidDataException($"unsupported product ID 0x{product:x4}");
         int mcu = payload[14], channels = payload[15], capabilities = payload[16], profiles = payload[17];
-        if (mcu is not (1 or 2) || channels != ChannelCount || (capabilities & ~0x7F) != 0 || (profiles & ~0x1F) != 0
+        if (mcu is not (1 or 2) || channels != ChannelCount || (profiles & ~0x1F) != 0
             || ((capabilities & 2) != 0) != (profiles != 0) || (profiles != 0 && (profiles & 2) == 0))
             throw new InvalidDataException("invalid identity capabilities");
         return new(product, Convert.ToHexString(payload.AsSpan(3, 8)), $"{payload[11]}.{payload[12]}.{payload[13]}",
             mcu == 1 ? "RP2040" : "RP2350", channels, (capabilities & 1) != 0, (capabilities & 2) != 0, profiles,
             (capabilities & 4) != 0, (capabilities & 8) != 0, (capabilities & 16) != 0,
-            (capabilities & 32) != 0, (capabilities & 64) != 0, mcu == 1 ? "Pico" : "Pico 2");
+            (capabilities & 32) != 0, (capabilities & 64) != 0, mcu == 1 ? "Pico" : "Pico 2",
+            CanReadPins: (capabilities & 128) != 0);
     }
 
     private static BankConfiguration DecodeBanks(byte[] payload, int offset)
@@ -103,6 +105,15 @@ public static class Protocol
             throw new InvalidDataException("invalid runtime service load");
         return new(BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(1)),
             temperature == int.MinValue ? null : temperature / 1000.0, core0 / 100.0, core1 / 100.0);
+    }
+
+    public static Pins DecodePins(byte[] payload)
+    {
+        Check(payload, PinsSize, "pin assignment report");
+        if (payload.Skip(1).Any(pin => pin > 47 && pin != 255))
+            throw new InvalidDataException("invalid pin assignment report");
+        var pins = payload.Skip(1).Select(pin => pin == 255 ? (int?)null : pin).ToArray();
+        return new(pins[..24], pins[24], pins[25], pins[26]);
     }
 
     public static ChannelState[] DecodeBankStatus(byte[] payload, int bank)

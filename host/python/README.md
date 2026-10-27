@@ -35,6 +35,9 @@ and RAM, boot configuration with one confirmed **Save and Reboot**, compact pin
 assignment, runtime telemetry, LED/reboot controls, and three eight-channel tables.
 Click a generator frequency or duty to edit its live output; monitor values are
 read-only. Old firmware disables unsupported actions and reports missing telemetry.
+Pin assignment, monitoring GPIOs and dialog GPIOs come from the connected board's
+capability-gated HID pin report, not a host-side map. Missing pins show `--`;
+older firmware shows update guidance and malformed reports show an error.
 
 Like PicoUart, the page scans boards attached to the **host server**, offers a
 product/serial selector and **Rescan**, and initially selects the preferred or first
@@ -65,7 +68,8 @@ Both hosts expose the same JSON API (snake_case, as in the HID report layouts):
 
 - `GET /api/boards` returns `boards` (ID, product, serial, path) and `default_board_id`
 - `GET /api/host` returns the dashboard type
-- `GET /api/status?board={id}` returns identity, configuration, runtime, and all 24 channels, or
+- `GET /api/status?board={id}` returns identity, configuration, runtime, `pins`
+  (`channels`, `i2c_sda`, `i2c_scl`, `led`), `pins_error`, and all 24 channels, or
   `connected: false` with an `error`
 - Every action requires `?board={id}` from the board scan; unknown/missing selections
   are rejected. Status without a selection is disconnected, without opening HID.

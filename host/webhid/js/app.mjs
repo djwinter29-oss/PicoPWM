@@ -1,5 +1,5 @@
-import { CLOCK_PROFILES, ROLES, PicoPwmWebHid } from "./device.mjs?v=5";
-import { CHANNEL_GPIOS, renderBootEdits, renderDashboard, updateReportAge } from "./view.mjs?v=11";
+import { CLOCK_PROFILES, ROLES, PicoPwmWebHid } from "./device.mjs?v=6";
+import { renderBootEdits, renderDashboard, updateReportAge } from "./view.mjs?v=12";
 
 const $ = selector => document.querySelector(selector);
 const connectButton = $("#connect");
@@ -95,7 +95,7 @@ $(".channel-panels").addEventListener("click", event => {
     || reading.freq_hz === null || reading.duty === null) return;
   editingChannel = channel;
   $("#channel-dialog-title").textContent =
-    `${["Hardware PWM", "PIO PWM", "Software PWM"][bank]} - Channel ${channel} - GPIO ${CHANNEL_GPIOS[channel]}`;
+    `${["Hardware PWM", "PIO PWM", "Software PWM"][bank]} - Channel ${channel} - GPIO ${data.pins?.channels[channel] ?? "--"}`;
   $("#channel-frequency").value = String(reading.freq_hz);
   $("#channel-duty").value = String(reading.duty);
   $("#channel-error").textContent = "";

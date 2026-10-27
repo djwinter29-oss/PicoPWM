@@ -7,6 +7,7 @@
 
 #include "pico/unique_id.h"
 #include "driver/i2c/i2c_slave.h"
+#include "driver/i2c/i2c_slave_hw.h"
 #include "platform/system.h"
 #include "platform/led.h"
 #include "hardware/regs/addressmap.h"
@@ -90,6 +91,19 @@ uint8_t device_i2c_address(void) {
 
 uint8_t device_channel_count(void) {
     return (uint8_t)PWM_DRIVER_CHANNEL_COUNT;
+}
+
+void device_get_pin_assignment(device_pin_assignment_t *pins) {
+    for (uint channel = 0; channel < PWM_DRIVER_CHANNEL_COUNT; ++channel) {
+        pins->channels[channel] = pwm_driver_channel_gpio(channel);
+    }
+    pins->i2c_sda = (uint8_t)i2c_board_config.sda_pin;
+    pins->i2c_scl = (uint8_t)i2c_board_config.scl_pin;
+#ifdef PICO_DEFAULT_LED_PIN
+    pins->led = PICO_DEFAULT_LED_PIN;
+#else
+    pins->led = UINT8_MAX;
+#endif
 }
 
 bool device_get_channel(uint channel, pwm_state_t *state) {

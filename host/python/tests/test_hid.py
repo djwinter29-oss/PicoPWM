@@ -22,7 +22,8 @@ class FakeDevice:
 
     def get_feature_report(self, report_id, length):
         payload = {1: self.identity, 2: CONFIGURATION, 3: struct.pack("<BII", 1, 120000, 532480),
-                   4: struct.pack("<BIiHH", 1, 123, 22900, 1170, 6720), 20: self.result}.get(report_id, BANK)
+                   4: struct.pack("<BIiHH", 1, 123, 22900, 1170, 6720),
+                   5: bytes([1, *range(24), 26, 27, 255]), 20: self.result}.get(report_id, BANK)
         return bytes([report_id]) + payload
 
     def send_feature_report(self, data):
@@ -121,7 +122,7 @@ def test_api():
 def modern():
     device, client = make()
     identity = bytearray(IDENTITY)
-    identity[16] = 127
+    identity[16] = 255
     device.identity = bytes(identity)
     return device, client
 
@@ -134,6 +135,12 @@ def test_telemetry_and_optional_report_validation():
     assert state["runtime"] == {"uptime_seconds": 123, "temperature_c": 22.9,
                                 "core0_load": 11.7, "core1_load": 67.2}
     assert state["configuration"]["led_on"]
+    assert state["pins"] == {"channels": list(range(24)), "i2c_sda": 26, "i2c_scl": 27, "led": None}
+    assert p.decode_identity(bytes([*IDENTITY[:16], 255, IDENTITY[17]]))["can_read_pins"]
+    with pytest.raises(p.ProtocolError):
+        p.decode_pins(bytes([1, 48, *range(23), 26, 27, 25]))
+    with pytest.raises(p.ProtocolError):
+        p.decode_pins(bytes(27))
     assert p.decode_runtime(struct.pack("<BIiHH", 1, 1, -2147483648, 0, 10000))["temperature_c"] is None
     with pytest.raises(p.ProtocolError):
         p.decode_runtime(struct.pack("<BIiHH", 1, 1, 0, 0, 10001))
@@ -141,6 +148,7 @@ def test_telemetry_and_optional_report_validation():
         p.decode_memory(struct.pack("<BII", 1, 100, 99))
     _, legacy = make()
     assert legacy.status()["runtime"] is None
+    assert legacy.status()["pins"] is None
     with pytest.raises(DeviceError, match="capability"):
         legacy.set_led(True)
 
@@ -159,6 +167,29 @@ def test_save_and_reboot_validates_before_writes_and_orders_commands():
     assert device.sent[-1][10] == 3
     assert device.closed
 
+
+def test_pin_report_errors_are_explicit_and_disconnect_clears_the_map():
+    device, client = modern()
+    original = device.get_feature_report
+
+    def invalid_pins(report_id, length):
+        if report_id == p.PINS_REPORT:
+            return bytes([p.PINS_REPORT, 1, 48, *range(23), 26, 27, 25])
+        return original(report_id, length)
+
+    device.get_feature_report = invalid_pins
+    state = client.status()
+    assert state["connected"] and state["pins"] is None
+    assert "invalid pin" in state["pins_error"]
+    device.get_feature_report = original
+    assert client.status()["pins"]["channels"][23] == 23
+
+    def unplugged(report_id, length):
+        raise OSError("device unplugged")
+
+    device.get_feature_report = unplugged
+    state = client.status()
+    assert not state["connected"] and state["pins"] is None
 
 def test_save_stops_at_first_failure_and_reboot_never_saves():
     device, client = modern()

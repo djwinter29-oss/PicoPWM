@@ -3,7 +3,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { CHANNEL_GPIOS } from "../js/view.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const html = readFileSync(join(root, "index.html"), "utf8");
@@ -89,21 +88,14 @@ test("settings follow board order with fixed backend role controls", () => {
   assert.doesNotMatch(settings, /Bank [ABC]|<small>/);
 });
 
-test("pin assignment is collapsed by default and matches firmware channel GPIOs", () => {
+test("pin assignment is collapsed by default and populated from device reports", () => {
   assert.match(html, /<details class="pin-map-disclosure">\s*<summary>Pin assignment<\/summary>/);
   assert.ok(html.indexOf('<details') > html.indexOf('id="sw-role"'));
   assert.ok(html.indexOf('<details') < html.indexOf('id="channels-title"'));
-  const board = readFileSync(join(root, "../../firmware/src/config/board.c"), "utf8");
-  for (const [index, [id, config]] of [
-    ["hw", "hardware_pwm"], ["pio", "pio_pwm"], ["sw", "software_pwm"],
-  ].entries()) {
+  for (const id of ["hw", "pio", "sw"]) {
     const table = html.match(new RegExp(`<table id="${id}-pins">([\\s\\S]*?)</table>`))[1];
-    const rows = [...table.matchAll(/<th scope="row">(\d+)<\/th><td>(\d+)<\/td>/g)]
-      .map(match => [Number(match[1]), Number(match[2])]);
-    const channels = board.match(new RegExp(`${config}_config = \\{\\s*\\.channels = \\{([^;]+)`))[1];
-    const pins = [...channels.matchAll(/\{(\d+)u\}/g)].map(match => Number(match[1]));
-    assert.equal(pins.length, 8);
-    assert.deepEqual(rows, pins.map((pin, channel) => [index * 8 + channel, pin]));
-    assert.deepEqual(CHANNEL_GPIOS.slice(index * 8, index * 8 + 8), pins);
+    assert.match(table, new RegExp(`<tbody id="${id}-pin-rows"></tbody>`));
+    assert.doesNotMatch(table, /<td>\d+<\/td>/);
   }
+  assert.match(html, /id="pins-message"/);
 });

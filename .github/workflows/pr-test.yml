@@ -67,7 +67,7 @@ jobs:
         run: tools/test/check-firmware-invariants.sh
 
       - name: Upload host coverage report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: pico-pwm-pr-coverage
           path: build/coverage-pr
@@ -106,7 +106,7 @@ jobs:
         run: python3 tools/release/check-usb-identity.py
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: pico-pwm-pr-${{ matrix.board }}
           path: |

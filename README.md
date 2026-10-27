@@ -1,216 +1,94 @@
 # PicoPWM
 
-PicoPWM is a Raspberry Pi Pico / Pico 2 firmware framework for controlling 24
-logical PWM channels through two stable host interfaces: a USB CDC shell and an
-I2C register protocol.
+[![PR Check](https://github.com/djwinter29-oss/PicoPWM/actions/workflows/pr-test.yml/badge.svg?branch=main)](https://github.com/djwinter29-oss/PicoPWM/actions/workflows/pr-test.yml)
+[![Release](https://github.com/djwinter29-oss/PicoPWM/actions/workflows/release.yml/badge.svg)](https://github.com/djwinter29-oss/PicoPWM/actions/workflows/release.yml)
+[![License: BSD 3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
+![Targets: RP2040 and RP2350](https://img.shields.io/badge/Targets-RP2040%20%7C%20RP2350-2674b8)
 
-The project is intended for both:
+**24 PWM channels. One Pico. Three ways to control it.** PicoPWM turns a Raspberry Pi Pico or Pico 2 into a PWM
+generator and frequency monitor with a USB CDC shell, an I2C register map and a USB HID interface. Each of three fixed
+banks is a generator or a monitor, and the host sees the same logical channel IDs either way.
 
-- **Raspberry Pi Pico** based on **RP2040**
-- **Raspberry Pi Pico 2** based on **RP2350**
+[Download firmware](https://github.com/djwinter29-oss/PicoPWM/releases) ·
+[Pinout](docs/guides/pinout.md) ·
+[Configuration](docs/guides/configuration.md) ·
+[Control interfaces](docs/guides/control/README.md)
 
-Startup configuration selects whether each fixed Bank A/B/C is a generator or
-monitor and which backend family it uses. The host sees the same logical
-channel IDs and control commands for every valid configuration.
+| Board | MCU | Firmware |
+| --- | --- | --- |
+| Raspberry Pi Pico | RP2040 | `pico` |
+| Raspberry Pi Pico 2 | RP2350 | `pico2` |
 
-Each fixed channel allocation defines its GPIO, direction, capabilities,
-frequency limits, and backend-local resource assignment.
+## Available Today
 
-The framework intentionally exposes backend tradeoffs rather than hiding them:
+| Capability | What you get today |
+| --- | --- |
+| **24 logical channels** | Three fixed 8-channel banks (A, B, C); each is a generator or a monitor, chosen in the startup configuration. |
+| **Three backends** | Hardware PWM, PIO and software, each with its own frequency range, accuracy and resource limits. |
+| **USB CDC shell** | Text commands at 115200 baud for channels, banks, clock, I2C address, version and board control. |
+| **I2C slave** | Binary register map at 7-bit address `0x40` (default) for host-controller integration. |
+| **USB HID and dashboards** | Browser (WebHID), Python and .NET dashboards read configuration and realized state and send commands. |
+| **Persistent configuration** | Bank roles, I2C address and system clock are saved to flash and applied at the next reboot. |
 
-- **Hardware PWM** provides high timing accuracy but has pin/slice constraints
-	and a backend-specific minimum frequency.
-- **PIO PWM** provides flexible pin placement and a broad range, with finite
-	PIO state-machine resources and divider/period quantization.
-- **Software PWM** has no fixed PWM slice or PIO channel allocation and can use
-	ordinary GPIOs, but polling/timer and CPU overhead limit channel count,
-	maximum frequency, and timing accuracy.
-- **Monitor backends** have their own measurable frequency range and accuracy;
-	input channels are read-only through the control interfaces. Software
-	monitoring is intended for simple low-frequency measurements; high-
-	performance monitoring should use PIO or hardware capture.
-
-The current firmware exposes:
-
-- a USB CDC CLI for interactive control
-- an I2C register map for host-controller integration
-- board-level LED and reboot control through both interfaces
-
----
-
-## Quick Start
-
-### Prerequisites
-
-- Install `git` and the [Raspberry Pi Pico SDK prerequisites](https://datasheets.raspberrypi.com/pico/getting-started-with-pico.pdf).
-- Put `cmake`, a supported build tool, and `arm-none-eabi-gcc` on your `PATH`.
-- The pinned Pico SDK is a recursive Git submodule at
-  `firmware/third_party/pico-sdk`. Initialize it with
-  `git submodule update --init --recursive` if it is not present; the build
-  helper does this automatically. The build always uses this SDK.
-
-### Build
-
-The Linux helper scripts select a suitable CMake generator and keep Pico and
-Pico 2 build directories separate. From the repository root:
-
-On Linux or macOS:
-
-```sh
-./tools/firmware/build.sh --board pico
-```
-
-Use `pico2` instead of `pico` for Raspberry Pi Pico 2. The matching helpers
-under `tools/firmware/` handle loading, while `tools/test/` contains the CTest
-and syntax-check entry points. A direct CMake build is also possible from
-`firmware/` when a custom generator or build layout is needed.
-
-Run the firmware host-side C tests independently of the ARM firmware build:
-
-```sh
-tools/test/test-firmware-c.sh
-tools/test/coverage-firmware-c.sh
-```
-
-The root CMake project intentionally configures the firmware build only;
-`firmware/tests` uses the host compiler and is managed by these test helpers.
-
-Channel roles are chosen in the startup configuration, not at build time. The
-host updates a target with `config set` over CDC or the matching I2C registers,
-persists it with `config save`, and applies it by rebooting. See
-[Firmware Configuration](docs/guides/configuration.md#startup-bank-configuration) for
-the full model.
-
-Build outputs of interest:
-
-- `build/pico/pico_pwm.uf2` or `build/pico2/pico_pwm.uf2` for USB flashing
-- `build/<board>/pico_pwm.elf` for debug tools
-
-Firmware versioning:
-
-- local builds default to firmware version `0.0.0-dev`
-- pass `-DPICO_PWM_FIRMWARE_VERSION=x.y.z` to CMake, or set `PICO_PWM_FIRMWARE_VERSION`, to override it
-- the `version` CDC command and the I2C `REG_VERSION` register both return this build-time firmware version
-- the release workflow triggers on tags matching `vx.y.z` and builds the firmware with version `x.y.z`
-- a normal local CMake build does not require Git tags or GitHub Actions; it builds with the default version unless you override it
-
-### Flash
-
-1. Hold **BOOTSEL** while connecting the board over USB.
-2. Copy `pico_pwm.uf2` to the `RPI-RP2` drive.
-3. Let the board reboot normally.
-
-Other flash options:
-
-- `picotool load pico_pwm.uf2`
-- `picotool reboot`
-- SWD / OpenOCD with `pico_pwm.elf` if you are using a debug probe
-
-### Connect
-
-- USB CDC serial at **115200 baud**
-- I2C slave at address `0x40`; see [Pinout](docs/guides/pinout.md) for physical connections.
-
-### Host Management Interface
-
-The optional Python host tool provides a Flask dashboard for reading and
-controlling all 24 logical channels through either USB CDC or I2C. See
-[host/python/README.md](host/python/README.md) for installation and connection
-examples.
-
-The matching C# ASP.NET Core host is available under
-[host/dotnet](host/dotnet/README.md) for .NET 8 environments.
-
-### Troubleshooting
-
-- Confirm `arm-none-eabi-gcc` is on your `PATH`.
-- If the Pico SDK checkout is incomplete, run `git submodule update --init --recursive` inside the SDK.
-- If USB CDC does not enumerate, reconnect the cable and confirm it supports data.
-- If I2C does not respond, confirm external pull-ups on SDA/SCL and start at 100 kHz; see [Pinout](docs/guides/pinout.md).
-
----
-
-## Pinout
-
-See [Pinout](docs/guides/pinout.md) for the complete PWM channel and host-interface pinout.
-
-### Backend Characteristics
+The backends expose their tradeoffs instead of hiding them:
 
 | Backend | Characteristics | Constraints |
-|---------|--------------|-------------|
+| --- | --- | --- |
 | Hardware PWM | High timing accuracy | Pin/slice assignment and minimum-frequency limits |
 | PIO PWM | Flexible placement and broad range | Finite state machines and divider/period quantization |
-| Software PWM | Simple polling/timer implementation | Lower maximum frequency and timing accuracy |
-| Monitor backends | Measure input signals | Backend-specific measurable range and accuracy |
+| Software PWM | Any ordinary GPIO | CPU and timer overhead limit channel count, frequency and accuracy |
+| Monitor backends | Measure input signals | Backend-specific range and accuracy; software monitoring suits simple low-frequency signals |
 
----
+## Get Started
 
-## Command Interfaces
+1. Get firmware for your board from [Releases](https://github.com/djwinter29-oss/PicoPWM/releases), or build it:
+   `tools/firmware/build.sh --board pico` (or `pico2`). Output goes to `build/<board>/pico_pwm.uf2`.
+2. Hold **BOOTSEL** while connecting the board over USB, copy the `.uf2` to the `RPI-RP2` drive, and let it reboot.
+   `tools/firmware/load.sh --board pico` does this when the drive is mounted.
+3. Connect to the USB CDC serial port at 115200 baud, or drive the I2C slave at `0x40` (see the
+   [pinout](docs/guides/pinout.md) for wiring), or open a dashboard from [Dashboards](#dashboards).
 
-- **USB CDC serial**: text commands at 115200 baud
-- **I2C slave**: binary register map at 7-bit address `0x40`; see [Pinout](docs/guides/pinout.md) for physical connections
+GPIO signals are **3.3 V only**. I2C needs external pull-ups on SDA and SCL; start at 100 kHz.
+Build prerequisites, version handling and test commands are in [BUILD_STRUCTURE.md](BUILD_STRUCTURE.md).
 
-Use the `stop` command to apply the configured banks' safe reset behavior.
-Generator banks stop outputs; monitor banks leave measured input channels
-unchanged.
+## Dashboards
 
----
+| Dashboard | How to run it |
+| --- | --- |
+| **WebHID** | Static page for desktop Chrome or Edge, no backend; see [host/webhid](host/webhid/README.md). |
+| **Python** | `tools/host/run-python.sh`, then open `http://127.0.0.1:5000/`; see [host/python](host/python/README.md). |
+| **.NET** | `tools/host/run-dotnet.sh`; see [host/dotnet](host/dotnet/README.md). |
+
+The Python and .NET hosts talk to the board over USB HID.
+
+## Before You Connect
+
+- After power-up the default configuration is monitor-only, so no PWM output is driven. Generator banks start at
+  0 Hz and 0% duty; `stop` drives generator outputs low again and leaves monitor banks unchanged.
+- Bank roles are chosen in the startup configuration, not at build time: update the target with `config set` (CDC),
+  the matching I2C registers or HID, persist it with `config save`, then reboot.
+- The default system clock is the SDK default (125 MHz RP2040, 150 MHz RP2350). 150, 200 and 250 MHz profiles are
+  opt-in, and overclock profiles are not qualified for every board.
+- The USB identity `0xCAFE:0x4012` is for development and lab use, not commercial derivatives. The CDC, HID and
+  I2C interfaces are unauthenticated; see [SECURITY.md](SECURITY.md).
+- Firmware has not been qualified on a hardware fixture; host tests do not replace hardware validation.
 
 ## Documentation
 
-- [Documentation index](docs/README.md)
-- [Architecture](docs/design/architecture.md)
-- [Firmware Configuration](docs/guides/configuration.md)
-- [PWM Driver Configuration](docs/design/pwm_driver_config.md)
-- [Control Interfaces](docs/guides/control/README.md)
-- [I2C Protocol](docs/guides/control/i2c_protocol.md)
-- [USB CDC CLI](docs/guides/control/usb_cdc_cli.md)
-- [CDC/HID Overview](docs/design/usb/cdc-hid-overview.md) and [HID Report Reference](docs/design/usb/hid-report-reference.md)
-- [Pinout](docs/guides/pinout.md)
+| Need | Guide |
+| --- | --- |
+| Wire and configure the board | [Pinout](docs/guides/pinout.md), [Firmware configuration](docs/guides/configuration.md) |
+| Control it | [Control interfaces](docs/guides/control/README.md), [USB CDC CLI](docs/guides/control/usb_cdc_cli.md), [I2C protocol](docs/guides/control/i2c_protocol.md) |
+| Understand the design | [Architecture](docs/design/architecture.md), [PWM driver design](docs/design/pwm_driver_design.md), [generators](docs/design/generator/) and [monitors](docs/design/monitor/) |
+| Write a HID host | [CDC/HID overview](docs/design/usb/cdc-hid-overview.md), [HID report reference](docs/design/usb/hid-report-reference.md) |
+| Build, test and release | [BUILD_STRUCTURE.md](BUILD_STRUCTURE.md), [documentation index](docs/README.md) |
+| Contribute | [Contributing](CONTRIBUTING.md), [Code of Conduct](CODE_OF_CONDUCT.md), [Security](SECURITY.md) |
 
-The USB CDC shell uses the [embedded-cli](https://github.com/funbiscuit/embedded-cli)
-line editor, included as the `firmware/third_party/embedded-cli` submodule
-(pinned to v0.1.4, MIT license).
-
-## Related Project
-
-[PicoUART](https://github.com/djwinter29-oss/PicoUART) is the companion
-Raspberry Pi Pico project for UART-oriented host communication. PicoPWM is a
-separate firmware and keeps its host interfaces focused on USB CDC and I2C;
-the projects can be used as related building blocks without sharing a runtime
-dependency.
-
-## Repository Layout
-
-- `firmware/` — CMake project, Pico SDK import, and all firmware source code
-- `host/python/` — Python client, CDC/I2C backends, and Flask management UI
-- `host/dotnet/` — C# ASP.NET Core client, CDC/I2C backends, and web UI
-- `docs/` — user and design documentation
-- `tools/firmware/` — Linux firmware build and flashing helpers
-- `tools/test/` — Linux CTest and coverage helpers
-- `README.md` — top-level project overview
-
----
-
-## Default Generator State
-
-After power-up or reset, the default configuration is monitor-only, so no PWM
-outputs are actively driven. If generator banks are configured, they start
-with their outputs off:
-
-| Property | Value |
-|----------|-------|
-| Frequency | 0 Hz (off) |
-| Duty | 0% |
-
-No demo channels are configured. Use the USB CDC shell or I2C commands to set
-frequencies and duty cycles. Monitor banks report input state instead of using
-this output-default state.
-
-Use the `stop` command to drive generator outputs low again (`0 Hz`, `0%` duty).
-
----
+Related projects: [PicoUart](https://github.com/djwinter29-oss/PicoUart) (six USB serial ports) and
+[PicoForge](https://github.com/djwinter29-oss/PicoForge) (host-controlled board services). They share no runtime
+dependency. The CDC shell uses [embedded-cli](https://github.com/funbiscuit/embedded-cli), included as the
+`firmware/third_party/embedded-cli` submodule (v0.1.4, MIT).
 
 ## License
 
-This firmware is provided as-is for embedded development and experimentation.
+[BSD 3-Clause](LICENSE).

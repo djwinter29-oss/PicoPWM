@@ -31,6 +31,16 @@ pick a generator:
 ./tools/firmware/build.sh --board pico2
 ```
 
+Prerequisites: `git`, `cmake`, a build tool and `arm-none-eabi-gcc` on `PATH`. The helper initializes the
+`firmware/third_party` submodules, including the pinned Pico SDK.
+
+Outputs: `build/<board>/pico_pwm.uf2` for USB flashing and `pico_pwm.elf` for debug tools. Other flash options are
+`picotool load pico_pwm.uf2` or SWD/OpenOCD with the `.elf`.
+
+Versioning: local builds use `0.0.0-dev`. Pass `--firmware-version x.y.z` (optional `-dev` or `-rcN` suffix) to
+override it; the release workflow builds tags `vx.y.z` with `x.y.z`. The version feeds the `version` CDC command,
+the I2C `REG_VERSION` register, HID identity and the USB `bcdDevice`. See `firmware/version.cmake`.
+
 Channel roles are selected in the startup configuration. See
 [Firmware Configuration](docs/guides/configuration.md#startup-bank-configuration).
 
@@ -39,6 +49,7 @@ Host-side firmware tests use the same root build directory:
 ```sh
 tools/test/test-firmware-c.sh
 tools/test/coverage-firmware-c.sh
+tools/test/test-host.sh   # Python, web/WebHID and .NET host tests
 ```
 
 ## I2C Slave

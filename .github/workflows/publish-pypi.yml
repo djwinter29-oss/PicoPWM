@@ -10,23 +10,29 @@ on:
         description: "Published release tag in vMAJOR.MINOR.PATCH form, for example v1.2.3"
         required: false
         type: string
+      test_publish:
+        description: Publish a public, immutable development version to production PyPI from the selected commit
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
   actions: read
 
 concurrency:
-  group: pypi-${{ github.event.workflow_run.head_branch || inputs.tag }}
+  group: pypi-${{ inputs.test_publish && github.ref || github.event.workflow_run.head_branch || inputs.tag }}
   cancel-in-progress: false
 
 jobs:
   verify:
     name: Verify released Python wheel
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_repository.full_name == github.repository)
+      (github.event_name != 'workflow_dispatch' || !inputs.test_publish) &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout release tooling
@@ -108,6 +114,86 @@ jobs:
           path: dist
 
       - name: Publish to PyPI using Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          repository-url: https://upload.pypi.org/legacy/
+          packages-dir: dist
+
+  test-package:
+    name: Build marked development wheel
+    if: github.event_name == 'workflow_dispatch' && inputs.test_publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout selected commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install host and test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libhidapi-dev
+          python -m pip install --editable "host/python[test]"
+
+      - name: Test Python host
+        run: python -m pytest -q host/python/tests
+
+      - name: Build development wheel
+        env:
+          VERSION: 0.0.0.dev${{ github.run_id }}
+        run: |
+          set -eu
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" host/python/pyproject.toml
+          mkdir -p host/python/picopwm/web
+          cp -R host/web/. host/python/picopwm/web/
+          python -m pip wheel --no-deps host/python --wheel-dir dist
+
+      - name: Verify installed development wheel
+        env:
+          VERSION: 0.0.0.dev${{ github.run_id }}
+        run: |
+          set -eu
+          python -m venv build/development-check
+          build/development-check/bin/python -m pip install dist/*.whl
+          cd build
+          development-check/bin/python - <<'PY'
+          from importlib.metadata import version
+          import os
+          from picopwm.app import create_app
+          assert version('picopwm-host') == os.environ['VERSION']
+          assert create_app(object()).test_client().get('/').status_code == 200
+          PY
+
+      - name: Upload development wheel
+        uses: actions/upload-artifact@v7
+        with:
+          name: pypi-development-distribution
+          path: dist/*.whl
+          if-no-files-found: error
+
+  publish-test:
+    name: Publish development wheel to PyPI
+    needs: test-package
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: pypi
+      url: https://pypi.org/project/picopwm-host/
+    steps:
+      - name: Download development wheel
+        uses: actions/download-artifact@v8
+        with:
+          name: pypi-development-distribution
+          path: dist
+
+      - name: Publish development version using Trusted Publishing
         uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           repository-url: https://upload.pypi.org/legacy/

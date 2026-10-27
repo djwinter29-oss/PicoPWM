@@ -9,6 +9,7 @@ Task-oriented information for building, configuring, connecting, and operating
 PicoPWM:
 
 - [Firmware Configuration](guides/configuration.md)
+- [Builds and Publishing](guides/releases.md)
 - [Pinout](guides/pinout.md)
 - [Control Interfaces](guides/control/README.md)
 - [USB CDC CLI](guides/control/usb_cdc_cli.md)

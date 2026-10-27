@@ -22,6 +22,9 @@ PicoPWM/
 
 ## Firmware Builds
 
+For CI artifacts, release tags, manual test publishing and repository setup, see
+[Builds and Publishing](docs/guides/releases.md).
+
 The helper builds into `build/<board>` and defaults to `pico`. The Pico SDK
 is always the `firmware/third_party/pico-sdk` submodule; set `CMAKE_GENERATOR` to
 pick a generator:

@@ -17,6 +17,7 @@ The host talks to the board over USB HID; optionally set PICOPWM_SERIAL or
 PICOPWM_DEVICE_PATH to preselect a board.
 Set PICOPWM_HOST / PICOPWM_PORT (defaults 127.0.0.1:5000), ASPNETCORE_URLS,
 or pass --urls http://127.0.0.1:5000 to select the address.
+Set PICOPWM_TOKEN before listening beyond loopback. The host refuses a remote URL without it.
 EOF
         exit 0
         ;;

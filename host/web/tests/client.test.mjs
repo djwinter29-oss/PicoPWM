@@ -79,6 +79,33 @@ test("save and reboot uses one confirmed API call and waits before reconnecting"
   } finally { globalThis.fetch = original; }
 });
 
+test("a 401 prompts once, logs in, and retries the same request", async () => {
+  const original = globalThis.fetch;
+  const originalPrompt = globalThis.prompt;
+  try {
+    const calls = [];
+    globalThis.prompt = () => "secret";
+    globalThis.fetch = async (path, options) => {
+      calls.push([path, options]);
+      if (path === "/api/login") {
+        assert.deepEqual(JSON.parse(options.body), { token: "secret" });
+        return response({ ok: true });
+      }
+      if (calls.filter(([item]) => item.startsWith("/api/status")).length === 1)
+        return { ok: false, status: 401, json: async () => ({ error: "unauthorized" }) };
+      return response(dashboard("A"));
+    };
+    const client = new PicoPwmHost();
+    client.select("a");
+    await client.refresh();
+    assert.equal(client.state.dashboard.identity.serial_number, "A");
+    assert.deepEqual(calls.map(([path]) => path), ["/api/status?board=a", "/api/login", "/api/status?board=a"]);
+  } finally {
+    globalThis.fetch = original;
+    globalThis.prompt = originalPrompt;
+  }
+});
+
 test("HTTP failures surface and unavailable boards never switch to a different device", async () => {
   const original = globalThis.fetch;
   try {

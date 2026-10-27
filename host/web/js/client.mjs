@@ -3,10 +3,19 @@ function emptyDashboard() {
     channels: [], bank_errors: [null, null, null], updated_at: null };
 }
 
-export async function request(path, body) {
+export async function request(path, body, attempt = 0) {
   const response = await fetch(path, body === undefined ? { cache: "no-store" } : {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
   });
+  if (response.status === 401 && attempt === 0 && path.split("?")[0] !== "/api/login") {
+    const token = globalThis.prompt?.("This dashboard requires PICOPWM_TOKEN");
+    if (!token) throw new Error("unauthorized");
+    const login = await fetch("/api/login", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token }),
+    });
+    if (!login.ok) throw new Error("unauthorized");
+    return request(path, body, attempt + 1);
+  }
   const data = await response.json();
   if (!response.ok) throw new Error(data.error ?? data.detail ?? `Request failed (${response.status})`);
   return data;

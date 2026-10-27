@@ -17,9 +17,42 @@ builder.Services.AddSingleton(_ => new BoardRegistry(HidDevices.Enumerate,
         board.SerialNumber is null ? board.DevicePath : null)),
     Environment.GetEnvironmentVariable("PICOPWM_SERIAL"), Environment.GetEnvironmentVariable("PICOPWM_DEVICE_PATH")));
 
+var listenUrls = DashboardBind.ListenUrls(args, Environment.GetEnvironmentVariable("ASPNETCORE_URLS"),
+    Environment.GetEnvironmentVariable("PICOPWM_HOST"), Environment.GetEnvironmentVariable("PICOPWM_PORT"));
+DashboardBind.RequireTokenForRemote(listenUrls, Environment.GetEnvironmentVariable("PICOPWM_TOKEN"));
+if (!DashboardBind.UrlsWereConfigured(args, Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
+    builder.WebHost.UseUrls(listenUrls);
+
 var app = builder.Build();
 app.UseDefaultFiles();
 app.UseStaticFiles();
+app.Use(async (context, next) =>
+{
+    if (!DashboardBind.OriginAllowed(context.Request.Headers.Origin.ToString(), context.Request.Host.Value))
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new { error = "cross-origin request rejected" });
+        return;
+    }
+
+    var configured = Environment.GetEnvironmentVariable("PICOPWM_TOKEN");
+    var path = context.Request.Path.Value ?? "";
+    var isApi = path.Equals("/api", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase);
+    var isLogin = path.Equals("/api/login", StringComparison.OrdinalIgnoreCase);
+    if (!string.IsNullOrEmpty(configured) && isApi && !isLogin)
+    {
+        context.Request.Cookies.TryGetValue("picopwm_auth", out var cookie);
+        if (!DashboardBind.CredentialAccepted(configured, context.Request.Headers.Authorization.ToString(), cookie))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsJsonAsync(new { error = "unauthorized" });
+            return;
+        }
+    }
+
+    await next();
+});
 
 IResult Act(Func<object> call)
 {
@@ -42,6 +75,22 @@ IResult Act(Func<object> call)
     }
 }
 
+app.MapPost("/api/login", (HttpContext http, LoginRequest request) =>
+{
+    var configured = Environment.GetEnvironmentVariable("PICOPWM_TOKEN");
+    if (string.IsNullOrEmpty(configured))
+        return Results.NotFound(new { error = "authentication is disabled" });
+    if (string.IsNullOrEmpty(request.Token)
+        || !DashboardBind.CredentialAccepted(configured, "Bearer " + request.Token, null))
+        return Results.Json(new { error = "unauthorized" }, statusCode: StatusCodes.Status401Unauthorized);
+    http.Response.Cookies.Append("picopwm_auth", DashboardBind.CookieValue(configured), new CookieOptions
+    {
+        HttpOnly = true,
+        SameSite = SameSiteMode.Strict,
+        IsEssential = true,
+    });
+    return Results.Ok(new { ok = true });
+});
 app.MapGet("/api/host", () => new { dashboard_type = ".NET" });
 app.MapGet("/api/boards", (BoardRegistry boards) => Act(() => boards.Boards()));
 app.MapGet("/api/status", (string? board, BoardRegistry boards) => Act(() => board is null
@@ -75,6 +124,7 @@ app.MapPost("/api/save-reboot", (string? board, BootRequest request, BoardRegist
 
 app.Run();
 
+record LoginRequest(string? Token);
 record ChannelRequest(long FreqHz, int Duty);
 record BankRequest(int Bank, int Backend, int Role);
 record AddressRequest(int Address);

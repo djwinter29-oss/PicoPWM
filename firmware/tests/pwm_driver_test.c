@@ -44,6 +44,13 @@ void sw_mon_handle_gpio_irq(uint gpio, uint32_t events) {
     (void)events;
 }
 
+/** @brief Set by the mailbox wait hook. Frequency 888 blocks in the backend until this becomes 1. */
+static atomic_int hold_release;
+
+static void release_apply(void) {
+    atomic_store(&hold_release, 1);
+}
+
 static bool test_gen_set(uint bank, uint channel, uint32_t freq_hz, uint8_t duty) {
     pwm_state_t state = {.freq_hz = freq_hz, .duty = duty};
 
@@ -55,6 +62,12 @@ static bool test_gen_set(uint bank, uint channel, uint32_t freq_hz, uint8_t duty
 }
 
 bool hw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
+    if (freq_hz == 888u) {
+        for (int i = 0; i < 2000 && atomic_load(&hold_release) == 0; ++i) {
+            usleep(1000);
+        }
+        assert(atomic_load(&hold_release) == 1);
+    }
     return test_gen_set(0u, channel, freq_hz, duty);
 }
 bool pio_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
@@ -150,6 +163,13 @@ int main(void) {
         usleep(1000);
     }
     expect_state(16u, 0u, 0u);
+
+    /* Core 1 is inside the apply until the wait hook runs, so a missing hook fails this assert. */
+    atomic_store(&hold_release, 0);
+    pwm_driver_set_wait_hook(release_apply);
+    assert(pwm_driver_set(0u, 888u, 10u) == PWM_DRIVER_RESULT_OK);
+    expect_state(0u, 888u, 10u);
+    pwm_driver_set_wait_hook(NULL);
 
     assert(pwm_driver_restore_defaults() == PWM_DRIVER_RESULT_OK);
     expect_state(0u, 0u, 0u);

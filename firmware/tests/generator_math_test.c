@@ -124,7 +124,24 @@ int main(void) {
         }
         assert(!pwm_hw_find_timing(125000000u, 0u, &top, &div));
         assert(!pwm_hw_find_timing(125000000u, 100u, NULL, &div));
+
+        /* Exact timing far above the minimum divider must still be found. A 128-step window misses it. */
+        {
+            const uint32_t sys_clk_hz = 16000000u;
+            const uint32_t distant_top = 99u;
+            const uint16_t distant_div = 4000u;
+            uint32_t freq = pwm_hw_realized_freq_hz(sys_clk_hz, distant_top, distant_div);
+
+            assert(freq != 0u);
+            assert(pwm_hw_find_timing(sys_clk_hz, freq, &top, &div));
+            assert(pwm_hw_realized_freq_hz(sys_clk_hz, top, div) == freq);
+        }
     }
+
+    assert(pwm_pio_fifo_put_action(false, false) == PWM_PIO_FIFO_PUT);
+    assert(pwm_pio_fifo_put_action(false, true) == PWM_PIO_FIFO_PUT);
+    assert(pwm_pio_fifo_put_action(true, false) == PWM_PIO_FIFO_WAIT);
+    assert(pwm_pio_fifo_put_action(true, true) == PWM_PIO_FIFO_FAIL);
 
     /* Realized duty is rounded from the integer step counts that program the output. */
     assert(pwm_realized_duty(0u, 10u) == 0u);

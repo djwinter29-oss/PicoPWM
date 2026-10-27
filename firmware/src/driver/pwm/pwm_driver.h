@@ -134,4 +134,12 @@ bool pwm_driver_is_ready(void);
 /** @brief Return whether Core 1 startup failed while initializing a selected backend. */
 bool pwm_driver_startup_failed(void);
 
+/**
+ * @brief Register a Core 0 callback invoked while a mailbox apply is still running.
+ * @param hook Callback that may service USB, or `NULL` to clear it.
+ * @note The hook runs with the control lock held. It must not parse CDC commands, poll HID actions,
+ *       or execute queued I2C writes: those paths submit another mailbox command and would deadlock.
+ */
+void pwm_driver_set_wait_hook(void (*hook)(void));
+
 #endif

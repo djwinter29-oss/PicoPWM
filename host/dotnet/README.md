@@ -14,7 +14,13 @@ From the repository root, `tools/host/run-dotnet.sh` runs the host. Set `PICOPWM
 or `PICOPWM_DEVICE_PATH` to preselect a board when desired.
 The launcher restores NuGet dependencies and builds before starting. Set
 `PICOPWM_PORT` / `PICOPWM_HOST` (default `127.0.0.1:5000`), `ASPNETCORE_URLS`, or
-pass `--urls` to choose another listening address. Keep board controls on loopback.
+pass `--urls` to choose another listening address. `dotnet run` without those
+settings listens on `http://127.0.0.1:5000`. A non-loopback URL is refused unless
+`PICOPWM_TOKEN` is set. With that token, `/api/*` requires
+`Authorization: Bearer <token>` or the `picopwm_auth` cookie from
+`POST /api/login` with `{"token": "..."}`. The page itself stays open so the
+browser can prompt once. A request whose `Origin` names a different host is
+rejected. Keep board controls on loopback when the token is unset.
 If only a newer runtime is installed, explicitly opt in to major-version
 roll-forward with `DOTNET_ROLL_FORWARD=Major` or install the .NET 10 ASP.NET Core
 runtime instead.
@@ -28,7 +34,7 @@ cd host/dotnet
 dotnet run --project PicoPwm
 ```
 
-Open <http://localhost:5000>. The dashboard matches WebHID: identity and RAM, boot
+Open <http://127.0.0.1:5000>. The dashboard matches WebHID: identity and RAM, boot
 configuration with confirmed **Save and Reboot**, compact pin assignment, uptime,
 temperature and per-core service load, LED/reboot controls, and three eight-channel
 tables. Generator frequency/duty values open an editing dialog; monitors are read-only.

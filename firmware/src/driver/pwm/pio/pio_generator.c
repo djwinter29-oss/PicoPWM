@@ -24,6 +24,7 @@
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
 #include "hardware/pio.h"
+#include "pico/time.h"
 
 #include "../pwm_driver_internal.h"
 #include "../pwm_math.h"
@@ -32,6 +33,8 @@
 
 /** @brief Intended upper frequency limit for the PIO generator backend. */
 #define PIO_GEN_MAX_FREQ_HZ 1000000u
+/** @brief How long a TX FIFO push may block before the apply fails. Two words fit in a cleared FIFO. */
+#define PIO_GEN_FIFO_PUT_TIMEOUT_US 1000u
 
 /** @brief Runtime ownership and mode for one PIO generator channel. */
 typedef struct {
@@ -74,14 +77,34 @@ static void gen_drive_level(uint channel, bool high) {
     pio_channels[channel].running = false;
 }
 
+/** @brief Push one TX word, or fail once the FIFO has stayed full for @ref PIO_GEN_FIFO_PUT_TIMEOUT_US. */
+static bool gen_fifo_put(PIO pio, uint sm, uint32_t value) {
+    absolute_time_t deadline = make_timeout_time_us(PIO_GEN_FIFO_PUT_TIMEOUT_US);
+
+    while (true) {
+        switch (pwm_pio_fifo_put_action(pio_sm_is_tx_fifo_full(pio, sm), time_reached(deadline))) {
+        case PWM_PIO_FIFO_PUT:
+            pio_sm_put(pio, sm, value);
+            return true;
+        case PWM_PIO_FIFO_FAIL:
+            return false;
+        case PWM_PIO_FIFO_WAIT:
+            tight_loop_contents();
+            break;
+        }
+    }
+}
+
 /**
  * @brief Enable one PIO generator channel with the supplied realized timing.
  * @param channel Backend-local channel index.
  * @param period_count Backend loop count representing one PWM period.
  * @param clkdiv_x256 Quantized PIO clock divider in units of `1/256`.
  * @param program Duty program for @p period_count; its match value is loaded into the state machine.
+ * @return `false` when the TX FIFO does not accept the program. The pin is held low and the previous
+ *         snapshot is left unchanged by the caller.
  */
-static void gen_enable_channel(uint channel, uint16_t period_count, uint32_t clkdiv_x256,
+static bool gen_enable_channel(uint channel, uint16_t period_count, uint32_t clkdiv_x256,
                                const pwm_pio_duty_program_t *program) {
     pio_gen_channel_t *ctx = &pio_channels[channel];
     PIO pio = ctx->pio;
@@ -99,11 +122,14 @@ static void gen_enable_channel(uint channel, uint16_t period_count, uint32_t clk
     pio_sm_clear_fifos(pio, sm);
     pio_sm_restart(pio, sm);
 
-    pio_sm_put_blocking(pio, sm, program->match);
-    pio_sm_put_blocking(pio, sm, period_count);
+    if (!gen_fifo_put(pio, sm, program->match) || !gen_fifo_put(pio, sm, period_count)) {
+        gen_drive_level(channel, false);
+        return false;
+    }
 
     pio_sm_set_enabled(pio, sm, true);
     ctx->running = true;
+    return true;
 }
 
 /** @copydoc pio_gen_init */
@@ -160,7 +186,9 @@ bool pio_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
     }
 
     pwm_pio_program_duty(period_count, duty, &program);
-    gen_enable_channel(channel, period_count, clkdiv_x256, &program);
+    if (!gen_enable_channel(channel, period_count, clkdiv_x256, &program)) {
+        return false;
+    }
     /* Publish the duty the loop really produces; short periods quantize it. */
     gen_publish_state(channel, pwm_pio_realized_freq_hz(pio_gen_sys_clk_hz, period_count, clkdiv_x256),
                       pwm_realized_duty(program.high_iterations, program.total_iterations));

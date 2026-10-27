@@ -162,6 +162,12 @@ static uint32_t pwm_core1_heartbeat_seen;
 static bool pwm_has_monitor;
 /** @brief Time of the last observed Core 1 heartbeat change. */
 static absolute_time_t pwm_core1_heartbeat_stamp;
+/** @brief Optional Core 0 callback invoked while a mailbox apply is still running. */
+static void (*pwm_wait_hook)(void);
+
+void pwm_driver_set_wait_hook(void (*hook)(void)) {
+    pwm_wait_hook = hook;
+}
 /** @brief Critical section protecting mailbox request and reply records. */
 static critical_section_t pwm_lock;
 /** @brief Core 0 serialization lock shared by the public control entry points. */
@@ -457,6 +463,9 @@ pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd) {
         }
 
         system_watchdog_kick();
+        if (pwm_wait_hook != NULL) {
+            pwm_wait_hook();
+        }
         best_effort_wfe_or_timeout(make_timeout_time_us(1000));
     } while (true);
 }

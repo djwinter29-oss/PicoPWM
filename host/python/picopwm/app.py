@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from flask import Flask, jsonify, request, send_from_directory
 
@@ -19,15 +22,79 @@ def _int(payload: dict, name: str) -> int:
     return value
 
 
-def create_app(client: PicoPwmHid | None = None, registry: BoardRegistry | None = None) -> Flask:
+LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1", "[::1]"}
+
+
+def bind_host(host: str | None, token: str | None) -> str:
+    """Return a listen host, refusing a non-loopback bind when no token is configured."""
+    chosen = host or "127.0.0.1"
+    if chosen not in LOOPBACK_HOSTS and not token:
+        raise RuntimeError("Refusing to listen beyond loopback without PICOPWM_TOKEN.")
+    return chosen
+
+
+def _cookie_value(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _same_secret(presented: str, expected: str) -> bool:
+    if len(presented) != len(expected):
+        return False
+    return hmac.compare_digest(presented, expected)
+
+
+def _origin_allowed(origin: str, request_host: str) -> bool:
+    if not origin:
+        return True
+    parsed = urlparse(origin)
+    return bool(parsed.netloc) and parsed.netloc.lower() == request_host.lower()
+
+
+def _credential_accepted(token: str, authorization: str | None, cookie: str | None) -> bool:
+    if cookie and _same_secret(cookie, _cookie_value(token)):
+        return True
+    prefix = "Bearer "
+    if authorization and authorization.startswith(prefix):
+        return _same_secret(authorization[len(prefix):], token)
+    return False
+
+
+def create_app(client: PicoPwmHid | None = None, registry: BoardRegistry | None = None,
+               token: str | None = None) -> Flask:
     # Wheels bundle the dashboard as picopwm/web; source checkouts use host/web.
     web_root = Path(__file__).resolve().parent / "web"
     if not (web_root / "index.html").is_file():
         web_root = Path(__file__).resolve().parents[2] / "web"
     app = Flask(__name__, static_folder=web_root, static_url_path="")
+    app.config["PICOPWM_TOKEN"] = token or ""
     boards = registry or BoardRegistry(serial=os.environ.get("PICOPWM_SERIAL"),
                                       path=os.environ.get("PICOPWM_DEVICE_PATH"))
     app.extensions["picopwm_boards"] = boards
+
+    @app.before_request
+    def guard_request():
+        if not _origin_allowed(request.headers.get("Origin", ""), request.host):
+            return jsonify({"error": "cross-origin request rejected"}), 403
+        configured = app.config["PICOPWM_TOKEN"]
+        if not configured or request.path == "/api/login" or not request.path.startswith("/api"):
+            return None
+        if _credential_accepted(configured, request.headers.get("Authorization"),
+                                request.cookies.get("picopwm_auth")):
+            return None
+        return jsonify({"error": "unauthorized"}), 401
+
+    @app.post("/api/login")
+    def login():
+        configured = app.config["PICOPWM_TOKEN"]
+        if not configured:
+            return jsonify({"error": "authentication is disabled"}), 404
+        payload = request.get_json(silent=True)
+        presented = payload.get("token") if isinstance(payload, dict) else None
+        if type(presented) is not str or not _same_secret(presented, configured):
+            return jsonify({"error": "unauthorized"}), 401
+        response = jsonify({"ok": True})
+        response.set_cookie("picopwm_auth", _cookie_value(configured), httponly=True, samesite="Strict")
+        return response
 
     def selected():
         return client if client is not None else boards.client(request.args.get("board"))
@@ -128,9 +195,11 @@ def create_app(client: PicoPwmHid | None = None, registry: BoardRegistry | None 
 
 
 def main() -> None:
-    app = create_app()
+    token = os.environ.get("PICOPWM_TOKEN", "")
+    host = bind_host(os.environ.get("PICOPWM_HOST"), token)
+    app = create_app(token=token)
     try:
-        app.run(host=os.environ.get("PICOPWM_HOST", "127.0.0.1"), port=int(os.environ.get("PICOPWM_PORT", "5000")))
+        app.run(host=host, port=int(os.environ.get("PICOPWM_PORT", "5000")))
     finally:
         app.extensions["picopwm_boards"].close()
 

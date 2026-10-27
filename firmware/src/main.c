@@ -17,6 +17,15 @@
 #include "app/usb/usb_hid.h"
 
 /**
+ * @brief Keep the USB device stack moving while Core 0 waits for a PWM apply.
+ * @note Shell parsing, HID action execution, and I2C write execution stay in the main loop.
+ *       Running them here would submit another mailbox command under the control lock.
+ */
+static void core0_service_while_pwm_applies(void) {
+    usb_cdc_poll();
+}
+
+/**
  * @brief Initialize Core 0 services, launch Core 1 PWM ownership, and run the main loop.
  * @return Never returns during normal firmware operation.
  */
@@ -37,6 +46,7 @@ int main(void) {
 
     // USB CDC command interface.
     usb_cdc_init();
+    pwm_driver_set_wait_hook(core0_service_while_pwm_applies);
     pwm_commands_init(&pwm_command_session, &shell_transport);
 
     // Configure and launch all three PWM banks before starting Core 1.

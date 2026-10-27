@@ -100,7 +100,7 @@ static void test_get_and_set_results(void) {
     get_state = (pwm_state_t){1000u, 40u};
     output[0] = '\0';
     assert(channel_commands_get(NULL, 2, get_argv));
-    assert(strstr(output, "enabled=yes") != NULL);
+    assert(strstr(output, "CH0: freq=1000 Hz, duty=40%, enabled=yes") != NULL);
 
     get_state.freq_hz = 0u;
     assert(channel_commands_get(NULL, 2, get_argv));
@@ -117,8 +117,7 @@ static void test_get_and_set_results(void) {
     set_result = PWM_DRIVER_RESULT_OK;
     assert(channel_commands_set(NULL, 4, set_argv));
     assert(set_calls == 1u);
-    assert(strstr(output, "OK CH1") != NULL);
-    assert(strstr(output, "duty=25%") != NULL);
+    assert(strstr(output, "OK CH1 freq=1000 Hz duty=25%") != NULL);
 
     assert(channel_commands_set(NULL, 4, bad_duty));
     assert(strstr(output, "usage") != NULL);

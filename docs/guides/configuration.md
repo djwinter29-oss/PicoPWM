@@ -120,7 +120,7 @@ A profile must validate these conditions at build time or startup:
 - monitor and generator implementations are not enabled simultaneously on a
   shared pin without an explicit ownership policy
 
-See [Architecture](architecture.md) for ownership boundaries and [USB CDC
+See [Architecture](../design/architecture.md) for ownership boundaries and [USB CDC
 CLI](control/usb_cdc_cli.md) for the stable interactive interface. See
-[PWM Driver Configuration](pwm_driver_config.md) for the fixed Bank A/B/C GPIO map
+[PWM Driver Configuration](../design/pwm_driver_config.md) for the fixed Bank A/B/C GPIO map
 and startup configuration validation rules.

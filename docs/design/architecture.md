@@ -2,7 +2,7 @@
 
 This page describes the current PicoPWM runtime structure. It focuses on module ownership and request flow, not backend implementation detail.
 
-For mailbox state machines, publication internals, and backend-specific behavior, see [detail/pwm_driver_design.md](detail/pwm_driver_design.md).
+For mailbox state machines, publication internals, and backend-specific behavior, see [PWM Driver Design](pwm_driver_design.md).
 
 ## At A Glance
 
@@ -59,15 +59,17 @@ rejects the request.
 Use the architecture-related pages as follows:
 
 - [Architecture](architecture.md) — system structure, layer boundaries, and request flow
-- [Firmware Configuration](configuration.md) — startup bank configuration, channel tables, and capability rules
-- [Pinout](pinout.md) — physical PWM, I2C, and shared-pin mapping
-- [PWM Driver Design](detail/pwm_driver_design.md) — detailed `pwmdriver` and backend internals
-- [Hardware PWM Generator](detail/generator/hardware_generator.md) — hardware output timing and slice constraints
-- [PIO PWM Generator](detail/generator/pio_generator.md) — PIO output timing and state-machine constraints
-- [Software PWM Generator](detail/generator/software_generator.md) — shared timer output generation
-- [Hardware PWM Monitor](detail/monitor/hardware_monitor.md) — GPIO interrupt measurement limits
-- [PIO PWM Monitor](detail/monitor/pio_monitor.md) — one-period high/low measurement
-- [Software PWM Monitor](detail/monitor/software_monitor.md) — low-frequency polling/edge measurement
+- [Firmware Configuration](../guides/configuration.md) — startup bank configuration, channel tables, and capability rules
+- [Pinout](../guides/pinout.md) — physical PWM, I2C, and shared-pin mapping
+- [PWM Driver Configuration](pwm_driver_config.md) — fixed channel allocation and capabilities
+- [PWM Driver Design](pwm_driver_design.md) — detailed `pwmdriver` and backend internals
+- [USB HID Control Design](usb/hid_control_design.md) — proposed WebHID management interface; not implemented
+- [Hardware PWM Generator](generator/hardware_generator.md) — hardware output timing and slice constraints
+- [PIO PWM Generator](generator/pio_generator.md) — PIO output timing and state-machine constraints
+- [Software PWM Generator](generator/software_generator.md) — shared timer output generation
+- [Hardware PWM Monitor](monitor/hardware_monitor.md) — GPIO interrupt measurement limits
+- [PIO PWM Monitor](monitor/pio_monitor.md) — one-period high/low measurement
+- [Software PWM Monitor](monitor/software_monitor.md) — low-frequency polling/edge measurement
 
 ## System Model
 
@@ -128,7 +130,7 @@ high-rate capture, trend analysis, or waveform history, DMA or a dedicated
 buffered capture design should be reconsidered as a new requirement rather than
 added preemptively.
 
-The hardware PWM bank intentionally uses PWM slice channel B pins so the external pin order stays aligned with the monitoring-oriented wiring plan. See [Pinout](pinout.md) for the physical mapping.
+The hardware PWM bank intentionally uses PWM slice channel B pins so the external pin order stays aligned with the monitoring-oriented wiring plan. See [Pinout](../guides/pinout.md) for the physical mapping.
 
 ## Runtime Layers
 
@@ -141,7 +143,10 @@ that transport code reaches PWM hardware only through `device_api` and
 Core 0 owns the host-facing transports:
 
 - `usb/usb_cdc.*` for TinyUSB CDC byte transport
-- `cli/shell.*` for the microrl-backed line editor and command dispatch
+- USB HID is a proposed additional Core 0 management transport; see
+  [USB HID Control Design](usb/hid_control_design.md). It is not currently
+  enabled or part of the runtime.
+- `cli/shell.*` for the embedded-cli-backed line editor and command dispatch
 - `cli/pwm_commands.*` for human-readable CLI commands
 - `i2c/i2c_slave.*` for the I2C slave ISR and deferred write scheduling
 - `i2c/i2c_control_map.*` for the I2C register map and payload translation
@@ -307,7 +312,7 @@ That means:
 Logical IDs are configuration-defined and stable for host software. The
 current default profile exposes `0..23`; backend ownership and GPIO assignment
 must be read from the selected profile rather than inferred from an ID range.
-See [Firmware Configuration](configuration.md) and [Pinout](pinout.md).
+See [Firmware Configuration](../guides/configuration.md) and [Pinout](../guides/pinout.md).
 
 ## Startup Sequence
 
@@ -344,7 +349,7 @@ When the USB CDC host opens the connection, the CLI prints help once through `pw
 
 ## Where To Read Next
 
-- [Control Interfaces](control/README.md) for shared semantics and transport links
-- [I2C Protocol](control/i2c_protocol.md) for binary register values
+- [Control Interfaces](../guides/control/README.md) for shared semantics and transport links
+- [I2C Protocol](../guides/control/i2c_protocol.md) for binary register values
 - Source headers under `firmware/src` for current C declarations and APIs
-- [PWM Driver Design](detail/pwm_driver_design.md) for backend and mailbox internals
+- [PWM Driver Design](pwm_driver_design.md) for backend and mailbox internals

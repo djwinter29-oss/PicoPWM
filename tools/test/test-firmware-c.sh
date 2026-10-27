@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-BUILD_DIR="${BUILD_DIR:-firmware/build/tests}"
+BUILD_DIR="${BUILD_DIR:-build/tests}"
 GENERATOR="${GENERATOR:-}"
 SKIP_BUILD=0
 

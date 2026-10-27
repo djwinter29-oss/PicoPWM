@@ -4,7 +4,7 @@ PicoPWM has one firmware image and one logical channel table, owned entirely
 by `firmware/src/pwmdriver/pwm_driver_config.c`. There is no per-profile source file
 and no `PICO_PWM_PROFILE` CMake option. Channel roles are stored in the startup
 configuration. The host edits that target, saves it, and applies it by rebooting.
-See [Firmware Configuration](configuration.md#startup-bank-configuration) for the
+See [Firmware Configuration](../guides/configuration.md#startup-bank-configuration) for the
 host-facing model.
 
 ## Channel Table Ownership
@@ -56,7 +56,7 @@ its GPIO count, reserved pins, or hardware PWM pin policy differs.
 | Bank C | 16..23 | `16, 17, 18, 19, 20, 21, 22, 28`; SW backend only |
 
 This map is fixed in `pwm_driver_config.c` and is not configurable at runtime; see
-[Pinout](pinout.md) for the physical rationale.
+[Pinout](../guides/pinout.md) for the physical rationale.
 
 ## Resource Rules
 

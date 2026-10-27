@@ -412,7 +412,7 @@ const char *pwm_driver_config_backend_name(pwm_driver_config_backend_t backend) 
     }
 }
 
-/** @brief Fixed GPIO assignment for each bank's 8 logical channels; see docs/pinout.md. */
+/** @brief Fixed GPIO assignment for each bank's 8 logical channels; see docs/guides/pinout.md. */
 static const uint pwm_driver_config_bank_gpio[PWM_DRIVER_CONFIG_BANK_COUNT][PWM_DRIVER_CONFIG_BANK_SIZE] = {
     [PWM_DRIVER_CONFIG_BANK_A] = {1u, 3u, 5u, 7u, 9u, 11u, 13u, 15u},
     [PWM_DRIVER_CONFIG_BANK_B] = {0u, 2u, 4u, 6u, 8u, 10u, 12u, 14u},

@@ -1,57 +1,66 @@
 # Build Directory Structure
 
-All build artifacts are now consolidated under `firmware/build/` and are git-ignored.
+All firmware, host-test, and coverage build artifacts are organized under the
+repository-root `build/` directory, which is git-ignored.
 
 ## Directory Layout
 
-```
+```text
 PicoPWM/
+├── build/
+│   ├── pico/                 # Firmware build for Raspberry Pi Pico
+│   ├── pico2/                # Firmware build for Raspberry Pi Pico 2
+│   ├── tests/                # Host-side firmware C tests
+│   └── tests-coverage/       # Host tests and coverage reports
 ├── firmware/
-│   ├── build/                 # ← All builds here (git-ignored)
-│   │   ├── pico/              # --board pico
-│   │   ├── pico2/             # --board pico2
-│   │   └── <profile>/         # --profile <name>, directory name only
 │   ├── src/
 │   └── CMakeLists.txt
-├── .gitignore                 # Ignores /firmware/build and /firmware/build-*
-└── tools/firmware/
-    └── build.sh
+└── tools/
+    ├── firmware/
+    └── test/
 ```
 
-## Usage
+## Firmware Builds
 
-### Default (400 kHz I2C at address 0x40, creates `firmware/build/`)
-```bash
-PICO_SDK_PATH=/path/to/pico-sdk ./tools/firmware/build.sh
+The helper defaults to `build/`; selecting a board or profile places that
+build in a named subdirectory:
+
+```sh
+./tools/firmware/build.sh --board pico
+./tools/firmware/build.sh --board pico2
+./tools/firmware/build.sh --profile my-build
 ```
 
-### Default with Named Build Directory (400 kHz I2C at address 0x40)
-```bash
-PICO_SDK_PATH=/path/to/pico-sdk ./tools/firmware/build.sh --profile my-build
+These commands produce build directories under `build/`. The `--profile`
+option only names a build directory; channel roles are selected in the startup
+configuration. See
+[Firmware Configuration](docs/guides/configuration.md#startup-bank-configuration).
+
+Host-side firmware tests use the same root build directory:
+
+```sh
+tools/test/test-firmware-c.sh
+tools/test/coverage-firmware-c.sh
 ```
 
-Note: `--profile` here only names the output directory
-(`firmware/build/<name>`); channel roles (generator/monitor per bank) are
-selected in the startup configuration, see
-[Firmware Configuration](docs/configuration.md#startup-bank-configuration).
+## Custom I2C Clock Speed
 
-### Custom I2C Clock Speed
-The I2C slave is configured for **400 kHz by default**, which is backward-compatible with 100 kHz masters.
+The I2C slave is configured for **400 kHz by default**, which is
+backward-compatible with 100 kHz masters. To use 100 kHz:
 
-To use 100 kHz (Standard I2C):
-```bash
-PICO_SDK_PATH=/path/to/pico-sdk cmake -S firmware -B firmware/build/gen-100k \
-  -DPICO_PWM_I2C_CLOCK_SPEED=100000
-
-cmake --build firmware/build/gen-100k --parallel
+```sh
+PICO_SDK_PATH="$PWD/firmware/third_party/pico-sdk" \
+  cmake -S firmware -B build/i2c-100k -DPICO_PWM_I2C_CLOCK_SPEED=100000
+cmake --build build/i2c-100k --parallel
 ```
 
 Supported speeds:
+
 - `100000` - Standard I2C (100 kHz)
 - `400000` - Fast I2C (400 kHz, default, backward-compatible with 100 kHz masters)
 
-### Custom I2C Address
-The default I2C slave address is **0x40**. Change it through CDC or I2C:
+The default I2C address is `0x40`. Change it through CDC or I2C and reboot to
+apply the saved address:
 
 ```text
 config address 0x50
@@ -59,43 +68,10 @@ config save
 reboot
 ```
 
-Valid user-configurable 7-bit addresses: `0x08` to `0x77`; reserved I2C
+Valid user-configurable 7-bit addresses are `0x08` to `0x77`; reserved I2C
 addresses are rejected.
-
-### Build-time clock and runtime address
-
-I2C clock speed is selected when configuring the firmware. The slave address is
-not a CMake option; change it after flashing.
-
-```bash
-PICO_SDK_PATH=/path/to/pico-sdk cmake -S firmware -B firmware/build/i2c-100k \
-  -DPICO_PWM_I2C_CLOCK_SPEED=100000
-cmake --build firmware/build/i2c-100k --parallel
-```
-
-Then set the address from the CDC shell and reboot so the saved target is applied:
-
-```text
-config address 0x30
-config save
-reboot
-```
 
 ## Git Ignore Rules
 
-Updated `.gitignore` includes:
-```
-/firmware/build/
-/firmware/build-*/
-/firmware/build-coverage/
-```
-
-This ensures all CMake build artifacts stay out of version control.
-
-## Benefits
-
-- ✅ Single, organized build folder (no scattered `build-*` directories)
-- ✅ Profile/board variants organized as subdirectories
-- ✅ Git automatically ignores all build artifacts
-- ✅ Cleaner workspace, easier to clean with `rm -rf firmware/build/`
-- ✅ Backward compatible (existing `--build-dir` option still works)
+The root `build/` directory is ignored. The legacy `firmware/build/` ignore
+remains to avoid tracking artifacts created by earlier project versions.

@@ -44,7 +44,10 @@ The current firmware exposes:
 
 - Install `git` and the [Raspberry Pi Pico SDK prerequisites](https://datasheets.raspberrypi.com/pico/getting-started-with-pico.pdf).
 - Put `cmake`, a supported build tool, and `arm-none-eabi-gcc` on your `PATH`.
-- The setup helper downloads the pinned Pico SDK into `.pico-sdk`.
+- The pinned Pico SDK is a recursive Git submodule at
+  `firmware/third_party/pico-sdk`. Initialize it with
+  `git submodule update --init --recursive` if it is not present; the build
+  helper does this automatically and defaults `PICO_SDK_PATH` to it.
 
 ### Build
 
@@ -54,7 +57,6 @@ Pico 2 build directories separate. From the repository root:
 On Linux or macOS:
 
 ```sh
-. tools/firmware/setup-sdk-env.sh
 ./tools/firmware/build.sh --board pico
 ```
 
@@ -76,13 +78,13 @@ The root CMake project intentionally configures the firmware build only;
 Channel roles are chosen in the startup configuration, not at build time. The
 host updates a target with `config set` over CDC or the matching I2C registers,
 persists it with `config save`, and applies it by rebooting. See
-[Firmware Configuration](docs/configuration.md#startup-bank-configuration) for
+[Firmware Configuration](docs/guides/configuration.md#startup-bank-configuration) for
 the full model.
 
 Build outputs of interest:
 
-- `pico_pwm.uf2` for USB flashing
-- `pico_pwm.elf` for debug tools
+- `build/pico/pico_pwm.uf2` or `build/pico2/pico_pwm.uf2` for USB flashing
+- `build/<board>/pico_pwm.elf` for debug tools
 
 Firmware versioning:
 
@@ -107,7 +109,7 @@ Other flash options:
 ### Connect
 
 - USB CDC serial at **115200 baud**
-- I2C slave at address `0x40`; see [Pinout](docs/pinout.md) for physical connections.
+- I2C slave at address `0x40`; see [Pinout](docs/guides/pinout.md) for physical connections.
 
 ### Host Management Interface
 
@@ -125,13 +127,13 @@ The matching C# ASP.NET Core host is available under
 - Confirm `arm-none-eabi-gcc` is on your `PATH`.
 - If the Pico SDK checkout is incomplete, run `git submodule update --init --recursive` inside the SDK.
 - If USB CDC does not enumerate, reconnect the cable and confirm it supports data.
-- If I2C does not respond, confirm external pull-ups on SDA/SCL and start at 100 kHz; see [Pinout](docs/pinout.md).
+- If I2C does not respond, confirm external pull-ups on SDA/SCL and start at 100 kHz; see [Pinout](docs/guides/pinout.md).
 
 ---
 
 ## Pinout
 
-See [docs/pinout.md](docs/pinout.md) for the complete PWM channel and host-interface pinout.
+See [Pinout](docs/guides/pinout.md) for the complete PWM channel and host-interface pinout.
 
 ### Backend Characteristics
 
@@ -147,7 +149,7 @@ See [docs/pinout.md](docs/pinout.md) for the complete PWM channel and host-inter
 ## Command Interfaces
 
 - **USB CDC serial**: text commands at 115200 baud
-- **I2C slave**: binary register map at 7-bit address `0x40`; see [Pinout](docs/pinout.md) for physical connections
+- **I2C slave**: binary register map at 7-bit address `0x40`; see [Pinout](docs/guides/pinout.md) for physical connections
 
 Use the `stop` command to apply the configured banks' safe reset behavior.
 Generator banks stop outputs; monitor banks leave measured input channels
@@ -157,17 +159,19 @@ unchanged. `pulse_count` is monotonic from power-on and is not reset by `stop`.
 
 ## Documentation
 
-- [Architecture](docs/architecture.md)
-- [Firmware Configuration](docs/configuration.md)
-- [PWM Driver Configuration](docs/pwm_driver_config.md)
-- [Control Interfaces](docs/control/README.md)
-- [I2C Protocol](docs/control/i2c_protocol.md)
-- [USB CDC CLI](docs/control/usb_cdc_cli.md)
-- [Pinout](docs/pinout.md)
+- [Documentation index](docs/README.md)
+- [Architecture](docs/design/architecture.md)
+- [Firmware Configuration](docs/guides/configuration.md)
+- [PWM Driver Configuration](docs/design/pwm_driver_config.md)
+- [Control Interfaces](docs/guides/control/README.md)
+- [I2C Protocol](docs/guides/control/i2c_protocol.md)
+- [USB CDC CLI](docs/guides/control/usb_cdc_cli.md)
+- [USB HID Control Design](docs/design/usb/hid_control_design.md) (proposed; not implemented)
+- [Pinout](docs/guides/pinout.md)
 
-The USB CDC shell uses the vendored [microrl](https://github.com/Helius/microrl)
-line editor, pinned to commit `d044bf4`. Its Apache-2.0 license and source are
-included under `firmware/third_party/microrl/`.
+The USB CDC shell uses the [embedded-cli](https://github.com/funbiscuit/embedded-cli)
+line editor, included as the `firmware/third_party/embedded-cli` submodule
+(pinned to v0.1.4, MIT license).
 
 ## Related Project
 

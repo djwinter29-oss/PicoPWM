@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-BUILD_DIR="${BUILD_DIR:-firmware/build/tests-coverage}"
-OUTPUT_DIR="${OUTPUT_DIR:-firmware/build/tests-coverage/coverage}"
+BUILD_DIR="${BUILD_DIR:-build/tests-coverage}"
+OUTPUT_DIR="${OUTPUT_DIR:-build/tests-coverage/coverage}"
 GENERATOR="${GENERATOR:-}"
 SKIP_BUILD=0
 SKIP_TESTS=0

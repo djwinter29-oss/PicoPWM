@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-BUILD_DIR="${BUILD_DIR:-firmware/build}"
+BUILD_DIR="${BUILD_DIR:-build}"
 BOARD="${PICO_BOARD:-}"
 UF2_PATH=""
 MOUNT_PATH="${PICO_MOUNT_PATH:-}"
@@ -56,8 +56,8 @@ if [ -n "$BOARD" ]; then
             ;;
     esac
 
-    if [ "$BUILD_DIR" = "firmware/build" ]; then
-        BUILD_DIR="firmware/build/$BOARD"
+    if [ "$BUILD_DIR" = "build" ]; then
+        BUILD_DIR="build/$BOARD"
     fi
 fi
 

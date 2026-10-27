@@ -22,6 +22,10 @@ picopwm-web = "picopwm.app:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
+include = ["picopwm*"]
+
+[tool.setuptools.package-data]
+picopwm = ["web/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

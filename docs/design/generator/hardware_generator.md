@@ -17,7 +17,7 @@ This page is implementation-oriented and reflects the current source tree.
 ## Channel Model
 
 The hardware PWM bank uses logical channels `0..7` in the unified driver model.
-The physical GPIO and slice mapping is documented in [Pinout](../pinout.md).
+The physical GPIO and slice mapping is documented in [Pinout](../../guides/pinout.md).
 The design intentionally uses slice-B pins so the physical channel order stays
 aligned with the measurement-oriented wiring plan.
 
@@ -187,4 +187,3 @@ over:
 - float math in the timing path
 - pulse counting through wrap IRQs
 - squeezing every representable MHz into the recommended user range
-

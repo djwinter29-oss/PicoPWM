@@ -1,15 +1,24 @@
 /**
  * @file shell.h
- * @brief microrl-backed interactive command shell for PicoPWM CLI transports.
+ * @brief embedded-cli-backed interactive command shell for PicoPWM CLI transports.
  */
 
 #ifndef SHELL_H
 #define SHELL_H
 
-#include "microrl.h"
+#include "embedded_cli.h"
 
 #include <stdbool.h>
 #include <stdint.h>
+
+/** @brief Maximum number of commands a shell can register. */
+#define SHELL_MAX_COMMANDS 16u
+
+/** @brief Maximum argv tokens passed to a command handler, including the command name. */
+#define SHELL_MAX_ARGS 8u
+
+/** @brief Size of the embedded-cli backing store in @c CLI_UINT units. */
+#define SHELL_CLI_BUFFER_UINTS 192u
 
 /**
  * @brief Transport read callback used by the CLI shell.
@@ -53,15 +62,6 @@ typedef bool (*shell_command_handler_t)(void *context, int argc, const char *con
  */
 typedef bool (*shell_unknown_handler_t)(void *context, const char *command_name);
 
-/**
- * @brief Return command completions for the current shell input.
- * @param context Caller-owned command context.
- * @param argc Number of parsed completion tokens.
- * @param argv Parsed completion tokens.
- * @return Null-terminated completion strings owned by the callback.
- */
-typedef char **(*shell_completion_handler_t)(void *context, int argc, const char *const *argv);
-
 /** @brief One registered CLI command entry. */
 typedef struct {
     const char *name; /**< Command token matched against the first word in a line. */
@@ -76,15 +76,14 @@ typedef struct {
     uint32_t command_count; /**< Number of entries in @ref commands. */
     const char *unknown_message; /**< Fallback message used when no unknown-handler responds. */
     shell_unknown_handler_t unknown_handler; /**< Optional callback for unknown command names. */
-    shell_completion_handler_t completion_handler; /**< Optional Tab-completion callback. */
     void *command_context; /**< Context passed to command callbacks. */
 } shell_config_t;
 
 /** @brief One independent interactive shell session.
  *
- * Shell sessions have independent microrl buffers and parser state. Only one
- * session may be inside @ref shell_poll or @ref shell_prompt at a time because
- * microrl invokes callbacks through a library-compatible process-wide bridge.
+ * Each session owns its embedded-cli instance and static buffers. Re-entering
+ * @ref shell_poll or @ref shell_prompt from a command handler is ignored.
+ * Tab completion and `help` come from embedded-cli's command bindings.
  */
 typedef struct {
     shell_transport_t transport; /**< Active byte transport. */
@@ -92,9 +91,11 @@ typedef struct {
     uint32_t command_count; /**< Number of entries in @ref commands. */
     const char *unknown_message; /**< Fallback message for unmatched commands. */
     shell_unknown_handler_t unknown_handler; /**< Optional unmatched-command callback. */
-    shell_completion_handler_t completion_handler; /**< Optional Tab-completion callback. */
     void *command_context; /**< Context passed to command callbacks. */
-    microrl_t microrl; /**< Interactive line editor state. */
+    EmbeddedCli *cli; /**< embedded-cli instance placed in @ref cli_buffer. */
+    CLI_UINT cli_buffer[SHELL_CLI_BUFFER_UINTS]; /**< Static backing store for @ref cli. */
+    bool prompted; /**< Indicates the initial prompt has been emitted by embedded-cli. */
+    bool busy; /**< Guards against re-entrant poll or prompt calls. */
     bool initialized; /**< Indicates whether @ref shell_init completed successfully. */
 } shell_t;
 

@@ -1,0 +1,36 @@
+.status-line { align-items: baseline; }
+.status-line .status-mark { flex-shrink: 0; }
+#status-message { overflow-wrap: anywhere; }
+.configuration-summary .summary-item { min-height: 62px; padding-block: 10px; }
+.configuration-summary label { color: var(--muted); font-size: 12px; }
+#configuration-profile {
+  width: 100%;
+  max-width: 100%;
+  min-height: 38px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid #cbd6d3;
+  border-radius: 7px;
+  background: var(--paper);
+  color: var(--ink);
+  font: 600 14px var(--mono);
+}
+#configuration-profile:focus-visible, #configuration-unsafe-ack:focus-visible {
+  outline: 3px solid var(--lime);
+  outline-offset: 2px;
+}
+.configuration-acknowledgement input { width: 16px; height: 16px; }
+.configuration-warning { margin: 0 0 12px; }
+.configuration-message {
+  margin: 0 0 20px;
+  font-size: 12px;
+  min-height: 1.5em;
+  color: var(--teal-dark);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.configuration-message:empty { display: none; }
+.configuration-message[data-error="true"] { color: var(--coral); }
+.static-map table { min-width: 540px; table-layout: auto; }
+.static-map caption { padding: 10px 14px; color: var(--muted); text-align: left; font-size: 12px; }
+.static-map td { height: 40px; }

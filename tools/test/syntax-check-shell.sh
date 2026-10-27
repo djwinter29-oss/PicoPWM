@@ -4,7 +4,6 @@ set -eu
 for script in \
     tools/firmware/build.sh \
     tools/firmware/load.sh \
-    tools/firmware/setup-sdk-env.sh \
     tools/release/resolve-release-version.sh \
     tools/test/check-firmware-invariants.sh \
     tools/test/check.sh \

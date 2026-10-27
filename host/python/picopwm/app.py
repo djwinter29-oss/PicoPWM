@@ -13,7 +13,10 @@ from .client import PicoPWMClient
 
 
 def create_app(client: PicoPWMClient | None = None, client_factory: Callable[[], PicoPWMClient] | None = None) -> Flask:
-    web_root = Path(__file__).resolve().parents[2] / "web"
+    # Wheels bundle the dashboard as picopwm/web; source checkouts use host/web.
+    web_root = Path(__file__).resolve().parent / "web"
+    if not web_root.is_dir():
+        web_root = Path(__file__).resolve().parents[2] / "web"
     app = Flask(__name__, static_folder=web_root, static_url_path="")
     state = {"client": client, "client_factory": client_factory or build_client}
 

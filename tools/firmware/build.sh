@@ -44,21 +44,17 @@ done
 # Determine build directory
 if [ -z "$BUILD_DIR" ]; then
     if [ -n "$PROFILE" ]; then
-        # If profile is specified, use firmware/build/<profile>
-        BUILD_DIR="firmware/build/$PROFILE"
+        # If profile is specified, use build/<profile>
+        BUILD_DIR="build/$PROFILE"
     elif [ -n "$BOARD" ]; then
-        # If board is specified, use firmware/build/<board>
-        BUILD_DIR="firmware/build/$BOARD"
+        # If board is specified, use build/<board>
+        BUILD_DIR="build/$BOARD"
     else
-        # Default: firmware/build
-        BUILD_DIR="firmware/build"
+        # Default: root-level build directory
+        BUILD_DIR="build"
     fi
 fi
 
-if [ -z "$PICO_SDK_PATH_VALUE" ]; then
-    echo "PICO_SDK_PATH is not set." >&2
-    exit 1
-fi
 
 if [ -n "$BOARD" ]; then
     case "$BOARD" in
@@ -74,6 +70,11 @@ fi
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 SOURCE_DIR="$REPO_ROOT/firmware"
+
+if [ -z "$PICO_SDK_PATH_VALUE" ]; then
+    PICO_SDK_PATH_VALUE="$SOURCE_DIR/third_party/pico-sdk"
+fi
+git -C "$REPO_ROOT" submodule update --init --recursive firmware/third_party
 BUILD_DIR_PATH="$REPO_ROOT/$BUILD_DIR"
 
 if [ -z "$GENERATOR" ]; then

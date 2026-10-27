@@ -44,7 +44,7 @@ add_executable(pico_pwm
     src/cli/pwm_commands.c
     src/cli/channel_commands.c
     src/cli/board_commands.c
-    third_party/microrl/microrl.c
+    third_party/embedded-cli/lib/src/embedded_cli.c
     src/i2c/i2c_control_map.c
     src/usb/usb_cdc.c
     src/usb/usb_descriptors.c
@@ -84,7 +84,7 @@ target_compile_definitions(pico_pwm PRIVATE
 target_include_directories(pico_pwm PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/src
     ${CMAKE_CURRENT_LIST_DIR}/src/config
-    ${CMAKE_CURRENT_LIST_DIR}/third_party/microrl
+    ${CMAKE_CURRENT_LIST_DIR}/third_party/embedded-cli/lib/include
 )
 
 # USB CDC is handled directly through TinyUSB; UART is disabled.

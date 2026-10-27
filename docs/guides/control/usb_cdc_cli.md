@@ -13,7 +13,7 @@ opened and displays the `pico> ` prompt.
 
 Commands are entered one line at a time and responses end with CRLF (`\r\n`).
 The interactive editor supports backspace, cursor movement, command history,
-Tab completion, and common Ctrl-key editing shortcuts.
+and Tab completion of command names.
 
 ## Command Groups
 
@@ -52,7 +52,7 @@ Implemented by `shell.*` and registered by `pwm_commands.*`.
 
 | Command | Description | Example |
 | --- | --- | --- |
-| `help` | Show the complete command list. | `help` |
+| `help` | Show the command list (`help <cmd>` shows one command). | `help` |
 
 Channel numbers are logical IDs assigned by the firmware configuration. The
 current firmware exposes channels `0..23`; their backend assignment is an

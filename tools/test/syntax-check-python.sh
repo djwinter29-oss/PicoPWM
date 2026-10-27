@@ -5,8 +5,9 @@ PYTHON_EXE="${PYTHON_EXE:-python3}"
 PYTHON_FILES=$(find . -type f -name '*.py' \
     -not -path './.git/*' \
     -not -path '*/__pycache__/*' \
-    -not -path './.pico-sdk/*' \
-    -not -path './firmware/build/*' \
+    -not -path './firmware/third_party/pico-sdk/*' \
+    -not -path './firmware/third_party/embedded-cli/*' \
+    -not -path './build/*' \
     -print)
 
 if [ -z "$PYTHON_FILES" ]; then

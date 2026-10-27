@@ -14,7 +14,7 @@ typedef struct {
     uint clock_hz;        /**< Internal timing setup only; match the expected master (100000 or 400000). */
 } i2c_board_config_t;
 
-/** @brief Board I2C slave configuration, defined in config/i2c_config.c. */
+/** @brief Board I2C slave configuration, defined in config/board.c. */
 extern const i2c_board_config_t i2c_board_config;
 
 void i2c_slave_init(uint8_t address);

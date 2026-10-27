@@ -45,7 +45,7 @@ add_executable(pico_pwm
     src/app/cli/channel_commands.c
     src/app/cli/board_commands.c
     third_party/embedded-cli/lib/src/embedded_cli.c
-    src/config/i2c_config.c
+    src/config/board.c
     src/app/i2c/i2c_control_map.c
     src/app/usb/usb_cdc.c
     src/app/usb/usb_hid.c

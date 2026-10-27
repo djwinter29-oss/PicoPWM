@@ -236,7 +236,7 @@ jobs:
         run: python3 tools/release/require_release_checks.py --sha "$SOURCE_SHA"
 
       - name: Download all board artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: release-*
           path: dist

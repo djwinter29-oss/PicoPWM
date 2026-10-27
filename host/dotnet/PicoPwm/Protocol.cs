@@ -49,7 +49,7 @@ public static class Protocol
         if (product != HidProductId)
             throw new InvalidDataException($"unsupported product ID 0x{product:x4}");
         int mcu = payload[14], channels = payload[15], capabilities = payload[16], profiles = payload[17];
-        if (mcu is not (1 or 2) || channels != ChannelCount || (capabilities & ~3) != 0 || (profiles & ~0x1F) != 0
+        if (mcu is not (1 or 2) || channels != ChannelCount || (capabilities & ~0x7F) != 0 || (profiles & ~0x1F) != 0
             || ((capabilities & 2) != 0) != (profiles != 0) || (profiles != 0 && (profiles & 2) == 0))
             throw new InvalidDataException("invalid identity capabilities");
         return new(product, Convert.ToHexString(payload.AsSpan(3, 8)), $"{payload[11]}.{payload[12]}.{payload[13]}",

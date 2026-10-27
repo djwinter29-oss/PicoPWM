@@ -43,6 +43,22 @@ The subsystem is designed around the following goals:
 4. Separate command submission from backend implementation details.
 5. Publish realized state rather than maintaining a second shadow model in a separate control layer.
 
+### Runtime Service Telemetry
+
+Core 1 measures wall time around mailbox processing and monitor refresh, excluding
+its WFE/timeout wait. Approximately once per second it publishes one aligned
+32-bit service-load value in basis points (0-10000), read through
+`pwm_driver_service_load()` and the Core 0 `device` facade. This is a workload
+proxy, not CPU utilization: IRQ work outside measured service passes is excluded,
+and lockout or preemption during a pass can affect the result. It does not change
+backend ownership or IRQ/timer placement. The initial value is zero until the
+first measurement window completes.
+
+The idle wait retains one deadline across early SDK wakeups, unless the mailbox
+has a pending command. Alarm setup and unrelated events must not trigger extra
+monitor refresh passes or repeatedly postpone the intended 1 ms polling wait.
+This keeps commands responsive without turning idle monitoring into a hot loop.
+
 ## Source Layout
 
 The current implementation is split as follows:

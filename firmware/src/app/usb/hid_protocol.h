@@ -16,6 +16,8 @@
 typedef enum {
     HID_REPORT_ID_IDENTITY = 1,      /**< Device identity and capabilities, host reads. */
     HID_REPORT_ID_CONFIGURATION = 2, /**< Running and target configuration, host reads. */
+    HID_REPORT_ID_MEMORY = 3,        /**< Static SRAM reservation and physical capacity, host reads. */
+    HID_REPORT_ID_RUNTIME = 4,       /**< Uptime, temperature, and service load, host reads. */
     HID_REPORT_ID_BANK_STATUS = 10,  /**< First of three bank status reports (10-12), host reads. */
     HID_REPORT_ID_ACTION = 20,       /**< Action request (SET) and latest result (GET). */
 } hid_report_id_t;
@@ -24,6 +26,8 @@ typedef enum {
 enum {
     HID_IDENTITY_SIZE = 18,                      /**< Report 1 payload bytes. */
     HID_CONFIGURATION_SIZE = 21,                 /**< Report 2 payload bytes. */
+    HID_MEMORY_SIZE = 9,                         /**< Report 3 version and two uint32 byte counts. */
+    HID_RUNTIME_SIZE = 13,                       /**< Report 4 runtime telemetry payload bytes. */
     HID_BANK_STATUS_SIZE = 41,                   /**< Reports 10-12 payload bytes. */
     HID_ACTION_SIZE = 12,                        /**< Report 20 payload bytes, in both directions. */
     HID_MAX_PAYLOAD_SIZE = HID_BANK_STATUS_SIZE, /**< Largest payload of any report. */
@@ -37,6 +41,9 @@ typedef enum {
     HID_OP_SET_I2C_ADDRESS = 4,   /**< Set the target I2C address. */
     HID_OP_SAVE_CONFIG = 5,       /**< Persist the target configuration. */
     HID_OP_SET_CLOCK_PROFILE = 6, /**< Set the target clock profile. */
+    HID_OP_SAVE_REBOOT = 7,       /**< Save the target and reboot after the host reads success. */
+    HID_OP_SET_LED = 8,           /**< Set the identification LED from arg0 (0 or 1). */
+    HID_OP_REBOOT = 9,            /**< Reboot without saving after confirmed result readback. */
 } hid_operation_t;
 
 /** @brief Report 20 result status. Values 0-5 equal `pwm_driver_result_t`. */

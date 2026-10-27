@@ -17,6 +17,9 @@
 /** @brief Number of logical channels owned by one physical bank. */
 #define PWM_DRIVER_CONFIG_BANK_SIZE 8u
 
+/** @brief Return Core 1 service wall time in basis points; excludes idle waits, not CPU utilization. */
+uint16_t pwm_driver_service_load(void);
+
 /** @brief Fixed physical bank; each bank owns 8 stable logical channels. */
 typedef enum {
     PWM_BANK_A = 0, /**< HW-capable GPIOs, logical channels 0..7. */

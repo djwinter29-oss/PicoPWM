@@ -58,7 +58,7 @@ def decode_identity(payload: bytes) -> dict[str, Any]:
     if product_id != HID_PRODUCT_ID:
         raise ProtocolError(f"unsupported product ID 0x{product_id:04x}")
     mcu, channels, capabilities, profiles = payload[14:18]
-    if (mcu not in (1, 2) or channels != CHANNEL_COUNT or capabilities & ~3 or profiles & ~0x1F
+    if (mcu not in (1, 2) or channels != CHANNEL_COUNT or capabilities & ~0x7F or profiles & ~0x1F
             or bool(capabilities & 2) != bool(profiles) or (profiles and not profiles & 2)):
         raise ProtocolError("invalid identity capabilities")
     return {

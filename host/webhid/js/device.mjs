@@ -19,6 +19,8 @@ const ACTION_POLL_MS = 50;
 
 export const OPERATION = Object.freeze({
   SET_CHANNEL: 1, STOP: 2, SET_BANK: 3, SET_I2C_ADDRESS: 4, SAVE_CONFIG: 5, SET_CLOCK_PROFILE: 6,
+  SAVE_REBOOT: 7,
+  SET_LED: 8, REBOOT: 9,
 });
 export const CLOCK_PROFILES = ["SDK default", "150 MHz", "200 MHz", "250 MHz", "280 MHz"];
 export const BACKENDS = ["HW", "PIO", "SW"];
@@ -50,7 +52,7 @@ export function decodeIdentity(report) {
   const channels = data.getUint8(15);
   const capabilities = data.getUint8(16);
   const profiles = data.getUint8(17);
-  if (![1, 2].includes(mcu) || channels !== CHANNEL_COUNT || capabilities & ~3 || profiles & ~0x1f
+  if (![1, 2].includes(mcu) || channels !== CHANNEL_COUNT || capabilities & ~0x7f || profiles & ~0x1f
     || Boolean(capabilities & 2) !== Boolean(profiles) || profiles && !(profiles & 2)) {
     throw new Error("Invalid identity capabilities");
   }
@@ -62,6 +64,12 @@ export function decodeIdentity(report) {
     mcu: { 1: "RP2040", 2: "RP2350" }[mcu],
     channel_count: channels,
     can_save: Boolean(capabilities & 1),
+    can_save_reboot: Boolean(capabilities & 4),
+    can_set_led: Boolean(capabilities & 8),
+    can_reboot: Boolean(capabilities & 16),
+    can_read_memory: Boolean(capabilities & 32),
+    can_read_runtime: Boolean(capabilities & 64),
+    board_model: { 1: "Pico", 2: "Pico 2" }[mcu],
     can_set_clock: Boolean(capabilities & 2),
     clock_profile_mask: profiles,
   };
@@ -88,6 +96,23 @@ export function decodeConfiguration(report) {
     target: bankConfiguration(data, 8),
     clock_profile: profile,
     system_clock_hz: clock,
+    led_on: Boolean(data.getUint8(15) & 1),
+  };
+}
+
+export function decodeRuntime(report) {
+  const data = payload(report, 13, "Runtime report", 4);
+  const core0 = data.getUint16(9, true);
+  const core1 = data.getUint16(11, true);
+  if (data.getUint8(0) !== 1 || core0 > 10000 || core1 > 10000) {
+    throw new Error("Invalid runtime report");
+  }
+  const temperature = data.getInt32(5, true);
+  return {
+    uptime_seconds: data.getUint32(1, true),
+    temperature_c: temperature === -2147483648 ? null : temperature / 1000,
+    core0_load: core0 / 100,
+    core1_load: core1 / 100,
   };
 }
 
@@ -142,6 +167,8 @@ function emptyDashboard() {
     identity_error: null,
     configuration: null,
     configuration_error: null,
+    runtime: null,
+    runtime_error: null,
     channels: emptyChannels(),
     bank_errors: Array(BANK_COUNT).fill(null),
     action_result: null,
@@ -218,7 +245,16 @@ export class PicoPwmWebHid {
 
   async readIdentity() {
     try {
-      this.patch({ identity: decodeIdentity(await this.readFeature(1)), identity_error: null });
+      const identity = decodeIdentity(await this.readFeature(1));
+      if (identity.can_read_memory) {
+        const memory = payload(await this.readFeature(3), 9, "Memory report", 3);
+        const reserved = memory.getUint32(1, true);
+        const total = memory.getUint32(5, true);
+        if (memory.getUint8(0) !== 1 || !total || reserved > total) throw new Error("Invalid memory report");
+        identity.ram_reserved_bytes = reserved;
+        identity.ram_total_bytes = total;
+      }
+      this.patch({ identity, identity_error: null });
     } catch (error) {
       if (this.device) this.patch({ identity: null, identity_error: error.message });
       throw error;
@@ -230,6 +266,16 @@ export class PicoPwmWebHid {
       this.patch({ configuration: decodeConfiguration(await this.readFeature(2)), configuration_error: null });
     } catch (error) {
       if (this.device) this.patch({ configuration: null, configuration_error: error.message });
+    }
+  }
+
+  async readRuntime() {
+    if (!this.state.dashboard.identity?.can_read_runtime) return;
+    try {
+      const runtime = decodeRuntime(await this.readFeature(4));
+      this.patch({ runtime, runtime_error: runtime.temperature_c === null ? "Temperature ADC reading is invalid" : null });
+    } catch (error) {
+      if (this.device) this.patch({ runtime: null, runtime_error: error.message });
     }
   }
 
@@ -262,7 +308,8 @@ export class PicoPwmWebHid {
     this.busy = true;
     try {
       if (!this.state.dashboard.identity) await this.readIdentity();
-      if (initial || !this.state.dashboard.configuration) await this.readConfiguration();
+      await this.readConfiguration();
+      await this.readRuntime();
       await this.readBanks();
       if (this.isCurrent(generation)) this.update({ message: "HID status received", error: null });
     } catch (error) {
@@ -285,11 +332,14 @@ export class PicoPwmWebHid {
       throw new Error("Device is not ready for a command.");
     }
     if (operation === OPERATION.SAVE_CONFIG && !identity.can_save
+      || operation === OPERATION.SAVE_REBOOT && !identity.can_save_reboot
+      || operation === OPERATION.SET_LED && !identity.can_set_led
+      || operation === OPERATION.REBOOT && !identity.can_reboot
       || operation === OPERATION.SET_CLOCK_PROFILE && !identity.can_set_clock) {
       throw new Error("The firmware does not advertise this capability.");
     }
     this.busy = true;
-    const saving = operation === OPERATION.SAVE_CONFIG;
+    const saving = operation === OPERATION.SAVE_CONFIG || operation === OPERATION.SAVE_REBOOT;
     this.update({ phase: "writing", message: saving ? "Saving configuration" : "Sending command", error: null });
     try {
       const before = decodeActionResult(await this.readFeature(20));
@@ -373,6 +423,45 @@ export class PicoPwmWebHid {
     if (profile > 1 && !acknowledgeOverclock) throw new Error("Acknowledge the overclock first.");
     await this.performAction(OPERATION.SAVE_CONFIG, { flags: 1 | (profile > 1 ? 2 : 0) });
     await this.afterChange(true);
+  }
+
+  async saveAndReboot({ clockProfile, i2cAddress, roles }, acknowledgeOverclock) {
+    const identity = this.state.dashboard.identity;
+    if (!identity?.can_save_reboot) {
+      throw new Error("Update the board firmware to enable Save and reboot.");
+    }
+    if (!Number.isInteger(clockProfile) || clockProfile < 0 || clockProfile > 4
+      || !(identity.clock_profile_mask & 1 << clockProfile)
+      || !Number.isInteger(i2cAddress) || i2cAddress < 8 || i2cAddress > 119
+      || !Array.isArray(roles) || roles.length !== 3 || roles.some(role => ![0, 1].includes(role))) {
+      throw new Error("Choose a supported clock, I2C address (8-119), and a role for each bank.");
+    }
+    if (clockProfile > 1 && !acknowledgeOverclock) throw new Error("Acknowledge the overclock first.");
+    try {
+      await this.performAction(OPERATION.SET_CLOCK_PROFILE,
+        { arg0: clockProfile, flags: clockProfile > 1 ? 2 : 0 });
+      await this.performAction(OPERATION.SET_I2C_ADDRESS, { arg0: i2cAddress });
+      for (let bank = 0; bank < 3; bank++) {
+        await this.performAction(OPERATION.SET_BANK, { channel: bank, arg0: bank | roles[bank] << 8 });
+      }
+      await this.performAction(OPERATION.SAVE_REBOOT, { flags: 1 | (clockProfile > 1 ? 2 : 0) });
+    } catch (error) {
+      throw new Error(`${error.message} Save and reboot was not confirmed; target settings may be partially updated. Reconnect and verify before retrying.`);
+    }
+    await this.disconnect();
+    this.update({ message: "Configuration saved. Board is rebooting; reconnect to read the applied settings." });
+  }
+
+  async setLed(on) {
+    if (typeof on !== "boolean") throw new Error("LED state must be on or off.");
+    await this.performAction(OPERATION.SET_LED, { arg0: on ? 1 : 0 });
+    await this.afterChange(true);
+  }
+
+  async reboot() {
+    await this.performAction(OPERATION.REBOOT, { flags: 1 });
+    await this.disconnect();
+    this.update({ message: "Board is rebooting without saving. Reconnect after restart." });
   }
 
   async connect() {

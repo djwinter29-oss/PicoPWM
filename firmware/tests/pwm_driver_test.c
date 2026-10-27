@@ -3,6 +3,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <stdatomic.h>
 
 /* Backend stubs: generators publish like the real ones; frequency 777 is rejected; bank C is a monitor. */
 bool hw_gen_init(void) {
@@ -62,8 +63,13 @@ bool sw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
 }
 
 static volatile bool sw_mon_signal = true;
+/** @brief Count service passes despite the SDK stub waking before its deadline. */
+static atomic_uint monitor_passes;
 
 bool sw_mon_get(uint channel, pwm_state_t *state) {
+    if (channel == 0u) {
+        atomic_fetch_add(&monitor_passes, 1u);
+    }
     if (channel != 0u || !sw_mon_signal) {
         return false;
     }
@@ -141,6 +147,13 @@ int main(void) {
     assert(pwm_driver_config_channel_role(16u, &role) && role == PWM_ROLE_MONITOR);
     assert(!pwm_driver_config_channel_role(24u, &role));
     assert(pwm_driver_config_is_monitor());
+    unsigned before = atomic_load(&monitor_passes);
+    absolute_time_t start = get_absolute_time();
+    usleep(30000);
+    uint64_t elapsed = (uint64_t)absolute_time_diff_us(start, get_absolute_time());
+    unsigned passes = atomic_load(&monitor_passes) - before;
+    assert(passes > 0u);
+    assert(passes <= elapsed / 1000u + 2u);
     puts("pwm_driver_test ok");
     return 0;
 }

@@ -44,6 +44,9 @@ public sealed class HidTests
     {
         Assert.Equal("RP2350", Protocol.DecodeIdentity(Identity).Mcu);
         Assert.Equal("0102030405060708", Protocol.DecodeIdentity(Identity).SerialNumber);
+        var rebootIdentity = (byte[])Identity.Clone();
+        rebootIdentity[16] = 127;
+        Assert.True(Protocol.DecodeIdentity(rebootIdentity).CanSave);
         var config = Protocol.DecodeConfiguration(Configuration);
         Assert.Equal(150_000_000u, config.SystemClockHz);
         Assert.Equal(new Protocol.ChannelState(8, 1000, 50), Protocol.DecodeBankStatus(Bank, 1)[0]);

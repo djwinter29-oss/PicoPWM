@@ -56,6 +56,7 @@ target_link_libraries(pico_pwm
     hardware_timer
     hardware_irq
     hardware_clocks
+    hardware_adc
     hardware_gpio
     hardware_i2c
     hardware_pio

@@ -45,6 +45,9 @@ def test_decoders():
     config = p.decode_configuration(CONFIGURATION)
     assert config["system_clock_hz"] == 150_000_000
     assert p.decode_bank_status(BANK, 1)[0] == {"channel": 8, "freq_hz": 1000, "duty": 50}
+    reboot_identity = bytearray(IDENTITY)
+    reboot_identity[16] = 127
+    assert p.decode_identity(bytes(reboot_identity))["can_save"]
 
 
 def test_decoder_rejects_bad_layout():

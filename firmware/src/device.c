@@ -8,6 +8,36 @@
 #include "pico/unique_id.h"
 #include "driver/i2c/i2c_slave.h"
 #include "platform/system.h"
+#include "platform/led.h"
+#include "hardware/regs/addressmap.h"
+
+/** @brief Linker boundaries for static SRAM, scratch data, and reserved core stacks. */
+extern char __bss_end__, __scratch_x_start__, __scratch_x_end__, __scratch_y_start__, __scratch_y_end__;
+extern char __StackBottom, __StackTop, __StackOneBottom, __StackOneTop;
+
+uint32_t device_ram_reserved_bytes(void) {
+    return (uint32_t)((uintptr_t)&__bss_end__ - SRAM_BASE +
+                      (uintptr_t)&__scratch_x_end__ - (uintptr_t)&__scratch_x_start__ +
+                      (uintptr_t)&__scratch_y_end__ - (uintptr_t)&__scratch_y_start__ +
+                      (uintptr_t)&__StackTop - (uintptr_t)&__StackBottom +
+                      (uintptr_t)&__StackOneTop - (uintptr_t)&__StackOneBottom);
+}
+
+uint32_t device_ram_total_bytes(void) {
+    return (uint32_t)((uintptr_t)&__StackTop - SRAM_BASE);
+}
+
+uint32_t device_uptime_seconds(void) {
+    return (uint32_t)(to_us_since_boot(get_absolute_time()) / 1000000u);
+}
+
+int32_t device_temperature_millic(void) {
+    return system_temperature_millic();
+}
+
+uint16_t device_service_load(bool core1) {
+    return core1 ? pwm_driver_service_load() : system_service_load();
+}
 #include "driver/pwm/pwm_driver_internal.h"
 
 const char *device_name(void) {
@@ -29,6 +59,23 @@ void device_get_uid(uint8_t uid[8]) {
 
 uint32_t device_system_clock_hz(void) {
     return system_clock_hz();
+}
+
+void device_schedule_reboot(uint32_t delay_ms) {
+    system_schedule_reboot(delay_ms);
+}
+
+bool device_led_read(bool *on) {
+    return led_read_state(on);
+}
+
+bool device_led_set(bool on) {
+    bool current;
+    if (!led_read_state(&current)) {
+        return false;
+    }
+    led_set(on);
+    return true;
 }
 
 pwm_role_t device_bank_role(pwm_bank_t bank) {

@@ -1,6 +1,10 @@
-import { BACKENDS, CLOCK_PROFILES, ROLES } from "./device.mjs?v=1";
+import { CLOCK_PROFILES, ROLES } from "./device.mjs?v=5";
 
-const BANK_NAMES = ["A", "B", "C"];
+export const CHANNEL_GPIOS = [
+  1, 3, 5, 7, 9, 11, 13, 15,
+  0, 2, 4, 6, 8, 10, 12, 14,
+  16, 17, 18, 19, 20, 21, 22, 28,
+];
 
 function setText(selector, text) {
   document.querySelector(selector).textContent = text ?? "--";
@@ -20,6 +24,13 @@ export function formatFrequency(hz) {
   return `${hz} Hz`;
 }
 
+export function formatUptime(seconds) {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor(seconds % 86400 / 3600);
+  const minutes = Math.floor(seconds % 3600 / 60);
+  return `${days ? `${days}d ` : ""}${hours}h ${minutes}m ${seconds % 60}s`;
+}
+
 export function updateReportAge(data, now = Date.now()) {
   const sample = Date.parse(data.updated_at);
   const age = document.querySelector("#sample-time");
@@ -31,25 +42,41 @@ export function updateReportAge(data, now = Date.now()) {
   age.dataset.stale = String(stale);
 }
 
-function describeBank(config, bank) {
-  return `${BACKENDS[config.backends[bank]]} ${ROLES[config.roles[bank]].toLowerCase()}`;
+function syncTarget(selector, value) {
+  const control = document.querySelector(selector);
+  const target = value === undefined ? "" : String(value);
+  if (control.dataset.target !== target) {
+    control.value = target;
+    control.dataset.target = target;
+  }
+}
+
+export function renderBootEdits(configuration) {
+  const selectors = ["#clock-profile-select", "#i2c-input", "#hw-role", "#pio-role", "#sw-role"];
+  const targets = configuration
+    ? [configuration.clock_profile, configuration.target.i2c_address, ...configuration.target.roles] : [];
+  let edited = false;
+  selectors.forEach((selector, index) => {
+    const control = document.querySelector(selector);
+    const changed = Boolean(configuration) && control.value !== String(targets[index]);
+    control.dataset.edited = String(changed);
+    edited ||= changed;
+  });
+  const pending = configuration && (configuration.target.i2c_address !== configuration.running.i2c_address
+    || configuration.target.roles.some((role, bank) => role !== configuration.running.roles[bank]));
+  const status = document.querySelector("#boot-edits");
+  status.hidden = !edited && !pending;
+  status.textContent = edited ? "Unsaved edits" : pending ? "Target differs from running" : "";
+  status.title = edited ? "Local edits have not been sent. Save and Reboot applies them."
+    : "Bank roles or I2C address differ from the running settings. Save and Reboot applies the target.";
 }
 
 function renderConfiguration(data) {
   const { configuration, identity } = data;
   setText("#system-clock", configuration ? `${(configuration.system_clock_hz / 1e6).toFixed(3)} MHz` : null);
-  setText("#clock-profile", configuration ? CLOCK_PROFILES[configuration.clock_profile] : null);
-  setText("#i2c-address", configuration
-    ? `0x${configuration.running.i2c_address.toString(16).padStart(2, "0")}`
-      + (configuration.target.i2c_address === configuration.running.i2c_address ? ""
-        : ` (target 0x${configuration.target.i2c_address.toString(16).padStart(2, "0")})`) : null);
-  const rows = document.querySelector("#bank-config");
-  rows.replaceChildren();
-  BANK_NAMES.forEach((name, bank) => {
-    const row = document.createElement("tr");
-    row.append(cell(`Bank ${name}`), cell(configuration ? describeBank(configuration.running, bank) : "--"),
-      cell(configuration ? describeBank(configuration.target, bank) : "--"));
-    rows.append(row);
+  syncTarget("#i2c-input", configuration?.target.i2c_address);
+  ["hw", "pio", "sw"].forEach((backend, bank) => {
+    syncTarget(`#${backend}-role`, configuration?.target.roles[bank]);
   });
   const select = document.querySelector("#clock-profile-select");
   const mask = identity?.clock_profile_mask ?? 0;
@@ -65,34 +92,68 @@ function renderConfiguration(data) {
     }));
     select.value = selected;
   }
-  if (!select.value && configuration && profiles.includes(configuration.clock_profile)) {
-    select.value = String(configuration.clock_profile);
-  }
+  syncTarget("#clock-profile-select", configuration && profiles.includes(configuration.clock_profile)
+    ? configuration.clock_profile : undefined);
 }
 
-function renderChannels(data) {
-  const body = document.querySelector("#channel-rows");
-  body.replaceChildren();
+function renderChannels(data, editable) {
+  const focused = document.activeElement?.dataset;
+  const bodies = ["hw", "pio", "sw"].map((backend, bank) => {
+    const role = data.configuration ? ROLES[data.configuration.running.roles[bank]] : null;
+    setText(`#${backend}-running-role`, role);
+    document.querySelector(`#${backend}-running-role`).dataset.role = role?.toLowerCase() ?? "unknown";
+    const body = document.querySelector(`#${backend}-channel-rows`);
+    body.replaceChildren();
+    return body;
+  });
   for (const channel of data.channels) {
     const bank = Math.floor(channel.channel / 8);
-    const role = data.configuration ? ROLES[data.configuration.running.roles[bank]] : "--";
     const row = document.createElement("tr");
-    row.append(cell(String(channel.channel)), cell(BANK_NAMES[bank]), cell(role),
-      cell(formatFrequency(channel.freq_hz), "number"),
-      cell(channel.duty === null ? "--" : `${channel.duty}%`, "number"));
+    row.append(cell(String(channel.channel)), cell(String(CHANNEL_GPIOS[channel.channel])),
+      cell(formatFrequency(channel.freq_hz), channel.freq_hz === null ? "number missing" : "number"),
+      cell(channel.duty === null ? "--" : `${channel.duty}%`, channel.duty === null ? "number missing" : "number"));
+    if (editable && data.configuration?.running.roles[bank] === 0 && !data.bank_errors[bank]
+      && channel.freq_hz !== null && channel.duty !== null) {
+      ["frequency", "duty"].forEach((field, index) => {
+        const target = row.children[index + 2];
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "channel-value";
+        button.dataset.channel = String(channel.channel);
+        button.dataset.field = field;
+        button.textContent = target.textContent;
+        button.setAttribute("aria-label", `Edit channel ${channel.channel} ${field}: ${target.textContent}`);
+        target.replaceChildren(button);
+      });
+    }
     if (data.bank_errors[bank]) row.title = data.bank_errors[bank];
-    body.append(row);
+    bodies[bank].append(row);
+  }
+  if (focused?.channel !== undefined && focused.field) {
+    document.querySelector(`.channel-value[data-channel="${focused.channel}"][data-field="${focused.field}"]`)
+      ?.focus({ preventScroll: true });
   }
 }
 
-export function renderDashboard(data) {
+export function renderDashboard(data, editable = false) {
   const identity = data.identity;
   setText("#product-name", identity ? "PicoPWM" : null);
-  setText("#mcu", identity?.mcu);
+  setText("#board-model", identity ? `${identity.board_model} (${identity.mcu})` : null);
+  setText("#ram-usage", identity?.ram_total_bytes
+    ? `${(identity.ram_reserved_bytes / 1024).toFixed(1)} / ${(identity.ram_total_bytes / 1024).toFixed(0)} KiB`
+    : identity ? "Unavailable (update firmware)" : null);
   setText("#serial", identity?.serial_number);
   setText("#firmware", identity?.firmware_version);
+  const runtime = data.runtime;
+  setText("#uptime", runtime ? formatUptime(runtime.uptime_seconds) : null);
+  setText("#temperature", runtime?.temperature_c != null ? `${runtime.temperature_c.toFixed(1)} \u00b0C` : null);
+  setText("#service-load", runtime ? `${runtime.core0_load.toFixed(1)}% / ${runtime.core1_load.toFixed(1)}%` : null);
+  setText("#runtime-message", data.runtime_error
+    ?? (identity && !identity.can_read_runtime ? "Update board firmware to enable runtime telemetry." : ""));
+  document.querySelector("#runtime-message").dataset.error = String(Boolean(data.runtime_error));
   renderConfiguration(data);
-  renderChannels(data);
+  renderBootEdits(data.configuration);
+  renderChannels(data, editable);
   const problems = [data.identity_error, data.configuration_error, ...data.bank_errors].filter(Boolean);
   setText("#read-errors", problems.length ? problems.join("; ") : "");
 }

@@ -51,7 +51,7 @@ static uint8_t pio_program_offsets[2] = {0, 0};
 
 /** @brief Publish the realized state for one backend-local channel into the shared driver cache. */
 static void gen_publish_state(uint channel, uint32_t realized_freq_hz, uint8_t duty_percent) {
-    pwm_driver_state_t state = {.freq_hz = realized_freq_hz, .duty = duty_percent};
+    pwm_state_t state = {.freq_hz = realized_freq_hz, .duty = duty_percent};
 
     pwm_driver_store_applied_state((uint)PWM_BANK_B * PWM_DRIVER_CONFIG_BANK_SIZE + channel, &state);
 }

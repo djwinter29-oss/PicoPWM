@@ -84,7 +84,7 @@ static bool channel_commands_parse_u8(const char *text, uint8_t *value_out) {
     return true;
 }
 
-static bool channel_commands_write_status_row(shell_t *shell, int channel, const pwm_driver_state_t *state) {
+static bool channel_commands_write_status_row(shell_t *shell, int channel, const pwm_state_t *state) {
     char line[96];
     const char *type = pwm_driver_config_channel_name((uint)channel);
 
@@ -105,7 +105,7 @@ static void channel_commands_format_invalid_channel(char *line, size_t line_size
 }
 
 bool channel_commands_get(void *context, int argc, const char *const *argv) {
-    pwm_driver_state_t state = {0u, 50u};
+    pwm_state_t state = {0u, 50u};
     char line[96];
     int channel;
 
@@ -159,7 +159,7 @@ bool channel_commands_set(void *context, int argc, const char *const *argv) {
 }
 
 bool channel_commands_status(void *context, int argc, const char *const *argv) {
-    pwm_driver_state_t state;
+    pwm_state_t state;
     char line[64];
 
     (void)argv;
@@ -174,7 +174,7 @@ bool channel_commands_status(void *context, int argc, const char *const *argv) {
     shell_write_line(COMMAND_SHELL, line);
     shell_write_line(COMMAND_SHELL, "Ch  Backend  State  Freq(Hz)   Duty(%)");
     for (uint8_t channel = 0u; channel < channel_count; ++channel) {
-        state = (pwm_driver_state_t){0u, 50u};
+        state = (pwm_state_t){0u, 50u};
         if (!device_get_channel(channel, &state)) {
             snprintf(line, sizeof(line), "ERR channel %d unavailable", channel);
             shell_write_line(COMMAND_SHELL, line);

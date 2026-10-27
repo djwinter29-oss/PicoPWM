@@ -4,7 +4,7 @@
  *
  * This module provides a PIO-based monitor implementation that measures the configured
  * PIO monitor channel bank and reports approximate frequency and duty cycle using the
- * existing `pwm_driver_state_t` shape.
+ * existing `pwm_state_t` shape.
  */
 
 #ifndef PWMDRIVER_PIO_MONITOR_H
@@ -40,6 +40,6 @@ bool pio_mon_init(void);
  * @note If no input transition is observed for more than one second, the monitor reports a
  *       static level as `freq_hz = 0` with `duty = 0` or `100` based on the sampled GPIO.
  */
-bool pio_mon_get(uint channel, pwm_driver_state_t *state);
+bool pio_mon_get(uint channel, pwm_state_t *state);
 
 #endif

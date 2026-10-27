@@ -105,7 +105,7 @@ typedef bool (*pwm_driver_backend_set_fn_t)(uint channel, uint32_t freq_hz, uint
 /** @brief Backend initialization operation signature used by the routing table. */
 typedef bool (*pwm_driver_backend_init_fn_t)(void);
 /** @brief Read one backend-local monitor sample. */
-typedef bool (*pwm_driver_backend_get_fn_t)(uint channel, pwm_driver_state_t *state);
+typedef bool (*pwm_driver_backend_get_fn_t)(uint channel, pwm_state_t *state);
 
 /** @brief One in-flight cross-core mailbox command record. */
 typedef struct {
@@ -149,9 +149,9 @@ static critical_section_t pwm_lock;
 /** @brief Core 0 serialization lock shared by the public control entry points. */
 static mutex_t control_api_lock;
 /** @brief Published realized-state cache for all logical channels, guarded by @ref pwm_lock. */
-static pwm_driver_state_t pwm_state_cache[PWM_DRIVER_CHANNEL_COUNT];
+static pwm_state_t pwm_state_cache[PWM_DRIVER_CHANNEL_COUNT];
 /** @brief Last monitor sample published by Core 1; used to skip unchanged publications. */
-static pwm_driver_state_t pwm_monitor_last[PWM_DRIVER_CHANNEL_COUNT];
+static pwm_state_t pwm_monitor_last[PWM_DRIVER_CHANNEL_COUNT];
 /** @brief One-slot Core 0/Core 1 mailbox shared between submitter and backend owner. */
 static pwm_driver_mailbox_t pwm_mailbox;
 
@@ -192,7 +192,7 @@ static void pwm_driver_monitor_gpio_irq(uint gpio, uint32_t events) {
 static pwm_driver_result_t pwm_driver_submit_locked(const pwm_driver_cmd_t *cmd);
 
 /** @copydoc pwm_driver_store_applied_state */
-void pwm_driver_store_applied_state(uint channel, const pwm_driver_state_t *state) {
+void pwm_driver_store_applied_state(uint channel, const pwm_state_t *state) {
     if (channel >= PWM_DRIVER_CHANNEL_COUNT || state == NULL) {
         return;
     }
@@ -238,11 +238,11 @@ static void pwm_driver_refresh_monitor_state(void) {
         }
         for (uint local = 0u; local < PWM_DRIVER_CONFIG_BANK_SIZE; ++local) {
             uint channel = bank * PWM_DRIVER_CONFIG_BANK_SIZE + local;
-            pwm_driver_state_t state;
+            pwm_state_t state;
 
             /* No valid sample (signal lost or not yet captured) reads as 0 Hz, 0% rather than a stale value. */
             if (!backend->get(local, &state)) {
-                state = (pwm_driver_state_t){0};
+                state = (pwm_state_t){0};
             }
             if (state.freq_hz != pwm_monitor_last[channel].freq_hz || state.duty != pwm_monitor_last[channel].duty) {
                 pwm_monitor_last[channel] = state;
@@ -463,7 +463,7 @@ pwm_driver_result_t pwm_driver_set(uint channel, uint32_t freq_hz, uint8_t duty)
 }
 
 /** @copydoc pwm_driver_get */
-bool pwm_driver_get(uint channel, pwm_driver_state_t *state) {
+bool pwm_driver_get(uint channel, pwm_state_t *state) {
     if (state == NULL || channel >= PWM_DRIVER_CHANNEL_COUNT || pwm_lifecycle == PWM_DRIVER_LIFECYCLE_RESET) {
         return false;
     }

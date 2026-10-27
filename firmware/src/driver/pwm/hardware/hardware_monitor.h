@@ -3,7 +3,7 @@
  * @brief Hardware PWM-slice input monitor for the logical `pwm` layer.
  *
  * Measures the bank-A slice-B pins with the PWM slice counters in input mode and reports
- * frequency and duty using the existing `pwm_driver_state_t` shape.
+ * frequency and duty using the existing `pwm_state_t` shape.
  */
 
 #ifndef PWMDRIVER_HW_MONITOR_H
@@ -24,6 +24,6 @@ bool hw_mon_init(void);
  *       monitor is reliable above about 20 Hz. A static input reports `freq_hz = 0` with duty
  *       `0` or `100` from the sampled GPIO level.
  */
-bool hw_mon_get(uint channel, pwm_driver_state_t *state);
+bool hw_mon_get(uint channel, pwm_state_t *state);
 
 #endif

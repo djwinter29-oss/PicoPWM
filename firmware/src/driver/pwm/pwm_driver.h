@@ -109,7 +109,7 @@ typedef enum {
 typedef struct {
     uint32_t freq_hz; /**< Realized output frequency in Hz. */
     uint8_t duty;     /**< Realized duty cycle in percent in the range `[0, 100]`. */
-} pwm_driver_state_t;
+} pwm_state_t;
 
 /**
  * @brief Configure all banks, launch Core 1 backend ownership, and start the PWM runtime.

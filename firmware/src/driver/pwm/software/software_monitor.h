@@ -3,7 +3,7 @@
  * @brief Standalone Core 1 software-PWM pin monitor backend for the logical `pwm` layer.
  *
  * This module measures the configured software monitor channel bank and reports approximate
- * frequency and duty cycle using the existing `pwm_driver_state_t` shape.
+ * frequency and duty cycle using the existing `pwm_state_t` shape.
  *
  * This monitor is intentionally limited to low-frequency, best-effort observation. It uses
  * one software GPIO interrupt per edge plus microsecond timestamps. That makes it a much
@@ -52,6 +52,6 @@ void sw_mon_handle_gpio_irq(uint gpio, uint32_t events);
  * @note If no input transition is observed for more than one second, the monitor reports a
  *       static level as `freq_hz = 0` with `duty = 0` or `100` based on the sampled GPIO.
  */
-bool sw_mon_get(uint channel, pwm_driver_state_t *state);
+bool sw_mon_get(uint channel, pwm_state_t *state);
 
 #endif

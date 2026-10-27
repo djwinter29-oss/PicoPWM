@@ -105,7 +105,7 @@ static bool build_configuration(uint8_t *payload) {
 static bool build_bank_status(uint8_t bank, uint8_t *payload) {
     payload[0] = HID_LAYOUT_VERSION;
     for (uint i = 0; i < HID_BANK_SIZE; ++i) {
-        pwm_driver_state_t state;
+        pwm_state_t state;
 
         if (!device_get_channel(bank * HID_BANK_SIZE + i, &state)) {
             return false;

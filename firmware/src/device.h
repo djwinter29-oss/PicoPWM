@@ -38,7 +38,7 @@ uint8_t device_channel_count(void);
  * @param state Caller-owned destination for the realized channel state.
  * @return `true` when the channel exists and the state was copied.
  */
-bool device_get_channel(uint channel, pwm_driver_state_t *state);
+bool device_get_channel(uint channel, pwm_state_t *state);
 
 /**
  * @brief Apply both frequency and duty to one logical channel.

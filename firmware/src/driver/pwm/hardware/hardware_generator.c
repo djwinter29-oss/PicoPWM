@@ -45,7 +45,7 @@ static void hw_gen_apply_static_state(uint channel, uint8_t realized_duty) {
 
 /** @brief Publish one hardware backend realized state snapshot into the shared logical cache. */
 static void hw_gen_publish_state(uint channel, uint32_t realized_freq_hz, uint8_t realized_duty) {
-    pwm_driver_state_t state;
+    pwm_state_t state;
 
     state.freq_hz = realized_freq_hz;
     state.duty = realized_duty;

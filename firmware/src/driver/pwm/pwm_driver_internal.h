@@ -26,7 +26,7 @@ pwm_driver_result_t pwm_driver_set(uint channel, uint32_t freq_hz, uint8_t duty)
  * @param state Caller-owned destination for the realized channel state.
  * @return `true` when the channel exists and the state was copied.
  */
-bool pwm_driver_get(uint channel, pwm_driver_state_t *state);
+bool pwm_driver_get(uint channel, pwm_state_t *state);
 
 /**
  * @brief Restore all logical channels to the shared default state.
@@ -39,6 +39,6 @@ pwm_driver_result_t pwm_driver_restore_defaults(void);
  * @param channel Logical channel index.
  * @param state Caller-owned realized state snapshot.
  */
-void pwm_driver_store_applied_state(uint channel, const pwm_driver_state_t *state);
+void pwm_driver_store_applied_state(uint channel, const pwm_state_t *state);
 
 #endif

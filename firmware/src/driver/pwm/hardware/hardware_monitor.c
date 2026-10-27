@@ -40,14 +40,14 @@ typedef enum {
 
 /** @brief Runtime state for one hardware monitor channel. */
 typedef struct {
-    uint slice;                /**< PWM slice measuring this channel. */
-    uint gpio;                 /**< Slice-B input GPIO. */
-    hw_mon_phase_t phase;      /**< Window currently running. */
-    uint64_t phase_start_us;   /**< Start time of the current window. */
-    uint32_t wraps;            /**< Counter wraps accumulated in the current window. */
-    uint32_t edge_freq_hz;     /**< Frequency from the last completed edge window. */
-    pwm_driver_state_t sample; /**< Last completed measurement. */
-    bool sample_valid;         /**< True after the first completed edge and high window pair. */
+    uint slice;              /**< PWM slice measuring this channel. */
+    uint gpio;               /**< Slice-B input GPIO. */
+    hw_mon_phase_t phase;    /**< Window currently running. */
+    uint64_t phase_start_us; /**< Start time of the current window. */
+    uint32_t wraps;          /**< Counter wraps accumulated in the current window. */
+    uint32_t edge_freq_hz;   /**< Frequency from the last completed edge window. */
+    pwm_state_t sample;      /**< Last completed measurement. */
+    bool sample_valid;       /**< True after the first completed edge and high window pair. */
 } hw_mon_channel_t;
 
 static hw_mon_channel_t hw_mon_channels[PWM_DRIVER_CONFIG_BANK_SIZE];
@@ -130,7 +130,7 @@ bool hw_mon_init(void) {
 }
 
 /** @copydoc hw_mon_get */
-bool hw_mon_get(uint channel, pwm_driver_state_t *state) {
+bool hw_mon_get(uint channel, pwm_state_t *state) {
     if (!hw_mon_initialized || channel >= PWM_DRIVER_CONFIG_BANK_SIZE || state == NULL) {
         return false;
     }

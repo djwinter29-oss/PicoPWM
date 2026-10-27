@@ -44,7 +44,7 @@ static uint32_t sw_pwm_active_mask = 0u;
 
 /** @brief Publish one channel's realized software PWM state into the shared driver snapshot. */
 static void sw_gen_publish_state(uint channel, uint32_t freq_hz, uint8_t duty) {
-    pwm_driver_state_t state = {.freq_hz = freq_hz, .duty = duty};
+    pwm_state_t state = {.freq_hz = freq_hz, .duty = duty};
 
     pwm_driver_store_applied_state((uint)PWM_BANK_C * PWM_DRIVER_CONFIG_BANK_SIZE + channel, &state);
 }

@@ -78,7 +78,7 @@ uint8_t i2c_control_map_expected_write_length(uint8_t reg) {
 
 bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *response, uint8_t response_capacity,
                                    uint8_t *response_len) {
-    pwm_driver_state_t state = {0u, 50u};
+    pwm_state_t state = {0u, 50u};
     const char *text;
     size_t text_len;
 

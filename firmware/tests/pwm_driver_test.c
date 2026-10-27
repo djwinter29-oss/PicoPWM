@@ -23,12 +23,12 @@ bool pio_mon_init(void) {
 bool sw_mon_init(void) {
     return true;
 }
-bool hw_mon_get(uint channel, pwm_driver_state_t *state) {
+bool hw_mon_get(uint channel, pwm_state_t *state) {
     (void)channel;
     (void)state;
     return false;
 }
-bool pio_mon_get(uint channel, pwm_driver_state_t *state) {
+bool pio_mon_get(uint channel, pwm_state_t *state) {
     (void)channel;
     (void)state;
     return false;
@@ -39,7 +39,7 @@ void sw_mon_handle_gpio_irq(uint gpio, uint32_t events) {
 }
 
 static bool test_gen_set(uint bank, uint channel, uint32_t freq_hz, uint8_t duty) {
-    pwm_driver_state_t state = {.freq_hz = freq_hz, .duty = duty};
+    pwm_state_t state = {.freq_hz = freq_hz, .duty = duty};
 
     if (freq_hz == 777u) {
         return false;
@@ -63,7 +63,7 @@ bool sw_gen_set(uint channel, uint32_t freq_hz, uint8_t duty) {
 
 static volatile bool sw_mon_signal = true;
 
-bool sw_mon_get(uint channel, pwm_driver_state_t *state) {
+bool sw_mon_get(uint channel, pwm_state_t *state) {
     if (channel != 0u || !sw_mon_signal) {
         return false;
     }
@@ -78,7 +78,7 @@ void system_reboot(void) {
 }
 
 static void expect_state(uint channel, uint32_t freq_hz, uint8_t duty) {
-    pwm_driver_state_t state;
+    pwm_state_t state;
 
     assert(pwm_driver_get(channel, &state));
     assert(state.freq_hz == freq_hz && state.duty == duty);
@@ -86,7 +86,7 @@ static void expect_state(uint channel, uint32_t freq_hz, uint8_t duty) {
 
 int main(void) {
     const pwm_role_t roles[PWM_BANK_COUNT] = {PWM_ROLE_GENERATOR, PWM_ROLE_GENERATOR, PWM_ROLE_MONITOR};
-    pwm_driver_state_t state;
+    pwm_state_t state;
     pwm_role_t role;
 
     assert(!pwm_driver_get(0u, &state));

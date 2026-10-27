@@ -31,13 +31,13 @@
 
 /** @brief Runtime state of one software-monitored channel. */
 typedef struct {
-    pwm_driver_state_t state; /**< Latest exported sample. */
-    bool sample_valid;        /**< Whether one full sample has been captured. */
-    uint64_t last_edge_us;    /**< Timestamp of the latest edge, used for the static-level timeout. */
-    uint64_t last_rise_us;    /**< Timestamp of the latest rising edge. */
-    uint32_t high_us;         /**< High width captured after the latest rising edge. */
-    bool have_rise;           /**< A rising edge has been seen. */
-    bool have_high;           /**< A high width is captured for the current cycle. */
+    pwm_state_t state;     /**< Latest exported sample. */
+    bool sample_valid;     /**< Whether one full sample has been captured. */
+    uint64_t last_edge_us; /**< Timestamp of the latest edge, used for the static-level timeout. */
+    uint64_t last_rise_us; /**< Timestamp of the latest rising edge. */
+    uint32_t high_us;      /**< High width captured after the latest rising edge. */
+    bool have_rise;        /**< A rising edge has been seen. */
+    bool have_high;        /**< A high width is captured for the current cycle. */
 } sw_mon_channel_t;
 
 /** @brief Per-channel monitor runtime state, indexed by bank-local channel. */
@@ -118,7 +118,7 @@ bool sw_mon_init(void) {
 }
 
 /** @copydoc sw_mon_get */
-bool sw_mon_get(uint channel, pwm_driver_state_t *state) {
+bool sw_mon_get(uint channel, pwm_state_t *state) {
     if (!sw_mon_initialized || channel >= PWM_DRIVER_CONFIG_BANK_SIZE || state == NULL) {
         return false;
     }

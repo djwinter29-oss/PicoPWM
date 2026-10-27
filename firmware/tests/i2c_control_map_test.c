@@ -58,12 +58,12 @@ uint8_t device_channel_count(void) {
     return PWM_DRIVER_CHANNEL_COUNT;
 }
 
-bool device_get_channel(uint channel, pwm_driver_state_t *state) {
+bool device_get_channel(uint channel, pwm_state_t *state) {
     if ((channel >= PWM_DRIVER_CHANNEL_COUNT) || (state == NULL) || (channel >= 8u)) {
         return false;
     }
 
-    *state = (pwm_driver_state_t){1000u, 50u};
+    *state = (pwm_state_t){1000u, 50u};
     return true;
 }
 

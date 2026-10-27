@@ -38,7 +38,7 @@
 
 /** @brief Runtime ownership and last sample state for one PIO monitor channel. */
 typedef struct {
-    pwm_driver_state_t state;  /**< Latest exported monitor state. */
+    pwm_state_t state;  /**< Latest exported monitor state. */
     uint64_t capture_start_us; /**< Timestamp when the current one-period capture started. */
     bool sample_valid;         /**< Indicates whether one full PWM period has been captured. */
     bool capture_active;       /**< Indicates that the PIO state machine is capturing one period. */
@@ -183,7 +183,7 @@ bool pio_mon_init(void) {
 }
 
 /** @copydoc pio_mon_get */
-bool pio_mon_get(uint channel, pwm_driver_state_t *state) {
+bool pio_mon_get(uint channel, pwm_state_t *state) {
     if (!pio_mon_initialized || channel >= PWM_DRIVER_CONFIG_BANK_SIZE || state == NULL) {
         return false;
     }

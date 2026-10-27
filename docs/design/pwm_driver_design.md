@@ -73,7 +73,7 @@ The transport-facing control/status layer is:
 const char *device_name(void);
 const char *device_firmware_version(void);
 uint8_t device_channel_count(void);
-bool device_get_channel(uint channel, pwm_driver_state_t *state);
+bool device_get_channel(uint channel, pwm_state_t *state);
 pwm_driver_result_t device_set_channel(uint channel, uint32_t freq_hz, uint8_t duty);
 pwm_driver_result_t device_restore_defaults(void);
 ```
@@ -89,7 +89,7 @@ The internal Core 0 control layer uses the following mailbox API:
 
 ```c
 pwm_driver_result_t pwm_driver_set(uint channel, uint32_t freq_hz, uint8_t duty);
-bool pwm_driver_get(uint channel, pwm_driver_state_t *state);
+bool pwm_driver_get(uint channel, pwm_state_t *state);
 pwm_driver_result_t pwm_driver_restore_defaults(void);
 ```
 
@@ -99,7 +99,7 @@ The shared state type is:
 typedef struct {
     uint32_t freq_hz;
     uint8_t duty;
-} pwm_driver_state_t;
+} pwm_state_t;
 ```
 
 ### API Intent
@@ -366,7 +366,7 @@ sequenceDiagram
     CTL->>WR: pwm_driver_get(ch, &state)
     WR->>SS: read snapshot under the cache lock
     SS-->>WR: coherent state struct
-    WR-->>CTL: pwm_driver_state_t
+    WR-->>CTL: pwm_state_t
     CTL-->>UI: coherent state struct
 ```
 
@@ -427,7 +427,7 @@ Each descriptor owns:
 
 ### Shared Snapshot Design
 
-Each logical channel has one published `pwm_driver_state_t` (`freq_hz`, `duty`) in a cache guarded by one
+Each logical channel has one published `pwm_state_t` (`freq_hz`, `duty`) in a cache guarded by one
 `critical_section_t` (a hardware spinlock plus local interrupt mask, so it is safe across cores and from the
 Core 1 timer ISR). Writers (`pwm_driver_store_applied_state()`) and the reader (`pwm_driver_get()`) hold it only for one
 struct copy, so the pair is never torn and no retry loop exists. The cache is zero (`0 Hz`, `0%`) until a backend

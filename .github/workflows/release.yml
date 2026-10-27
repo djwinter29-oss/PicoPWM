@@ -62,7 +62,7 @@ jobs:
         run: tools/test/test-firmware-c.sh --build-dir build/tests-release
 
       - name: Generate host coverage report
-        run: tools/test/coverage-firmware-c.sh --build-dir build/tests-coverage-release --output-dir build/tests-coverage-release/coverage
+        run: tools/test/coverage-firmware-c.sh --build-dir build/tests-coverage-release --output-dir build/coverage-release
 
       - name: Check firmware invariants
         run: tools/test/check-firmware-invariants.sh
@@ -71,7 +71,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: pico-pwm-release-coverage
-          path: build/tests-coverage-release/coverage
+          path: build/coverage-release
           if-no-files-found: error
 
   host-tools:

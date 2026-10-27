@@ -63,8 +63,8 @@ uint8_t device_channel_count(void) {
     return PWM_DRIVER_CHANNEL_COUNT;
 }
 
-bool device_get_channel(uint channel, pwm_driver_state_t *state) {
-    *state = (pwm_driver_state_t){1000u + channel, (uint8_t)channel};
+bool device_get_channel(uint channel, pwm_state_t *state) {
+    *state = (pwm_state_t){1000u + channel, (uint8_t)channel};
     return true;
 }
 

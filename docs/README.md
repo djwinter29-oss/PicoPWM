@@ -27,3 +27,11 @@ Architecture and implementation details for contributors:
 - [Monitor designs](design/monitor/)
 - [CDC/HID Overview](design/usb/cdc-hid-overview.md) and
   [HID Report Reference](design/usb/hid-report-reference.md)
+
+## Tests
+
+Hardware setup and recorded validation results:
+
+- [HIL Test Connections](tests/hil-test-connection.md)
+- [HIL Test Plan](tests/hil-test-plan.md)
+- [HIL Test Records](tests/records/README.md)

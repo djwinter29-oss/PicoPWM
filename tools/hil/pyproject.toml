@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "picopwm-hil"
+version = "0.1.0"
+description = "Repository-local CDC hardware-in-the-loop tests for PicoPWM"
+requires-python = ">=3.10"
+dependencies = ["pyserial>=3.5,<4"]
+
+[project.scripts]
+picopwm-hil = "run_hil:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = ["run_hil"]

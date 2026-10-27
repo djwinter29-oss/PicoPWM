@@ -152,6 +152,8 @@ jobs:
           sed -i "s/^version = \".*\"/version = \"$VERSION\"/" host/python/pyproject.toml
           mkdir -p host/python/picopwm/web
           cp -R host/web/. host/python/picopwm/web/
+          cp host/webhid/css/webhid.css host/python/picopwm/web/css/
+          cp host/webhid/js/view.mjs host/webhid/js/device.mjs host/python/picopwm/web/js/
           python -m pip wheel --no-deps host/python --wheel-dir dist
 
       - name: Verify installed development wheel
@@ -167,7 +169,9 @@ jobs:
           import os
           from picopwm.app import create_app
           assert version('picopwm-host') == os.environ['VERSION']
-          assert create_app(object()).test_client().get('/').status_code == 200
+          client = create_app(object()).test_client()
+          for asset in ('/', '/css/webhid.css', '/js/view.mjs', '/js/device.mjs', '/js/client.mjs'):
+              assert client.get(asset).status_code == 200, asset
           PY
 
       - name: Upload development wheel

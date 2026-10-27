@@ -16,6 +16,10 @@ python -m pip install -e '.[test]'
 The `hidapi` dependency needs HID access to the board (on Linux, a udev rule or access
 to `/dev/hidraw*`). From the repository root, `tools/host/run-python.sh` creates a
 virtualenv, installs the host and runs it.
+The launcher refreshes the editable installation and runtime dependencies on each
+start, including dependency version constraints. If Python lacks `ensurepip`, it
+can create a pip-free venv and use the base interpreter's pip (`--python`) to install
+into it. Install pip or the OS Python venv package if neither interpreter has pip.
 
 ## Run the web interface
 
@@ -23,11 +27,20 @@ virtualenv, installs the host and runs it.
 picopwm-web
 ```
 
-Set `PICOPWM_SERIAL` or `PICOPWM_DEVICE_PATH` when more than one board is attached, and
+Optionally set `PICOPWM_SERIAL` or `PICOPWM_DEVICE_PATH` to preselect a board, and
 `PICOPWM_HOST` / `PICOPWM_PORT` to change the listen address (default `127.0.0.1:5000`).
 
-Open <http://127.0.0.1:5000>. The dashboard mirrors the WebHID page: identity, bank
-configuration, channel controls, clock profile, and save.
+Open <http://127.0.0.1:5000>. The dashboard mirrors the WebHID page: device identity
+and RAM, boot configuration with one confirmed **Save and Reboot**, compact pin
+assignment, runtime telemetry, LED/reboot controls, and three eight-channel tables.
+Click a generator frequency or duty to edit its live output; monitor values are
+read-only. Old firmware disables unsupported actions and reports missing telemetry.
+
+Like PicoUart, the page scans boards attached to the **host server**, offers a
+product/serial selector and **Rescan**, and initially selects the preferred or first
+board. Each browser page keeps its own selection. Unplugging or rebooting retries
+that same board, never silently switches to another, and a rescan labels an absent
+selected board as **not found**. Select another board explicitly to switch.
 
 The Flask app factory accepts an injected `PicoPwmHid`, which keeps tests independent of
 hardware:
@@ -41,21 +54,34 @@ app = create_app(PicoPwmHid(lambda: my_device))
 
 ## Shared Web UI
 
-The shared frontend source is in `host/web/`: the WebHID-style `index.html`, `css/`, and
-`js/`. Flask serves these files from the repository checkout, and the .NET host links
-them into its static web root. Keep UI changes in this source directory rather than
-copying them into either host project. The documented editable install keeps this
-shared directory available to the Python app.
+The host-specific HTML and HTTP transport are in `host/web/`. Rendering, PWM styles,
+and display constants reuse `host/webhid/js/view.mjs`, `js/device.mjs`, and
+`css/webhid.css` directly; no WebHID access is needed by these server dashboards.
+Flask serves the canonical assets in source checkouts; release wheel workflows
+bundle them alongside the host assets. The .NET project links the same files at
+build/publish time. Do not edit generated or bundled copies.
 
 Both hosts expose the same JSON API (snake_case, as in the HID report layouts):
 
-- `GET /api/status` returns identity, configuration, and all 24 channels, or
+- `GET /api/boards` returns `boards` (ID, product, serial, path) and `default_board_id`
+- `GET /api/host` returns the dashboard type
+- `GET /api/status?board={id}` returns identity, configuration, runtime, and all 24 channels, or
   `connected: false` with an `error`
-- `POST /api/channels/{channel}` with `{"freq_hz": 1000, "duty": 50}`
+- Every action requires `?board={id}` from the board scan; unknown/missing selections
+  are rejected. Status without a selection is disconnected, without opening HID.
+- `POST /api/channels/{channel}?board={id}` with `{"freq_hz": 1000, "duty": 50}`
+- `POST /api/led` with `{"on": true}`; `POST /api/reboot` with `{}`
+- `POST /api/save-reboot` with `{"profile": 0, "address": 64, "roles": [0,1,1],
+  "acknowledge_overclock": false}` validates all fields before sending targets.
+  Failures stop the sequence; already submitted target edits are not rolled back.
+  Reboot responses return `{"rebooting": true}` only after command confirmation.
 - `POST /api/stop`, `/api/bank`, `/api/i2c-address`, `/api/clock-profile`, `/api/save`
+  remain available for existing API clients, with a board selection.
 
 Errors return 400 for invalid input and 409 when the device rejects a command or its
-outcome is unconfirmed.
+outcome is unconfirmed; board discovery/transport availability errors return 503.
+Temperature is an internal die estimate, not calibrated ambient temperature.
+Service load measures service-work wall time, not CPU utilization.
 
 Run the focused tests from this directory with:
 

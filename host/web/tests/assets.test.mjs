@@ -1,39 +1,52 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const html = readFileSync(join(root, "index.html"), "utf8");
+const shared = new Set(["css/webhid.css", "js/view.mjs", "js/device.mjs"]);
+const asset = path => join(shared.has(path) ? resolve(root, "../webhid") : root, path);
 
-test("HTML references only assets owned by the shared web directory", () => {
+test("HTML references only host assets or canonical WebHID presentation assets", () => {
   for (const match of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
     if (match[1] === "./") continue;
     assert.ok(!match[1].startsWith(".."), match[1]);
-    assert.ok(existsSync(join(root, match[1].split("?")[0])), match[1]);
+    assert.ok(existsSync(asset(match[1].split("?")[0])), match[1]);
   }
 });
 
 test("every element the scripts query exists in the page", () => {
   const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map(match => match[1]));
   for (const name of ["app.mjs", "view.mjs"]) {
-    const source = readFileSync(join(root, "js", name), "utf8");
+    const source = readFileSync(asset(`js/${name}`), "utf8");
     for (const match of source.matchAll(/["'`]#([a-z0-9-]+)["'`]/g)) {
       assert.ok(ids.has(match[1]), `${name} queries missing #${match[1]}`);
     }
   }
 });
 
-test("module imports resolve inside the web directory", () => {
-  for (const name of ["app.mjs", "view.mjs"]) {
-    const file = join(root, "js", name);
+test("module imports resolve to served host or WebHID assets", () => {
+  for (const name of ["app.mjs", "client.mjs", "view.mjs"]) {
+    const file = asset(`js/${name}`);
     for (const match of readFileSync(file, "utf8").matchAll(/from "([^"]+)"/g)) {
-      const target = resolve(dirname(file), match[1].split("?")[0]);
-      assert.ok(!relative(root, target).startsWith(".."), match[1]);
+      const path = join("js", match[1].split("?")[0]);
+      const target = asset(path);
       assert.ok(existsSync(target), match[1]);
     }
   }
+});
+
+test("host dashboard matches WebHID sections and controls except browser pairing", () => {
+  const hid = readFileSync(resolve(root, "../webhid/index.html"), "utf8");
+  const ids = source => [...source.matchAll(/id="([^"]+)"/g)].map(match => match[1]);
+  const hostIds = new Set(ids(html));
+  for (const id of ids(hid).filter(id => id !== "connect")) assert.ok(hostIds.has(id), id);
+  for (const id of ["board-select", "rescan-boards"]) assert.ok(hostIds.has(id), id);
+  assert.doesNotMatch(html, /id="stop-all"|id="bank-index"|id="apply-bank"/);
+  const pinMap = source => source.match(/<details class="pin-map-disclosure">([\s\S]*?)<\/details>/)[1];
+  assert.equal(pinMap(html).replace(/\s+/g, " "), pinMap(hid).replace(/\s+/g, " "));
 });
 
 test("the page may only talk to its own host service", () => {

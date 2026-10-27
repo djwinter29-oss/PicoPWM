@@ -12,11 +12,17 @@ public interface IFeatureDevice : IDisposable
 
 public static class HidDevices
 {
+    private static IEnumerable<HidDevice> MatchingDevices() => DeviceList.Local.GetHidDevices(Protocol.VendorId, Protocol.ProductId)
+        .Where(device => device.GetReportDescriptor().DeviceItems
+            .Any(item => item.Usages.GetAllValues().Contains(Protocol.UsagePageAndUsage)));
+
+    public static BoardInfo[] Enumerate() => MatchingDevices()
+        .Select(device => BoardInfo.Create(device.GetProductName(), device.GetSerialNumber(), device.DevicePath))
+        .ToArray();
+
     public static IFeatureDevice Open(string? serial = null, string? path = null)
     {
-        var devices = DeviceList.Local.GetHidDevices(Protocol.VendorId, Protocol.ProductId)
-            .Where(device => device.GetReportDescriptor().DeviceItems
-                .Any(item => item.Usages.GetAllValues().Contains(Protocol.UsagePageAndUsage)))
+        var devices = MatchingDevices()
             .Where(device => serial is null || device.GetSerialNumber() == serial)
             .Where(device => path is null || device.DevicePath == path)
             .ToArray();

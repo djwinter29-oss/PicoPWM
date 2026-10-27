@@ -64,7 +64,10 @@ class PicoPwmHid:
 
     def _ensure_identity(self) -> dict[str, Any]:
         if self._identity is None:
-            self._identity = p.decode_identity(self._read(p.IDENTITY_REPORT, p.IDENTITY_SIZE))
+            identity = p.decode_identity(self._read(p.IDENTITY_REPORT, p.IDENTITY_SIZE))
+            if identity["can_read_memory"]:
+                identity.update(p.decode_memory(self._read(p.MEMORY_REPORT, p.MEMORY_SIZE)))
+            self._identity = identity
         return self._identity
 
     def status(self) -> dict[str, Any]:
@@ -74,17 +77,23 @@ class PicoPwmHid:
                 "connected": False, "identity": None, "identity_error": None, "configuration": None,
                 "configuration_error": None, "channels": _blank_channels(),
                 "bank_errors": [None] * p.BANK_COUNT, "error": None,
+                "runtime": None, "runtime_error": None,
             }
             try:
                 state["identity"] = self._ensure_identity()
                 state["connected"] = True
-                if self._configuration is None:
-                    try:
-                        self._configuration = p.decode_configuration(
-                            self._read(p.CONFIGURATION_REPORT, p.CONFIGURATION_SIZE))
-                    except p.ProtocolError as error:
-                        state["configuration_error"] = str(error)
+                self._configuration = None
+                try:
+                    self._configuration = p.decode_configuration(
+                        self._read(p.CONFIGURATION_REPORT, p.CONFIGURATION_SIZE))
+                except p.ProtocolError as error:
+                    state["configuration_error"] = str(error)
                 state["configuration"] = self._configuration
+                if self._identity["can_read_runtime"]:
+                    try:
+                        state["runtime"] = p.decode_runtime(self._read(p.RUNTIME_REPORT, p.RUNTIME_SIZE))
+                    except p.ProtocolError as error:
+                        state["runtime_error"] = str(error)
                 for bank in range(p.BANK_COUNT):
                     try:
                         entries = p.decode_bank_status(
@@ -102,10 +111,11 @@ class PicoPwmHid:
 
     def _perform(self, operation: int, **fields: int) -> None:
         identity = self._ensure_identity()
-        if operation == p.OP_SAVE_CONFIG and not identity["can_save"] \
-                or operation == p.OP_SET_CLOCK_PROFILE and not identity["can_set_clock"]:
+        capability = {p.OP_SAVE_CONFIG: "can_save", p.OP_SET_CLOCK_PROFILE: "can_set_clock",
+                      p.OP_SAVE_REBOOT: "can_save_reboot", p.OP_SET_LED: "can_set_led", p.OP_REBOOT: "can_reboot"}
+        if operation in capability and not identity[capability[operation]]:
             raise DeviceError("the firmware does not advertise this capability")
-        saving = operation == p.OP_SAVE_CONFIG
+        saving = operation in (p.OP_SAVE_CONFIG, p.OP_SAVE_REBOOT)
         timeout = SAVE_TIMEOUT_S if saving else ACTION_TIMEOUT_S
         if p.decode_action_result(self._read(p.ACTION_REPORT, p.ACTION_SIZE))["status"] == p.STATUS_PENDING:
             raise DeviceError("a previous command is still pending")
@@ -184,3 +194,48 @@ class PicoPwmHid:
             raise ValueError("acknowledge the overclock first")
         return self._run(p.OP_SAVE_CONFIG, True,
                          flags=p.FLAG_CONFIRM_SAVE | (p.FLAG_ACK_OVERCLOCK if overclock else 0))
+
+    def set_led(self, on: bool) -> dict[str, Any]:
+        return self._run(p.OP_SET_LED, False, arg0=int(on))
+
+    def reboot(self) -> dict[str, Any]:
+        with self._lock:
+            self._run_reboot(p.OP_REBOOT)
+            return {"rebooting": True}
+
+    def _run_reboot(self, operation: int, flags: int = 0) -> None:
+        try:
+            self._perform(operation, flags=flags)
+        except (OSError, p.ProtocolError, RuntimeError) as error:
+            if isinstance(error, DeviceError):
+                raise
+            raise DeviceError(f"HID transfer failed; outcome is unconfirmed: {error}") from error
+        finally:
+            self.close()
+
+    def save_and_reboot(self, profile: int, address: int, roles: list[int],
+                        acknowledge_overclock: bool) -> dict[str, Any]:
+        """Validate the entire draft before submitting targets and one confirmed save/reboot."""
+        with self._lock:
+            identity = self._ensure_identity()
+            if not identity["can_save_reboot"] or not identity["can_set_clock"]:
+                raise DeviceError("update firmware to enable Save and Reboot")
+            if not 0 <= profile <= 4 or not identity["clock_profile_mask"] & 1 << profile:
+                raise ValueError("choose a clock profile the firmware advertises")
+            if not 8 <= address <= 119 or len(roles) != 3 or any(type(role) is not int or role not in (0, 1)
+                                                              for role in roles):
+                raise ValueError("expected I2C address 8-119 and three bank roles")
+            if profile > 1 and not acknowledge_overclock:
+                raise ValueError("acknowledge the overclock first")
+            try:
+                self._perform(p.OP_SET_CLOCK_PROFILE, arg0=profile,
+                              flags=p.FLAG_ACK_OVERCLOCK if profile > 1 else 0)
+                self._perform(p.OP_SET_I2C_ADDRESS, arg0=address)
+                for bank, role in enumerate(roles):
+                    self._perform(p.OP_SET_BANK, channel=bank, arg0=bank | role << 8)
+                self._run_reboot(p.OP_SAVE_REBOOT,
+                                 p.FLAG_CONFIRM_SAVE | (p.FLAG_ACK_OVERCLOCK if profile > 1 else 0))
+            except (OSError, p.ProtocolError, RuntimeError) as error:
+                self.close()
+                raise DeviceError(f"Save and Reboot did not complete; target settings may have changed: {error}") from error
+            return {"rebooting": True}

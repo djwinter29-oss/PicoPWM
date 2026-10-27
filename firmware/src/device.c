@@ -16,10 +16,9 @@ extern char __bss_end__, __scratch_x_start__, __scratch_x_end__, __scratch_y_sta
 extern char __StackBottom, __StackTop, __StackOneBottom, __StackOneTop;
 
 uint32_t device_ram_reserved_bytes(void) {
-    return (uint32_t)((uintptr_t)&__bss_end__ - SRAM_BASE +
-                      (uintptr_t)&__scratch_x_end__ - (uintptr_t)&__scratch_x_start__ +
-                      (uintptr_t)&__scratch_y_end__ - (uintptr_t)&__scratch_y_start__ +
-                      (uintptr_t)&__StackTop - (uintptr_t)&__StackBottom +
+    return (uint32_t)((uintptr_t)&__bss_end__ - SRAM_BASE + (uintptr_t)&__scratch_x_end__ -
+                      (uintptr_t)&__scratch_x_start__ + (uintptr_t)&__scratch_y_end__ -
+                      (uintptr_t)&__scratch_y_start__ + (uintptr_t)&__StackTop - (uintptr_t)&__StackBottom +
                       (uintptr_t)&__StackOneTop - (uintptr_t)&__StackOneBottom);
 }
 

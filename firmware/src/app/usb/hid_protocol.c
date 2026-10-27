@@ -101,7 +101,8 @@ static bool build_identity(uint8_t *payload) {
     payload[14] = 1u;
 #endif
     payload[15] = device_channel_count();
-    payload[16] = HID_CAP_SAVE | HID_CAP_CLOCK | HID_CAP_SAVE_REBOOT | HID_CAP_REBOOT | HID_CAP_MEMORY | HID_CAP_RUNTIME;
+    payload[16] =
+        HID_CAP_SAVE | HID_CAP_CLOCK | HID_CAP_SAVE_REBOOT | HID_CAP_REBOOT | HID_CAP_MEMORY | HID_CAP_RUNTIME;
     if (device_led_read(&led_on)) {
         payload[16] |= HID_CAP_LED;
     }

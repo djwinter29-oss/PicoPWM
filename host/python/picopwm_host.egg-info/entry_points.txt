@@ -1,0 +1,2 @@
+[console_scripts]
+picopwm-web = picopwm.app:main

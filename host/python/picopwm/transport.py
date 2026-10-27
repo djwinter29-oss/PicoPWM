@@ -18,10 +18,13 @@ else:
 def enumerate_devices() -> list[dict[str, Any]]:
     if hid is None:
         raise RuntimeError("missing dependency: install picopwm-host with its runtime dependencies") from _IMPORT_ERROR
-    # ponytail: hidapi backends without usage metadata are rejected rather than guessed; add a
-    # product-string fallback like PicoUart's only if a supported OS is found to omit usage data.
+    # Match PicoUart's constrained fallback for hidapi backends without usage metadata.
     return [info for info in hid.enumerate(VENDOR_ID, PRODUCT_ID)
-            if info.get("usage_page") == USAGE_PAGE and info.get("usage") == USAGE]
+            if (info.get("usage_page") == USAGE_PAGE and info.get("usage") == USAGE)
+            or (not info.get("usage_page") and not info.get("usage")
+                and (info.get("product_string") == "PicoPWM USB CDC HID"
+                     or (not info.get("product_string") and info.get("interface_number") == 2))
+                and info.get("interface_number") in (None, -1, 2))]
 
 
 def open_device(serial: str | None = None, path: str | None = None) -> Any:

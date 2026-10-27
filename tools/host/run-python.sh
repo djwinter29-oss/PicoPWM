@@ -12,7 +12,7 @@ case "${1:-}" in
 Usage: tools/host/run-python.sh
 
 Run the Python web host at http://127.0.0.1:5000/.
-Creates a virtualenv and installs the host when needed.
+Creates a virtualenv and installs/updates the editable host and runtime dependencies.
 Set PYTHON to select Python 3.10+, or VENV_DIR to select the environment.
 The host talks to the board over USB HID. Optional: PICOPWM_SERIAL,
 PICOPWM_DEVICE_PATH, PICOPWM_HOST, and PICOPWM_PORT.
@@ -36,12 +36,23 @@ if [ ! -x "$VENV_DIR/bin/python" ]; then
         echo "PicoPWM requires Python 3.10 or newer." >&2
         exit 1
     }
-    "$BASE_PYTHON" -m venv "$VENV_DIR"
+    if "$BASE_PYTHON" -c 'import ensurepip' >/dev/null 2>&1; then
+        "$BASE_PYTHON" -m venv "$VENV_DIR"
+    else
+        echo "ensurepip unavailable; creating the venv without pip and using the base interpreter's pip."
+        "$BASE_PYTHON" -m venv --without-pip "$VENV_DIR"
+    fi
 fi
 
 PYTHON_EXE="$VENV_DIR/bin/python"
-if ! "$PYTHON_EXE" -c 'import flask, hid' >/dev/null 2>&1; then
-    "$PYTHON_EXE" -m pip install "$REPO_ROOT/host/python"
+if "$PYTHON_EXE" -m pip --version >/dev/null 2>&1; then
+    "$PYTHON_EXE" -m pip install --editable "$REPO_ROOT/host/python"
+elif "$BASE_PYTHON" -m pip --version >/dev/null 2>&1; then
+    "$BASE_PYTHON" -m pip --python "$PYTHON_EXE" install --editable "$REPO_ROOT/host/python"
+else
+    echo "pip is unavailable. Install pip or your Python venv package, then rerun this script." >&2
+    exit 1
 fi
 
+echo "Starting PicoPWM Python dashboard at http://${PICOPWM_HOST:-127.0.0.1}:${PICOPWM_PORT:-5000}/"
 PYTHONPATH="$REPO_ROOT/host/python${PYTHONPATH:+:$PYTHONPATH}" exec "$PYTHON_EXE" -m picopwm.app

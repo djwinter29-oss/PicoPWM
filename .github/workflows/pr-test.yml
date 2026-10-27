@@ -74,32 +74,8 @@ jobs:
           if-no-files-found: error
 
   host-tools:
-    name: Python and .NET host tests
-    runs-on: ubuntu-24.04
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Test Python host
-        working-directory: host/python
-        run: |
-          python -m pip install -e '.[test]'
-          python -m pytest -q
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
-
-      - name: Test .NET host
-        working-directory: host/dotnet
-        run: dotnet test PicoPwm.sln --configuration Release
+    name: Host tests
+    uses: ./.github/workflows/host-validation.yml
 
   firmware:
     name: Firmware (${{ matrix.board }})

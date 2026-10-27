@@ -12,6 +12,7 @@ for script in \
     tools/test/check.sh \
     tools/test/coverage-firmware-c.sh \
     tools/test/test-firmware-c.sh \
+    tools/test/test-host.sh \
     tools/test/syntax-check-python.sh \
     tools/test/syntax-check-shell.sh; do
     sh -n "$script"

@@ -2,7 +2,7 @@
 
 This document describes the current PIO-based PWM design used by PicoPWM.
 
-The scope of this page is limited to the PIO-backed PWM implementations under `firmware/src/pwmdriver/pio/`:
+The scope of this page is limited to the PIO-backed PWM implementations under `firmware/src/driver/pwm/pio/`:
 
 - the PIO PWM generator backend
 - the standalone PIO PWM monitor backend prototype
@@ -50,12 +50,12 @@ accumulation rather than accepting possible overrun at high frequencies.
 
 | File | Responsibility |
 |------|----------------|
-| `firmware/src/pwmdriver/pio/generator.c` | PIO PWM generator backend implementation |
-| `firmware/src/pwmdriver/pio/generator.h` | PIO PWM generator backend interface |
-| `firmware/src/pwmdriver/pio/generator.pio` | PIO assembly program for PWM generation |
-| `firmware/src/pwmdriver/pio/monitor.c` | Standalone PIO PWM monitor prototype |
-| `firmware/src/pwmdriver/pio/monitor.h` | Standalone PIO PWM monitor interface |
-| `firmware/src/pwmdriver/pio/monitor.pio` | PIO assembly program for PWM monitoring |
+| `firmware/src/driver/pwm/pio/generator.c` | PIO PWM generator backend implementation |
+| `firmware/src/driver/pwm/pio/generator.h` | PIO PWM generator backend interface |
+| `firmware/src/driver/pwm/pio/generator.pio` | PIO assembly program for PWM generation |
+| `firmware/src/driver/pwm/pio/monitor.c` | Standalone PIO PWM monitor prototype |
+| `firmware/src/driver/pwm/pio/monitor.h` | Standalone PIO PWM monitor interface |
+| `firmware/src/driver/pwm/pio/monitor.pio` | PIO assembly program for PWM monitoring |
 
 ## Channel and Pin Model
 
@@ -167,7 +167,7 @@ This sequence shows the current control flow when the PIO generator backend appl
 
 ```mermaid
 sequenceDiagram
-	participant Caller as Caller / pwmdriver
+	participant Caller as Caller / pwm
 	participant Gen as generator.c
 	participant PIO as PIO SM
 

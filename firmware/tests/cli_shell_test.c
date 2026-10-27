@@ -1,4 +1,4 @@
-#include "cli/shell.h"
+#include "app/cli/shell.h"
 
 #include <assert.h>
 #include <stdbool.h>

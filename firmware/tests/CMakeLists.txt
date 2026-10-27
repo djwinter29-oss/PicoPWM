@@ -20,7 +20,7 @@ endfunction()
 
 add_executable(cli_shell_test
     cli_shell_test.c
-    ${SOURCE_ROOT}/cli/shell.c
+    ${SOURCE_ROOT}/app/cli/shell.c
     ${EMBEDDED_CLI_ROOT}/src/embedded_cli.c
 )
 target_include_directories(cli_shell_test PRIVATE
@@ -32,7 +32,7 @@ add_test(NAME cli_shell COMMAND cli_shell_test)
 
 add_executable(cli_channel_commands_test
     cli_channel_commands_test.c
-    ${SOURCE_ROOT}/cli/channel_commands.c
+    ${SOURCE_ROOT}/app/cli/channel_commands.c
 )
 target_include_directories(cli_channel_commands_test PRIVATE
     ${TEST_STUB_ROOT}
@@ -45,7 +45,7 @@ add_test(NAME cli_channel_commands COMMAND cli_channel_commands_test)
 add_executable(pwm_driver_config_test
     pwm_driver_config_test.c
     stubs/hardware/flash.c
-    ${SOURCE_ROOT}/pwmdriver/pwm_driver_config.c
+    ${SOURCE_ROOT}/driver/pwm/pwm_driver_config.c
 )
 target_include_directories(pwm_driver_config_test PRIVATE
     ${TEST_STUB_ROOT}
@@ -102,7 +102,7 @@ add_test(NAME i2c_irq_gate COMMAND i2c_irq_gate_test)
 
 add_executable(i2c_control_map_test
     i2c_control_map_test.c
-    ${SOURCE_ROOT}/i2c/i2c_control_map.c
+    ${SOURCE_ROOT}/app/i2c/i2c_control_map.c
 )
 target_include_directories(i2c_control_map_test PRIVATE
     ${TEST_STUB_ROOT}
@@ -110,6 +110,17 @@ target_include_directories(i2c_control_map_test PRIVATE
 )
 pico_pwm_test_warnings(i2c_control_map_test)
 add_test(NAME i2c_control_map COMMAND i2c_control_map_test)
+
+add_executable(hid_protocol_test
+    hid_protocol_test.c
+    ${SOURCE_ROOT}/app/usb/hid_protocol.c
+)
+target_include_directories(hid_protocol_test PRIVATE
+    ${TEST_STUB_ROOT}
+    ${SOURCE_ROOT}
+)
+pico_pwm_test_warnings(hid_protocol_test)
+add_test(NAME hid_protocol COMMAND hid_protocol_test)
 
 add_executable(stop_contract_test
     stop_contract_test.c

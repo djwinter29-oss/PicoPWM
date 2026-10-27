@@ -1,6 +1,6 @@
 # Hardware PWM Generator Design
 
-This document describes the current hardware PWM design under `firmware/src/pwmdriver/generator/`.
+This document describes the current hardware PWM design under `firmware/src/driver/pwm/generator/`.
 
 This page covers the hardware PWM generator backend. The matching monitor
 design is documented in [Hardware PWM Monitor](../monitor/hardware_monitor.md).
@@ -11,8 +11,8 @@ This page is implementation-oriented and reflects the current source tree.
 
 | File | Responsibility |
 | ------ | ---------------- |
-| `firmware/src/pwmdriver/generator/hardware_generator.c` | Hardware PWM generator backend implementation |
-| `firmware/src/pwmdriver/generator/hardware_generator.h` | Hardware PWM generator backend interface |
+| `firmware/src/driver/pwm/generator/hardware_generator.c` | Hardware PWM generator backend implementation |
+| `firmware/src/driver/pwm/generator/hardware_generator.h` | Hardware PWM generator backend interface |
 
 ## Channel Model
 

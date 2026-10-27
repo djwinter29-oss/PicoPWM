@@ -3,7 +3,7 @@
 This ASP.NET Core application serves the PicoPWM dashboard and controls the board over
 the USB HID vendor interface (VID `0xCAFE`, PID `0x4012`) described in
 [hid-report-reference.md](../../docs/design/usb/hid-report-reference.md). The firmware
-does not implement HID yet, so the host finds no device until it does.
+implements it in `firmware/src/usb`; this build ships with the clock-profile capability cleared.
 
 ## Requirements
 

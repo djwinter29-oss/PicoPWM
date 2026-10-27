@@ -22,7 +22,7 @@ flowchart LR
     subgraph Core0[Core 0: control and responses]
         CDC[USB CDC shell]
         I2C[I2C slave]
-        Control[device_api]
+        Control[device_service]
         Response[Format response]
     end
 
@@ -62,7 +62,7 @@ Use the architecture-related pages as follows:
 - [Firmware Configuration](../guides/configuration.md) — startup bank configuration, channel tables, and capability rules
 - [Pinout](../guides/pinout.md) — physical PWM, I2C, and shared-pin mapping
 - [PWM Driver Configuration](pwm_driver_config.md) — fixed channel allocation and capabilities
-- [PWM Driver Design](pwm_driver_design.md) — detailed `pwmdriver` and backend internals
+- [PWM Driver Design](pwm_driver_design.md) — detailed `pwm` and backend internals
 - [CDC/HID Overview](usb/cdc-hid-overview.md) — USB interface roles and HID rules
 - [HID Report Reference](usb/hid-report-reference.md) — HID report layouts and action semantics
 - [Hardware PWM Generator](generator/hardware_generator.md) — hardware output timing and slice constraints
@@ -136,20 +136,20 @@ The hardware PWM bank intentionally uses PWM slice channel B pins so the externa
 ## Runtime Layers
 
 The current firmware is split into four practical layers. The important rule is
-that transport code reaches PWM hardware only through `device_api` and
+that transport code reaches PWM hardware only through `device_service` and
 `pwm_driver`.
 
 ### 1. Transport Layer
 
 Core 0 owns the host-facing transports:
 
-- `usb/usb_cdc.*` for TinyUSB CDC byte transport
+- `app/usb/usb_cdc.*` for TinyUSB CDC byte transport
 - USB HID is an additional Core 0 management transport; see
   [CDC/HID Overview](usb/cdc-hid-overview.md)
-- `cli/shell.*` for the embedded-cli-backed line editor and command dispatch
-- `cli/pwm_commands.*` for human-readable CLI commands
-- `i2c/i2c_slave.*` for the I2C slave ISR and deferred write scheduling
-- `i2c/i2c_control_map.*` for the I2C register map and payload translation
+- `app/cli/shell.*` for the embedded-cli-backed line editor and command dispatch
+- `app/cli/pwm_commands.*` for human-readable CLI commands
+- `driver/i2c/i2c_slave.*` for the I2C slave ISR and deferred write scheduling
+- `app/i2c/i2c_control_map.*` for the I2C register map and payload translation
 
 USB CDC uses bounded 128-byte receive and 256-byte transmit queues. When a
 queue is full, additional received bytes or transmit responses are dropped and
@@ -159,18 +159,18 @@ transfer must provide host-side pacing and retry at the command level.
 
 ### 2. Shared Control Layer
 
-`device_api/device_api.*` is the transport-neutral Core 0 API shared by USB CDC and I2C.
+`app/device_service/device_service.*` is the transport-neutral Core 0 API shared by USB CDC and I2C.
 
 Responsibilities:
 
 - expose device info and firmware version
 - return realized channel state
 - translate channel updates into the shared PWM command path
-- avoid introducing a second shadow cache above `pwmdriver`
+- avoid introducing a second shadow cache above `pwm`
 
 ### 3. Multicore Boundary Layer
 
-`pwmdriver/pwm_driver.*` is the architectural boundary between Core 0 command ingress and Core 1 backend ownership.
+`driver/pwm/pwm_driver.*` is the architectural boundary between Core 0 command ingress and Core 1 backend ownership.
 
 Responsibilities:
 
@@ -187,9 +187,9 @@ backend.
 
 Core 1 owns the backend implementations:
 
-- `pwmdriver/generator/hardware_generator.*` and `pwmdriver/monitor/hardware_monitor.*`
-- `pwmdriver/generator/pio_generator.*` and `pwmdriver/monitor/pio_monitor.*`
-- `pwmdriver/generator/software_generator.*` and `pwmdriver/monitor/software_monitor.*`
+- `driver/pwm/generator/hardware_generator.*` and `driver/pwm/monitor/hardware_monitor.*`
+- `driver/pwm/generator/pio_generator.*` and `driver/pwm/monitor/pio_monitor.*`
+- `driver/pwm/generator/software_generator.*` and `driver/pwm/monitor/software_monitor.*`
 
 These modules own hardware configuration, IRQ or timer paths, and backend-local state.
 
@@ -227,7 +227,7 @@ from the published snapshot; mutations cross the mailbox boundary:
 sequenceDiagram
     participant Host
     participant Transport as USB CDC or I2C
-    participant Control as device_api
+    participant Control as device_service
     participant Mailbox as Command mailbox
     participant Router as Core 1 profile router
     participant Backend as Generator or monitor
@@ -255,8 +255,8 @@ Transport-specific details:
 
 - I2C reads can be served directly from the published snapshot or last command status.
 - I2C writes are captured in the ISR, queued, and executed from normal Core 0 polling through the same shared control path used by USB CDC. I2C read responses are also built on Core 0. The ISR holds SCL while a requested response is still being built, and releases it when the read had no request pending.
-- USB commands are parsed by `shell` and the CLI command handlers before they reach `device_api`.
-- I2C commands are decoded by `i2c_slave` and `i2c_control_map` before they reach `device_api`.
+- USB commands are parsed by `shell` and the CLI command handlers before they reach `device_service`.
+- I2C commands are decoded by `i2c_slave` and `i2c_control_map` before they reach `device_service`.
 
 This keeps the ISR transport-focused and avoids running backend-affecting logic in interrupt context.
 
@@ -285,24 +285,24 @@ sees coherent realized snapshots.
 
 ## Cross-Core Mutation Boundary
 
-`device_api` is the only public Core 0 mutation facade.
+`device_service` is the only public Core 0 mutation facade.
 
-- Core 0 transport code enters through `device_api`.
-- `device_api` forwards writes into the internal `pwmdriver` mailbox API.
+- Core 0 transport code enters through `device_service`.
+- `device_service` forwards writes into the internal `pwm` mailbox API.
 - Core 1 applies the write to the selected backend.
 - Core 1 publishes the realized state after successful apply.
 - Core 0 waits for the result and reports `ok`, `busy`, `invalid`, `timeout`, `unavailable`, or `apply failed` to the caller.
 
-The internal `pwmdriver` mailbox API is not part of the transport-facing interface.
+The internal `pwm` mailbox API is not part of the transport-facing interface.
 
 ## Shared State Model
 
-The single source of truth for channel state is the snapshot published by `pwmdriver`.
+The single source of truth for channel state is the snapshot published by `pwm`.
 
 That means:
 
 - reads report realized backend state, not just the last requested values
-- `device_api` does not keep a second cache
+- `device_service` does not keep a second cache
 - both USB CDC and I2C observe the same logical channel view
 
 `pulse_count` is monotonic from power-on. `stop` disables generator outputs by driving them low (`freq = 0 Hz`, `duty = 0%`) and does not reset the counter. Hardware and PIO generators publish the elapsed-time period count described above; that is the count those backends can provide without a per-period interrupt. Software generators count completed periods. PIO monitor channels report `0` because they capture one period per sample.

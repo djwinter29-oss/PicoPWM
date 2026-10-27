@@ -1,52 +1,23 @@
 /**
  * @file i2c_config.h
- * @brief I2C slave configuration.
+ * @brief I2C slave board configuration table; values live in i2c_config.c.
  */
 
 #ifndef I2C_CONFIG_H
 #define I2C_CONFIG_H
 
-/**
- * I2C peripheral instance.
- * Standard Pico board: i2c1 (GPIO 26 SDA, GPIO 27 SCL).
- */
-#define I2C_SLAVE_INST i2c1
+#include "hardware/i2c.h"
 
-/** @brief IRQ line paired with the selected I2C peripheral instance. */
-#define I2C_SLAVE_IRQ I2C1_IRQ
+/** @brief Peripheral, GPIO assignment, and timing used by the I2C slave. */
+typedef struct {
+    i2c_inst_t *instance; /**< I2C peripheral instance. */
+    uint irq;             /**< IRQ line paired with `instance`. */
+    uint sda_pin;         /**< SDA GPIO; must support the I2C function of `instance`. */
+    uint scl_pin;         /**< SCL GPIO; must support the I2C function of `instance`. */
+    uint clock_hz;        /**< Internal timing setup only; match the expected master (100000 or 400000). */
+} i2c_board_config_t;
 
-/**
- * SDA pin (GPIO 26).
- */
-#define I2C_SDA_PIN 26
-
-/**
- * SCL pin (GPIO 27).
- */
-#define I2C_SCL_PIN 27
-
-/**
- * I2C clock speed in Hz (for internal timing configuration only).
- *
- * The slave does not generate or control the clock—the master does. However,
- * the RP2040's I2C peripheral requires internal timing setup even in slave mode.
- * This value configures:
- * - Clock edge detection sampling rates
- * - Internal filter timing
- * - Peripheral timing registers
- *
- * Set this to match the **expected** master clock speed:
- * - Standard mode: 100000 Hz (100 kHz)
- * - Fast mode: 400000 Hz (400 kHz)
- *
- * **Important**: If the actual master clock differs from this setting, slave timing
- * logic may fail. Specifically:
- * - If slave is configured for 100 kHz but master uses 400 kHz: FAILS (too slow)
- * - If slave is configured for 400 kHz but master uses 100 kHz: WORKS (timing is relaxed)
- *
- * Default is 400000 Hz, which is backward-compatible with 100 kHz masters.
- * Override at build time with CMake: -DPICO_PWM_I2C_CLOCK_SPEED=100000
- */
-#define I2C_CLOCK_SPEED PICO_PWM_I2C_CLOCK_SPEED
+/** @brief Board I2C slave configuration; the clock comes from `PICO_PWM_I2C_CLOCK_SPEED`. */
+extern const i2c_board_config_t i2c_board_config;
 
 #endif

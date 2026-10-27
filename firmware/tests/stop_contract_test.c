@@ -1,4 +1,4 @@
-#include "pwmdriver/pwm_driver_internal.h"
+#include "driver/pwm/pwm_driver_internal.h"
 
 #include <assert.h>
 #include <stdint.h>

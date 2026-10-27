@@ -44,11 +44,11 @@ because VID/PID alone are not an allocated identity.
 | --------- | --------- | -------- |
 | Interactive shell | USB CDC | Text commands; unchanged by HID. |
 | Controller register access | I2C | Binary register map; unchanged by HID. |
-| Identity, configuration, channel status | HID reports 1, 2, 10-12 | Read-only; realized state from `device_api`, no HID shadow cache. |
-| Channel set and stop | HID report 20 | Same `device_api` path as CDC and I2C. |
+| Identity, configuration, channel status | HID reports 1, 2, 10-12 | Read-only; realized state from `device_service`, no HID shadow cache. |
+| Channel set and stop | HID report 20 | Same `device_service` path as CDC and I2C. |
 | Bank, I2C address, clock profile, save | HID report 20 | Target configuration only; takes effect after save and restart. |
 
-HID does not call `pwmdriver`, backends, or `board/system.*` directly.
+HID does not call `pwm`, backends, or `platform/system.*` directly.
 
 ## Report IDs
 
@@ -78,15 +78,15 @@ Feature report, host reads, 18-byte payload.
 | 12 | 1 | `firmware_minor` | Firmware version minor. |
 | 13 | 1 | `firmware_patch` | Firmware version patch. |
 | 14 | 1 | `mcu` | `1` RP2040, `2` RP2350. |
-| 15 | 1 | `channel_count` | From `device_api_channel_count()`; `24` (three banks of eight). |
+| 15 | 1 | `channel_count` | From `device_service_channel_count()`; `24` (three banks of eight). |
 | 16 | 1 | `capabilities` | Bit 0 config save, bit 1 clock profile; bits 2-7 reserved and zero. A host treats a cleared bit as the feature being absent: without bit 0 it sends no `SAVE_CONFIG`; without bit 1 it sends no `SET_CLOCK_PROFILE` and ignores `clock_profile` in report 2 (`clock_profile_mask` is then zero). |
-| 17 | 1 | `clock_profile_mask` | Bit *n* set when clock profile *n* (0-4) is accepted by this firmware build on this MCU; bits 5-7 zero. Profile `1` is always set. The running I2C address is read from report 2. |
+| 17 | 1 | `clock_profile_mask` | The current firmware ships bit 1 and this mask cleared (no stored clock profile yet). Bit *n* set when clock profile *n* (0-4) is accepted by this firmware build on this MCU; bits 5-7 zero. Profile `1` is always set. The running I2C address is read from report 2. |
 
 ## Report ID 2: Board Configuration
 
 Feature report, host reads, 21-byte payload.
 
-Backed by `device_api_config_get_running()` and `device_api_config_get_target()`.
+Backed by `device_service_config_get_running()` and `device_service_config_get_target()`.
 
 | Offset | Size | Field | Meaning |
 | -----: | ---: | ----- | ------- |
@@ -141,9 +141,9 @@ Rules:
 - The stored profile lives in the configuration sector under its own layout
   version. Sectors without the field load as profile `1`, and the profile is
   read before `system_init_clock()`.
-- The profile is read and written through a `device_api` clock-profile accessor that the firmware must add alongside
+- The profile is read and written through a `device_service` clock-profile accessor that the firmware must add alongside
   the other configuration functions; `system_clock_hz()` already provides the running clock. HID does not call
-  `board/system.*` directly, and CDC and I2C can expose the same accessor later.
+  `platform/system.*` directly, and CDC and I2C can expose the same accessor later.
 
 ## Reports 10-12: Bank Status
 
@@ -160,7 +160,7 @@ no timestamp or validity flag; a host that needs freshness compares successive r
 | 0 | 1 | `version` | Layout version, `1`. |
 | 1 | 40 | `channels[8]` | 5 bytes each: `freq_hz` u32, `duty` u8. Entry *n* is logical channel `8 * bank + n`. |
 
-Each entry is the realized `freq_hz` and `duty` from `device_api_get_channel()`; HID keeps no shadow cache.
+Each entry is the realized `freq_hz` and `duty` from `device_service_get_channel()`; HID keeps no shadow cache.
 Firmware reads the eight channels back to back on Core 0 in one polling pass, so entries within a report are
 individually coherent but not captured at one instant, and the three banks are separate captures. A failed read of
 any channel fails the whole report instead of returning partial or zero-filled data. The read must stay bounded and
@@ -189,20 +189,20 @@ length because a report ID has a single descriptor length.
 
 | Op | Name | Maps to |
 | -: | ---- | ------- |
-| 1 | `SET_CHANNEL` | `device_api_set_channel(channel, freq_hz, duty)`. |
-| 2 | `STOP` | `device_api_restore_defaults()`; outputs stop and defaults are restored. |
-| 3 | `SET_BANK` | `device_api_config_set_bank()`; `channel` is the bank (`0`-`2`), `arg0` byte 0 backend, byte 1 role. |
-| 4 | `SET_I2C_ADDRESS` | `device_api_config_set_i2c_address()`; `arg0` low byte is the 7-bit address. |
-| 5 | `SAVE_CONFIG` | `device_api_config_save_target()`; requires flag bit 0, plus bit 1 when the target clock profile is above `1`. Persists only; it does not restart the device. See Save Cost. |
+| 1 | `SET_CHANNEL` | `device_service_set_channel(channel, freq_hz, duty)`. |
+| 2 | `STOP` | `device_service_restore_defaults()`; outputs stop and defaults are restored. |
+| 3 | `SET_BANK` | `device_service_config_set_bank()`; `channel` is the bank (`0`-`2`), `arg0` byte 0 backend, byte 1 role. |
+| 4 | `SET_I2C_ADDRESS` | `device_service_config_set_i2c_address()`; `arg0` low byte is the 7-bit address. |
+| 5 | `SAVE_CONFIG` | `device_service_config_save_target()`; requires flag bit 0, plus bit 1 when the target clock profile is above `1`. Persists only; it does not restart the device. See Save Cost. |
 | 6 | `SET_CLOCK_PROFILE` | Sets the target clock profile from `arg0` low byte; profiles above `1` require flag bit 1. |
 
 Operation validity, checked before any side effect; every failure returns `INVALID` and changes nothing:
 
 - `SET_CHANNEL`: `channel` below `channel_count`, the channel is a generator in the running configuration, `arg1`
-  is `[0, 100]`, and `freq_hz` is accepted by `device_api_set_channel()`.
+  is `[0, 100]`, and `freq_hz` is accepted by `device_service_set_channel()`.
 - `STOP`: `channel`, `arg0`, and `arg1` are zero.
 - `SET_BANK`: `channel` is `0`-`2`, and the backend/role pair is allowed for that bank.
-- `SET_I2C_ADDRESS`: the address is accepted by `device_api_config_set_i2c_address()`.
+- `SET_I2C_ADDRESS`: the address is accepted by `device_service_config_set_i2c_address()`.
 - `SAVE_CONFIG`: flag bit 0 set (and bit 1 for an overclock target), and no other fields set.
 - `SET_CLOCK_PROFILE`: the profile is set in `clock_profile_mask`.
 - Unused fields and reserved bits are zero; a nonzero value is `INVALID`.

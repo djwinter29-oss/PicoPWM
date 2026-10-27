@@ -1,8 +1,8 @@
-#include "i2c/i2c_control_map.h"
+#include "app/i2c/i2c_control_map.h"
 
-#include "board/led.h"
-#include "board/system.h"
-#include "device_api/device_api.h"
+#include "platform/led.h"
+#include "platform/system.h"
+#include "app/device_service/device_service.h"
 
 #include <assert.h>
 #include <string.h>
@@ -14,15 +14,15 @@ static bool address_ok = true;
 static bool rebooted;
 static int led_calls;
 
-const char *device_api_device_name(void) {
+const char *device_service_device_name(void) {
     return "PicoPWM";
 }
 
-const char *device_api_firmware_version(void) {
+const char *device_service_firmware_version(void) {
     return "test";
 }
 
-bool device_api_config_get_running(pwm_driver_config_t *config) {
+bool device_service_config_get_running(pwm_driver_config_t *config) {
     if ((config == NULL) || !config_read_ok)
         return false;
     *config = (pwm_driver_config_t){
@@ -36,11 +36,11 @@ bool device_api_config_get_running(pwm_driver_config_t *config) {
     return true;
 }
 
-bool device_api_config_get_target(pwm_driver_config_t *config) {
-    return device_api_config_get_running(config);
+bool device_service_config_get_target(pwm_driver_config_t *config) {
+    return device_service_config_get_running(config);
 }
 
-bool device_api_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_backend_t backend,
+bool device_service_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config_bank_backend_t backend,
                                 pwm_driver_config_bank_role_t role) {
     (void)bank;
     (void)backend;
@@ -48,20 +48,20 @@ bool device_api_config_set_bank(pwm_driver_config_bank_t bank, pwm_driver_config
     return set_bank_ok;
 }
 
-bool device_api_config_save_target(void) {
+bool device_service_config_save_target(void) {
     return save_ok;
 }
 
-bool device_api_config_set_i2c_address(uint8_t address) {
+bool device_service_config_set_i2c_address(uint8_t address) {
     (void)address;
     return address_ok;
 }
 
-uint8_t device_api_channel_count(void) {
+uint8_t device_service_channel_count(void) {
     return PWM_DRIVER_CHANNEL_COUNT;
 }
 
-bool device_api_get_channel(uint channel, pwm_driver_state_t *state) {
+bool device_service_get_channel(uint channel, pwm_driver_state_t *state) {
     if ((channel >= PWM_DRIVER_CHANNEL_COUNT) || (state == NULL) || (channel >= 8u)) {
         return false;
     }
@@ -70,14 +70,14 @@ bool device_api_get_channel(uint channel, pwm_driver_state_t *state) {
     return true;
 }
 
-pwm_driver_result_t device_api_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
+pwm_driver_result_t device_service_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
     (void)channel;
     (void)freq_hz;
     (void)duty;
     return PWM_DRIVER_RESULT_OK;
 }
 
-pwm_driver_result_t device_api_restore_defaults(void) {
+pwm_driver_result_t device_service_restore_defaults(void) {
     return PWM_DRIVER_RESULT_OK;
 }
 

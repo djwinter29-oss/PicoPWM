@@ -1,6 +1,6 @@
 # PWM Driver Detailed Design
 
-This document describes the detailed design of the `pwmdriver` subsystem in the current PicoPWM firmware.
+This document describes the detailed design of the `pwm` subsystem in the current PicoPWM firmware.
 
 The focus of this page is:
 
@@ -11,11 +11,11 @@ The focus of this page is:
 - API call sequences
 - detailed behavior of each PWM backend
 
-This document is implementation-oriented and follows the current firmware under `firmware/src/pwmdriver/`.
+This document is implementation-oriented and follows the current firmware under `firmware/src/driver/pwm/`.
 
 ## Scope
 
-The `pwmdriver` subsystem provides one logical channel service. The default
+The `pwm` subsystem provides one logical channel service. The default
 profile currently exposes 24 channels, but backend ownership and direction are
 intended to come from a profile channel table rather than fixed ID ranges.
 
@@ -49,40 +49,40 @@ The current implementation is split as follows:
 
 | File | Responsibility |
 | ------ | ---------------- |
-| `firmware/src/device_api/device_api.h` | Shared Core 0 device API surface used by CDC and I2C |
-| `firmware/src/device_api/device_api.c` | Shared device info, channel reads, and channel write helpers above the Core 1 mailbox boundary |
-| `firmware/src/config/board_config.h` | Board identity and build-level firmware configuration consumed by `device_api` |
-| `firmware/src/i2c/i2c_control_map.h` | I2C register map definitions and protocol helpers |
-| `firmware/src/i2c/i2c_control_map.c` | I2C register encode/decode and deferred write translation into `device_api` |
-| `firmware/src/pwmdriver/pwm_driver.h` | Public wrapper API and backend channel capacity constants |
-| `firmware/src/pwmdriver/pwm_driver.c` | Core 1 launch, mailbox loop, channel routing, shared snapshot |
-| `firmware/src/pwmdriver/pwm_driver_config.h` | Startup configuration, validation, persistence, and channel types |
-| `firmware/src/pwmdriver/pwm_driver_config.c` | Fixed channel mapping and versioned CRC-protected flash storage |
-| `firmware/src/pwmdriver/pwm_driver_table.h` | Backend capability and timing descriptors used to populate channel entries |
-| `firmware/src/pwmdriver/generator/hardware_generator.c` | Hardware PWM generator backend |
-| `firmware/src/pwmdriver/monitor/hardware_monitor.c` | Hardware PWM monitor backend |
-| `firmware/src/pwmdriver/generator/pio_generator.c` | PIO generator backend |
-| `firmware/src/pwmdriver/generator/pio_generator.pio` | PIO assembly program used by the PIO generator backend |
-| `firmware/src/pwmdriver/monitor/pio_monitor.c` | PIO monitor backend |
-| `firmware/src/pwmdriver/monitor/pio_monitor.pio` | PIO assembly program used by the PIO monitor backend |
-| `firmware/src/pwmdriver/generator/software_generator.c` | Software PWM generator backend |
-| `firmware/src/pwmdriver/monitor/software_monitor.c` | Software PWM monitor backend |
-| `firmware/src/pwmdriver/monitor/monitor_gpio_common.h` | Shared GPIO edge-timestamp monitor helpers used by the hardware and software monitor backends |
+| `firmware/src/app/device_service/device_service.h` | Shared Core 0 device API surface used by CDC and I2C |
+| `firmware/src/app/device_service/device_service.c` | Shared device info, channel reads, and channel write helpers above the Core 1 mailbox boundary |
+| `firmware/src/config/board_config.h` | Board identity and build-level firmware configuration consumed by `device_service` |
+| `firmware/src/app/i2c/i2c_control_map.h` | I2C register map definitions and protocol helpers |
+| `firmware/src/app/i2c/i2c_control_map.c` | I2C register encode/decode and deferred write translation into `device_service` |
+| `firmware/src/driver/pwm/pwm_driver.h` | Public wrapper API and backend channel capacity constants |
+| `firmware/src/driver/pwm/pwm_driver.c` | Core 1 launch, mailbox loop, channel routing, shared snapshot |
+| `firmware/src/driver/pwm/pwm_driver_config.h` | Startup configuration, validation, persistence, and channel types |
+| `firmware/src/driver/pwm/pwm_driver_config.c` | Fixed channel mapping and versioned CRC-protected flash storage |
+| `firmware/src/driver/pwm/pwm_driver_table.h` | Backend capability and timing descriptors used to populate channel entries |
+| `firmware/src/driver/pwm/generator/hardware_generator.c` | Hardware PWM generator backend |
+| `firmware/src/driver/pwm/monitor/hardware_monitor.c` | Hardware PWM monitor backend |
+| `firmware/src/driver/pwm/generator/pio_generator.c` | PIO generator backend |
+| `firmware/src/driver/pwm/generator/pio_generator.pio` | PIO assembly program used by the PIO generator backend |
+| `firmware/src/driver/pwm/monitor/pio_monitor.c` | PIO monitor backend |
+| `firmware/src/driver/pwm/monitor/pio_monitor.pio` | PIO assembly program used by the PIO monitor backend |
+| `firmware/src/driver/pwm/generator/software_generator.c` | Software PWM generator backend |
+| `firmware/src/driver/pwm/monitor/software_monitor.c` | Software PWM monitor backend |
+| `firmware/src/driver/pwm/monitor/monitor_gpio_common.h` | Shared GPIO edge-timestamp monitor helpers used by the hardware and software monitor backends |
 
 ## External Interface
 
 The transport-facing control/status layer is:
 
 ```c
-const char *device_api_device_name(void);
-const char *device_api_firmware_version(void);
-uint8_t device_api_channel_count(void);
-bool device_api_get_channel(uint channel, pwm_driver_state_t *state);
-pwm_driver_result_t device_api_set_channel(uint channel, uint32_t freq_hz, uint8_t duty);
-pwm_driver_result_t device_api_restore_defaults(void);
+const char *device_service_device_name(void);
+const char *device_service_firmware_version(void);
+uint8_t device_service_channel_count(void);
+bool device_service_get_channel(uint channel, pwm_driver_state_t *state);
+pwm_driver_result_t device_service_set_channel(uint channel, uint32_t freq_hz, uint8_t duty);
+pwm_driver_result_t device_service_restore_defaults(void);
 ```
 
-Below that, `pwmdriver` owns the internal cross-core mailbox boundary used by `device_api`:
+Below that, `pwm` owns the internal cross-core mailbox boundary used by `device_service`:
 
 ```c
 bool pwm_driver_init(const pwm_driver_config_t *config);
@@ -111,7 +111,7 @@ typedef struct {
 
 Architecturally, `pwm_driver_set()` is an internal command-ingress API.
 
-- Top-level command paths such as the CDC CLI and I2C register map should enter through `device_api`.
+- Top-level command paths such as the CDC CLI and I2C register map should enter through `device_service`.
 - The I2C write path should continue to defer out of the ISR before it reaches this mailbox API.
 - It is not intended as a general-purpose helper for arbitrary internal call sites.
 - Core 1 callers must not use this API; it returns `PWM_DRIVER_RESULT_UNAVAILABLE` outside the Core 0 command path.
@@ -157,18 +157,18 @@ For I2C specifically, the transport layer includes an ISR-facing slave module an
 
 ### 2. Shared Control Layer
 
-Owned by `firmware/src/device_api/device_api.c`.
+Owned by `firmware/src/app/device_service/device_service.c`.
 
 Responsibilities:
 
 - expose one shared Core 0 control/status API to both transports
 - centralize device identity and version reporting
-- centralize logical channel reads and writes above `pwmdriver`
+- centralize logical channel reads and writes above `pwm`
 - avoid maintaining a second shadow copy of realized channel state
 
-This layer reads realized state from `pwm_driver_get()` and forwards writes through the internal `pwmdriver` mailbox API.
+This layer reads realized state from `pwm_driver_get()` and forwards writes through the internal `pwm` mailbox API.
 
-It does not own I2C register numbers or binary payload layout. Those protocol details live in `firmware/src/i2c/i2c_control_map.c`.
+It does not own I2C register numbers or binary payload layout. Those protocol details live in `firmware/src/app/i2c/i2c_control_map.c`.
 
 ### 3. Wrapper Layer
 
@@ -238,7 +238,7 @@ Core 0 must not call backend driver functions directly.
 
 ## High-Level State Machine
 
-The `pwmdriver` wrapper has a small lifecycle state machine.
+The `pwm` wrapper has a small lifecycle state machine.
 
 ```mermaid
 stateDiagram-v2
@@ -321,17 +321,17 @@ sequenceDiagram
     C1->>WR: publish ready state
 ```
 
-### `device_api_set_channel()` to `pwm_driver_set()`
+### `device_service_set_channel()` to `pwm_driver_set()`
 
 ```mermaid
 sequenceDiagram
     participant CLI as CDC CLI / command layer
-    participant CTL as device_api
+    participant CTL as device_service
     participant WR as pwm_driver.c
     participant C1 as Core 1 mailbox loop
     participant BE as selected backend
 
-    CLI->>CTL: device_api_set_channel(ch, freq, duty)
+    CLI->>CTL: device_service_set_channel(ch, freq, duty)
     CTL->>WR: pwm_driver_set(ch, freq, duty)
     WR->>WR: admit one in-flight mailbox command
     WR->>C1: __sev()
@@ -343,19 +343,19 @@ sequenceDiagram
     CTL-->>CLI: result
 ```
 
-### `device_api_restore_defaults()` to `pwm_driver_restore_defaults()`
+### `device_service_restore_defaults()` to `pwm_driver_restore_defaults()`
 
 ```mermaid
 sequenceDiagram
     participant CLI as CDC CLI / command layer
-    participant CTL as device_api
+    participant CTL as device_service
     participant WR as pwm_driver.c
     participant C1 as Core 1 mailbox loop
     participant HW as HW backend
     participant PIO as PIO backend
     participant SW as SW backend
 
-    CLI->>CTL: device_api_restore_defaults()
+    CLI->>CTL: device_service_restore_defaults()
     CTL->>WR: pwm_driver_restore_defaults()
     WR->>C1: admitted mailbox command
     C1->>HW: hw_gen_restore_defaults()
@@ -371,11 +371,11 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant UI as CLI/I2C status path
-    participant CTL as device_api
+    participant CTL as device_service
     participant WR as pwm_driver.c
     participant SS as shared snapshot
 
-    UI->>CTL: device_api_get_channel(ch, &state)
+    UI->>CTL: device_service_get_channel(ch, &state)
     CTL->>WR: pwm_driver_get(ch, &state)
     WR->>SS: read versioned snapshot
     SS-->>WR: coherent state struct
@@ -383,7 +383,7 @@ sequenceDiagram
     CTL-->>UI: coherent state struct
 ```
 
-The coherent higher-layer read boundary is `device_api_get_channel()`, which forwards one channel snapshot from `pwm_driver_get()`.
+The coherent higher-layer read boundary is `device_service_get_channel()`, which forwards one channel snapshot from `pwm_driver_get()`.
 
 ## Mailbox Command Structure
 
@@ -481,8 +481,8 @@ This provides a lock-free coherent snapshot read on Core 0.
 
 The hardware PWM implementation is now split into:
 
-- `firmware/src/pwmdriver/generator/hardware_generator.c` for the integrated generator backend
-- `firmware/src/pwmdriver/monitor/hardware_monitor.c` for the hardware monitor backend
+- `firmware/src/driver/pwm/generator/hardware_generator.c` for the integrated generator backend
+- `firmware/src/driver/pwm/monitor/hardware_monitor.c` for the hardware monitor backend
 
 The integrated generator backend:
 
@@ -507,8 +507,8 @@ For the current hardware timing equations, counter-width limits, divider limits,
 
 The software PWM implementation is now split into:
 
-- `firmware/src/pwmdriver/generator/software_generator.c` for the integrated generator backend
-- `firmware/src/pwmdriver/monitor/software_monitor.c` for the software monitor backend
+- `firmware/src/driver/pwm/generator/software_generator.c` for the integrated generator backend
+- `firmware/src/driver/pwm/monitor/software_monitor.c` for the software monitor backend
 
 The integrated generator backend:
 
@@ -771,7 +771,7 @@ Only the `pulse_count` field is updated for these events.
 
 ## Readback Semantics
 
-The architectural intent is that the `pwmdriver` snapshot is the single source of truth for logical channel state.
+The architectural intent is that the `pwm` snapshot is the single source of truth for logical channel state.
 
 Important readback properties:
 
@@ -820,12 +820,12 @@ Restore-defaults uses the same mailbox path, but Core 1 now fans out through bac
 
 The current design assumes:
 
-1. Core 0 is the normal producer of `pwm_driver_set()` and `pwm_driver_restore_defaults()` requests through `device_api`.
+1. Core 0 is the normal producer of `pwm_driver_set()` and `pwm_driver_restore_defaults()` requests through `device_service`.
 2. Backend drivers remain Core 1 implementation details.
 3. CDC CLI and I2C both use the same shared Core 0 control facade.
 4. The shared snapshot is the only read model exposed upward.
 
-I2C writes should continue to defer out of ISR context before they enter `device_api` and the internal `pwmdriver` mailbox boundary.
+I2C writes should continue to defer out of ISR context before they enter `device_service` and the internal `pwm` mailbox boundary.
 
 ## Startup Bank Configuration
 
@@ -836,7 +836,7 @@ combinations by selecting roles in the startup configuration.
 
 ## Summary
 
-The `pwmdriver` subsystem is a logical-channel wrapper around three different PWM timing engines.
+The `pwm` subsystem is a logical-channel wrapper around three different PWM timing engines.
 
 Its main value is not the backends themselves, but the separation it enforces:
 

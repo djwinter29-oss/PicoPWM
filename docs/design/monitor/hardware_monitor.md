@@ -3,8 +3,8 @@
 The hardware monitor measures PWM input edges on GPIOs using interrupts and
 microsecond timestamps. Source files:
 
-- `firmware/src/pwmdriver/monitor/hardware_monitor.c`
-- `firmware/src/pwmdriver/monitor/hardware_monitor.h`
+- `firmware/src/driver/pwm/monitor/hardware_monitor.c`
+- `firmware/src/driver/pwm/monitor/hardware_monitor.h`
 
 ## Constraints
 

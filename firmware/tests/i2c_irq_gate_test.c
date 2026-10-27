@@ -1,5 +1,5 @@
-#include "i2c/i2c_irq_gate.h"
-#include "i2c/i2c_write_queue.h"
+#include "driver/i2c/i2c_irq_gate.h"
+#include "driver/i2c/i2c_write_queue.h"
 
 #include <assert.h>
 

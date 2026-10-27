@@ -1,7 +1,7 @@
 # PWM Driver Configuration
 
 PicoPWM has one firmware image and one logical channel table, owned entirely
-by `firmware/src/pwmdriver/pwm_driver_config.c`. There is no per-profile source file
+by `firmware/src/driver/pwm/pwm_driver_config.c`. There is no per-profile source file
 and no `PICO_PWM_PROFILE` CMake option. Channel roles are stored in the startup
 configuration. The host edits that target, saves it, and applies it by rebooting.
 See [Firmware Configuration](../guides/configuration.md#startup-bank-configuration) for the
@@ -16,7 +16,7 @@ host-facing model.
 - the fixed GPIO assignment for each bank (`pwm_driver_config_bank_gpio`)
 - `pwm_driver_config_configure()`, which fills in all bank entries from the
   startup roles, using the channel-entry macros in
-  `firmware/src/pwmdriver/pwm_driver_table.h`
+  `firmware/src/driver/pwm/pwm_driver_table.h`
 - the shared lookup/validation helpers (`pwm_driver_config_get_channel`, `pwm_driver_config_get_gpio`,
   `pwm_driver_config_validate`, etc.)
 
@@ -97,4 +97,4 @@ source files unless the bank/backend mapping itself changes.
 
 The USB shell and I2C protocol must remain unchanged when adding a bank
 layout. Unsupported operations should return `PWM_DRIVER_RESULT_UNAVAILABLE`
-through `device_api`.
+through `device_service`.

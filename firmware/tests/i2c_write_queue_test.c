@@ -1,4 +1,4 @@
-#include "i2c/i2c_write_queue.h"
+#include "driver/i2c/i2c_write_queue.h"
 
 #include <assert.h>
 #include <string.h>

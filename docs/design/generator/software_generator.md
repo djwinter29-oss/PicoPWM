@@ -3,8 +3,8 @@
 The software generator produces PWM through one shared repeating timer and a
 per-channel scheduler state. Source files:
 
-- `firmware/src/pwmdriver/generator/software_generator.c`
-- `firmware/src/pwmdriver/generator/software_generator.h`
+- `firmware/src/driver/pwm/generator/software_generator.c`
+- `firmware/src/driver/pwm/generator/software_generator.h`
 
 ## Resource Constraints
 

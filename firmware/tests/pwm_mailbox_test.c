@@ -1,4 +1,4 @@
-#include "pwmdriver/pwm_driver_mailbox.h"
+#include "driver/pwm/pwm_driver_mailbox.h"
 
 #include <assert.h>
 

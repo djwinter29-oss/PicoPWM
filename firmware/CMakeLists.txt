@@ -29,33 +29,36 @@ math(EXPR PICO_PWM_CONFIG_FLASH_OFFSET "${PICO_FLASH_SIZE_BYTES} - ${PICO_PWM_CO
 
 add_executable(pico_pwm
     src/main.c
-    src/device_api/device_api.c
-    src/pwmdriver/pwm_driver_config.c
-    src/board/led.c
-    src/board/system.c
-    src/pwmdriver/pwm_driver.c
-    src/pwmdriver/generator/hardware_generator.c
-    src/pwmdriver/generator/pio_generator.c
-    src/pwmdriver/generator/software_generator.c
-    src/pwmdriver/monitor/hardware_monitor.c
-    src/pwmdriver/monitor/pio_monitor.c
-    src/pwmdriver/monitor/software_monitor.c
-    src/cli/shell.c
-    src/cli/pwm_commands.c
-    src/cli/channel_commands.c
-    src/cli/board_commands.c
+    src/app/device_service/device_service.c
+    src/driver/pwm/pwm_driver_config.c
+    src/platform/led.c
+    src/platform/system.c
+    src/driver/pwm/pwm_driver.c
+    src/driver/pwm/generator/hardware_generator.c
+    src/driver/pwm/generator/pio_generator.c
+    src/driver/pwm/generator/software_generator.c
+    src/driver/pwm/monitor/hardware_monitor.c
+    src/driver/pwm/monitor/pio_monitor.c
+    src/driver/pwm/monitor/software_monitor.c
+    src/app/cli/shell.c
+    src/app/cli/pwm_commands.c
+    src/app/cli/channel_commands.c
+    src/app/cli/board_commands.c
     third_party/embedded-cli/lib/src/embedded_cli.c
-    src/i2c/i2c_control_map.c
-    src/usb/usb_cdc.c
-    src/usb/usb_descriptors.c
-    src/i2c/i2c_slave.c
+    src/config/i2c_config.c
+    src/app/i2c/i2c_control_map.c
+    src/app/usb/usb_cdc.c
+    src/app/usb/usb_hid.c
+    src/app/usb/hid_protocol.c
+    src/app/usb/usb_descriptors.c
+    src/driver/i2c/i2c_slave.c
 )
 
 pico_generate_pio_header(pico_pwm
-    ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/generator/pio_generator.pio
+    ${CMAKE_CURRENT_LIST_DIR}/src/driver/pwm/generator/pio_generator.pio
 )
 pico_generate_pio_header(pico_pwm
-    ${CMAKE_CURRENT_LIST_DIR}/src/pwmdriver/monitor/pio_monitor.pio
+    ${CMAKE_CURRENT_LIST_DIR}/src/driver/pwm/monitor/pio_monitor.pio
 )
 
 target_link_libraries(pico_pwm

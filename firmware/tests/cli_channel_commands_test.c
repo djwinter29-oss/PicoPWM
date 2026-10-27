@@ -1,7 +1,7 @@
-#include "cli/channel_commands.h"
+#include "app/cli/channel_commands.h"
 
-#include "pwmdriver/pwm_driver_config.h"
-#include "device_api/device_api.h"
+#include "driver/pwm/pwm_driver_config.h"
+#include "app/device_service/device_service.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -42,7 +42,7 @@ const char *pwm_driver_config_backend_name(pwm_driver_config_backend_t backend) 
     return "HW";
 }
 
-bool device_api_get_channel(uint channel, pwm_driver_state_t *state) {
+bool device_service_get_channel(uint channel, pwm_driver_state_t *state) {
     if ((channel >= PWM_DRIVER_CONFIG_CHANNEL_COUNT) || (state == NULL) || !get_available) {
         return false;
     }
@@ -51,11 +51,11 @@ bool device_api_get_channel(uint channel, pwm_driver_state_t *state) {
     return true;
 }
 
-uint8_t device_api_channel_count(void) {
+uint8_t device_service_channel_count(void) {
     return channel_count;
 }
 
-pwm_driver_result_t device_api_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
+pwm_driver_result_t device_service_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
     (void)channel;
     (void)freq_hz;
     (void)duty;

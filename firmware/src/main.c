@@ -5,13 +5,14 @@
 
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
-#include "cli/pwm_commands.h"
-#include "board/led.h"
-#include "board/system.h"
-#include "device_api/device_api.h"
-#include "i2c/i2c_slave.h"
-#include "pwmdriver/pwm_driver.h"
-#include "usb/usb_cdc.h"
+#include "app/cli/pwm_commands.h"
+#include "platform/led.h"
+#include "platform/system.h"
+#include "app/device_service/device_service.h"
+#include "driver/i2c/i2c_slave.h"
+#include "driver/pwm/pwm_driver.h"
+#include "app/usb/usb_cdc.h"
+#include "app/usb/usb_hid.h"
 
 /**
  * @brief Initialize Core 0 services, launch Core 1 PWM ownership, and run the main loop.
@@ -38,7 +39,7 @@ int main(void) {
     // Configure and launch all three PWM banks before starting Core 1.
     pwm_driver_config_t pwm_config;
     pwm_driver_config_load_target(&pwm_config);
-    if (!device_api_config_init(&pwm_config, &pwm_config) || !pwm_driver_init(&pwm_config)) {
+    if (!device_service_config_init(&pwm_config, &pwm_config) || !pwm_driver_init(&pwm_config)) {
         system_reboot();
     }
 
@@ -58,13 +59,14 @@ int main(void) {
     i2c_slave_init(pwm_config.i2c_address);
     pwm_driver_set_wait_hook(i2c_slave_service_reads);
 
-    // Core 0 main loop: service USB CDC and I2C.
+    // Core 0 main loop: service USB CDC, USB HID, and I2C.
     while (true) {
         bool usb_connected;
 
         system_watchdog_kick();
         i2c_slave_service_reads();
         usb_cdc_poll();
+        usb_hid_poll();
         // Detect USB connection events and print the initial CLI help.
         usb_connected = usb_cdc_is_connected();
         if (usb_connected && !usb_was_connected) {

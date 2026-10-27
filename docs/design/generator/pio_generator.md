@@ -3,9 +3,9 @@
 The PIO generator produces continuous PWM output using one PIO state machine
 per configured channel. Source files:
 
-- `firmware/src/pwmdriver/generator/pio_generator.c`
-- `firmware/src/pwmdriver/generator/pio_generator.h`
-- `firmware/src/pwmdriver/generator/pio_generator.pio`
+- `firmware/src/driver/pwm/generator/pio_generator.c`
+- `firmware/src/driver/pwm/generator/pio_generator.h`
+- `firmware/src/driver/pwm/generator/pio_generator.pio`
 
 ## Resource Constraints
 
@@ -26,7 +26,7 @@ current target range is about `1 Hz .. 1 MHz`.
 The compact PIO program loads a period count and duty threshold, loops
 continuously, and drives the side-set output. C code selects timing values,
 handles static output cases, and publishes realized frequency, duty, and pulse
-state through `pwmdriver`.
+state through `pwm`.
 
 The public policy is:
 

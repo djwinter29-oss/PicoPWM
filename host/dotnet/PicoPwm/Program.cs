@@ -28,7 +28,7 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 app.Use(async (context, next) =>
 {
-    if (!DashboardBind.OriginAllowed(context.Request.Headers.Origin.ToString(), context.Request.Host.Value))
+    if (!DashboardBind.OriginAllowed(context.Request.Headers.Origin.ToString(), context.Request.Host.Value ?? ""))
     {
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
         await context.Response.WriteAsJsonAsync(new { error = "cross-origin request rejected" });

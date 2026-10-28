@@ -17,6 +17,9 @@
 /** @brief Maximum argv tokens passed to a command handler, including the command name. */
 #define SHELL_MAX_ARGS 8u
 
+/** @brief Maximum number of characters accepted in one command line. */
+#define SHELL_MAX_INPUT_LENGTH 100u
+
 /** @brief Size of the embedded-cli backing store in @c CLI_UINT units. */
 #define SHELL_CLI_BUFFER_UINTS 192u
 
@@ -131,7 +134,8 @@ bool shell_write(shell_t *shell, const char *text);
 /**
  * @brief Write one text line followed by CRLF through the shell transport.
  * @param text Null-terminated line text, or `NULL` to emit only CRLF.
- * @return `true` when the line was accepted, otherwise `false`.
+ * @return `true` when the complete line was accepted; otherwise `false`.
+ * @note Text longer than @ref SHELL_MAX_INPUT_LENGTH is rejected.
  */
 bool shell_write_line(shell_t *shell, const char *text);
 

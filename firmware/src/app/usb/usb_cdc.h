@@ -15,6 +15,9 @@ void usb_cdc_init(void);
 /** @brief Run TinyUSB background work and flush queued CDC TX bytes. */
 void usb_cdc_poll(void);
 
+/** @brief Discard bytes buffered in the local RX queue and TinyUSB CDC FIFO. */
+void usb_cdc_reset_rx(void);
+
 /** @brief Return whether the CDC interface is enumerated and the host is connected. */
 bool usb_cdc_is_connected(void);
 

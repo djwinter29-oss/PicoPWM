@@ -30,10 +30,11 @@ bool pwm_commands_init(pwm_commands_t *commands, const shell_transport_t *transp
 bool pwm_commands_on_connected(pwm_commands_t *commands);
 
 /**
- * @brief Reset connection-output progress after the host disconnects.
+ * @brief Reset the shell session after the host disconnects.
  * @param commands CLI command session.
+ * @return `true` when the fresh shell session initialized successfully.
  */
-void pwm_commands_on_disconnected(pwm_commands_t *commands);
+bool pwm_commands_on_disconnected(pwm_commands_t *commands);
 
 /** @brief Poll the device command transport and dispatch complete commands. */
 void pwm_commands_poll(pwm_commands_t *commands);

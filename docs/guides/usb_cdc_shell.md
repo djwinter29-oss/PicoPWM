@@ -1,6 +1,6 @@
 # USB CDC Shell
 
-The PicoPWM USB CDC interface provides an interactive shell for human control
+The PicoPWM USB CDC shell provides an interactive interface for human control
 and simple host scripts.
 
 ## Connection
@@ -12,7 +12,10 @@ connection is opened and displays the `pico> ` prompt.
 
 Commands are entered one line at a time and responses end with CRLF (`\r\n`).
 The interactive editor supports backspace, cursor movement, command history,
-and Tab completion of command names.
+and Tab completion of command names. A command line is limited to 100
+characters; additional characters are ignored by the editor. Keep commands
+within this limit because submitting an overlong line can execute its accepted
+prefix.
 
 ## Command Format
 
@@ -39,9 +42,9 @@ The stop command attempts every generator channel even if one channel fails.
 If it reports an error, some outputs may have stopped while others may remain
 active; inspect the channels with `pwm get all` before relying on their state.
 
-The `pwm get all` listing is bounded to the configured channel count and is
-buffered by the CDC transport before delivery. Keep the terminal connected
-while the response is being transmitted.
+The `pwm get all` listing includes the configured channels and is queued for
+transmission while it is produced. Keep the terminal connected until the
+listing finishes; rerun the command if the output appears incomplete.
 
 Channel numbers are logical IDs. Their backend and GPIO are fixed by bank;
 configuration changes only the bank's role (generator or monitor).
@@ -52,7 +55,7 @@ configuration changes only the bank's role (generator or monitor).
 | B | `8..15` | PIO PWM | `0, 2, 4, 6, 8, 10, 12, 14` |
 | C | `16..23` | Software PWM | `16, 17, 18, 19, 20, 21, 22, 28` |
 
-For example, channel `0` is GPIO 1. See [Hardware Setup](../hardware-setup.md)
+For example, channel `0` is GPIO 1. See [Hardware Setup](hardware-setup.md)
 for the full pin map and board-specific notes.
 
 The duty argument is an integer percentage from `0` to `100`; if omitted it
@@ -90,6 +93,11 @@ rejected assignment does not partially apply the request. A successful command
 saves the new target configuration and reboots the board; no separate save or
 reboot command is needed.
 
+The `150` MHz profile is an overclock on RP2040, and the `200` and `250` MHz
+profiles are not qualified for every board. CDC does not require a separate
+overclock acknowledgement. Use these profiles only if you understand the
+stability and hardware risks for your board.
+
 Configuration changes do not affect running hardware until the reboot applies
 the saved target. Saving uses flash and temporarily stalls CDC, HID, and I2C
 while the flash sector is programmed; the operation can take up to 2 seconds.
@@ -103,7 +111,8 @@ informational only and never changes device state.
 
 | Input | Result |
 | --- | --- |
-| `help` or `?` | List command groups and their forms. |
+| `help` | List registered commands and their syntax. |
+| `?` | List command groups and how to get their syntax. |
 | `help pwm` | List PWM commands. |
 | `pwm ?` | Show PWM verbs and their options. |
 | `pwm get ?` | Show the channel or `all` option. |
@@ -120,5 +129,5 @@ realized channel state, not just the last requested values. The `enabled` field
 is `yes` when the realized frequency is nonzero and `no` when it is zero; a
 zero-frequency channel can still be held high at `100%` duty.
 
-See [Control Interfaces](README.md) for shared semantics and
+See [Firmware Configuration](configuration.md) for bank behavior and
 [I2C Protocol](i2c_protocol.md) for the binary register protocol.

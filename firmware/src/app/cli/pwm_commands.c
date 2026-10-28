@@ -194,10 +194,15 @@ bool pwm_commands_on_connected(pwm_commands_t *commands) {
 }
 
 /** @copydoc pwm_commands_on_disconnected */
-void pwm_commands_on_disconnected(pwm_commands_t *commands) {
-    if (commands != NULL) {
-        commands->connection_help_queued = false;
+bool pwm_commands_on_disconnected(pwm_commands_t *commands) {
+    shell_transport_t transport;
+
+    if ((commands == NULL) || !commands->shell.initialized) {
+        return false;
     }
+
+    transport = commands->shell.transport;
+    return pwm_commands_init(commands, &transport);
 }
 
 /** @copydoc pwm_commands_poll */

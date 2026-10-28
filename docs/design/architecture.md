@@ -345,7 +345,7 @@ explicit error when the CDC connection is available.
 
 ## Where To Read Next
 
-- [Control Interfaces](../guides/control/README.md) for shared semantics and transport links
-- [I2C Protocol](../guides/control/i2c_protocol.md) for binary register values
+- [USB CDC Shell](../guides/usb_cdc_shell.md) for interactive text commands
+- [I2C Protocol](../guides/i2c_protocol.md) for binary register values
 - Source headers under `firmware/src` for current C declarations and APIs
 - [PWM Driver Design](pwm_driver_design.md) for backend and mailbox internals

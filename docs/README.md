@@ -11,9 +11,9 @@ PicoPWM:
 - [Firmware Configuration](guides/configuration.md)
 - [Builds and Publishing](guides/releases.md)
 - [Hardware Setup](guides/hardware-setup.md)
-- [Control Interfaces](guides/control/README.md)
-- [USB CDC CLI](guides/control/usb_cdc_cli.md)
-- [I2C Protocol](guides/control/i2c_protocol.md)
+- [USB CDC shell](guides/usb_cdc_shell.md)
+- [I2C Protocol](guides/i2c_protocol.md)
+- [Linux HID Permissions](guides/linux_hid_permissions.md)
 
 ## Design
 

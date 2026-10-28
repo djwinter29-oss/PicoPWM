@@ -13,7 +13,8 @@ generator and frequency monitor, controlled through USB CDC, I2C or USB HID. The
 [Hardware setup](docs/guides/hardware-setup.md) ·
 [Open browser dashboard](https://djwinter29-oss.github.io/PicoPWM/) ·
 [Python dashboard](host/python/README.md) ·
-[Control interfaces](docs/guides/control/README.md)
+[USB CDC shell](docs/guides/usb_cdc_shell.md) ·
+[I2C protocol](docs/guides/i2c_protocol.md)
 
 ## Why PicoPWM?
 
@@ -64,11 +65,11 @@ These are generator request ranges; `0 Hz` is a special static output level (`0%
 3. **Wire your signals.** Follow the [hardware setup guide](docs/guides/hardware-setup.md) for the channel GPIO map,
    I2C pins and board-specific pin considerations.
 4. **Connect to PicoPWM.** Open the board's USB CDC serial port in a terminal (see the
-   [USB CDC CLI guide](docs/guides/control/usb_cdc_cli.md)), or connect an I2C controller to the default 7-bit
+   [USB CDC shell guide](docs/guides/usb_cdc_shell.md)), or connect an I2C controller to the default 7-bit
    address `0x40`. Serial device names vary by OS; common examples are `/dev/ttyACM0` on Linux, `COMx` on Windows,
    and `/dev/cu.usbmodem*` on macOS. USB CDC does not require a particular terminal baud-rate setting.
 5. **Verify.** In the CDC shell, run `board get version` to confirm the firmware is running, then
-   `config get` to see the bank roles. See the [USB CDC CLI guide](docs/guides/control/usb_cdc_cli.md) for command details.
+   `config get` to see the bank roles. See the [USB CDC shell guide](docs/guides/usb_cdc_shell.md) for command details.
 6. **Open a dashboard (optional).** Use the [browser dashboard](https://djwinter29-oss.github.io/PicoPWM/) or run one
    locally as described below.
 
@@ -81,7 +82,7 @@ config set banka=generator
 
 The command saves the target setting and reboots the board. After it reconnects, run `pwm set 0 1000 50` and
 `pwm get 0` to request 1 kHz at 50% duty and inspect the realized output. When finished, run `pwm stop all` to stop
-generator outputs; the saved bank role remains unchanged. See the [CDC CLI guide](docs/guides/control/usb_cdc_cli.md)
+generator outputs; the saved bank role remains unchanged. See the [CDC shell guide](docs/guides/usb_cdc_shell.md)
 for command details.
 
 ## Troubleshooting
@@ -94,7 +95,7 @@ for command details.
    the load shares ground with the board.
 
 Use `config get` to inspect running and target bank roles and `pwm get <channel>` to inspect a channel's realized
-frequency and duty; both are described in the [USB CDC CLI guide](docs/guides/control/usb_cdc_cli.md).
+frequency and duty; both are described in the [USB CDC shell guide](docs/guides/usb_cdc_shell.md).
 
 ## Dashboards
 
@@ -129,7 +130,7 @@ USB HID. See the [.NET guide](host/dotnet/README.md) for configuration and API d
 
 On Linux, configure HID access once with `tools/host/hid-permissions-setup.sh`; the Python and .NET launchers check
 permissions before starting. For WebHID, run setup on the computer connected to the board, not only on a remote server.
-See [Linux HID permissions](docs/guides/control/README.md#linux-hid-permissions).
+See [Linux HID permissions](docs/guides/linux_hid_permissions.md).
 
 ## Hardware Compatibility
 
@@ -150,7 +151,7 @@ mapping or board profile.
 | Need | Guide |
 | --- | --- |
 | Wire and configure the board | [Hardware setup](docs/guides/hardware-setup.md), [Firmware configuration](docs/guides/configuration.md) |
-| Control it | [Control interfaces](docs/guides/control/README.md), [USB CDC CLI](docs/guides/control/usb_cdc_cli.md), [I2C protocol](docs/guides/control/i2c_protocol.md) |
+| Control it | [USB CDC shell](docs/guides/usb_cdc_shell.md), [I2C protocol](docs/guides/i2c_protocol.md), [CDC/HID overview](docs/design/usb/cdc-hid-overview.md) |
 | Understand the design | [Architecture](docs/design/architecture.md), [PWM driver design](docs/design/pwm_driver_design.md), [generators](docs/design/generator/) and [monitors](docs/design/monitor/) |
 | Write a HID host | [CDC/HID overview](docs/design/usb/cdc-hid-overview.md), [HID report reference](docs/design/usb/hid-report-reference.md) |
 | Build, test and release | [Build structure](BUILD_STRUCTURE.md), [Builds and publishing](docs/guides/releases.md) |

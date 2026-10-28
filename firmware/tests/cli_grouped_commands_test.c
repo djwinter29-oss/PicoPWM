@@ -302,17 +302,39 @@ static void test_connection_output_retries(void) {
     assert(pwm_commands_on_connected(&commands));
     assert(strcmp(transport.output, "pico> ") == 0);
 
-    pwm_commands_on_disconnected(&commands);
+    assert(pwm_commands_on_disconnected(&commands));
     reset_output(&transport, "");
     assert(pwm_commands_on_connected(&commands));
     assert(strstr(transport.output, "Groups: pwm, board, config") != NULL);
     assert(strstr(transport.output, "pico> ") != NULL);
 }
 
+static void test_disconnect_resets_incomplete_command(void) {
+    test_transport_t transport = {0};
+    shell_transport_t binding = {.read = test_read, .write = test_write, .context = &transport};
+    pwm_commands_t commands;
+
+    led_state = false;
+    assert(pwm_commands_init(&commands, &binding));
+
+    run_command(&commands, &transport, "board set led ");
+    assert(!led_state);
+
+    assert(pwm_commands_on_disconnected(&commands));
+    run_command(&commands, &transport, "on\r");
+    assert(!led_state);
+    assert(strstr(transport.output, "OK led on") == NULL);
+
+    run_command(&commands, &transport, "board set led on\r");
+    assert(led_state);
+    assert(strstr(transport.output, "OK led on") != NULL);
+}
+
 int main(void) {
     test_grouped_commands();
     test_help_commands();
     test_connection_output_retries();
+    test_disconnect_resets_incomplete_command();
     puts("cli_grouped_commands_test ok");
     return 0;
 }

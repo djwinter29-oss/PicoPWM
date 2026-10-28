@@ -1,6 +1,6 @@
 # I2C Protocol
 
-The Pico acts as an I2C slave on **I2C1**. See [Hardware Setup](../hardware-setup.md) for the
+The Pico acts as an I2C slave on **I2C1**. See [Hardware Setup](hardware-setup.md) for the
 SDA and SCL GPIO assignments.
 
 ### Electrical
@@ -14,7 +14,7 @@ All transactions are initiated by an I2C master. The protocol is **write-then-re
 1. **Write phase**: master sends one register byte and, when required, its payload.
 2. **Read phase**: master reads the response bytes.
 
-Read commands are answered from the realized channel snapshot published by the PWM driver layer. The ISR builds each read response when the master starts reading, using only non-blocking getters, so the clock is never stretched and every read transaction sees the newest value. Write commands are queued by the ISR and applied from Core 0 polling through the same shared control path used by the USB CDC CLI.
+Read commands are answered from the realized channel snapshot published by the PWM driver layer. The ISR builds each read response when the master starts reading, using only non-blocking getters, so the clock is never stretched and every read transaction sees the newest value. Write commands are queued by the ISR and applied from Core 0 polling through the same shared control path used by the USB CDC shell.
 
 The firmware keeps four complete writes. A write that arrives while that queue
 is full is dropped, and the register status becomes `PWM_DRIVER_RESULT_UNAVAILABLE`

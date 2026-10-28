@@ -41,7 +41,7 @@ For optional I2C tests:
 Pull SDA and SCL up to **3.3 V**, typically with 4.7 kOhm resistors; account for any pull-ups already fitted to the
 controller. Do not connect a controller's power output to the USB-powered board unless the power arrangement is
 explicitly designed for it. Start at 100 kHz and use the running slave address (default `0x40`).
-See the [I2C protocol](../guides/control/i2c_protocol.md).
+See the [I2C protocol](../guides/i2c_protocol.md).
 
 ## PWM Loopback
 

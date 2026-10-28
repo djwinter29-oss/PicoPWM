@@ -36,7 +36,7 @@ The Core 0 and Core 1 split, the `device` facade, and the `pwm_driver` multicore
 ## CDC Behavior
 
 CDC carries the text shell only; its line behavior is unchanged by HID. Commands follow the
-[CLI reference](../../guides/control/README.md).
+[USB CDC shell guide](../../guides/usb_cdc_shell.md).
 
 ## HID Behavior
 

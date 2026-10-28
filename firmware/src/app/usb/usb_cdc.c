@@ -157,6 +157,22 @@ void usb_cdc_poll(void) {
     usb_cdc_poll_tx();
 }
 
+void usb_cdc_reset_rx(void) {
+    uint8_t discard[USB_CDC_PACKET_SIZE];
+
+    while (tud_cdc_n_available(USB_CDC_ITF) != 0u) {
+        uint32_t count = tud_cdc_n_read(USB_CDC_ITF, discard, sizeof(discard));
+
+        if (count == 0u) {
+            break;
+        }
+    }
+
+    usb_cdc_rx_head = 0u;
+    usb_cdc_rx_tail = 0u;
+    usb_cdc_rx_count = 0u;
+}
+
 bool usb_cdc_is_connected(void) {
     return tud_ready() && tud_cdc_n_connected(USB_CDC_ITF);
 }

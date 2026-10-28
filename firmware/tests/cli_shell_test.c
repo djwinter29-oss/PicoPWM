@@ -11,6 +11,7 @@ typedef struct {
     size_t input_offset;
     char output[512];
     size_t output_length;
+    size_t output_limit;
 } test_transport_t;
 
 typedef struct {
@@ -32,6 +33,9 @@ static uint32_t test_read(void *context, uint8_t *data, uint32_t capacity) {
 static bool test_write(void *context, const uint8_t *data, uint32_t length) {
     test_transport_t *transport = context;
 
+    if ((transport->output_limit != 0u) && ((transport->output_length + length) > transport->output_limit)) {
+        return false;
+    }
     assert(transport->output_length + length < sizeof(transport->output));
     memcpy(transport->output + transport->output_length, data, length);
     transport->output_length += length;
@@ -130,6 +134,26 @@ static void test_completion(void) {
     shell_poll(&shell);
 
     assert(context.command_calls == 1u);
+}
+
+static void test_overlong_line_is_truncated_at_documented_limit(void) {
+    char input[SHELL_MAX_INPUT_LENGTH + sizeof(" bad\r")];
+    test_transport_t transport = {0};
+    shell_t shell;
+    test_context_t context = {.shell = &shell};
+    shell_transport_t binding = {.read = test_read, .write = test_write, .context = &transport};
+    shell_config_t config = test_config(&context, &binding);
+
+    memcpy(input, "ping", 4u);
+    memset(input + 4u, ' ', SHELL_MAX_INPUT_LENGTH - 4u);
+    memcpy(input + SHELL_MAX_INPUT_LENGTH, " bad\r", sizeof(" bad\r"));
+    transport.input = input;
+
+    assert(shell_init(&shell, &config));
+    shell_poll(&shell);
+
+    assert(context.command_calls == 1u);
+    assert(strstr(transport.output, "handled\r\n") != NULL);
 }
 
 static void test_interleaved_escape_sequences(void) {
@@ -286,12 +310,32 @@ static void test_excess_arguments_are_rejected(void) {
     assert(strstr(transport.output, "ERR too many command arguments") != NULL);
 }
 
+static void test_line_write_is_atomic(void) {
+    test_transport_t transport = {.input = ""};
+    shell_t shell;
+    test_context_t context = {.shell = &shell};
+    shell_transport_t binding = {.read = test_read, .write = test_write, .context = &transport};
+    shell_config_t config = test_config(&context, &binding);
+
+    assert(shell_init(&shell, &config));
+    transport.output_limit = 5u;
+    assert(!shell_write_line(&shell, "text"));
+    assert(transport.output_length == 0u);
+    assert(transport.output[0] == '\0');
+
+    transport.output_limit = 6u;
+    assert(shell_write_line(&shell, "text"));
+    assert(strcmp(transport.output, "text\r\n") == 0);
+}
+
 int main(void) {
     test_independent_sessions_and_line_endings();
     test_arguments();
     test_completion();
+    test_overlong_line_is_truncated_at_documented_limit();
     test_interleaved_escape_sequences();
     test_rejected_inputs();
     test_excess_arguments_are_rejected();
+    test_line_write_is_atomic();
     return 0;
 }

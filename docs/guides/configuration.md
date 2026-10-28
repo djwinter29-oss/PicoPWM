@@ -103,9 +103,9 @@ the SDK clock: 125 MHz on Pico and 150 MHz on Pico 2. The I2C address is a
 Saving disables interrupts and locks the PWM core for the flash sector erase,
 so USB and I2C stall until programming finishes or the 5-second watchdog resets
 the board. Allow up to 2 seconds for the operation. For all command forms, see
-the [USB CDC CLI guide](control/usb_cdc_cli.md).
+the [USB CDC shell guide](usb_cdc_shell.md).
 
-Use the logical channel number shown in the [USB CDC CLI guide](control/usb_cdc_cli.md)
+Use the logical channel number shown in the [USB CDC shell guide](usb_cdc_shell.md)
 to read or set a channel. The assigned bank determines whether that channel
 generates PWM or monitors an input; no backend selection is needed in the command.
 
@@ -123,6 +123,6 @@ A profile must validate these conditions at build time or startup:
   shared pin without an explicit ownership policy
 
 See [Architecture](../design/architecture.md) for ownership boundaries and [USB CDC
-CLI](control/usb_cdc_cli.md) for the stable interactive interface. See
+shell](usb_cdc_shell.md) for the stable interactive interface. See
 [PWM Driver Configuration](../design/pwm_driver_config.md) for the fixed Bank A/B/C GPIO map
 and startup configuration validation rules.

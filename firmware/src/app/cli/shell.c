@@ -10,6 +10,9 @@
 /** @brief Prompt printed by embedded-cli at the start of each input line. */
 #define SHELL_PROMPT "pico> "
 
+/** @brief Maximum response line bytes, including CRLF. */
+#define SHELL_WRITE_LINE_BUFFER_SIZE (SHELL_MAX_INPUT_LENGTH + 2u)
+
 /** @brief Maximum bytes read from the transport per poll iteration. */
 #define CLI_EDITOR_RX_CHUNK_SIZE 16u
 
@@ -47,11 +50,19 @@ bool shell_write(shell_t *shell, const char *text) {
 
 /** @copydoc shell_write_line */
 bool shell_write_line(shell_t *shell, const char *text) {
-    if ((text != NULL) && !shell_write(shell, text)) {
+    uint8_t line[SHELL_WRITE_LINE_BUFFER_SIZE];
+    size_t length = (text != NULL) ? strlen(text) : 0u;
+
+    if (length > SHELL_MAX_INPUT_LENGTH) {
         return false;
     }
 
-    return shell_write_bytes(shell, (const uint8_t *)"\r\n", 2u);
+    if (length != 0u) {
+        memcpy(line, text, length);
+    }
+    line[length] = '\r';
+    line[length + 1u] = '\n';
+    return shell_write_bytes(shell, line, (uint32_t)(length + 2u));
 }
 
 /**
@@ -158,7 +169,7 @@ bool shell_init(shell_t *shell, const shell_config_t *config) {
 
     cli_config = *embeddedCliDefaultConfig();
     cli_config.invitation = SHELL_PROMPT;
-    cli_config.cmdBufferSize = 102u;
+    cli_config.cmdBufferSize = SHELL_MAX_INPUT_LENGTH + 2u;
     cli_config.maxBindingCount = SHELL_MAX_COMMANDS;
     cli_config.cliBuffer = shell->cli_buffer;
     cli_config.cliBufferSize = sizeof(shell->cli_buffer);

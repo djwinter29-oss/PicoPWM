@@ -1,7 +1,7 @@
 # PicoPWM GitHub Copilot Instructions
 Read [README.md](../README.md) first for product intent, channel map, and user-facing behavior.
 
-Use the docs directly: [docs/guides/control/README.md](../docs/guides/control/README.md) for interface behavior, [docs/design/architecture.md](../docs/design/architecture.md) for system structure, source headers under `firmware/src` for C interfaces, and [docs/design/pwm_driver_design.md](../docs/design/pwm_driver_design.md) for `pwm` internals.
+Use the docs directly: [docs/guides/usb_cdc_shell.md](../docs/guides/usb_cdc_shell.md) for CDC behavior, [docs/guides/i2c_protocol.md](../docs/guides/i2c_protocol.md) for I2C behavior, [docs/design/architecture.md](../docs/design/architecture.md) for system structure, source headers under `firmware/src` for C interfaces, and [docs/design/pwm_driver_design.md](../docs/design/pwm_driver_design.md) for `pwm` internals.
 
 For `pwm` internals, use [docs/design/pwm_driver_design.md](../docs/design/pwm_driver_design.md) as the source of truth.
 

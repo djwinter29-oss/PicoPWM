@@ -7,9 +7,9 @@
   <title>PicoPWM Control | Web</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="css/dashboard.css?v=26">
-  <link rel="stylesheet" href="css/webhid.css?v=21">
+  <link rel="stylesheet" href="css/webhid.css?v=23">
   <link rel="stylesheet" href="css/web.css?v=2">
-  <script type="module" src="js/app.mjs?v=4"></script>
+  <script type="module" src="js/app.mjs?v=9"></script>
 </head>
 <body>
   <header class="topbar">
@@ -193,13 +193,19 @@
         <p id="channel-dialog-note">Values start from the current realized output, which may differ from the
           requested frequency due to hardware rounding. Apply changes the live output immediately; no save or reboot.</p>
         <div class="control-grid">
-          <label>Frequency (Hz)
-            <input id="channel-frequency" type="number" min="0" max="4294967295" step="1" required autofocus>
+          <label>Frequency
+            <span class="frequency-input">
+              <input id="channel-frequency" type="number" min="0" max="4294967295" step="any" required autofocus>
+              <select id="channel-frequency-unit" aria-label="Frequency unit">
+                <option value="Hz">Hz</option><option value="kHz">kHz</option><option value="MHz">MHz</option>
+              </select>
+            </span>
           </label>
           <label>Duty (%)
             <input id="channel-duty" type="number" min="0" max="100" step="1" required>
           </label>
         </div>
+        <button class="button button-small channel-preset" id="channel-preset" type="button">Use 1 kHz / 50%</button>
         <p class="configuration-message" id="channel-error" role="alert" data-error="true"></p>
         <div class="dialog-actions">
           <button class="button button-cancel" id="cancel-channel" type="button">Cancel</button>

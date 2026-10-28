@@ -1,5 +1,41 @@
 import { CLOCK_PROFILES, ROLES } from "./device.mjs?v=6";
 
+const FREQUENCY_MULTIPLIERS = Object.freeze({ Hz: 1, kHz: 1_000, MHz: 1_000_000 });
+const MAX_FREQUENCY_HZ = 0xffffffff;
+
+export function frequencyEditorValue(frequencyHz) {
+  const unit = frequencyHz >= FREQUENCY_MULTIPLIERS.MHz ? "MHz"
+    : frequencyHz >= FREQUENCY_MULTIPLIERS.kHz ? "kHz" : "Hz";
+  return { unit, value: String(frequencyHz / FREQUENCY_MULTIPLIERS[unit]) };
+}
+
+export function frequencyMax(unit) {
+  return String(MAX_FREQUENCY_HZ / FREQUENCY_MULTIPLIERS[unit]);
+}
+
+export function convertFrequencyValue(value, fromUnit, toUnit) {
+  const from = FREQUENCY_MULTIPLIERS[fromUnit];
+  const to = FREQUENCY_MULTIPLIERS[toUnit];
+  const frequency = Number(value);
+  if (!from || !to || value === "" || !Number.isFinite(frequency) || frequency < 0) return "";
+  return String(frequency * from / to);
+}
+
+export function frequencyToHertz(value, unit) {
+  const multiplier = FREQUENCY_MULTIPLIERS[unit];
+  const frequency = Number(value);
+  const frequencyHz = frequency * multiplier;
+  if (!multiplier || value === "" || !Number.isFinite(frequency) || frequency < 0
+    || !Number.isFinite(frequencyHz) || frequencyHz > MAX_FREQUENCY_HZ + 0.000001) {
+    throw new RangeError("Frequency must be between 0 and 4294967295 Hz.");
+  }
+  const roundedHz = Math.round(frequencyHz);
+  if (Math.abs(frequencyHz - roundedHz) > 0.000001) {
+    throw new RangeError("Frequency must resolve to a whole number of hertz.");
+  }
+  return Math.min(roundedHz, MAX_FREQUENCY_HZ);
+}
+
 function setText(selector, text) {
   document.querySelector(selector).textContent = text ?? "--";
 }
@@ -13,8 +49,8 @@ function cell(text, className) {
 
 export function formatFrequency(hz) {
   if (hz === null) return "--";
-  if (hz >= 1e6) return `${(hz / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} MHz`;
-  if (hz >= 1e3) return `${(hz / 1e3).toLocaleString(undefined, { maximumFractionDigits: 3 })} kHz`;
+  if (hz >= 1e6 && hz % 1e6 === 0) return `${hz / 1e6} MHz`;
+  if (hz >= 1e3 && hz % 1e3 === 0) return `${hz / 1e3} kHz`;
   return `${hz} Hz`;
 }
 

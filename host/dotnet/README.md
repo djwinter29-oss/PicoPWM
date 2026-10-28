@@ -40,6 +40,8 @@ Open <http://127.0.0.1:5000>. The dashboard matches WebHID: identity and RAM, bo
 configuration with confirmed **Save and Reboot**, compact pin assignment, uptime,
 temperature and per-core service load, LED/reboot controls, and three eight-channel
 tables. Generator frequency/duty values open an editing dialog; monitors are read-only.
+Frequency uses Hz, kHz, or MHz units, and the optional 1 kHz / 50% preset only fills
+the dialog until Apply is clicked.
 Unsupported firmware features are disabled with update guidance.
 Pin assignment, monitoring GPIOs and dialog GPIOs use the connected board's
 capability-gated HID pin report, never a hard-coded host map. Unavailable pins show

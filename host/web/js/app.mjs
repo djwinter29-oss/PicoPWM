@@ -1,5 +1,8 @@
-import { CLOCK_PROFILES, ROLES } from "./device.mjs?v=6";
-import { renderBootEdits, renderDashboard, updateReportAge } from "./view.mjs?v=13";
+import { CLOCK_PROFILES, ROLES } from "./device.mjs?v=8";
+import {
+  convertFrequencyValue, frequencyEditorValue, frequencyMax, frequencyToHertz,
+  renderBootEdits, renderDashboard, updateReportAge,
+} from "./view.mjs?v=16";
 import { PicoPwmHost, request } from "./client.mjs?v=1";
 
 const $ = selector => document.querySelector(selector);
@@ -53,7 +56,9 @@ function render(state) {
     : "Board LED unavailable; update firmware if unsupported";
   $("#apply-channel").disabled = !ready || channelApplying;
   $("#channel-frequency").disabled = channelApplying;
+  $("#channel-frequency-unit").disabled = channelApplying;
   $("#channel-duty").disabled = channelApplying;
+  $("#channel-preset").disabled = channelApplying;
   if (!connected && channelDialog.open) channelDialog.close();
   if (!ready && rebootDialog.open) rebootDialog.close();
   if (!ready && saveDialog.open) { saveDialog.close(); pendingSettings = null; }
@@ -135,11 +140,30 @@ $(".channel-panels").addEventListener("click", event => {
   editingChannel = channel;
   $("#channel-dialog-title").textContent =
     `${["Hardware PWM", "PIO PWM", "Software PWM"][bank]} - Channel ${channel} - GPIO ${data.pins?.channels[channel] ?? "--"}`;
-  $("#channel-frequency").value = String(reading.freq_hz);
+  const frequency = frequencyEditorValue(reading.freq_hz);
+  $("#channel-frequency").value = frequency.value;
+  $("#channel-frequency-unit").value = frequency.unit;
+  $("#channel-frequency").dataset.unit = frequency.unit;
+  $("#channel-frequency").max = frequencyMax(frequency.unit);
   $("#channel-duty").value = String(reading.duty);
   $("#channel-error").textContent = "";
   channelDialog.showModal();
   $(button.dataset.field === "duty" ? "#channel-duty" : "#channel-frequency").focus();
+});
+$("#channel-frequency-unit").addEventListener("change", () => {
+  const input = $("#channel-frequency");
+  const unit = $("#channel-frequency-unit");
+  input.value = convertFrequencyValue(input.value, input.dataset.unit, unit.value);
+  input.dataset.unit = unit.value;
+  input.max = frequencyMax(unit.value);
+});
+$("#channel-preset").addEventListener("click", () => {
+  $("#channel-frequency-unit").value = "kHz";
+  $("#channel-frequency").dataset.unit = "kHz";
+  $("#channel-frequency").max = frequencyMax("kHz");
+  $("#channel-frequency").value = "1";
+  $("#channel-duty").value = "50";
+  $("#channel-error").textContent = "";
 });
 $("#cancel-channel").addEventListener("click", () => channelDialog.close());
 $("#channel-form").addEventListener("submit", async event => {
@@ -151,11 +175,19 @@ $("#channel-form").addEventListener("submit", async event => {
     $("#channel-error").textContent = "Channel is no longer available for editing. Reconnect and read its status.";
     return;
   }
+  if (!$("#channel-frequency").reportValidity() || !$("#channel-duty").reportValidity()) return;
+  let frequencyHz;
+  try {
+    frequencyHz = frequencyToHertz($("#channel-frequency").value, $("#channel-frequency-unit").value);
+  } catch (error) {
+    $("#channel-error").textContent = error.message;
+    return;
+  }
   channelApplying = true;
   $("#channel-error").textContent = "";
   render(client.state);
   try {
-    await client.setChannel(editingChannel, integer("#channel-frequency"), integer("#channel-duty"));
+    await client.setChannel(editingChannel, frequencyHz, integer("#channel-duty"));
     channelDialog.close();
   } catch (error) {
     $("#channel-error").textContent = error.message;

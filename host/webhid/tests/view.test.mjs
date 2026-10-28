@@ -1,11 +1,31 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatUptime, renderBootEdits, renderDashboard } from "../js/view.mjs";
+import {
+  convertFrequencyValue, formatFrequency, formatUptime, frequencyEditorValue, frequencyMax, frequencyToHertz,
+  renderBootEdits, renderDashboard,
+} from "../js/view.mjs";
 
 test("runtime uptime formatting handles second, minute, and day boundaries", () => {
   assert.equal(formatUptime(0), "0h 0m 0s");
   assert.equal(formatUptime(60), "0h 1m 0s");
   assert.equal(formatUptime(90061), "1d 1h 1m 1s");
+});
+
+test("frequency editor chooses units and preserves hertz when converting", () => {
+  assert.deepEqual(frequencyEditorValue(0), { unit: "Hz", value: "0" });
+  assert.deepEqual(frequencyEditorValue(1_000), { unit: "kHz", value: "1" });
+  assert.deepEqual(frequencyEditorValue(1_234_567), { unit: "MHz", value: "1.234567" });
+  assert.equal(convertFrequencyValue("1234", "Hz", "kHz"), "1.234");
+  assert.equal(convertFrequencyValue("1.234", "kHz", "Hz"), "1234");
+  assert.equal(formatFrequency(2_000), "2 kHz");
+  assert.equal(formatFrequency(2_001), "2001 Hz");
+  assert.equal(formatFrequency(1_000_000), "1 MHz");
+  assert.equal(formatFrequency(1_000_001), "1000001 Hz");
+  assert.equal(frequencyMax("MHz"), "4294.967295");
+  assert.equal(frequencyToHertz("1.234567", "MHz"), 1_234_567);
+  assert.equal(frequencyToHertz("4294.967295", "MHz"), 0xffffffff);
+  assert.throws(() => frequencyToHertz("4294.967296", "MHz"), RangeError);
+  assert.throws(() => frequencyToHertz("0.0000001", "MHz"), /whole number of hertz/);
 });
 
 test("boot save state covers unchanged, edited, and unapplied settings", () => {

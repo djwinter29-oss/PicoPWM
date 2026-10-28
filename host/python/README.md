@@ -44,7 +44,8 @@ Open <http://127.0.0.1:5000>. The dashboard mirrors the WebHID page: device iden
 and RAM, boot configuration with one confirmed **Save and Reboot**, compact pin
 assignment, runtime telemetry, LED/reboot controls, and three eight-channel tables.
 Click a generator frequency or duty to edit its live output; monitor values are
-read-only. Old firmware disables unsupported actions and reports missing telemetry.
+read-only. Frequency uses Hz, kHz, or MHz units, and the optional 1 kHz / 50% preset
+only fills the dialog until Apply is clicked. Old firmware disables unsupported actions and reports missing telemetry.
 Pin assignment, monitoring GPIOs and dialog GPIOs come from the connected board's
 capability-gated HID pin report, not a host-side map. Missing pins show `--`;
 older firmware shows update guidance and malformed reports show an error.

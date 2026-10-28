@@ -29,7 +29,9 @@ test("channel editing uses a dialog instead of detached channel controls", () =>
   assert.doesNotMatch(html, /channel-controls|id="set-channel"/);
   assert.match(html, /<dialog[^>]*id="channel-dialog"/);
   assert.match(html, /id="channel-frequency"[^>]*max="4294967295"/);
+  assert.match(html, /id="channel-frequency-unit" aria-label="Frequency unit">[\s\S]*?<option value="MHz">MHz<\/option>/);
   assert.match(html, /id="channel-duty"[^>]*max="100"/);
+  assert.match(html, /id="channel-preset" type="button">Use 1 kHz \/ 50%<\/button>/);
   assert.match(html, /id="apply-channel" type="submit">Apply/);
 });
 

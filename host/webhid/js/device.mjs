@@ -407,7 +407,24 @@ export class PicoPwmWebHid {
       || !Number.isInteger(duty) || duty < 0 || duty > 100) {
       throw new Error("Channel, frequency, or duty is out of range.");
     }
-    await this.performAction(OPERATION.SET_CHANNEL, { channel, arg0: freqHz, arg1: duty });
+    try {
+      await this.performAction(OPERATION.SET_CHANNEL, { channel, arg0: freqHz, arg1: duty });
+    } catch (error) {
+      if (error.message !== "Command failed: INVALID.") throw error;
+      let actual;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await this.refresh();
+        actual = this.state.dashboard.channels[channel];
+        if (actual?.freq_hz === freqHz && actual.duty === duty) return;
+        if (attempt < 2) await new Promise(resolve => globalThis.setTimeout(resolve, ACTION_POLL_MS));
+      }
+      const readback = actual?.freq_hz === null || actual?.freq_hz === undefined
+        ? "unavailable" : `${actual.freq_hz} Hz / ${actual.duty}%`;
+      const diagnostic = new Error(
+        `Command failed: INVALID (requested ${freqHz} Hz / ${duty}%, readback ${readback}).`);
+      this.update({ error: diagnostic.message });
+      throw diagnostic;
+    }
     await this.afterChange(false);
   }
 

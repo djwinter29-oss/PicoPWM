@@ -44,6 +44,8 @@ Tables stack on narrow screens.
 Generator values have a dotted underline and are keyboard-accessible buttons.
 The dialog identifies the backend, logical channel, and GPIO, and starts from the
 latest realized output (not necessarily the originally requested frequency).
+Frequency is shown in Hz, kHz, or MHz based on its value; changing units preserves
+the frequency. **Use 1 kHz / 50%** fills the fields only and does not change output.
 Apply changes the live output immediately and refreshes readback; Cancel writes
 nothing. Disconnected devices and channels with failed readings cannot be edited.
 An editing hint identifies the interactive generator readings. Boot controls mark

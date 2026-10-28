@@ -72,10 +72,12 @@ test("device filter requires the vendor usage page", () => {
   assert.ok(!matchesPicoPwm({ vendorId: 0xcafe, productId: 0x4012, collections: [{ usagePage: 1 }] }));
 });
 
-function fakeDevice({ acceptSet = true, pendingPolls = 1, capabilities = 3 } = {}) {
+function fakeDevice({ acceptSet = true, pendingPolls = 1, capabilities = 3, actionStatus = 0,
+  applyChannelReadback = false } = {}) {
   const device = {
     vendorId: 0xcafe, productId: 0x4012, collections: [{ usagePage: 0xff00 }], opened: false,
     sent: [], result: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], pending: 0,
+    appliedChannels: new Map(),
     async open() { this.opened = true; },
     async close() { this.opened = false; },
     async receiveFeatureReport(id) {
@@ -90,14 +92,25 @@ function fakeDevice({ acceptSet = true, pendingPolls = 1, capabilities = 3 } = {
         return view(result);
       }
       const bytes = [1];
-      for (let index = 0; index < 8; index++) bytes.push(...[100 * index, 0, 0, 0], index);
+      const bank = id - 10;
+      for (let index = 0; index < 8; index++) {
+        const applied = this.appliedChannels.get(bank * 8 + index);
+        const frequency = applied?.freq_hz ?? 100 * index;
+        const duty = applied?.duty ?? index;
+        bytes.push(frequency & 0xff, frequency >>> 8 & 0xff, frequency >>> 16 & 0xff,
+          frequency >>> 24 & 0xff, duty);
+      }
       return view(bytes);
     },
     async sendFeatureReport(id, data) {
       assert.equal(id, 20);
       this.sent.push([...data]);
       if (acceptSet) {
-        this.result = [1, data[1], data[2], 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        this.result = [1, data[1], data[2], actionStatus, 0, 0, 0, 0, 0, 0, 0, 0];
+        if (applyChannelReadback && data[2] === OPERATION.SET_CHANNEL) {
+          const freqHz = data[4] + (data[5] << 8) + (data[6] << 16) + (data[7] << 24);
+          this.appliedChannels.set(data[3], { freq_hz: freqHz >>> 0, duty: data[8] });
+        }
         this.pending = pendingPolls;
       }
     },
@@ -240,6 +253,17 @@ test("setChannel sends a nonzero transaction and waits past PENDING", async () =
   await client.stop();
   assert.equal(device.sent[1][1], 2);
   assert.equal(device.sent[1][2], OPERATION.STOP);
+});
+
+test("an INVALID channel result is reconciled only when readback confirms the request", async () => {
+  const updatedDevice = fakeDevice({ pendingPolls: 0, actionStatus: 2, applyChannelReadback: true });
+  const updatedClient = await connected(updatedDevice);
+  await updatedClient.setChannel(0, 1000, 50);
+  assert.deepEqual(updatedClient.state.dashboard.channels[0], { channel: 0, freq_hz: 1000, duty: 50 });
+  assert.equal(updatedClient.state.error, null);
+
+  const unchangedClient = await connected(fakeDevice({ pendingPolls: 0, actionStatus: 2 }));
+  await assert.rejects(() => unchangedClient.setChannel(0, 1000, 50), /requested 1000 Hz \/ 50%, readback 0 Hz \/ 0%/);
 });
 
 test("a dropped SET is reported as not accepted", async () => {

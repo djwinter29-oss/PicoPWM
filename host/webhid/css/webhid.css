@@ -4,6 +4,10 @@
   min-height: 38px; padding: 0 10px; border: 1px solid #cbd6d3; border-radius: 7px;
   background: var(--paper); color: var(--ink); font: 600 14px var(--mono);
 }
+.frequency-input { display: flex; min-width: 0; gap: 8px; }
+.frequency-input input { flex: 1 1 0; width: 0; min-width: 0; }
+.frequency-input select { flex: 0 0 84px; }
+.channel-preset { margin: 8px 0; }
 .control-grid .inline-check { display: flex; align-items: center; gap: 6px; min-height: 38px; }
 .control-grid .inline-check input { min-height: 0; }
 .channels-section > .section-heading { flex-wrap: wrap; align-items: center; margin-bottom: 16px; }

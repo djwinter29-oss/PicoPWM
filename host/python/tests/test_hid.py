@@ -17,13 +17,20 @@ class FakeDevice:
         self.mode = mode
         self.result = bytes([1, 0, 0, 0] + [0] * 8)
         self.sent = []
+        self.channels = [{"freq_hz": 1000, "duty": 50} for _ in range(p.CHANNEL_COUNT)]
         self.identity = IDENTITY
         self.closed = False
 
     def get_feature_report(self, report_id, length):
-        payload = {1: self.identity, 2: CONFIGURATION, 3: struct.pack("<BII", 1, 120000, 532480),
-                   4: struct.pack("<BIiHH", 1, 123, 22900, 1170, 6720),
-                   5: bytes([1, *range(24), 26, 27, 255]), 20: self.result}.get(report_id, BANK)
+        if p.BANK_STATUS_REPORT <= report_id < p.BANK_STATUS_REPORT + p.BANK_COUNT:
+            start = (report_id - p.BANK_STATUS_REPORT) * p.BANK_SIZE
+            payload = bytes([1]) + b"".join(
+                struct.pack("<IB", entry["freq_hz"], entry["duty"])
+                for entry in self.channels[start:start + p.BANK_SIZE])
+        else:
+            payload = {1: self.identity, 2: CONFIGURATION, 3: struct.pack("<BII", 1, 120000, 532480),
+                       4: struct.pack("<BIiHH", 1, 123, 22900, 1170, 6720),
+                       5: bytes([1, *range(24), 26, 27, 255]), 20: self.result}.get(report_id, BANK)
         return bytes([report_id]) + payload
 
     def send_feature_report(self, data):
@@ -31,6 +38,12 @@ class FakeDevice:
         if self.mode == "drop":
             return len(data)
         status = 6 if self.mode == "pending" else 2 if self.mode == "fail-bank" and data[3] == 3 else 0
+        if self.mode == "invalid-channel" and data[3] == p.OP_SET_CHANNEL:
+            status = 2
+        if self.mode == "invalid-applied" and data[3] == p.OP_SET_CHANNEL:
+            channel = data[4]
+            self.channels[channel] = {"freq_hz": struct.unpack_from("<I", data, 5)[0], "duty": data[9]}
+            status = 2
         self.result = bytes([1, data[2], data[3], status] + [0] * 8)
         return len(data)
 
@@ -84,6 +97,18 @@ def test_set_channel_completes():
     device, client = make()
     client.set_channel(3, 2000, 25)
     assert device.sent[0][:5] == bytes([20, 1, 1, 1, 3])
+
+
+def test_invalid_result_is_reconciled_when_readback_matches_requested_channel():
+    device, client = make("invalid-applied")
+    state = client.set_channel(0, 2000, 25)
+    assert state["channels"][0] == {"channel": 0, "freq_hz": 2000, "duty": 25}
+
+
+def test_invalid_result_remains_an_error_when_readback_does_not_match():
+    _, client = make("invalid-channel")
+    with pytest.raises(DeviceError, match=r"command failed: INVALID .*readback 1000 Hz / 50%"):
+        client.set_channel(0, 2000, 25)
 
 
 def test_dropped_set_is_reported():

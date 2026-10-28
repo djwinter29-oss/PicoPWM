@@ -88,6 +88,10 @@ static void shell_on_command(EmbeddedCli *cli, CliCommand *cli_command) {
 
         embeddedCliTokenizeArgs(cli_command->args);
         count = embeddedCliGetTokenCount(cli_command->args);
+        if (count >= SHELL_MAX_ARGS) {
+            shell_write_line(shell, "ERR too many command arguments");
+            return;
+        }
         for (uint16_t pos = 1u; (pos <= count) && (argc < (int)SHELL_MAX_ARGS); ++pos) {
             argv[argc++] = embeddedCliGetToken(cli_command->args, pos);
         }

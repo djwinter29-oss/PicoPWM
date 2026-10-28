@@ -46,9 +46,9 @@ These are generator request ranges; `0 Hz` is a special static output level (`0%
 - I2C needs external pull-ups on SDA and SCL. Start at 100 kHz.
 - The default configuration is monitor-only, so no PWM output is driven after power-up. Generator banks start at
    0 Hz and 0% duty.
-- Bank roles are set in the startup configuration, not at build time. Change the target over CDC (`config set`), I2C
-  (`REG_CONFIG_SET`) or HID, then save it with that interface's own operation (`config save`, `REG_CONFIG_SAVE`, or the
-  dashboard's **Save & Reboot**) and reboot to apply it.
+- Bank roles are set in the startup configuration, not at build time. Change them over CDC (`config set`), I2C
+  (`REG_CONFIG_SET`) or HID. CDC validates, saves and reboots for a `config set` request; I2C and HID use their own
+  save and reboot operations (`REG_CONFIG_SAVE` or the dashboard's **Save & Reboot**).
 - The SDK default is 125 MHz on RP2040 and 150 MHz on RP2350. The 150 MHz profile is an overclock only on RP2040.
    HID/dashboard saves require acknowledgement above 150 MHz; CDC has no separate acknowledgement step. The 200 and
    250 MHz profiles are not qualified for every board.
@@ -67,7 +67,8 @@ These are generator request ranges; `0 Hz` is a special static output level (`0%
    [USB CDC CLI guide](docs/guides/control/usb_cdc_cli.md)), or connect an I2C controller to the default 7-bit
    address `0x40`. Serial device names vary by OS; common examples are `/dev/ttyACM0` on Linux, `COMx` on Windows,
    and `/dev/cu.usbmodem*` on macOS. USB CDC does not require a particular terminal baud-rate setting.
-5. **Verify.** In the CDC shell, run `version` to confirm the firmware is running, then `config` to see the bank roles.
+5. **Verify.** In the CDC shell, run `board get version` to confirm the firmware is running, then
+   `config get` to see the bank roles. See the [USB CDC CLI guide](docs/guides/control/usb_cdc_cli.md) for command details.
 6. **Open a dashboard (optional).** Use the [browser dashboard](https://djwinter29-oss.github.io/PicoPWM/) or run one
    locally as described below.
 
@@ -75,14 +76,13 @@ The default bank roles are monitor-only. To try a generator output, connect a 3.
 analyzer to GPIO 1 and GND, then configure Bank A and reboot:
 
 ```text
-config set a gen
-config save
-reboot
+config set banka=generator
 ```
 
-After the board reconnects, run `set 0 1000 50` and `get 0` to request 1 kHz at 50% duty and inspect the realized
-output. When finished, run `reboot` to return generator outputs to their startup state; the saved bank role remains
-unchanged. See the [CDC CLI guide](docs/guides/control/usb_cdc_cli.md) for command details.
+The command saves the target setting and reboots the board. After it reconnects, run `pwm set 0 1000 50` and
+`pwm get 0` to request 1 kHz at 50% duty and inspect the realized output. When finished, run `pwm stop all` to stop
+generator outputs; the saved bank role remains unchanged. See the [CDC CLI guide](docs/guides/control/usb_cdc_cli.md)
+for command details.
 
 ## Troubleshooting
 
@@ -93,8 +93,8 @@ unchanged. See the [CDC CLI guide](docs/guides/control/usb_cdc_cli.md) for comma
 3. Check the wiring: confirm the channel's GPIO in the [hardware setup guide](docs/guides/hardware-setup.md) and that
    the load shares ground with the board.
 
-Use `config` to inspect running and target bank roles and `get <channel>` to inspect a channel's realized frequency and
-duty; both are described in the [USB CDC CLI guide](docs/guides/control/usb_cdc_cli.md).
+Use `config get` to inspect running and target bank roles and `pwm get <channel>` to inspect a channel's realized
+frequency and duty; both are described in the [USB CDC CLI guide](docs/guides/control/usb_cdc_cli.md).
 
 ## Dashboards
 

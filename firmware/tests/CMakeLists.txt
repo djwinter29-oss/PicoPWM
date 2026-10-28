@@ -42,6 +42,22 @@ target_include_directories(cli_channel_commands_test PRIVATE
 pico_pwm_test_warnings(cli_channel_commands_test)
 add_test(NAME cli_channel_commands COMMAND cli_channel_commands_test)
 
+add_executable(cli_grouped_commands_test
+    cli_grouped_commands_test.c
+    ${SOURCE_ROOT}/app/cli/shell.c
+    ${SOURCE_ROOT}/app/cli/pwm_commands.c
+    ${SOURCE_ROOT}/app/cli/channel_commands.c
+    ${SOURCE_ROOT}/app/cli/board_commands.c
+    ${EMBEDDED_CLI_ROOT}/src/embedded_cli.c
+)
+target_include_directories(cli_grouped_commands_test PRIVATE
+    ${TEST_STUB_ROOT}
+    ${SOURCE_ROOT}
+    ${EMBEDDED_CLI_ROOT}/include
+)
+pico_pwm_test_warnings(cli_grouped_commands_test)
+add_test(NAME cli_grouped_commands COMMAND cli_grouped_commands_test)
+
 add_executable(boot_config_test
     boot_config_test.c
     stubs/hardware/flash.c

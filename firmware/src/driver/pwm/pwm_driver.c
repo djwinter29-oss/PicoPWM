@@ -527,11 +527,14 @@ pwm_driver_result_t pwm_driver_restore_defaults(void) {
     pwm_driver_result_t status = PWM_DRIVER_RESULT_OK;
 
     /* Restoring defaults means stopping every generator channel; monitors have nothing to restore. */
-    for (uint channel = 0u; channel < PWM_DRIVER_CHANNEL_COUNT && status == PWM_DRIVER_RESULT_OK; ++channel) {
+    for (uint channel = 0u; channel < PWM_DRIVER_CHANNEL_COUNT; ++channel) {
         pwm_role_t role;
 
         if (pwm_driver_config_channel_role(channel, &role) && role == PWM_ROLE_GENERATOR) {
-            status = pwm_driver_set(channel, 0u, 0u);
+            pwm_driver_result_t result = pwm_driver_set(channel, 0u, 0u);
+            if ((status == PWM_DRIVER_RESULT_OK) && (result != PWM_DRIVER_RESULT_OK)) {
+                status = result;
+            }
         }
     }
 

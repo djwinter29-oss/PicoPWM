@@ -6,13 +6,21 @@ identity, and board-control operations.
 
 ## Shared Semantics
 
-- `get` and `status` report realized channel state.
-- `set` applies only to output-capable channels in the configured banks.
+- Channel reads report realized state, not just the last requested values.
+- Channel updates apply only to output-capable channels in the configured banks.
 - Monitor-only or disabled channels report an unavailable operation.
-- `config` changes only the next-boot target; it never changes active PWM
-  hardware until the board reboots.
+- Configuration changes affect the next boot, not active PWM hardware. On CDC,
+  `config set` validates the complete request, saves it, and reboots to apply
+  the target. I2C and HID use their own save and reboot operations.
 - Channel backend, direction, GPIO, and capabilities come from the fixed Bank
   A/B/C allocation. Hosts may rely on those stable channel ranges.
+
+On the CDC shell, use `pwm get <channel>` to read one channel,
+`pwm get all` to read all channels, and
+`pwm set <channel> <freq_hz> [duty_percent]` to update a generator. Use
+`config get [item]` and `config set <key=value>[, ...]` for startup settings.
+See the [USB CDC CLI guide](usb_cdc_cli.md) for all commands and accepted
+configuration values.
 
 ## Interfaces
 

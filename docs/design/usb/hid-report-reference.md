@@ -237,7 +237,7 @@ length because a report ID has a single descriptor length.
 | Op | Name | Maps to |
 | -: | ---- | ------- |
 | 1 | `SET_CHANNEL` | `device_set_channel(channel, freq_hz, duty)`. |
-| 2 | `STOP` | `device_restore_defaults()`; outputs stop and defaults are restored. |
+| 2 | `STOP` | `device_restore_defaults()`; attempts to stop every generator output. A failure status can mean the stop was partial. |
 | 3 | `SET_BANK` | `boot_config_set_bank()`; `channel` is the bank (`0`-`2`), `arg0` byte 0 backend, byte 1 role. |
 | 4 | `SET_I2C_ADDRESS` | `boot_config_set_i2c_address()`; `arg0` low byte is the 7-bit address. |
 | 5 | `SAVE_CONFIG` | `boot_config_save()`; requires flag bit 0, plus bit 1 when the target clock profile is above `1`. Persists only; it does not restart the device. See Save Cost. |

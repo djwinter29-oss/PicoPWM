@@ -16,6 +16,7 @@ typedef struct {
 typedef struct {
     shell_t *shell;
     uint32_t command_calls;
+    int last_argc;
 } test_context_t;
 
 static uint32_t test_read(void *context, uint8_t *data, uint32_t capacity) {
@@ -44,7 +45,17 @@ static bool test_command(void *context, int argc, const char *const *argv) {
     assert(argc == 1);
     assert(strcmp(argv[0], "ping") == 0);
     test->command_calls++;
+    test->last_argc = argc;
     return shell_write_line(test->shell, "handled");
+}
+
+static bool test_count_arguments(void *context, int argc, const char *const *argv) {
+    test_context_t *test = context;
+
+    (void)argv;
+    test->last_argc = argc;
+    test->command_calls++;
+    return true;
 }
 
 static shell_config_t test_config(test_context_t *context, const shell_transport_t *transport) {
@@ -249,11 +260,28 @@ static void test_rejected_inputs(void) {
     shell_poll(&shell);
 }
 
+static void test_excess_arguments_are_rejected(void) {
+    static const shell_command_t commands[] = {{"args", "args", test_count_arguments}};
+    test_transport_t transport = {.input = "args a b c d e f g h\r"};
+    shell_t shell;
+    test_context_t context = {.shell = &shell};
+    shell_transport_t binding = {.read = test_read, .write = test_write, .context = &transport};
+    shell_config_t config = test_config(&context, &binding);
+
+    config.commands = commands;
+    shell_init(&shell, &config);
+    shell_poll(&shell);
+
+    assert(context.command_calls == 0u);
+    assert(strstr(transport.output, "ERR too many command arguments") != NULL);
+}
+
 int main(void) {
     test_independent_sessions_and_line_endings();
     test_arguments();
     test_completion();
     test_interleaved_escape_sequences();
     test_rejected_inputs();
+    test_excess_arguments_are_rejected();
     return 0;
 }

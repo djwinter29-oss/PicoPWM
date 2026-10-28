@@ -88,24 +88,26 @@ The default profiles expose 24 logical channels. The driver uses this table for
 logical-channel dispatch; generator and monitor backends retain their
 backend-local resources behind the profile mapping.
 
-## Stable CLI Contract
+## CLI Configuration Commands
 
-The host-facing commands remain the same regardless of which startup roles are
-running:
+The CDC shell uses grouped commands. `config get` shows the running and target
+bank settings. `config set` accepts one or more comma-separated assignments,
+such as `config set banka=generator, clock=150`. It validates the complete
+request, saves the new target configuration, and reboots the board to apply it.
+The bank role, clock profile, and I2C address may be combined in one request.
 
-- `info`, `version`, `get`, and `status` report device identity and realized
-  channel state. `info` also reports whether the system-clock target was met.
-- `config` shows the running and target bank settings. `config set` changes
-  one target bank, `config address` changes the target I2C address,
-  `config clock <default|150|200|250>` changes the target system clock in MHz
-  (default keeps the SDK clock: 125 MHz on Pico, 150 MHz on Pico 2), and `config save` persists the target. A reboot applies the target. Saving disables interrupts and locks the PWM core for the flash sector erase, so USB and I2C stall until programming finishes or the 5 second watchdog resets the board. Hosts allow 2 seconds.
-- `set` applies to output-capable channels and returns `ERR unavailable` for
-  monitor channels.
-- `led` and `reboot` remain board-level commands.
+The system clock accepts `default`, `150`, `200`, or `250` MHz. `default` keeps
+the SDK clock: 125 MHz on Pico and 150 MHz on Pico 2. The I2C address is a
+7-bit decimal value from 8 to 119.
 
-The CLI must not require the host to know which backend owns a logical channel.
-Backend and direction details belong in the profile and, where useful, in
-machine-readable capability information from `info`.
+Saving disables interrupts and locks the PWM core for the flash sector erase,
+so USB and I2C stall until programming finishes or the 5-second watchdog resets
+the board. Allow up to 2 seconds for the operation. For all command forms, see
+the [USB CDC CLI guide](control/usb_cdc_cli.md).
+
+Use the logical channel number shown in the [USB CDC CLI guide](control/usb_cdc_cli.md)
+to read or set a channel. The assigned bank determines whether that channel
+generates PWM or monitors an input; no backend selection is needed in the command.
 
 ## Configuration Invariants
 

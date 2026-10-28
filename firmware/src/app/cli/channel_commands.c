@@ -1,8 +1,8 @@
 #include "app/cli/channel_commands.h"
 
+#include "app/cli/cli_usage.h"
 #include "driver/pwm/pwm_driver.h"
 #include "device.h"
-#include "driver/pwm/pwm_driver.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -110,7 +110,7 @@ bool channel_commands_get(void *context, int argc, const char *const *argv) {
     int channel;
 
     if ((argc != 2) || !channel_commands_parse_int(argv[1], &channel)) {
-        return shell_write_line(COMMAND_SHELL, "ERR usage: get <ch>");
+        return shell_write_line(COMMAND_SHELL, "ERR usage: " CLI_SYNTAX_PWM_GET);
     }
 
     if ((channel < 0) || (channel >= (int)channel_commands_channel_count())) {
@@ -135,7 +135,7 @@ bool channel_commands_set(void *context, int argc, const char *const *argv) {
 
     if (((argc != 3) && (argc != 4)) || !channel_commands_parse_int(argv[1], &channel) ||
         !channel_commands_parse_u32(argv[2], &frequency)) {
-        return shell_write_line(COMMAND_SHELL, "ERR usage: set <ch> <freq> [duty%]");
+        return shell_write_line(COMMAND_SHELL, "ERR usage: " CLI_SYNTAX_PWM_SET);
     }
 
     if ((channel < 0) || (channel >= (int)channel_commands_channel_count())) {
@@ -144,7 +144,7 @@ bool channel_commands_set(void *context, int argc, const char *const *argv) {
     }
 
     if ((argc == 4) && !channel_commands_parse_u8(argv[3], &duty)) {
-        return shell_write_line(COMMAND_SHELL, "ERR usage: set <ch> <freq> [duty%]");
+        return shell_write_line(COMMAND_SHELL, "ERR usage: " CLI_SYNTAX_PWM_SET);
     }
 
     result = device_set_channel((uint)channel, frequency, duty);

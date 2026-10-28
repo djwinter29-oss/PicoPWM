@@ -1,48 +1,185 @@
 /**
  * @file pwm_commands.c
- * @brief PicoPWM command registry and shell integration.
+ * @brief PicoPWM command groups and shell integration.
  */
 
 #include "app/cli/pwm_commands.h"
 
-#include "app/cli/channel_commands.h"
 #include "app/cli/board_commands.h"
+#include "app/cli/channel_commands.h"
+#include "app/cli/cli_usage.h"
 
-#include <stdio.h>
 #include <string.h>
 
+static bool pwm_commands_pwm(void *context, int argc, const char *const *argv);
+static bool pwm_commands_board(void *context, int argc, const char *const *argv);
+static bool pwm_commands_config(void *context, int argc, const char *const *argv);
+static bool pwm_commands_question(void *context, int argc, const char *const *argv);
+
+/** @brief Top-level commands exposed by the CDC shell. */
 static const shell_command_t pwm_commands[] = {
-    {"info", "info                    Show device type and system clock", board_commands_info},
-    {"version", "version              Show firmware version", board_commands_version},
-    {"config", "config [set <a|b|c> <gen|mon>|address <7-bit>|clock <mhz>|save]  Show or set startup config",
-     board_commands_config},
-    {"get", "get <ch>                 Read channel properties", channel_commands_get},
-    {"set", "set <ch> <freq> [duty%]  Set freq, optional duty defaults to 50%", channel_commands_set},
-    {"led", "led <on|off>             Set board LED state", board_commands_led},
-    {"reboot", "reboot                Reboot the board", board_commands_reboot},
-    {"stop", "stop                    Stop all channels and reset defaults", board_commands_stop},
-    {"status", "status                Show all configured channels", channel_commands_status},
+    {"pwm", CLI_SYNTAX_PWM_GET " | " CLI_SYNTAX_PWM_SET " | " CLI_SYNTAX_PWM_STOP, pwm_commands_pwm},
+    {"board", CLI_SYNTAX_BOARD_GET " | " CLI_SYNTAX_BOARD_SET " | " CLI_SYNTAX_BOARD_REBOOT, pwm_commands_board},
+    {"config", CLI_SYNTAX_CONFIG_GET " | " CLI_SYNTAX_CONFIG_SET, pwm_commands_config},
+    {"?", "List command groups and available commands", pwm_commands_question},
 };
 
-static void pwm_commands_write_help(shell_t *shell) {
-    shell_write_line(shell, "Unified control interface: each channel has freq and duty.");
-    shell_write_line(shell, "Logical channels and backend assignment are firmware-configured.");
-    shell_write_line(shell, NULL);
-    shell_write_line(shell, "Commands:");
-    shell_write_line(shell, "help [cmd]              Show this help");
-    for (uint32_t index = 0u; index < (sizeof(pwm_commands) / sizeof(pwm_commands[0])); ++index) {
-        shell_write_line(shell, pwm_commands[index].help);
+/** @brief Print the commands belonging to one group. */
+static bool pwm_commands_write_group_help(shell_t *shell, const char *group) {
+    if (group == NULL) {
+        shell_write_line(shell, "Groups: pwm, board, config");
+        shell_write_line(shell, "Use 'help <group> [verb]' or '<group> ?' for command syntax.");
+        return true;
     }
+
+    if (strcmp(group, "pwm") == 0) {
+        shell_write_line(shell, CLI_SYNTAX_PWM_GET);
+        shell_write_line(shell, CLI_SYNTAX_PWM_SET);
+        shell_write_line(shell, CLI_SYNTAX_PWM_STOP);
+        return true;
+    }
+    if (strcmp(group, "board") == 0) {
+        shell_write_line(shell, CLI_SYNTAX_BOARD_GET);
+        shell_write_line(shell, CLI_SYNTAX_BOARD_SET);
+        shell_write_line(shell, CLI_SYNTAX_BOARD_REBOOT);
+        return true;
+    }
+    if (strcmp(group, "config") == 0) {
+        shell_write_line(shell, CLI_SYNTAX_CONFIG_GET);
+        shell_write_line(shell, CLI_SYNTAX_CONFIG_SET);
+        return true;
+    }
+
+    shell_write_line(shell, "ERR unknown command group (pwm, board, config)");
+    return false;
 }
 
-static bool pwm_commands_unknown(void *context, const char *command_name) {
-    char line[64];
+/** @brief Dispatch PWM verbs and their parameters. */
+static bool pwm_commands_pwm(void *context, int argc, const char *const *argv) {
+    shell_t *shell = context;
+    const char *const get_all[] = {"status"};
+    const char *const stop_all[] = {"stop"};
 
-    snprintf(line, sizeof(line), "ERR unknown command: '%s'. Type 'help'.", command_name);
-    shell_write_line((shell_t *)context, line);
+    if ((argc == 1) || ((argc == 2) && (strcmp(argv[1], "?") == 0))) {
+        return pwm_commands_write_group_help(shell, "pwm");
+    }
+    if (strcmp(argv[1], "get") == 0) {
+        if ((argc == 2) || ((argc == 3) && (strcmp(argv[2], "?") == 0))) {
+            shell_write_line(shell, CLI_USAGE_PWM_GET);
+            return true;
+        }
+        if ((argc == 3) && (strcmp(argv[2], "all") == 0)) {
+            return channel_commands_status(shell, 1, get_all);
+        }
+        if (argc == 3) {
+            const char *channel_argv[] = {"get", argv[2]};
+            return channel_commands_get(shell, 2, channel_argv);
+        }
+        shell_write_line(shell, "ERR " CLI_SYNTAX_PWM_GET);
+        return false;
+    }
+    if (strcmp(argv[1], "set") == 0) {
+        if ((argc == 2) || ((argc == 3) && (strcmp(argv[2], "?") == 0))) {
+            shell_write_line(shell, CLI_USAGE_PWM_SET);
+            return true;
+        }
+        if ((argc == 4) || (argc == 5)) {
+            const char *set_argv[] = {"set", argv[2], argv[3], argc == 5 ? argv[4] : NULL};
+            return channel_commands_set(shell, argc - 1, set_argv);
+        }
+        shell_write_line(shell, "ERR " CLI_SYNTAX_PWM_SET);
+        return false;
+    }
+    if (strcmp(argv[1], "stop") == 0) {
+        if ((argc == 2) || ((argc == 3) && (strcmp(argv[2], "?") == 0))) {
+            shell_write_line(shell, CLI_USAGE_PWM_STOP);
+            return true;
+        }
+        if ((argc == 3) && (strcmp(argv[2], "all") == 0)) {
+            return board_commands_stop(shell, 1, stop_all);
+        }
+        shell_write_line(shell, "ERR " CLI_SYNTAX_PWM_STOP);
+        return false;
+    }
+
+    shell_write_line(shell, "ERR unknown PWM command; use 'pwm ?'");
+    return false;
+}
+
+/** @brief Dispatch board verbs and their parameters. */
+static bool pwm_commands_board(void *context, int argc, const char *const *argv) {
+    shell_t *shell = context;
+
+    if ((argc == 1) || ((argc == 2) && (strcmp(argv[1], "?") == 0))) {
+        return pwm_commands_write_group_help(shell, "board");
+    }
+    if (strcmp(argv[1], "get") == 0) {
+        if ((argc == 2) || ((argc == 3) && (strcmp(argv[2], "?") == 0))) {
+            shell_write_line(shell, CLI_USAGE_BOARD_GET);
+            return true;
+        }
+        if (argc == 3) {
+            return board_commands_get(shell, 3, argv);
+        }
+        shell_write_line(shell, "ERR " CLI_SYNTAX_BOARD_GET);
+        return false;
+    }
+    if (strcmp(argv[1], "set") == 0) {
+        if ((argc == 2) || ((argc == 3) && (strcmp(argv[2], "?") == 0))) {
+            shell_write_line(shell, CLI_USAGE_BOARD_SET);
+            return true;
+        }
+        if (argc == 4) {
+            return board_commands_set(shell, argc, argv);
+        }
+        shell_write_line(shell, "ERR " CLI_SYNTAX_BOARD_SET);
+        return false;
+    }
+    if ((strcmp(argv[1], "reboot") == 0) && ((argc == 2) || ((argc == 3) && (strcmp(argv[2], "?") == 0)))) {
+        if (argc == 3) {
+            return shell_write_line(shell, CLI_USAGE_BOARD_REBOOT);
+        }
+        return board_commands_reboot(shell, 1, (const char *const[]){"reboot"});
+    }
+    shell_write_line(shell, "ERR unknown board command; use 'board ?'");
+    return false;
+}
+
+/** @brief Dispatch configuration verbs and their parameters. */
+static bool pwm_commands_config(void *context, int argc, const char *const *argv) {
+    shell_t *shell = context;
+
+    if ((argc == 1) || ((argc == 2) && (strcmp(argv[1], "?") == 0))) {
+        return pwm_commands_write_group_help(shell, "config");
+    }
+    if ((strcmp(argv[1], "get") == 0) || (strcmp(argv[1], "set") == 0)) {
+        return board_commands_config(shell, argc, argv);
+    }
+
+    shell_write_line(shell, "ERR unknown config command; use 'config ?'");
+    return false;
+}
+
+/** @brief Dispatch the top-level question-mark help alias. */
+static bool pwm_commands_question(void *context, int argc, const char *const *argv) {
+    shell_t *shell = context;
+
+    (void)argv;
+    if (argc != 1) {
+        return shell_write_line(shell, "Usage: ?");
+    }
+    return pwm_commands_write_group_help(shell, NULL);
+}
+
+/** @brief Handle commands that do not match a registered group. */
+static bool pwm_commands_unknown(void *context, const char *command_name) {
+    shell_t *shell = context;
+    shell_write_line(shell, "ERR unknown command; use 'help' or '?'");
+    (void)command_name;
     return true;
 }
 
+/** @copydoc pwm_commands_init */
 void pwm_commands_init(pwm_commands_t *commands, const shell_transport_t *transport) {
     shell_config_t config = {
         .transport = transport,
@@ -56,15 +193,17 @@ void pwm_commands_init(pwm_commands_t *commands, const shell_transport_t *transp
     shell_init((commands != NULL) ? &commands->shell : NULL, &config);
 }
 
+/** @copydoc pwm_commands_on_connected */
 void pwm_commands_on_connected(pwm_commands_t *commands) {
     if (commands == NULL) {
         return;
     }
 
-    pwm_commands_write_help(&commands->shell);
+    pwm_commands_write_group_help(&commands->shell, NULL);
     shell_prompt(&commands->shell);
 }
 
+/** @copydoc pwm_commands_poll */
 void pwm_commands_poll(pwm_commands_t *commands) {
     if (commands != NULL) {
         shell_poll(&commands->shell);

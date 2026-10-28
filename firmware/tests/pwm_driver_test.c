@@ -46,6 +46,8 @@ void sw_mon_handle_gpio_irq(uint gpio, uint32_t events) {
 
 /** @brief Set by the mailbox wait hook. Frequency 888 blocks in the backend until this becomes 1. */
 static atomic_int hold_release;
+static atomic_uint stop_attempt_mask;
+static atomic_int stop_failure_channel = -1;
 
 static void release_apply(void) {
     atomic_store(&hold_release, 1);
@@ -59,12 +61,19 @@ static void reenter_apply(void) {
 }
 
 static bool test_gen_set(uint bank, uint channel, uint32_t freq_hz, uint8_t duty) {
+    uint logical_channel = bank * PWM_DRIVER_CONFIG_BANK_SIZE + channel;
     pwm_state_t state = {.freq_hz = freq_hz, .duty = duty};
 
+    if (freq_hz == 0u) {
+        atomic_fetch_or(&stop_attempt_mask, (uint32_t)1u << logical_channel);
+        if ((int)logical_channel == atomic_load(&stop_failure_channel)) {
+            return false;
+        }
+    }
     if (freq_hz == 777u) {
         return false;
     }
-    pwm_driver_store_applied_state(bank * PWM_DRIVER_CONFIG_BANK_SIZE + channel, &state);
+    pwm_driver_store_applied_state(logical_channel, &state);
     return true;
 }
 
@@ -188,6 +197,16 @@ int main(void) {
     expect_state(1u, 0u, 0u);
     pwm_driver_set_wait_hook(NULL);
 
+    assert(pwm_driver_set(3u, 1000u, 50u) == PWM_DRIVER_RESULT_OK);
+    atomic_store(&stop_attempt_mask, 0u);
+    atomic_store(&stop_failure_channel, 3);
+    assert(pwm_driver_restore_defaults() == PWM_DRIVER_RESULT_APPLY_FAILED);
+    assert(atomic_load(&stop_attempt_mask) == ((1u << 16u) - 1u));
+    expect_state(0u, 0u, 0u);
+    expect_state(3u, 1000u, 50u);
+    expect_state(9u, 0u, 0u);
+
+    atomic_store(&stop_failure_channel, -1);
     assert(pwm_driver_restore_defaults() == PWM_DRIVER_RESULT_OK);
     expect_state(0u, 0u, 0u);
     expect_state(9u, 0u, 0u);

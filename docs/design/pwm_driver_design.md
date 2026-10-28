@@ -135,7 +135,7 @@ Architecturally, `pwm_driver_set()` is an internal command-ingress API.
 - The wrapper returns `PWM_DRIVER_RESULT_UNAVAILABLE` if Core 1 is not ready yet.
 - The wrapper returns `PWM_DRIVER_RESULT_TIMEOUT` when the command is still unclaimed at the apply deadline. Core 0 cancels that command and it is not applied. If Core 1 has already claimed it, Core 0 keeps waiting and returns the published result. A stalled Core 1 heartbeat during that wait reboots the board.
 - The wrapper returns `PWM_DRIVER_RESULT_APPLY_FAILED` if Core 1 accepts the command but the backend rejects it.
-- `pwm_driver_restore_defaults()` has no mailbox command of its own: it calls `pwm_driver_set(ch, 0, 0)` for every generator channel and returns the first failure.
+- `pwm_driver_restore_defaults()` has no mailbox command of its own: it calls `pwm_driver_set(ch, 0, 0)` for every generator channel, continues after individual failures, and returns the first failure after all generator channels have been attempted.
 
 ## Current Default Mapping
 

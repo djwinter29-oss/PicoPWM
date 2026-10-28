@@ -43,7 +43,7 @@ below. Channel register ranges use the channel count advertised by
 | `REG_CONFIG_ADDRESS` | `0x06` | 2 | 1 | One-byte target 7-bit I2C address; reboot applies it |
 | `REG_GET_CHk` | `0x10 + k` | 1 | 5 | Channel state: `freq`, `duty` |
 | `REG_SET_CHk` | `0x30 + k` | 6 | 1 | Five-byte `freq`/`duty` payload; returns status |
-| `REG_STOP_ALL` | `0x90` | 1 | 1 | Profile reset request; returns status |
+| `REG_STOP_ALL` | `0x90` | 1 | 1 | Stop every generator output; returns status |
 | `REG_LED` | `0x91` | 2 | 1 | One-byte LED value; returns status |
 | `REG_REBOOT` | `0x92` | 1 | 1 | Reboot request; returns status |
 
@@ -65,6 +65,10 @@ target; the host must issue `REG_REBOOT` before the target becomes running.
 The erase disables interrupts and locks the PWM core, so the slave stretches
 or stalls for that sector. The stall ends when programming returns or the 5 second watchdog resets the board.
 Allow 2 seconds before treating the bus as failed.
+
+`REG_STOP_ALL` attempts every configured generator channel, leaving monitor
+channels unchanged. If it returns an error, some outputs may have stopped
+before the failure while others may remain active; read channel state to verify.
 
 ## Channel Property Layout
 

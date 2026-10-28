@@ -29,8 +29,8 @@ pwm_driver_result_t pwm_driver_set(uint channel, uint32_t freq_hz, uint8_t duty)
 bool pwm_driver_get(uint channel, pwm_state_t *state);
 
 /**
- * @brief Restore all logical channels to the shared default state.
- * @return Result code for the admitted command attempt.
+ * @brief Stop every generator channel, continuing after individual failures.
+ * @return `PWM_DRIVER_RESULT_OK` if all channels stopped, otherwise the first failure.
  */
 pwm_driver_result_t pwm_driver_restore_defaults(void);
 

@@ -96,8 +96,8 @@ bool device_get_channel(uint channel, pwm_state_t *state);
 pwm_driver_result_t device_set_channel(uint channel, uint32_t freq_hz, uint8_t duty);
 
 /**
- * @brief Restore all logical channels to the shared default state.
- * @return Result code from the shared PWM control plane.
+ * @brief Stop every configured generator channel; monitor channels are unchanged.
+ * @return `PWM_DRIVER_RESULT_OK` if all outputs stopped, otherwise the first failure after all are attempted.
  */
 pwm_driver_result_t device_restore_defaults(void);
 

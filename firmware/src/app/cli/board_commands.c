@@ -1,188 +1,362 @@
+/**
+ * @file board_commands.c
+ * @brief Board and startup-configuration command handlers for the CDC shell.
+ */
+
 #include "app/cli/board_commands.h"
 
-#include "driver/pwm/pwm_driver.h"
-#include "platform/boot_config.h"
+#include "app/cli/cli_usage.h"
 #include "device.h"
-#include "platform/led.h"
+#include "platform/boot_config.h"
 #include "platform/system.h"
-#include "driver/pwm/pwm_driver.h"
 
-#include "hardware/clocks.h"
-
+#include <ctype.h>
+#include <errno.h>
+#include <limits.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define COMMAND_SHELL ((shell_t *)context)
 
-static const char *board_commands_result_text(pwm_driver_result_t result) {
-    switch (result) {
-    case PWM_DRIVER_RESULT_BUSY:
-        return "busy";
-    case PWM_DRIVER_RESULT_INVALID:
-        return "invalid";
-    case PWM_DRIVER_RESULT_UNAVAILABLE:
-        return "unavailable";
-    case PWM_DRIVER_RESULT_TIMEOUT:
-        return "timeout";
-    case PWM_DRIVER_RESULT_APPLY_FAILED:
-        return "apply failed";
-    case PWM_DRIVER_RESULT_OK:
-    default:
-        return "ok";
-    }
+/** @brief Staged configuration changes; nothing is written until every field validates. */
+typedef struct {
+    bool bank_changed[PWM_BANK_COUNT]; /**< Whether the corresponding bank role was requested. */
+    pwm_role_t bank_role[PWM_BANK_COUNT]; /**< New role for each requested bank. */
+    bool clock_changed; /**< Whether the system clock profile was requested. */
+    boot_config_sysclk_t clock_profile; /**< New system clock profile. */
+    bool address_changed; /**< Whether the I2C address was requested. */
+    uint8_t address; /**< New 7-bit I2C address. */
+} board_config_update_t;
+
+/** @brief Map a bank role to its user-facing name. */
+static const char *board_commands_role_name(pwm_role_t role) {
+    return role == PWM_ROLE_GENERATOR ? "generator" : "monitor";
 }
 
-bool board_commands_info(void *context, int argc, const char *const *argv) {
-    char line[64];
+/** @brief Parse a decimal unsigned integer without signs or trailing characters. */
+static bool board_commands_parse_decimal(const char *text, unsigned long *value_out) {
+    char *end = NULL;
+    unsigned long value;
 
-    (void)argv;
-
-    if (argc != 1) {
-        return shell_write_line(COMMAND_SHELL, "ERR usage: info");
-    }
-
-    if (!shell_write_line(COMMAND_SHELL, device_name())) {
+    if ((text == NULL) || (text[0] < '0') || (text[0] > '9') || (value_out == NULL)) {
         return false;
     }
 
-    snprintf(line, sizeof(line), "clock=%lu Hz target=%s", (unsigned long)system_clock_hz(),
-             system_clock_is_at_target() ? "met" : "fallback");
-    return shell_write_line(COMMAND_SHELL, line);
-}
-
-bool board_commands_version(void *context, int argc, const char *const *argv) {
-    (void)argv;
-
-    if (argc != 1) {
-        return shell_write_line(COMMAND_SHELL, "ERR usage: version");
+    errno = 0;
+    value = strtoul(text, &end, 10);
+    if ((errno == ERANGE) || (end == text) || (end == NULL) || (*end != '\0')) {
+        return false;
     }
 
-    return shell_write_line(COMMAND_SHELL, device_firmware_version());
+    *value_out = value;
+    return true;
 }
 
-static const char *board_commands_role_name(pwm_role_t role) {
-    return role == PWM_ROLE_GENERATOR ? "gen" : "mon";
+/** @brief Print one setting's active and saved-target values. */
+static bool board_commands_config_item(shell_t *shell, const char *item) {
+    char line[96];
+    unsigned long running_clock = (unsigned long)device_system_clock_hz();
+    uint16_t target_clock = boot_config_get_sysclk_mhz();
+
+    if (strcmp(item, "banka") == 0) {
+        snprintf(line, sizeof(line), "banka running=%s target=%s",
+                 board_commands_role_name(device_bank_role(PWM_BANK_A)),
+                 board_commands_role_name(boot_config_get_bank(PWM_BANK_A)));
+    } else if (strcmp(item, "bankb") == 0) {
+        snprintf(line, sizeof(line), "bankb running=%s target=%s",
+                 board_commands_role_name(device_bank_role(PWM_BANK_B)),
+                 board_commands_role_name(boot_config_get_bank(PWM_BANK_B)));
+    } else if (strcmp(item, "bankc") == 0) {
+        snprintf(line, sizeof(line), "bankc running=%s target=%s",
+                 board_commands_role_name(device_bank_role(PWM_BANK_C)),
+                 board_commands_role_name(boot_config_get_bank(PWM_BANK_C)));
+    } else if (strcmp(item, "clock") == 0) {
+        if (target_clock == 0u) {
+            snprintf(line, sizeof(line), "clock running=%lu Hz target=default", running_clock);
+        } else {
+            snprintf(line, sizeof(line), "clock running=%lu Hz target=%u MHz", running_clock, (unsigned)target_clock);
+        }
+    } else if (strcmp(item, "address") == 0) {
+        snprintf(line, sizeof(line), "address running=%u target=%u", (unsigned)device_i2c_address(),
+                 (unsigned)boot_config_get_i2c_address());
+    } else {
+        return shell_write_line(shell, "ERR config item must be banka, bankb, bankc, clock or address");
+    }
+
+    return shell_write_line(shell, line);
 }
 
-static void board_commands_format_config(char *line, size_t size, const char *label, unsigned mhz, uint8_t address,
-                                         pwm_role_t (*role)(pwm_bank_t)) {
-    snprintf(line, size, "%s=clk=%uMHz i2c=0x%02X A:hw/%s B:pio/%s C:sw/%s", label, mhz, (unsigned)address,
-             board_commands_role_name(role(PWM_BANK_A)), board_commands_role_name(role(PWM_BANK_B)),
-             board_commands_role_name(role(PWM_BANK_C)));
+/** @brief Parse and validate one comma-separated configuration assignment. */
+static bool board_commands_parse_assignment(char *assignment, board_config_update_t *update) {
+    char *equal = strchr(assignment, '=');
+    unsigned long number;
+
+    if ((equal == NULL) || (equal == assignment) || (equal[1] == '\0') || strchr(equal + 1, '=') != NULL) {
+        return false;
+    }
+    *equal++ = '\0';
+
+    if (strcmp(assignment, "banka") == 0 || strcmp(assignment, "bankb") == 0 ||
+        strcmp(assignment, "bankc") == 0) {
+        pwm_bank_t bank = (strcmp(assignment, "banka") == 0) ? PWM_BANK_A
+                          : (strcmp(assignment, "bankb") == 0) ? PWM_BANK_B
+                                                               : PWM_BANK_C;
+        if (update->bank_changed[bank]) {
+            return false;
+        }
+        if (strcmp(equal, "generator") == 0) {
+            update->bank_role[bank] = PWM_ROLE_GENERATOR;
+        } else if (strcmp(equal, "monitor") == 0) {
+            update->bank_role[bank] = PWM_ROLE_MONITOR;
+        } else {
+            return false;
+        }
+        update->bank_changed[bank] = true;
+        return true;
+    }
+
+    if (strcmp(assignment, "clock") == 0) {
+        if (update->clock_changed) {
+            return false;
+        }
+        if (strcmp(equal, "default") == 0) {
+            update->clock_profile = BOOT_CONFIG_SYSCLK_DEFAULT;
+        } else if (board_commands_parse_decimal(equal, &number)) {
+            update->clock_profile = (number == 150u)   ? BOOT_CONFIG_SYSCLK_150MHZ
+                                    : (number == 200u) ? BOOT_CONFIG_SYSCLK_200MHZ
+                                    : (number == 250u) ? BOOT_CONFIG_SYSCLK_250MHZ
+                                                       : (boot_config_sysclk_t)(BOOT_CONFIG_SYSCLK_250MHZ + 1u);
+            if ((unsigned)update->clock_profile > BOOT_CONFIG_SYSCLK_250MHZ) {
+                return false;
+            }
+        } else {
+            return false;
+        }
+        update->clock_changed = true;
+        return true;
+    }
+
+    if (strcmp(assignment, "address") == 0) {
+        if (update->address_changed || !board_commands_parse_decimal(equal, &number) || (number < 8u) ||
+            (number > 119u)) {
+            return false;
+        }
+        update->address = (uint8_t)number;
+        update->address_changed = true;
+        return true;
+    }
+
+    return false;
 }
 
-bool board_commands_config(void *context, int argc, const char *const *argv) {
-    char line[128];
+/** @brief Parse the complete update before mutating any stored setting. */
+static bool board_commands_parse_update(int argc, const char *const *argv, board_config_update_t *update) {
+    char assignments[96];
+    size_t used = 0u;
 
-    if (argc == 1) {
-        board_commands_format_config(line, sizeof(line), "running",
-                                     (unsigned)((device_system_clock_hz() + 500000u) / 1000000u), device_i2c_address(),
-                                     device_bank_role);
-        shell_write_line(COMMAND_SHELL, line);
-        board_commands_format_config(line, sizeof(line), "target",
-                                     boot_config_get_sysclk_mhz() != 0u ? boot_config_get_sysclk_mhz()
-                                                                        : SYS_CLK_KHZ / 1000u,
-                                     boot_config_get_i2c_address(), boot_config_get_bank);
+    if ((argc < 3) || (update == NULL)) {
+        return false;
+    }
+
+    assignments[0] = '\0';
+    for (int index = 2; index < argc; ++index) {
+        size_t length = strlen(argv[index]);
+        if ((used + length + (used != 0u ? 1u : 0u)) >= sizeof(assignments)) {
+            return false;
+        }
+        if (used != 0u) {
+            assignments[used++] = ' ';
+        }
+        memcpy(&assignments[used], argv[index], length);
+        used += length;
+        assignments[used] = '\0';
+    }
+
+    char *cursor = assignments;
+    while (*cursor != '\0') {
+        char *end = strchr(cursor, ',');
+        char *first;
+        char *last;
+
+        if (end != NULL) {
+            *end = '\0';
+        }
+        first = cursor;
+        while (isspace((unsigned char)*first)) {
+            ++first;
+        }
+        last = first + strlen(first);
+        while ((last > first) && isspace((unsigned char)last[-1])) {
+            *--last = '\0';
+        }
+        if ((first == last) || !board_commands_parse_assignment(first, update)) {
+            return false;
+        }
+        if (end == NULL) {
+            break;
+        }
+        cursor = end + 1;
+        if (*cursor == '\0') {
+            return false;
+        }
+    }
+
+    return update->bank_changed[0] || update->bank_changed[1] || update->bank_changed[2] ||
+           update->clock_changed || update->address_changed;
+}
+
+/** @brief Restore the staged configuration after a failed flash save. */
+static void board_commands_restore_config(const pwm_role_t *roles, boot_config_sysclk_t clock, uint8_t address) {
+    for (pwm_bank_t bank = PWM_BANK_A; bank < PWM_BANK_COUNT; bank = (pwm_bank_t)(bank + 1)) {
+        (void)boot_config_set_bank(bank, roles[bank]);
+    }
+    (void)boot_config_set_sysclk(clock);
+    (void)boot_config_set_i2c_address(address);
+}
+
+/** @brief Commit a fully validated update, saving it and scheduling its reboot. */
+static bool board_commands_apply_update(shell_t *shell, const board_config_update_t *update) {
+    pwm_role_t previous_roles[PWM_BANK_COUNT];
+    boot_config_sysclk_t previous_clock = boot_config_get_sysclk();
+    uint8_t previous_address = boot_config_get_i2c_address();
+
+    for (pwm_bank_t bank = PWM_BANK_A; bank < PWM_BANK_COUNT; bank = (pwm_bank_t)(bank + 1)) {
+        previous_roles[bank] = boot_config_get_bank(bank);
+    }
+    for (pwm_bank_t bank = PWM_BANK_A; bank < PWM_BANK_COUNT; bank = (pwm_bank_t)(bank + 1)) {
+        if (update->bank_changed[bank] && !boot_config_set_bank(bank, update->bank_role[bank])) {
+            board_commands_restore_config(previous_roles, previous_clock, previous_address);
+            return shell_write_line(shell, "ERR config update rejected");
+        }
+    }
+    if ((update->clock_changed && !boot_config_set_sysclk(update->clock_profile)) ||
+        (update->address_changed && !boot_config_set_i2c_address(update->address))) {
+        board_commands_restore_config(previous_roles, previous_clock, previous_address);
+        return shell_write_line(shell, "ERR config update rejected");
+    }
+    if (!boot_config_save()) {
+        board_commands_restore_config(previous_roles, previous_clock, previous_address);
+        return shell_write_line(shell, "ERR config save failed; settings unchanged");
+    }
+
+    if (!shell_write_line(shell, "OK config saved; rebooting")) {
+        device_schedule_reboot(500u);
+        return false;
+    }
+    device_schedule_reboot(500u);
+    return true;
+}
+
+/** @copydoc board_commands_get */
+bool board_commands_get(void *context, int argc, const char *const *argv) {
+    char line[64];
+
+    if (argc != 3) {
+        return shell_write_line(COMMAND_SHELL, "ERR " CLI_SYNTAX_BOARD_GET);
+    }
+    if (strcmp(argv[2], "clock") == 0) {
+        snprintf(line, sizeof(line), "clock=%lu Hz target=%s", (unsigned long)device_system_clock_hz(),
+                 system_clock_is_at_target() ? "met" : "fallback");
         return shell_write_line(COMMAND_SHELL, line);
     }
-
-    if ((argc == 2) && (strcmp(argv[1], "save") == 0)) {
-        return shell_write_line(COMMAND_SHELL, boot_config_save() ? "OK config saved; reboot required"
-                                                                  : "ERR config invalid or flash write failed");
+    if (strcmp(argv[2], "led") == 0) {
+        bool on;
+        if (!device_led_read(&on)) {
+            return shell_write_line(COMMAND_SHELL, "ERR LED unavailable");
+        }
+        return shell_write_line(COMMAND_SHELL, on ? "led=on" : "led=off");
     }
-
-    if ((argc == 3) && (strcmp(argv[1], "address") == 0)) {
-        char *end = NULL;
-        unsigned long value = strtoul(argv[2], &end, 0);
-        return shell_write_line(COMMAND_SHELL, (end != argv[2] && *end == '\0' && value <= 0x77u && value >= 0x08u &&
-                                                boot_config_set_i2c_address((uint8_t)value))
-                                                   ? "OK target address updated; save then reboot"
-                                                   : "ERR invalid I2C address");
+    if (strcmp(argv[2], "version") == 0) {
+        return shell_write_line(COMMAND_SHELL, device_firmware_version());
     }
-
-    if ((argc == 3) && (strcmp(argv[1], "clock") == 0)) {
-        char *end = NULL;
-        unsigned long mhz = strtoul(argv[2], &end, 10);
-        bool is_default = strcmp(argv[2], "default") == 0;
-        bool numeric = end != argv[2] && *end == '\0';
-        boot_config_sysclk_t profile = (numeric && mhz == 150u)   ? BOOT_CONFIG_SYSCLK_150MHZ
-                                       : (numeric && mhz == 200u) ? BOOT_CONFIG_SYSCLK_200MHZ
-                                       : (numeric && mhz == 250u) ? BOOT_CONFIG_SYSCLK_250MHZ
-                                                                  : BOOT_CONFIG_SYSCLK_DEFAULT;
-        bool found = is_default || profile != BOOT_CONFIG_SYSCLK_DEFAULT;
-        bool ok = found && boot_config_set_sysclk(profile);
-        return shell_write_line(COMMAND_SHELL, ok ? "OK target clock updated; save then reboot"
-                                                  : "ERR clock must be default, 150, 200 or 250");
-    }
-
-    if ((argc != 4) || (strcmp(argv[1], "set") != 0)) {
-        return shell_write_line(
-            COMMAND_SHELL,
-            "ERR usage: config [set <a|b|c> <gen|mon>|address <7-bit>|clock <default|150|200|250>|save]");
-    }
-
-    pwm_bank_t bank = (strcmp(argv[2], "a") == 0)   ? PWM_BANK_A
-                      : (strcmp(argv[2], "b") == 0) ? PWM_BANK_B
-                      : (strcmp(argv[2], "c") == 0) ? PWM_BANK_C
-                                                    : PWM_BANK_COUNT;
-    pwm_role_t role = (strcmp(argv[3], "gen") == 0)   ? PWM_ROLE_GENERATOR
-                      : (strcmp(argv[3], "mon") == 0) ? PWM_ROLE_MONITOR
-                                                      : PWM_ROLE_MONITOR + 1u;
-
-    return shell_write_line(COMMAND_SHELL, boot_config_set_bank(bank, role) ? "OK target updated; save then reboot"
-                                                                            : "ERR invalid bank/role");
+    return shell_write_line(COMMAND_SHELL, "ERR board item must be clock, led or version");
 }
 
-bool board_commands_led(void *context, int argc, const char *const *argv) {
-    if (argc != 2) {
-        return shell_write_line(COMMAND_SHELL, "ERR usage: led <on|off>");
-    }
+/** @copydoc board_commands_set */
+bool board_commands_set(void *context, int argc, const char *const *argv) {
+    bool on;
 
-    if ((strcmp(argv[1], "on") == 0) || (strcmp(argv[1], "1") == 0)) {
-        led_set(true);
-        return shell_write_line(COMMAND_SHELL, "OK led on");
+    if ((argc != 4) || (strcmp(argv[2], "led") != 0)) {
+        return shell_write_line(COMMAND_SHELL, "ERR " CLI_SYNTAX_BOARD_SET);
     }
-
-    if ((strcmp(argv[1], "off") == 0) || (strcmp(argv[1], "0") == 0)) {
-        led_set(false);
-        return shell_write_line(COMMAND_SHELL, "OK led off");
+    if (strcmp(argv[3], "on") == 0) {
+        on = true;
+    } else if (strcmp(argv[3], "off") == 0) {
+        on = false;
+    } else {
+        return shell_write_line(COMMAND_SHELL, "ERR " CLI_SYNTAX_BOARD_SET);
     }
-
-    return shell_write_line(COMMAND_SHELL, "ERR usage: led <on|off>");
+    if (!device_led_set(on)) {
+        return shell_write_line(COMMAND_SHELL, "ERR LED unavailable");
+    }
+    return shell_write_line(COMMAND_SHELL, on ? "OK led on" : "OK led off");
 }
 
+/** @copydoc board_commands_config */
+bool board_commands_config(void *context, int argc, const char *const *argv) {
+    shell_t *shell = COMMAND_SHELL;
+    board_config_update_t update = {0};
+    const char *const items[] = {"banka", "bankb", "bankc", "clock", "address"};
+
+    if ((argc < 2) || (strcmp(argv[1], "get") != 0 && strcmp(argv[1], "set") != 0)) {
+        return shell_write_line(shell, "ERR " CLI_SYNTAX_CONFIG_GET " | " CLI_SYNTAX_CONFIG_SET);
+    }
+    if (strcmp(argv[1], "get") == 0) {
+        if (argc == 2) {
+            for (size_t index = 0u; index < sizeof(items) / sizeof(items[0]); ++index) {
+                if (!board_commands_config_item(shell, items[index])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if ((argc == 3) && (strcmp(argv[2], "?") == 0)) {
+            return shell_write_line(shell, "Items: banka, bankb, bankc, clock, address");
+        }
+        if (argc == 3) {
+            return board_commands_config_item(shell, argv[2]);
+        }
+        return shell_write_line(shell, "ERR " CLI_SYNTAX_CONFIG_GET);
+    }
+
+    if ((argc == 2) || ((argc == 3) && (strcmp(argv[2], "?") == 0))) {
+        return shell_write_line(shell, CLI_USAGE_CONFIG_SET);
+    }
+    if (!board_commands_parse_update(argc, argv, &update)) {
+        return shell_write_line(shell, "ERR invalid config assignment; use 'config set ?'");
+    }
+    return board_commands_apply_update(shell, &update);
+}
+
+/** @copydoc board_commands_reboot */
 bool board_commands_reboot(void *context, int argc, const char *const *argv) {
     (void)argv;
 
     if (argc != 1) {
-        return shell_write_line(COMMAND_SHELL, "ERR usage: reboot");
+        return shell_write_line(COMMAND_SHELL, "ERR " CLI_SYNTAX_BOARD_REBOOT);
     }
-
-    shell_write_line(COMMAND_SHELL, "OK rebooting");
-    system_reboot();
+    if (!shell_write_line(COMMAND_SHELL, "OK rebooting")) {
+        device_schedule_reboot(500u);
+        return false;
+    }
+    device_schedule_reboot(500u);
     return true;
 }
 
+/** @copydoc board_commands_stop */
 bool board_commands_stop(void *context, int argc, const char *const *argv) {
-    char line[64];
     pwm_driver_result_t result;
 
     (void)argv;
     if (argc != 1) {
-        return shell_write_line(COMMAND_SHELL, "ERR usage: stop");
+        return shell_write_line(COMMAND_SHELL, "ERR " CLI_SYNTAX_PWM_STOP);
     }
 
     result = device_restore_defaults();
     if (result == PWM_DRIVER_RESULT_OK) {
-        if (pwm_driver_config_is_monitor()) {
-            return shell_write_line(COMMAND_SHELL, "OK monitor channels unchanged");
-        }
-        snprintf(line, sizeof(line), "OK all channels stopped and reset (freq=%u, duty=%u%%)",
-                 PWM_DRIVER_STOPPED_FREQ_HZ, (unsigned)PWM_DRIVER_STOPPED_DUTY_PERCENT);
-        return shell_write_line(COMMAND_SHELL, line);
+        return shell_write_line(COMMAND_SHELL, "OK generator outputs stopped; monitor channels unchanged");
     }
 
-    snprintf(line, sizeof(line), "ERR stop %s", board_commands_result_text(result));
-    return shell_write_line(COMMAND_SHELL, line);
+    return shell_write_line(COMMAND_SHELL, "ERR stop failed; some generator outputs may remain active");
 }

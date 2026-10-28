@@ -84,3 +84,19 @@ typically use 4.7 kOhm pull-ups on SDA and SCL.
 - GPIO 26 is I2C1 SDA and ADC0.
 - GPIO 27 is I2C1 SCL and ADC1.
 - GPIO 28 is software PWM channel 23 and ADC2.
+
+## Program with a Pico Debug Probe
+
+For local builds, `tools/firmware/load.sh` programs the ELF over SWD using OpenOCD. Connect the Debug Probe's three-pin
+SWD cable to the target:
+
+| Debug Probe signal | Cable color | Target signal |
+|---|---|---|
+| `SC` / SWCLK | Orange | SWCLK |
+| GND | Black | GND |
+| `SD` / SWDIO | Yellow | SWDIO |
+
+Connect GND first to establish a common reference. Power the target board separately over USB; the SWD cable does not
+power it. The Debug Probe uses 3.3 V I/O. For a third-party board, identify SWCLK, SWDIO, and GND from its schematic
+rather than assuming the standard Pico connector placement. See the [Raspberry Pi Debug Probe guide](https://www.raspberrypi.com/documentation/microcontrollers/debug-probe.html)
+for probe details.

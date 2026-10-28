@@ -14,7 +14,8 @@
 static const shell_command_t pwm_commands[] = {
     {"info", "info                    Show device type and system clock", board_commands_info},
     {"version", "version              Show firmware version", board_commands_version},
-    {"config", "config [set <a|b|c> <hw|pio|sw> <gen|mon>|save]  Show or set startup config", board_commands_config},
+    {"config", "config [set <a|b|c> <gen|mon>|address <7-bit>|clock <mhz>|save]  Show or set startup config",
+     board_commands_config},
     {"get", "get <ch>                 Read channel properties", channel_commands_get},
     {"set", "set <ch> <freq> [duty%]  Set freq, optional duty defaults to 50%", channel_commands_set},
     {"led", "led <on|off>             Set board LED state", board_commands_led},

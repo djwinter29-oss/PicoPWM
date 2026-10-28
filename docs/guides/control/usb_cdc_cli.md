@@ -7,9 +7,10 @@ commands through `pwm_commands.*`.
 
 ## Connection
 
-Connect the board over a USB data cable and open its CDC serial device at
-115200 baud. The firmware prints the command help when a host connection is
-opened and displays the `pico> ` prompt.
+Connect the board over a USB data cable and open its CDC serial device. The
+terminal's baud-rate setting does not affect USB packet timing; this shell does
+not configure a physical UART. The firmware prints the command help when a host
+connection is opened and displays the `pico> ` prompt.
 
 Commands are entered one line at a time and responses end with CRLF (`\r\n`).
 The interactive editor supports backspace, cursor movement, command history,

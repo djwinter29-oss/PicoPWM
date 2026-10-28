@@ -12,7 +12,7 @@ generator and frequency monitor, controlled through USB CDC, I2C or USB HID. The
 **Quick links:** [Download firmware](https://github.com/djwinter29-oss/PicoPWM/releases) ·
 [Hardware setup](docs/guides/hardware-setup.md) ·
 [Open browser dashboard](https://djwinter29-oss.github.io/PicoPWM/) ·
-[Python package](https://pypi.org/project/picopwm-host/) ·
+[Python dashboard](host/python/README.md) ·
 [Control interfaces](docs/guides/control/README.md)
 
 ## Why PicoPWM?
@@ -27,14 +27,18 @@ generator and frequency monitor, controlled through USB CDC, I2C or USB HID. The
 
 ![WebHID dashboard with simulated device identity, boot configuration, runtime status, and 24 PWM generator and monitor channels.](docs/assets/pico-pwm-dashboard.png)
 
-_Current WebHID layout with simulated readings; illustrative, not a live hardware result._
+_Illustrative WebHID dashboard with simulated readings, not a live hardware result. The Python and .NET dashboards share
+this layout; labels and columns may differ slightly in the current release._
 
 | Backend | Characteristics | Constraints |
 | --- | --- | --- |
-| Hardware PWM | High timing accuracy | Pin/slice assignment and minimum-frequency limits |
-| PIO PWM | Flexible placement and broad range | Finite state machines and divider/period quantization |
-| Software PWM | Any ordinary GPIO | CPU and timer overhead limit channel count, frequency and accuracy |
+| Hardware PWM | High timing accuracy | Generator requests: 10 Hz-1 MHz; fixed pin/slice assignment |
+| PIO PWM | Fixed Bank B pin map; broad range | Generator requests: 1 Hz-1 MHz; finite state machines and divider/period quantization |
+| Software PWM | Fixed Bank C pin map | Generator requests: 1 Hz-1 kHz; CPU and timer overhead limit channel count and accuracy |
 | Monitor backends | Measure input signals | Backend-specific range and accuracy; software monitoring suits simple low-frequency signals |
+
+These are generator request ranges; `0 Hz` is a special static output level (`0%` low or `100%` high). Duty is
+0-100%. Monitor measurement limits are backend-specific.
 
 ## Before You Connect
 
@@ -42,41 +46,104 @@ _Current WebHID layout with simulated readings; illustrative, not a live hardwar
 - I2C needs external pull-ups on SDA and SCL. Start at 100 kHz.
 - The default configuration is monitor-only, so no PWM output is driven after power-up. Generator banks start at
   0 Hz and 0% duty; `stop` drives generator outputs low and leaves monitor banks unchanged.
-- Bank roles are set in the startup configuration, not at build time. Change the target with `config set` (CDC), the
-  matching I2C registers or HID, save it with `config save`, then reboot to apply it.
-- The default system clock is the SDK default: 125 MHz on RP2040 and 150 MHz on RP2350. 150, 200 and 250 MHz profiles
-  are optional overclocks and are not qualified for every board.
+- Bank roles are set in the startup configuration, not at build time. Change the target over CDC (`config set`), I2C
+  (`REG_CONFIG_SET`) or HID, then save it with that interface's own operation (`config save`, `REG_CONFIG_SAVE`, or the
+  dashboard's **Save & Reboot**) and reboot to apply it.
+- The SDK default is 125 MHz on RP2040 and 150 MHz on RP2350. The 150 MHz profile is an overclock only on RP2040.
+   HID/dashboard saves require acknowledgement above 150 MHz; CDC has no separate acknowledgement step. The 200 and
+   250 MHz profiles are not qualified for every board.
 - Firmware has not been qualified on a hardware fixture; host tests do not replace hardware validation.
 
 ## Get Started
 
-1. **Get the firmware.** Download the `pico` UF2 for Raspberry Pi Pico (RP2040) or `pico2` for Raspberry Pi Pico 2
-   (RP2350) from [Releases](https://github.com/djwinter29-oss/PicoPWM/releases), or build it with
+1. **Get firmware.** Download the `pico` UF2 for Raspberry Pi Pico (RP2040) or `pico2` for Raspberry Pi Pico 2
+   (RP2350) from [Releases](https://github.com/djwinter29-oss/PicoPWM/releases), or build one with
    `tools/firmware/build.sh --board pico` (or `pico2`). The UF2 is written to `build/<board>/pico_pwm.uf2`.
-2. **Flash with a debug probe.** Connect a Pico Debug Probe to the board's SWD interface, then run
-   `tools/firmware/load.sh --board pico` (or `pico2`). The script builds the firmware and programs it through OpenOCD.
-   OpenOCD must be installed and the probe connected; see the [hardware setup guide](docs/guides/hardware-setup.md).
-   The loader bypasses SPI flash ID detection; for a board with a non-default flash capacity, pass `--flash-size`
-   with the capacity in bytes.
+2. **Flash the UF2.** Hold **BOOTSEL** while connecting the board, release it when the boot drive appears, then copy
+   the downloaded or locally built `.uf2` onto that drive. The board reboots automatically.
 3. **Wire your signals.** Follow the [hardware setup guide](docs/guides/hardware-setup.md) for the channel GPIO map,
    I2C pins and board-specific pin considerations.
-4. **Connect to PicoPWM.** Use the USB CDC shell at 115200 baud, or connect an I2C controller to the default 7-bit
-   address `0x40`.
-5. **Open a dashboard (optional).** Use the [browser dashboard](https://djwinter29-oss.github.io/PicoPWM/) or run one
+4. **Connect to PicoPWM.** Open the board's USB CDC serial port in a terminal (see the
+   [USB CDC CLI guide](docs/guides/control/usb_cdc_cli.md)), or connect an I2C controller to the default 7-bit
+   address `0x40`. Serial device names vary by OS; common examples are `/dev/ttyACM0` on Linux, `COMx` on Windows,
+   and `/dev/cu.usbmodem*` on macOS. USB CDC does not require a particular terminal baud-rate setting.
+5. **Verify.** In the CDC shell, run `version` to confirm the firmware is running, then `config` to see the bank roles.
+6. **Open a dashboard (optional).** Use the [browser dashboard](https://djwinter29-oss.github.io/PicoPWM/) or run one
    locally as described below.
+
+The default bank roles are monitor-only. To try a generator output, connect a 3.3 V-safe oscilloscope or logic
+analyzer to GPIO 1 and GND, then configure Bank A and reboot:
+
+```text
+config set a gen
+config save
+reboot
+```
+
+After the board reconnects, run `set 0 1000 50` and `get 0` to request 1 kHz at 50% duty and inspect the realized
+output. When finished, run `stop` to drive generator outputs low; this does not change the saved bank role. See the
+[CDC CLI guide](docs/guides/control/usb_cdc_cli.md) for command details.
+
+## Troubleshooting
+
+### When an output stays low
+
+1. Check that the bank is configured as a generator; monitor banks measure inputs and never drive outputs.
+2. Check the realized state. A generator at `0 Hz / 0%` is intentionally held low, while `0 Hz / 100%` is held high.
+3. Check the wiring: confirm the channel's GPIO in the [hardware setup guide](docs/guides/hardware-setup.md) and that
+   the load shares ground with the board.
+
+Use `config` to inspect running and target bank roles and `get <channel>` to inspect a channel's realized frequency and
+duty; both are described in the [USB CDC CLI guide](docs/guides/control/usb_cdc_cli.md).
 
 ## Dashboards
 
 Use a dashboard for interactive control and monitoring. USB CDC and I2C remain available to scripts and other host
 applications.
 
-| Dashboard | How to run it |
-| --- | --- |
-| **Browser (WebHID)** | Open the [hosted dashboard](https://djwinter29-oss.github.io/PicoPWM/) in desktop Chrome or Edge; no backend required. See [host/webhid](host/webhid/README.md). |
-| **Python** | Run `tools/host/run-python.sh`, then open `http://127.0.0.1:5000/`; see [host/python](host/python/README.md). |
-| **.NET** | Run `tools/host/run-dotnet.sh`; see [host/dotnet](host/dotnet/README.md). |
+The source-checkout launchers below require a repository checkout. For a published Python release, install the wheel
+with `python -m pip install picopwm-host`, start it with `picopwm-web`, then open <http://127.0.0.1:5000/>. For the
+standalone .NET host, download and extract the `picopwm-host-v<VERSION>-<RID>` archive for your platform, then run
+`./PicoPwm` (Linux/macOS) or `PicoPwm.exe` (Windows) from the extracted directory and open
+<http://127.0.0.1:5000/>. In Windows PowerShell, invoke the executable as `.\PicoPwm.exe`. The .NET archive includes
+its runtime. See
+[Builds and Publishing](docs/guides/releases.md) for package availability and release details.
 
-The Python and .NET hosts talk to the board over USB HID.
+### Browser Dashboard
+
+Open the [hosted dashboard](https://djwinter29-oss.github.io/PicoPWM/) in desktop Chrome or Edge, connect the board to
+that computer, and select **Connect**. The browser talks to the board directly over WebHID; no local server is needed.
+See the [WebHID guide](host/webhid/README.md) for browser requirements and controls.
+
+### Local Python Dashboard
+
+Run `tools/host/run-python.sh`, then open <http://127.0.0.1:5000/>. The Python server connects to the board over USB
+HID. See the [Python guide](host/python/README.md) for configuration and API details.
+
+### Local .NET Dashboard
+
+Run `tools/host/run-dotnet.sh`, then open <http://127.0.0.1:5000/>. The .NET server also connects to the board over
+USB HID. See the [.NET guide](host/dotnet/README.md) for configuration and API details.
+
+### Linux HID Permissions
+
+On Linux, configure HID access once with `tools/host/hid-permissions-setup.sh`; the Python and .NET launchers check
+permissions before starting. For WebHID, run setup on the computer connected to the board, not only on a remote server.
+See [Linux HID permissions](docs/guides/control/README.md#linux-hid-permissions).
+
+## Hardware Compatibility
+
+The `pico` and `pico2` profiles use the standard Pico and Pico 2 GPIO assignments documented in the
+[hardware setup guide](docs/guides/hardware-setup.md). A third-party RP2040/RP2350 board is not automatically
+compatible: verify it exposes the profile's channel GPIOs `0-22` and `28`; I2C additionally requires GPIOs `26` and
+`27`. The standard profile also assumes the board's LED is on GPIO 25. Verify SWD access only if programming it with a
+Debug Probe.
+`tools/firmware/load.sh` is the developer workflow for programming a local build through a Debug Probe; see
+[Program with a Pico Debug Probe](docs/guides/hardware-setup.md#program-with-a-pico-debug-probe). Its
+`--flash-size <bytes>` option overrides OpenOCD's flash-size assumption only; it does not change the firmware's GPIO
+mapping or board profile.
+
+**Pico W and Pico 2 W** are not supported: the build helper and releases cover only the `pico` and `pico2` boards.
 
 ## Documentation
 
@@ -95,7 +162,9 @@ are in [BUILD_STRUCTURE.md](BUILD_STRUCTURE.md).
 
 Related projects: [PicoUART](https://github.com/djwinter29-oss/PicoUart) (six USB serial ports) and
 [PicoForge](https://github.com/djwinter29-oss/PicoForge) (host-controlled board services). They share no runtime
-dependency. The CDC shell uses [embedded-cli](https://github.com/funbiscuit/embedded-cli), included as the
+dependency.
+
+Third-party software: the CDC shell uses [embedded-cli](https://github.com/funbiscuit/embedded-cli), included as the
 `firmware/third_party/embedded-cli` submodule (v0.1.4, MIT).
 
 ## License

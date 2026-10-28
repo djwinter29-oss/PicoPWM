@@ -4,7 +4,7 @@ This guide describes a suggested hardware-in-the-loop (HIL) fixture for PicoPWM 
 It is a wiring plan, not a record of a completed test. Save actual results in [records/](records/README.md).
 Use the [HIL test plan](hil-test-plan.md) to select cases and define acceptance limits.
 
-Use the [pinout](../guides/pinout.md) as the source of truth for channel assignments and the
+Use the [hardware setup guide](../guides/hardware-setup.md) as the source of truth for channel assignments and the
 [configuration guide](../guides/configuration.md) for bank roles.
 
 ## Equipment

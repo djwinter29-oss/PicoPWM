@@ -6,7 +6,7 @@ build-time profile selection or runtime role switching.
 
 ## Startup Bank Configuration
 
-The GPIO map is fixed into three 8-pin banks (see [Pinout](pinout.md)):
+The GPIO map is fixed into three 8-pin banks (see [Hardware Setup](hardware-setup.md)):
 Bank A is HW-capable, Bank B is PIO-capable, and Bank C is software-only. All
 three banks are configured before Core 1 starts, so every logical channel has a
 valid backend and role during runtime.

@@ -1,7 +1,9 @@
-# Pinout
+# Hardware Setup
 
-This page defines the fixed physical mapping for every firmware image. The static pin sets live in `firmware/src/config/board.c`. The
-logical channel IDs permanently identify one of three 8-channel banks.
+This guide covers wiring and the fixed physical mapping for PicoPWM firmware on
+Raspberry Pi Pico and Pico 2 boards. The static pin sets live in
+`firmware/src/config/board.c`; the logical channel IDs permanently identify one
+of three 8-channel banks.
 
 Hardware PWM and PIO assignments have peripheral-specific pin and resource
 constraints. Hardware PWM is fixed to one set of 8 slice-B GPIOs and PIO PWM is

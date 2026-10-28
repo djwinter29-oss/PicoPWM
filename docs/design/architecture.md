@@ -60,7 +60,7 @@ Use the architecture-related pages as follows:
 
 - [Architecture](architecture.md) — system structure, layer boundaries, and request flow
 - [Firmware Configuration](../guides/configuration.md) — startup bank configuration and channel rules
-- [Pinout](../guides/pinout.md) — physical PWM, I2C, and shared-pin mapping
+- [Hardware Setup](../guides/hardware-setup.md) — physical PWM, I2C, and shared-pin mapping
 - [PWM Driver Configuration](pwm_driver_config.md) — fixed channel allocation and capabilities
 - [PWM Driver Design](pwm_driver_design.md) — detailed `pwm` and backend internals
 - [CDC/HID Overview](usb/cdc-hid-overview.md) — USB interface roles and HID rules
@@ -123,7 +123,7 @@ high-rate capture, trend analysis, or waveform history, DMA or a dedicated
 buffered capture design should be reconsidered as a new requirement rather than
 added preemptively.
 
-The hardware PWM bank intentionally uses PWM slice channel B pins so the external pin order stays aligned with the monitoring-oriented wiring plan. See [Pinout](../guides/pinout.md) for the physical mapping.
+The hardware PWM bank intentionally uses PWM slice channel B pins so the external pin order stays aligned with the monitoring-oriented wiring plan. See [Hardware Setup](../guides/hardware-setup.md) for the physical mapping.
 
 ## Runtime Layers
 
@@ -304,7 +304,7 @@ That means:
 Logical IDs are configuration-defined and stable for host software. The
 current default profile exposes `0..23`; backend ownership and GPIO assignment
 must be read from the selected profile rather than inferred from an ID range.
-See [Firmware Configuration](../guides/configuration.md) and [Pinout](../guides/pinout.md).
+See [Firmware Configuration](../guides/configuration.md) and [Hardware Setup](../guides/hardware-setup.md).
 
 ## Startup Sequence
 

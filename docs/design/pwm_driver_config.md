@@ -32,7 +32,7 @@ it. A monitor module has no `set`, so writes are refused. There is no stored cha
 | Bank C | 16..23 | `16, 17, 18, 19, 20, 21, 22, 28`; SW backend only |
 
 This map is defined in `config/board.c` and is not configurable at runtime; see
-[Pinout](../guides/pinout.md) for the physical rationale.
+[Hardware Setup](../guides/hardware-setup.md) for the physical rationale.
 
 ## Resource Rules
 

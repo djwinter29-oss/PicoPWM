@@ -10,7 +10,7 @@ PicoPWM:
 
 - [Firmware Configuration](guides/configuration.md)
 - [Builds and Publishing](guides/releases.md)
-- [Pinout](guides/pinout.md)
+- [Hardware Setup](guides/hardware-setup.md)
 - [Control Interfaces](guides/control/README.md)
 - [USB CDC CLI](guides/control/usb_cdc_cli.md)
 - [I2C Protocol](guides/control/i2c_protocol.md)

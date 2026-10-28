@@ -149,7 +149,7 @@ selects its backend family and role:
 | `16..23` (Bank C) | SW generator only | SW monitor only |
 
 The physical mapping and slice assignments are documented in
-[Pinout](../guides/pinout.md). Startup bank configuration is documented in
+[Hardware Setup](../guides/hardware-setup.md). Startup bank configuration is documented in
 [Firmware Configuration](../guides/configuration.md#startup-bank-configuration).
 
 ## Internal Separation

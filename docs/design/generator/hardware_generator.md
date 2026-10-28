@@ -17,7 +17,7 @@ This page is implementation-oriented and reflects the current source tree.
 ## Channel Model
 
 The hardware PWM bank uses logical channels `0..7` in the unified driver model.
-The physical GPIO and slice mapping is documented in [Pinout](../../guides/pinout.md).
+The physical GPIO and slice mapping is documented in [Hardware Setup](../../guides/hardware-setup.md).
 The design intentionally uses slice-B pins so the physical channel order stays
 aligned with the measurement-oriented wiring plan.
 

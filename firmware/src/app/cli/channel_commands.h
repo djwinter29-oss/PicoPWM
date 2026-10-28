@@ -19,8 +19,7 @@ bool channel_commands_get(shell_t *shell, const char *channel_text);
  * @param duty_text Optional duty percentage; `NULL` selects the default.
  * @return `true` when the operation response was accepted by the transport.
  */
-bool channel_commands_set(shell_t *shell, const char *channel_text, const char *frequency_text,
-                          const char *duty_text);
+bool channel_commands_set(shell_t *shell, const char *channel_text, const char *frequency_text, const char *duty_text);
 
 /**
  * @brief Write the realized state of every configured channel.

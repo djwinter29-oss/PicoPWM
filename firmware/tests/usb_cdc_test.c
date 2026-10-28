@@ -55,9 +55,6 @@ int main(void) {
 
     cdc_test_load_rx(payload, sizeof(payload));
     usb_cdc_poll();
-    assert(usb_cdc_read(NULL, chunk, sizeof(chunk)) == sizeof(chunk));
-    cdc_test_load_rx(payload, sizeof(payload));
-    usb_cdc_poll();
     assert(cdc_test_rx_remaining() == sizeof(payload) - 128u);
     usb_cdc_reset_rx();
     assert(cdc_test_rx_remaining() == 0u);

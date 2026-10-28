@@ -11,7 +11,7 @@
 #define SHELL_PROMPT "pico> "
 
 /** @brief Maximum response line bytes, including CRLF. */
-#define SHELL_WRITE_LINE_BUFFER_SIZE (SHELL_MAX_INPUT_LENGTH + 2u)
+#define SHELL_WRITE_LINE_BUFFER_SIZE (SHELL_MAX_OUTPUT_LINE_LENGTH + 2u)
 
 /** @brief Maximum bytes read from the transport per poll iteration. */
 #define CLI_EDITOR_RX_CHUNK_SIZE 16u
@@ -53,7 +53,7 @@ bool shell_write_line(shell_t *shell, const char *text) {
     uint8_t line[SHELL_WRITE_LINE_BUFFER_SIZE];
     size_t length = (text != NULL) ? strlen(text) : 0u;
 
-    if (length > SHELL_MAX_INPUT_LENGTH) {
+    if (length > SHELL_MAX_OUTPUT_LINE_LENGTH) {
         return false;
     }
 

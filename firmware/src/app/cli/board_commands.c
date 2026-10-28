@@ -21,12 +21,12 @@
 
 /** @brief Staged configuration changes; nothing is written until every field validates. */
 typedef struct {
-    bool bank_changed[PWM_BANK_COUNT]; /**< Whether the corresponding bank role was requested. */
+    bool bank_changed[PWM_BANK_COUNT];    /**< Whether the corresponding bank role was requested. */
     pwm_role_t bank_role[PWM_BANK_COUNT]; /**< New role for each requested bank. */
-    bool clock_changed; /**< Whether the system clock profile was requested. */
-    boot_config_sysclk_t clock_profile; /**< New system clock profile. */
-    bool address_changed; /**< Whether the I2C address was requested. */
-    uint8_t address; /**< New 7-bit I2C address. */
+    bool clock_changed;                   /**< Whether the system clock profile was requested. */
+    boot_config_sysclk_t clock_profile;   /**< New system clock profile. */
+    bool address_changed;                 /**< Whether the I2C address was requested. */
+    uint8_t address;                      /**< New 7-bit I2C address. */
 } board_config_update_t;
 
 /** @brief Map a bank role to its user-facing name. */
@@ -97,9 +97,8 @@ static bool board_commands_parse_assignment(char *assignment, board_config_updat
     }
     *equal++ = '\0';
 
-    if (strcmp(assignment, "banka") == 0 || strcmp(assignment, "bankb") == 0 ||
-        strcmp(assignment, "bankc") == 0) {
-        pwm_bank_t bank = (strcmp(assignment, "banka") == 0) ? PWM_BANK_A
+    if (strcmp(assignment, "banka") == 0 || strcmp(assignment, "bankb") == 0 || strcmp(assignment, "bankc") == 0) {
+        pwm_bank_t bank = (strcmp(assignment, "banka") == 0)   ? PWM_BANK_A
                           : (strcmp(assignment, "bankb") == 0) ? PWM_BANK_B
                                                                : PWM_BANK_C;
         if (update->bank_changed[bank]) {
@@ -205,8 +204,8 @@ static bool board_commands_parse_update(int argc, const char *const *argv, board
         }
     }
 
-    return update->bank_changed[0] || update->bank_changed[1] || update->bank_changed[2] ||
-           update->clock_changed || update->address_changed;
+    return update->bank_changed[0] || update->bank_changed[1] || update->bank_changed[2] || update->clock_changed ||
+           update->address_changed;
 }
 
 /** @brief Restore the staged configuration after a failed flash save. */

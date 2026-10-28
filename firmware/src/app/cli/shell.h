@@ -20,6 +20,9 @@
 /** @brief Maximum number of characters accepted in one command line. */
 #define SHELL_MAX_INPUT_LENGTH 100u
 
+/** @brief Maximum number of characters accepted by @ref shell_write_line. */
+#define SHELL_MAX_OUTPUT_LINE_LENGTH 192u
+
 /** @brief Size of the embedded-cli backing store in @c CLI_UINT units. */
 #define SHELL_CLI_BUFFER_UINTS 192u
 
@@ -43,9 +46,9 @@ typedef bool (*shell_transport_write_t)(void *context, const uint8_t *data, uint
 
 /** @brief Transport binding used by the CLI editor for byte-oriented I/O. */
 typedef struct {
-    shell_transport_read_t read; /**< Callback used to fetch received bytes. */
+    shell_transport_read_t read;   /**< Callback used to fetch received bytes. */
     shell_transport_write_t write; /**< Callback used to write response bytes. */
-    void *context; /**< Caller-owned context passed back to @ref read and @ref write. */
+    void *context;                 /**< Caller-owned context passed back to @ref read and @ref write. */
 } shell_transport_t;
 
 /**
@@ -68,19 +71,19 @@ typedef bool (*shell_unknown_handler_t)(void *context, const char *command_name)
 
 /** @brief One registered CLI command entry. */
 typedef struct {
-    const char *name; /**< Command token matched against the first word in a line. */
-    const char *help; /**< One-line help text shown by the device CLI help command. */
+    const char *name;                /**< Command token matched against the first word in a line. */
+    const char *help;                /**< One-line help text shown by the device CLI help command. */
     shell_command_handler_t handler; /**< Callback invoked when @ref name matches. */
 } shell_command_t;
 
 /** @brief CLI editor configuration supplied during initialization. */
 typedef struct {
-    const shell_transport_t *transport; /**< Transport binding used for shell I/O. */
-    const shell_command_t *commands; /**< Static command table visible to the shell. */
-    uint32_t command_count; /**< Number of entries in @ref commands. */
-    const char *unknown_message; /**< Fallback message used when no unknown-handler responds. */
+    const shell_transport_t *transport;      /**< Transport binding used for shell I/O. */
+    const shell_command_t *commands;         /**< Static command table visible to the shell. */
+    uint32_t command_count;                  /**< Number of entries in @ref commands. */
+    const char *unknown_message;             /**< Fallback message used when no unknown-handler responds. */
     shell_unknown_handler_t unknown_handler; /**< Optional callback for unknown command names. */
-    void *command_context; /**< Context passed to command callbacks. */
+    void *command_context;                   /**< Context passed to command callbacks. */
 } shell_config_t;
 
 /** @brief One independent interactive shell session.
@@ -90,18 +93,18 @@ typedef struct {
  * Tab completion and `help` come from embedded-cli's command bindings.
  */
 typedef struct {
-    shell_transport_t transport; /**< Active byte transport. */
-    const shell_command_t *commands; /**< Registered command table. */
-    uint32_t command_count; /**< Number of entries in @ref commands. */
-    const char *unknown_message; /**< Fallback message for unmatched commands. */
-    shell_unknown_handler_t unknown_handler; /**< Optional unmatched-command callback. */
-    void *command_context; /**< Context passed to command callbacks. */
-    EmbeddedCli *cli;      /**< embedded-cli instance placed in @ref cli_buffer. */
+    shell_transport_t transport;                 /**< Active byte transport. */
+    const shell_command_t *commands;             /**< Registered command table. */
+    uint32_t command_count;                      /**< Number of entries in @ref commands. */
+    const char *unknown_message;                 /**< Fallback message for unmatched commands. */
+    shell_unknown_handler_t unknown_handler;     /**< Optional unmatched-command callback. */
+    void *command_context;                       /**< Context passed to command callbacks. */
+    EmbeddedCli *cli;                            /**< embedded-cli instance placed in @ref cli_buffer. */
     CLI_UINT cli_buffer[SHELL_CLI_BUFFER_UINTS]; /**< Static backing store for @ref cli. */
     bool prompted;                               /**< Indicates the initial prompt has been emitted by embedded-cli. */
     bool busy;                                   /**< Guards against re-entrant poll or prompt calls. */
-    bool transport_write_failed; /**< A transport write failed during the current command dispatch. */
-    bool initialized; /**< Indicates whether @ref shell_init completed successfully. */
+    bool transport_write_failed;                 /**< A transport write failed during the current command dispatch. */
+    bool initialized;                            /**< Indicates whether @ref shell_init completed successfully. */
 } shell_t;
 
 /**
@@ -135,7 +138,7 @@ bool shell_write(shell_t *shell, const char *text);
  * @brief Write one text line followed by CRLF through the shell transport.
  * @param text Null-terminated line text, or `NULL` to emit only CRLF.
  * @return `true` when the complete line was accepted; otherwise `false`.
- * @note Text longer than @ref SHELL_MAX_INPUT_LENGTH is rejected.
+ * @note Text longer than @ref SHELL_MAX_OUTPUT_LINE_LENGTH is rejected.
  */
 bool shell_write_line(shell_t *shell, const char *text);
 

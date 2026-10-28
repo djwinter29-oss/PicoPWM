@@ -9,7 +9,7 @@
 typedef struct {
     const char *input;
     size_t input_offset;
-    char output[512];
+    char output[2048];
     size_t output_length;
     size_t output_limit;
 } test_transport_t;
@@ -222,7 +222,8 @@ static void test_rejected_inputs(void) {
     const shell_command_t nameless[] = {{NULL, "help", test_command}};
     const shell_command_t failing[] = {{"fail", "fail", test_command_fails}};
     const shell_command_t reenter[] = {{"re", "re", test_reenter}};
-    const shell_command_t too_many[SHELL_MAX_COMMANDS + 1u] = {{.name = "ping", .help = "ping", .handler = test_command}};
+    const shell_command_t too_many[SHELL_MAX_COMMANDS + 1u] = {
+        {.name = "ping", .help = "ping", .handler = test_command}};
 
     memset(&shell, 0, sizeof(shell));
     shell_init(NULL, &config);

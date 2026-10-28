@@ -10,8 +10,8 @@
 
 /** @brief CDC command session and connection-output retry state. */
 typedef struct {
-	shell_t shell; /**< Generic CLI editor and transport state. */
-	bool connection_help_queued; /**< Help is queued; only the prompt remains pending after a transient failure. */
+    shell_t shell;               /**< Generic CLI editor and transport state. */
+    bool connection_help_queued; /**< Help is queued; only the prompt remains pending after a transient failure. */
 } pwm_commands_t;
 
 /**

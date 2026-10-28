@@ -283,9 +283,8 @@ static void test_help_commands(void) {
 }
 
 static void test_connection_output_retries(void) {
-    static const char help[] =
-        "Groups: pwm, board, config\r\n"
-        "Use 'help <group>' or '<group> ?' for command syntax.\r\n";
+    static const char help[] = "Groups: pwm, board, config\r\n"
+                               "Use 'help <group>' or '<group> ?' for command syntax.\r\n";
     test_transport_t transport = {0};
     shell_transport_t binding = {.read = test_read, .write = test_write, .context = &transport};
     pwm_commands_t commands;

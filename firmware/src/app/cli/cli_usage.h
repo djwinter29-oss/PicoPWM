@@ -42,8 +42,7 @@
 /** @brief User-facing syntax for updating startup configuration. */
 #define CLI_SYNTAX_CONFIG_SET "config set <key=value>[, <key=value>...]"
 /** @brief Usage response including accepted configuration values. */
-#define CLI_USAGE_CONFIG_SET \
-    "Usage: " CLI_SYNTAX_CONFIG_SET \
-    "; banka/bankb/bankc=generator|monitor, clock=default|150|200|250, address=8..119"
+#define CLI_USAGE_CONFIG_SET                                                                                           \
+    "Usage: " CLI_SYNTAX_CONFIG_SET "; banka/bankb/bankc=generator|monitor, clock=default|150|200|250, address=8..119"
 
 #endif

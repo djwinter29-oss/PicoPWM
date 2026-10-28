@@ -40,7 +40,15 @@ class RunPythonTests(unittest.TestCase):
                     capture_output=True, text=True,
                 )
                 log = calls.read_text()
-                self.assertIn(f"--index-url https://packages.example/simple --editable {ROOT}/host/python", log)
+                root_paths = {str(ROOT).replace("\\", "/")}
+                if os.name == "nt":
+                    drive, tail = os.path.splitdrive(str(ROOT))
+                    root_paths.add("/" + drive[0].lower() + tail.replace(os.sep, "/"))
+                self.assertTrue(
+                    any(f"--index-url https://packages.example/simple --editable {path}/host/python" in log
+                        for path in root_paths),
+                    log,
+                )
                 self.assertIn("-m picopwm.app", log)
                 if pip_available == "1":
                     self.assertIn(f"base -m pip --python {interpreter}", log)

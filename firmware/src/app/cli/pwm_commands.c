@@ -27,9 +27,8 @@ static const shell_command_t pwm_commands[] = {
 /** @brief Print the commands belonging to one group. */
 static bool pwm_commands_write_group_help(shell_t *shell, const char *group) {
     if (group == NULL) {
-        return shell_write(shell,
-                           "Groups: pwm, board, config\r\n"
-                           "Use 'help <group>' or '<group> ?' for command syntax.\r\n");
+        return shell_write(shell, "Groups: pwm, board, config\r\n"
+                                  "Use 'help <group>' or '<group> ?' for command syntax.\r\n");
     }
 
     if (strcmp(group, "pwm") == 0) {

@@ -132,8 +132,7 @@ bool channel_commands_get(shell_t *shell, const char *channel_text) {
 }
 
 /** @copydoc channel_commands_set */
-bool channel_commands_set(shell_t *shell, const char *channel_text, const char *frequency_text,
-                          const char *duty_text) {
+bool channel_commands_set(shell_t *shell, const char *channel_text, const char *frequency_text, const char *duty_text) {
     char line[64];
     int channel;
     uint32_t frequency;

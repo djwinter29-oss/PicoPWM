@@ -249,6 +249,36 @@ def test_scan_errors_and_duplicate_serials_are_explicit():
     assert "duplicate" in create_app(registry=registry).test_client().get("/api/boards").json["error"]
 
 
+def test_bind_and_dashboard_reject_remote_and_foreign_callers():
+    from picopwm.app import bind_host
+
+    assert bind_host(None, None) == "127.0.0.1"
+    assert bind_host("localhost", "") == "localhost"
+    assert bind_host("0.0.0.0", "secret") == "0.0.0.0"
+    with pytest.raises(RuntimeError, match="loopback"):
+        bind_host("0.0.0.0", "")
+
+    _, client = make()
+    open_host = create_app(client).test_client()
+    assert open_host.get("/api/status", headers={"Host": "evil.example"}).status_code == 403
+    assert open_host.get("/api/status").status_code == 200
+    http = create_app(client, token="secret").test_client()
+    assert http.get("/").status_code == 200
+    assert http.get("/api/status", headers={"Origin": "http://evil.example"}).status_code == 403
+    assert http.get("/api/status", headers={"Authorization": "Bearer secret",
+                                            "Origin": "http://evil.example"}).status_code == 403
+    assert http.get("/api/status").status_code == 401
+    assert http.post("/api/login", json={"token": "nope"}).status_code == 401
+    login = http.post("/api/login", json={"token": "secret"})
+    assert login.status_code == 200
+    assert "picopwm_auth" in login.headers.get("Set-Cookie", "")
+    assert "HttpOnly" in login.headers.get("Set-Cookie", "")
+    assert http.get("/api/status").status_code == 200
+    other = create_app(client, token="secret").test_client()
+    assert other.get("/api/status", headers={"Authorization": "Bearer secret"}).status_code == 200
+    assert create_app(client).test_client().post("/api/login", json={"token": "x"}).status_code == 404
+
+
 def test_discovery_matches_vendor_usage_or_constrained_picouart_style_fallback(monkeypatch):
     from picopwm import transport
     from types import SimpleNamespace

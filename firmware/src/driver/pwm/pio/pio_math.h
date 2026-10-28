@@ -127,4 +127,19 @@ static inline bool pwm_pio_find_timing(uint32_t sys_clk_hz, uint32_t freq_hz, ui
     return best_actual != 0u;
 }
 
+/** @brief What to do with one PIO TX word while the FIFO may be full. */
+typedef enum {
+    PWM_PIO_FIFO_PUT = 0, /**< FIFO has room; write the word. */
+    PWM_PIO_FIFO_WAIT,    /**< FIFO is full and the deadline has not expired. */
+    PWM_PIO_FIFO_FAIL,    /**< FIFO stayed full until the deadline. */
+} pwm_pio_fifo_action_t;
+
+/** @brief Bound a PIO FIFO push so a wedged state machine fails the apply instead of stalling Core 1. */
+static inline pwm_pio_fifo_action_t pwm_pio_fifo_put_action(bool fifo_full, bool timed_out) {
+    if (!fifo_full) {
+        return PWM_PIO_FIFO_PUT;
+    }
+    return timed_out ? PWM_PIO_FIFO_FAIL : PWM_PIO_FIFO_WAIT;
+}
+
 #endif

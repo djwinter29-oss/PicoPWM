@@ -130,3 +130,38 @@ if grep "I2C_IC_INTR_MASK_M_TX_EMPTY_BITS" "$SLAVE_HW_FILE" | grep -v "enabled" 
     echo "i2c_slave_hw.c: TX_EMPTY must stay masked unless a read still has bytes to send" >&2
     exit 1
 fi
+
+MAIN_FILE="$REPO_ROOT/firmware/src/main.c"
+PIO_C_FILE="$REPO_ROOT/firmware/src/driver/pwm/pio/pio_generator.c"
+HW_MATH_FILE="$REPO_ROOT/firmware/src/driver/pwm/hardware/hardware_math.h"
+CDC_FILE="$REPO_ROOT/firmware/src/app/usb/usb_cdc.c"
+
+if ! grep -q "pwm_wait_hook_active" "$DRIVER_FILE"; then
+    echo "pwm_driver.c: a wait hook that submits another command must return BUSY" >&2
+    exit 1
+fi
+
+if ! grep -q "gen_publish_state(channel, 0u, 0u)" "$PIO_C_FILE"; then
+    echo "pio_generator.c: a failed FIFO push must publish the stopped pin state" >&2
+    exit 1
+fi
+
+if ! grep -q "pwm_driver_set_wait_hook" "$MAIN_FILE"; then
+    echo "main.c: Core 0 must register a PWM-apply wait hook so USB keeps moving" >&2
+    exit 1
+fi
+
+if ! grep -q "pwm_pio_fifo_put_action" "$PIO_C_FILE"; then
+    echo "pio_generator.c: TX writes must use the bounded FIFO action" >&2
+    exit 1
+fi
+
+if ! grep -q "div_x16 <= PWM_HW_MAX_DIV_X16" "$HW_MATH_FILE" || grep -q "PWM_HW_DIV_SEARCH_WINDOW" "$HW_MATH_FILE"; then
+    echo "hardware_math.h: timing search must walk every divider through PWM_HW_MAX_DIV_X16" >&2
+    exit 1
+fi
+
+if ! grep -q "usb_cdc_rx_count < USB_CDC_RX_QUEUE_SIZE" "$CDC_FILE"; then
+    echo "usb_cdc.c: a full local RX queue must stop reading so the host is NAKed" >&2
+    exit 1
+fi

@@ -29,6 +29,13 @@ picopwm-web
 
 Optionally set `PICOPWM_SERIAL` or `PICOPWM_DEVICE_PATH` to preselect a board, and
 `PICOPWM_HOST` / `PICOPWM_PORT` to change the listen address (default `127.0.0.1:5000`).
+A host other than `127.0.0.1`, `localhost`, or `::1` is refused unless `PICOPWM_TOKEN`
+is set. With that token, `/api/*` requires `Authorization: Bearer <token>` or the
+`picopwm_auth` cookie from `POST /api/login` with `{"token": "..."}`. Pages stay
+open so the browser can prompt once. A request whose `Origin` names a different
+host is rejected. Leave the token unset on loopback; the dashboard then accepts
+local API calls with no extra header. Without a token, a request whose `Host` is not
+`127.0.0.1`, `localhost`, or `::1` is rejected, including a page reached by DNS rebinding.
 
 Open <http://127.0.0.1:5000>. The dashboard mirrors the WebHID page: device identity
 and RAM, boot configuration with one confirmed **Save and Reboot**, compact pin

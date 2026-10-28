@@ -62,6 +62,9 @@ bank is fixed, so it is not sent. It updates the target only. `REG_CONFIG_ADDRES
 (`0x08..0x77`)
 and updates the target only. `REG_CONFIG_SAVE` validates and persists the
 target; the host must issue `REG_REBOOT` before the target becomes running.
+The erase disables interrupts and locks the PWM core, so the slave stretches
+or stalls for that sector. The stall ends when programming returns or the 5 second watchdog resets the board.
+Allow 2 seconds before treating the bus as failed.
 
 ## Channel Property Layout
 

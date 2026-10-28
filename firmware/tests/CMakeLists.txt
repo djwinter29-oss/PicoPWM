@@ -138,3 +138,37 @@ target_include_directories(pwm_driver_test PRIVATE
 target_link_libraries(pwm_driver_test PRIVATE Threads::Threads)
 pico_pwm_test_warnings(pwm_driver_test)
 add_test(NAME pwm_driver COMMAND pwm_driver_test)
+
+add_executable(pio_generator_test
+    pio_generator_test.c
+    ${SOURCE_ROOT}/driver/pwm/pio/pio_generator.c
+)
+target_include_directories(pio_generator_test PRIVATE
+    ${TEST_ROOT}/stubs_pio
+    ${SOURCE_ROOT}
+)
+pico_pwm_test_warnings(pio_generator_test)
+add_test(NAME pio_generator COMMAND pio_generator_test)
+
+add_executable(software_generator_test
+    software_generator_test.c
+    ${SOURCE_ROOT}/driver/pwm/software/software_generator.c
+)
+target_include_directories(software_generator_test PRIVATE
+    ${TEST_ROOT}/stubs_sw
+    ${SOURCE_ROOT}
+)
+pico_pwm_test_warnings(software_generator_test)
+add_test(NAME software_generator COMMAND software_generator_test)
+
+add_executable(usb_cdc_test
+    usb_cdc_test.c
+    cdc_stub.c
+    ${SOURCE_ROOT}/app/usb/usb_cdc.c
+)
+target_include_directories(usb_cdc_test PRIVATE
+    ${TEST_ROOT}/stubs_cdc
+    ${SOURCE_ROOT}
+)
+pico_pwm_test_warnings(usb_cdc_test)
+add_test(NAME usb_cdc COMMAND usb_cdc_test)

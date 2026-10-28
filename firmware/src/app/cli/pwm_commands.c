@@ -12,7 +12,7 @@
 #include <string.h>
 
 static const shell_command_t pwm_commands[] = {
-    {"info", "info                    Show device type", board_commands_info},
+    {"info", "info                    Show device type and system clock", board_commands_info},
     {"version", "version              Show firmware version", board_commands_version},
     {"config", "config [set <a|b|c> <hw|pio|sw> <gen|mon>|save]  Show or set startup config", board_commands_config},
     {"get", "get <ch>                 Read channel properties", channel_commands_get},

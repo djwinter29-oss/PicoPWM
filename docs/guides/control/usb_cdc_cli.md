@@ -36,7 +36,7 @@ Implemented by `board_commands.*`.
 
 | Command | Description | Example |
 | --- | --- | --- |
-| `info` | Show the device type. | `info` |
+| `info` | Show the device type and system clock. | `info` |
 | `version` | Show the build-time firmware version. | `version` |
 | `config` | Show running and target Bank A/B/C settings. | `config` |
 | `config set <a|b|c> <gen|mon>` | Change one target bank role. | `config set a gen` |
@@ -78,6 +78,9 @@ For monitor banks, `stop` leaves measured input channels unchanged.
 
 `config` prints both `running` and `target` Bank A/B/C settings. `config set`
 changes only the target configuration. `config save` writes the validated target
-to flash; use `reboot` to apply it.
+to flash; use `reboot` to apply it. The save disables interrupts and locks the
+PWM core for one flash sector, so CDC, HID, and I2C stall until it finishes.
+The stall ends when the sector program returns or the 5 second watchdog resets the board.
+Allow 2 seconds.
 See [Control Interfaces](README.md) for shared semantics and [I2C Protocol](i2c_protocol.md)
 for the binary register protocol.

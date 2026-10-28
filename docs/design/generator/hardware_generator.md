@@ -166,7 +166,7 @@ The current generator workflow is:
 1. accept one logical request in integer `freq_hz` and integer duty percent
 2. clamp duty into `0..100`
 3. resolve static outputs first for `freq_hz = 0` and endpoint duties
-4. otherwise search a local divider window for the best valid `TOP` and divider pair
+4. otherwise search every legal divider, from the smallest wrap-legal value through the maximum, for the closest valid `TOP` and divider pair, and stop on an exact match
 5. program wrap, divider, and compare level into the slice
 6. publish the realized frequency and the realized duty (`level` over `TOP + 1`, rounded) through the backend state
 

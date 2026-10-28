@@ -54,6 +54,27 @@ static void usb_cdc_queue_byte(uint8_t byte) {
 }
 
 /**
+ * @brief Move received CDC bytes into the local queue, leaving the rest in the USB FIFO.
+ * @note A full local queue stops the read so the host is NAKed instead of having bytes discarded.
+ */
+static void usb_cdc_drain_rx(void) {
+    uint8_t buffer[USB_CDC_PACKET_SIZE];
+
+    while (usb_cdc_rx_count < USB_CDC_RX_QUEUE_SIZE && tud_cdc_n_available(USB_CDC_ITF) != 0u) {
+        uint32_t space = USB_CDC_RX_QUEUE_SIZE - usb_cdc_rx_count;
+        uint32_t want = space < sizeof(buffer) ? space : (uint32_t)sizeof(buffer);
+        uint32_t count = tud_cdc_n_read(USB_CDC_ITF, buffer, want);
+
+        if (count == 0u) {
+            break;
+        }
+        for (uint32_t index = 0u; index < count; ++index) {
+            usb_cdc_queue_byte(buffer[index]);
+        }
+    }
+}
+
+/**
  * @brief Append bytes to the local CDC transmit queue.
  * @param data Caller-owned payload bytes.
  * @param length Number of bytes to queue.
@@ -132,6 +153,7 @@ void usb_cdc_init(void) {
 
 void usb_cdc_poll(void) {
     tud_task();
+    usb_cdc_drain_rx();
     usb_cdc_poll_tx();
 }
 
@@ -178,19 +200,8 @@ bool usb_cdc_write(void *context, const uint8_t *data, uint32_t length) {
  * @param itf TinyUSB CDC interface index that received data.
  */
 void tud_cdc_rx_cb(uint8_t itf) {
-    uint8_t buffer[USB_CDC_PACKET_SIZE];
-
-    while (tud_cdc_n_available(itf) != 0u) {
-        uint32_t count = tud_cdc_n_read(itf, buffer, sizeof(buffer));
-
-        if (count == 0u) {
-            break;
-        }
-
-        for (uint32_t index = 0u; index < count; ++index) {
-            usb_cdc_queue_byte(buffer[index]);
-        }
-    }
+    (void)itf;
+    usb_cdc_drain_rx();
 }
 
 /**

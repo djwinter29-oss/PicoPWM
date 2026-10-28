@@ -269,10 +269,11 @@ before submitting `SAVE_CONFIG`, and resume once a final status arrives.
 The save runs from Core 0 polling, never from the USB callback. Core 0 is also blocked, because the flash routines
 disable XIP and Core 0 cannot run code from flash during the erase and program. For that interval Core 0 services
 nothing: HID GETs are delayed or NAKed, and CDC and I2C slave service stall as well, so CLI users and I2C masters see
-the same pause. `PENDING` is observable only before the save starts. Hosts allow a multi-second timeout for report 20
-during a save. A SET sent during the save is not dropped: it is delayed and accepted once the slot frees, so a host
-that times out reads the result and matches `transaction_id` before retrying, to avoid a double submit. The interval
-is not yet measured.
+the same pause. `PENDING` is observable only before the save starts. The firmware kicks the 5 second watchdog once
+immediately before interrupts are disabled and does not kick it again until the sector program returns, so the stall
+ends in a completed save or a watchdog reset. Hosts allow 2 seconds for report 20 during a save. A SET sent during
+the save is not dropped: it is delayed and accepted once the slot frees, so a host that times out reads the result
+and matches `transaction_id` before retrying, to avoid a double submit.
 
 ### GET_REPORT: Result (payload 12 bytes)
 

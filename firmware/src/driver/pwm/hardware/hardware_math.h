@@ -31,8 +31,6 @@ static inline uint32_t pwm_generator_level_from_duty(uint32_t period_counts, uin
 #define PWM_HW_MAX_DIV_X16 (255u * 16u + 15u)
 /** @brief Largest supported wrap value plus one. */
 #define PWM_HW_MAX_PERIOD_COUNTS 65536u
-/** @brief Local seeded-search window size in sixteenth-step divider units. */
-#define PWM_HW_DIV_SEARCH_WINDOW_X16 128u
 
 /** @brief Rounded realized frequency for one wrap value and divider, or 0 for an invalid divider. */
 static inline uint32_t pwm_hw_realized_freq_hz(uint32_t sys_clk_hz, uint32_t top, uint16_t div_x16) {
@@ -49,16 +47,13 @@ static inline uint32_t pwm_hw_realized_freq_hz(uint32_t sys_clk_hz, uint32_t top
  * @param best_div_x16 Selected divider in sixteenth-step units.
  * @return `true` when the frequency is inside the timing envelope; `false` below the minimum, above half the
  *         system clock, or for zero.
- * @note ponytail: only a local divider window above the smallest divider that keeps the wrap in range is probed.
- *       The ceiling is that a distant divider could beat the window on another clock plan. That is acceptable
- *       because the host sweep test bounds the error for the supported clocks; widen the window or sweep
- *       exhaustively if that test regresses.
+ * @note The search walks every divider from the smallest wrap-legal value through @ref PWM_HW_MAX_DIV_X16
+ *       and stops early on an exact match. A set command runs this once; it is not an interrupt path.
  */
 static inline bool pwm_hw_find_timing(uint32_t sys_clk_hz, uint32_t freq_hz, uint32_t *best_top,
                                       uint16_t *best_div_x16) {
     uint64_t numerator = (uint64_t)sys_clk_hz * 16u;
     uint32_t start_div;
-    uint32_t end_div;
     uint32_t best_delta_hz = UINT32_MAX;
 
     if (freq_hz == 0u || best_top == NULL || best_div_x16 == NULL) {
@@ -69,12 +64,11 @@ static inline bool pwm_hw_find_timing(uint32_t sys_clk_hz, uint32_t freq_hz, uin
     if (start_div < PWM_HW_MIN_DIV_X16) {
         start_div = PWM_HW_MIN_DIV_X16;
     }
-    end_div = start_div + PWM_HW_DIV_SEARCH_WINDOW_X16;
-    if (end_div > PWM_HW_MAX_DIV_X16) {
-        end_div = PWM_HW_MAX_DIV_X16;
+    if (start_div > PWM_HW_MAX_DIV_X16) {
+        return false;
     }
 
-    for (uint32_t div_x16 = start_div; div_x16 <= end_div; div_x16++) {
+    for (uint32_t div_x16 = start_div; div_x16 <= PWM_HW_MAX_DIV_X16; div_x16++) {
         uint64_t denominator = (uint64_t)freq_hz * div_x16;
         uint64_t period_counts = (numerator + (denominator / 2u)) / denominator;
         uint32_t actual_hz;

@@ -53,8 +53,11 @@ _Current WebHID layout with simulated readings; illustrative, not a live hardwar
 1. **Get the firmware.** Download the `pico` UF2 for Raspberry Pi Pico (RP2040) or `pico2` for Raspberry Pi Pico 2
    (RP2350) from [Releases](https://github.com/djwinter29-oss/PicoPWM/releases), or build it with
    `tools/firmware/build.sh --board pico` (or `pico2`). The UF2 is written to `build/<board>/pico_pwm.uf2`.
-2. **Flash over USB.** Hold **BOOTSEL** while connecting the board, copy the `.uf2` to the `RPI-RP2` drive, and let it
-   reboot. `tools/firmware/load.sh --board pico` (or `pico2`) automates this when the drive is mounted.
+2. **Flash with a debug probe.** Connect a Pico Debug Probe to the board's SWD interface, then run
+   `tools/firmware/load.sh --board pico` (or `pico2`). The script builds the firmware and programs it through OpenOCD.
+   OpenOCD must be installed and the probe connected; see the [hardware setup guide](docs/guides/hardware-setup.md).
+   The loader bypasses SPI flash ID detection; for a board with a non-default flash capacity, pass `--flash-size`
+   with the capacity in bytes.
 3. **Wire your signals.** Follow the [hardware setup guide](docs/guides/hardware-setup.md) for the channel GPIO map,
    I2C pins and board-specific pin considerations.
 4. **Connect to PicoPWM.** Use the USB CDC shell at 115200 baud, or connect an I2C controller to the default 7-bit

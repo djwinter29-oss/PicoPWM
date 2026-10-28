@@ -45,7 +45,7 @@ function syncTarget(selector, value) {
   }
 }
 
-export function renderBootEdits(configuration) {
+export function renderBootEdits(configuration, identity) {
   const selectors = ["#clock-profile-select", "#i2c-input", "#hw-role", "#pio-role", "#sw-role"];
   const targets = configuration
     ? [configuration.clock_profile, configuration.target.i2c_address, ...configuration.target.roles] : [];
@@ -56,13 +56,20 @@ export function renderBootEdits(configuration) {
     control.dataset.edited = String(changed);
     edited ||= changed;
   });
-  const pending = configuration && (configuration.target.i2c_address !== configuration.running.i2c_address
-    || configuration.target.roles.some((role, bank) => role !== configuration.running.roles[bank]));
+  const expectedClockHz = configuration?.clock_profile === 0
+    ? { RP2040: 125_000_000, RP2350: 150_000_000 }[identity?.mcu]
+    : [null, 150_000_000, 200_000_000, 250_000_000, 280_000_000][configuration?.clock_profile];
+  const pending = Boolean(configuration && (
+    configuration.system_clock_hz !== expectedClockHz
+    || configuration.target.i2c_address !== configuration.running.i2c_address
+    || configuration.target.roles.some((role, bank) => role !== configuration.running.roles[bank])));
+  const needsSave = Boolean(edited || pending);
   const status = document.querySelector("#boot-edits");
-  status.hidden = !edited && !pending;
+  status.hidden = !needsSave;
   status.textContent = edited ? "Unsaved edits" : pending ? "Target differs from running" : "";
   status.title = edited ? "Local edits have not been sent. Save and Reboot applies them."
-    : "Bank roles or I2C address differ from the running settings. Save and Reboot applies the target.";
+    : "Boot settings differ from the running configuration. Save and Reboot applies the target.";
+  return needsSave;
 }
 
 function renderConfiguration(data) {
@@ -103,13 +110,14 @@ function renderChannels(data, editable) {
   for (const channel of data.channels) {
     const bank = Math.floor(channel.channel / 8);
     const row = document.createElement("tr");
-    row.append(cell(String(channel.channel)), cell(String(data.pins?.channels[channel.channel] ?? "--")),
+    const gpio = data.pins?.channels[channel.channel] ?? "--";
+    row.append(cell(`${channel.channel} (GPIO ${gpio})`),
       cell(formatFrequency(channel.freq_hz), channel.freq_hz === null ? "number missing" : "number"),
       cell(channel.duty === null ? "--" : `${channel.duty}%`, channel.duty === null ? "number missing" : "number"));
     if (editable && data.configuration?.running.roles[bank] === 0 && !data.bank_errors[bank]
       && channel.freq_hz !== null && channel.duty !== null) {
       ["frequency", "duty"].forEach((field, index) => {
-        const target = row.children[index + 2];
+        const target = row.children[index + 1];
         const button = document.createElement("button");
         button.type = "button";
         button.className = "channel-value";
@@ -171,8 +179,9 @@ export function renderDashboard(data, editable = false) {
   document.querySelector("#runtime-message").dataset.error = String(Boolean(data.runtime_error));
   renderConfiguration(data);
   renderPins(data);
-  renderBootEdits(data.configuration);
+  const bootConfigurationChanged = renderBootEdits(data.configuration, identity);
   renderChannels(data, editable);
   const problems = [data.identity_error, data.configuration_error, ...data.bank_errors].filter(Boolean);
   setText("#read-errors", problems.length ? problems.join("; ") : "");
+  return bootConfigurationChanged;
 }

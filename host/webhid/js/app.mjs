@@ -1,5 +1,5 @@
 import { CLOCK_PROFILES, ROLES, PicoPwmWebHid } from "./device.mjs?v=6";
-import { renderBootEdits, renderDashboard, updateReportAge } from "./view.mjs?v=12";
+import { renderBootEdits, renderDashboard, updateReportAge } from "./view.mjs?v=13";
 
 const $ = selector => document.querySelector(selector);
 const connectButton = $("#connect");
@@ -17,11 +17,29 @@ let channelApplying = false;
 let pendingSettings = null;
 const controls = ["#hw-role", "#pio-role", "#sw-role", "#i2c-input"].map($);
 
+function updateSaveButton(state, bootConfigurationChanged) {
+  const dashboard = state.dashboard;
+  const connected = ["connected", "writing"].includes(state.phase);
+  const ready = state.phase === "connected" && dashboard.identity && dashboard.configuration;
+  const settingsHelp = !connected
+    ? "Connect to read boot settings and enable Save & Reboot."
+    : !dashboard.identity || !dashboard.configuration
+      ? "Read device identity and configuration successfully to enable Save & Reboot."
+      : !dashboard.identity.can_save_reboot
+        ? "Connected firmware does not support Save & Reboot. Flash the latest firmware for your board, then disconnect and reconnect this page."
+        : state.phase === "writing" ? "A command is in progress. Wait before saving."
+          : !bootConfigurationChanged ? "Boot configuration is unchanged."
+            : "Save changed boot settings and reboot to apply them.";
+  saveButton.disabled = !ready || !dashboard.identity.can_save_reboot || !bootConfigurationChanged;
+  $("#settings-help").textContent = settingsHelp;
+  saveButton.title = saveButton.disabled ? settingsHelp : "Save boot settings and restart the board";
+}
+
 function render(state) {
   const dashboard = state.dashboard;
   const connected = ["connected", "writing"].includes(state.phase);
   const ready = state.phase === "connected" && dashboard.identity && dashboard.configuration;
-  renderDashboard(dashboard, Boolean(ready));
+  const bootConfigurationChanged = renderDashboard(dashboard, Boolean(ready));
   $("#apply-channel").disabled = !ready || channelApplying;
   $("#channel-frequency").disabled = channelApplying;
   $("#channel-duty").disabled = channelApplying;
@@ -36,7 +54,6 @@ function render(state) {
   for (const control of controls) control.disabled = !ready;
   const clockReady = ready && dashboard.identity.can_set_clock;
   $("#clock-profile-select").disabled = !clockReady;
-  saveButton.disabled = !ready || !dashboard.identity.can_save_reboot;
   const ledAvailable = Boolean(dashboard.identity?.can_set_led && dashboard.configuration);
   const ledOn = ledAvailable && dashboard.configuration.led_on;
   ledButton.disabled = !ready || !ledAvailable;
@@ -47,16 +64,7 @@ function render(state) {
     : "Board LED unavailable; connect with firmware supporting LED control";
   $("#reboot-board").disabled = !ready || !dashboard.identity.can_reboot;
   if (!ready && rebootDialog.open) rebootDialog.close();
-  const settingsHelp = !connected
-    ? "Connect to read boot settings and enable Save and Reboot."
-    : !dashboard.identity || !dashboard.configuration
-      ? "Read device identity and configuration successfully to enable Save and Reboot."
-      : !dashboard.identity.can_save_reboot
-        ? "Connected firmware does not support Save and Reboot. Flash the latest firmware for your board, then disconnect and reconnect this page."
-        : state.phase === "writing" ? "A command is in progress. Wait before saving."
-          : "Edit the boot settings, then save and reboot to apply them.";
-  $("#settings-help").textContent = settingsHelp;
-  saveButton.title = saveButton.disabled ? settingsHelp : "Save boot settings and restart the board";
+  updateSaveButton(state, bootConfigurationChanged);
   if (!ready && saveDialog.open) {
     saveDialog.close();
     pendingSettings = null;
@@ -79,8 +87,11 @@ async function run(action) {
 
 const integer = selector => Number($(selector).value.trim() === "" ? NaN : $(selector).value);
 
-$(".settings-controls").addEventListener("input", () =>
-  renderBootEdits(client.state.dashboard.configuration));
+$(".settings-controls").addEventListener("input", () => {
+  const state = client.state;
+  const changed = renderBootEdits(state.dashboard.configuration, state.dashboard.identity);
+  updateSaveButton(state, changed);
+});
 
 connectButton.addEventListener("click", () =>
   client.state.phase === "disconnected" ? client.connect() : client.disconnect());

@@ -40,8 +40,11 @@ CMAKE_GENERATOR=Ninja ./tools/firmware/build.sh --board pico
 To switch an existing Makefiles build to Ninja, move `build/<board>` aside first
 so CMake configures a fresh build directory. The helper does not delete build state.
 
-Prerequisites: `git`, `cmake`, a build tool and `arm-none-eabi-gcc` on `PATH`. The helper initializes the
-`firmware/third_party` submodules, including the pinned Pico SDK.
+Build prerequisites: `git`, `cmake`, a build tool and `arm-none-eabi-gcc` on `PATH`. The helper initializes the
+`firmware/third_party` submodules, including the pinned Pico SDK. To program a board with
+`tools/firmware/load.sh`, also install OpenOCD and connect a Pico Debug Probe over SWD. The loader bypasses SPI
+flash autodetection, assuming 2 MiB for `pico` and 4 MiB for `pico2`; pass `--flash-size <bytes>` for a different
+capacity.
 
 Check the helper's generator selection without compiling firmware:
 `python3 tools/test/test_firmware_build.py`.

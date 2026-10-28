@@ -24,6 +24,9 @@ class RunPythonTests(unittest.TestCase):
                     'exit 0\n'
                 )
                 interpreter.chmod(0o755)
+                udevadm = root / "bin/udevadm"
+                udevadm.write_text('#!/bin/sh\nprintf "/devices/not-picopwm\\n"\n')
+                udevadm.chmod(0o755)
                 base = root / "base-python"
                 base.write_text('#!/bin/sh\nprintf "base %s\\n" "$*" >> "$CALLS"\nexit 0\n')
                 base.chmod(0o755)
@@ -31,11 +34,13 @@ class RunPythonTests(unittest.TestCase):
                 subprocess.run(
                     ["sh", str(ROOT / "tools/host/run-python.sh")], check=True,
                     env={**os.environ, "VENV_DIR": str(root), "PYTHON": str(base),
-                         "CALLS": str(calls), "PIP_AVAILABLE": pip_available},
+                         "CALLS": str(calls), "PIP_AVAILABLE": pip_available,
+                        "PIP_INDEX_URL": "https://packages.example/simple",
+                        "PATH": f"{root / 'bin'}:{os.environ['PATH']}"},
                     capture_output=True, text=True,
                 )
                 log = calls.read_text()
-                self.assertIn(f"install --editable {ROOT}/host/python", log)
+                self.assertIn(f"--index-url https://packages.example/simple --editable {ROOT}/host/python", log)
                 self.assertIn("-m picopwm.app", log)
                 if pip_available == "1":
                     self.assertIn(f"base -m pip --python {interpreter}", log)

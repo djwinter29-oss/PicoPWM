@@ -13,13 +13,16 @@ From `host/python`:
 python -m pip install -e '.[test]'
 ```
 
-The `hidapi` dependency needs HID access to the board (on Linux, a udev rule or access
-to `/dev/hidraw*`). From the repository root, `tools/host/run-python.sh` creates a
+The `hidapi` dependency needs HID access to the board. On Linux, configure it with the
+[HID permissions guide](../../docs/guides/control/README.md#linux-hid-permissions).
+From the repository root, `tools/host/run-python.sh` creates a
 virtualenv, installs the host and runs it.
 The launcher refreshes the editable installation and runtime dependencies on each
 start, including dependency version constraints. If Python lacks `ensurepip`, it
 can create a pip-free venv and use the base interpreter's pip (`--python`) to install
 into it. Install pip or the OS Python venv package if neither interpreter has pip.
+The launcher uses `https://pypi.org/simple` by default for these public dependencies;
+set `PIP_INDEX_URL` to use another package index.
 
 ## Run the web interface
 

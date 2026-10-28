@@ -8,7 +8,8 @@ implements it in `firmware/src/usb`.
 ## Requirements
 
 - .NET 10 SDK, or a newer SDK with the .NET 10 ASP.NET Core runtime
-- HID access to the board (on Linux, a udev rule or access to `/dev/hidraw*`)
+- HID access to the board. On Linux, configure it with the
+  [HID permissions guide](../../docs/guides/control/README.md#linux-hid-permissions).
 
 From the repository root, `tools/host/run-dotnet.sh` runs the host. Set `PICOPWM_SERIAL`
 or `PICOPWM_DEVICE_PATH` to preselect a board when desired.

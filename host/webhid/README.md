@@ -21,7 +21,7 @@ commands. It follows the
 4. Click a generator's frequency or duty in **PWM control and monitoring** to edit
    both values in a channel dialog, then click **Apply**. Monitor values are read-only.
    Edit boot settings in **Boot configuration**.
-5. Click **Save and Reboot**, review the settings in the confirmation dialog, and confirm.
+5. Click **Save & Reboot**, review the settings in the confirmation dialog, and confirm.
    The page writes the target settings, saves once, and the board reboots. Reconnect to verify the applied settings.
 
 Boot configuration groups controls in order: clock profile, I2C address, hardware
@@ -38,7 +38,8 @@ Use one controlling host per board. The page never reopens a device automaticall
 **PWM control and monitoring** shows three side-by-side, eight-row tables:
 Hardware PWM (channels 0-7), PIO PWM (8-15), and Software PWM (16-23).
 Each title shows the running role, not the unsaved boot selection. Columns show
-the logical channel index, GPIO number (not physical header pin), frequency, and duty.
+the logical channel and GPIO number together (for example `0 (GPIO 1)`), frequency, and duty. GPIO values are not
+physical header-pin numbers.
 Tables stack on narrow screens.
 Generator values have a dotted underline and are keyboard-accessible buttons.
 The dialog identifies the backend, logical channel, and GPIO, and starts from the
@@ -61,7 +62,7 @@ firmware without the capability; update firmware to enable readback. Invalid
 reports show an explicit error. The map is cached only for the current connection.
 
 **Board LED** beside Connect toggles the identification LED and shows its readback
-state. **Reboot board** beside Save and Reboot opens a confirmation dialog and
+state. **Reboot Board** beside Save & Reboot opens a confirmation dialog and
 restarts without saving any edits. Both controls require advertised firmware
 capabilities and remain disabled on older firmware. LED state is refreshed with
 configuration readback once per second, including changes made through CDC.
@@ -102,7 +103,8 @@ node --test host/webhid/tests/*.test.mjs
 
 ## Troubleshooting
 
-- **Save and Reboot disabled:** hover over Save and Reboot to read the explanation.
+- **Save & Reboot disabled:** hover over the button to read the explanation. It is disabled when the boot
+  configuration has no unsaved or unapplied changes.
   If the connected firmware lacks the capability, flash the latest firmware for
   your board, then disconnect and reconnect the page. Building firmware alone does
   not update the connected board.

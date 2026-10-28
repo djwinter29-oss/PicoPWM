@@ -23,6 +23,8 @@ EOF
         ;;
 esac
 
+    "$SCRIPT_DIR/hid-permissions-check.sh"
+
 if ! command -v "$DOTNET_EXE" >/dev/null 2>&1; then
     echo ".NET SDK executable not found: $DOTNET_EXE; install the .NET SDK or set DOTNET." >&2
     exit 1

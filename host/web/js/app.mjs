@@ -1,5 +1,5 @@
 import { CLOCK_PROFILES, ROLES } from "./device.mjs?v=6";
-import { renderBootEdits, renderDashboard, updateReportAge } from "./view.mjs?v=12";
+import { renderBootEdits, renderDashboard, updateReportAge } from "./view.mjs?v=13";
 import { PicoPwmHost, request } from "./client.mjs?v=1";
 
 const $ = selector => document.querySelector(selector);
@@ -15,11 +15,24 @@ let pendingSettings = null;
 let scanning = false;
 let scanError = null;
 
+function updateSaveButton(state, bootConfigurationChanged) {
+  const data = state.dashboard;
+  const ready = state.phase === "connected" && data.identity && data.configuration;
+  const help = state.phase === "writing" ? "A command is in progress. Wait before saving."
+    : !ready ? "Select a board and read its configuration to enable Save & Reboot."
+      : !data.identity.can_save_reboot ? "Update board firmware to enable Save & Reboot."
+        : !bootConfigurationChanged ? "Boot configuration is unchanged."
+          : "Save changed boot settings and reboot to apply them.";
+  $("#settings-help").textContent = help;
+  $("#save-configuration").disabled = !ready || !data.identity.can_save_reboot || !bootConfigurationChanged;
+  $("#save-configuration").title = help;
+}
+
 function render(state) {
   const data = state.dashboard;
   const connected = ["connected", "writing"].includes(state.phase);
   const ready = state.phase === "connected" && data.identity && data.configuration;
-  renderDashboard(data, Boolean(ready));
+  const bootConfigurationChanged = renderDashboard(data, Boolean(ready));
   $("#connection").dataset.state = connected ? "connected" : "disconnected";
   $("#connection-label").textContent = connected ? "Connected" : "Disconnected";
   boardSelect.disabled = state.phase === "writing" || scanning || !boardSelect.options.length
@@ -28,12 +41,7 @@ function render(state) {
   for (const selector of ["#hw-role", "#pio-role", "#sw-role", "#i2c-input"])
     $(selector).disabled = !ready;
   $("#clock-profile-select").disabled = !ready || !data.identity.can_set_clock;
-  const help = !ready ? "Select a board and read its configuration to enable Save and Reboot."
-    : !data.identity.can_save_reboot ? "Update board firmware to enable Save and Reboot."
-      : "Edit the boot settings, then save and reboot to apply them.";
-  $("#settings-help").textContent = help;
-  $("#save-configuration").disabled = !ready || !data.identity.can_save_reboot;
-  $("#save-configuration").title = help;
+  updateSaveButton(state, bootConfigurationChanged);
   $("#reboot-board").disabled = !ready || !data.identity.can_reboot;
   const ledAvailable = Boolean(data.identity?.can_set_led && data.configuration);
   const ledOn = ledAvailable && data.configuration.led_on;
@@ -73,7 +81,7 @@ async function rescan() {
     for (const board of result.boards) {
       const option = document.createElement("option");
       option.value = board.id;
-      option.textContent = `${board.product_name} / ${board.serial_number || board.device_path}`;
+      option.textContent = `PicoPWM - ${board.serial_number || board.device_path}`;
       boardSelect.append(option);
     }
     if (selected && !result.boards.some(board => board.id === selected)) {
@@ -110,7 +118,11 @@ boardSelect.addEventListener("change", () => {
   client.refresh();
 });
 rescanButton.addEventListener("click", rescan);
-$(".settings-controls").addEventListener("input", () => renderBootEdits(client.state.dashboard.configuration));
+$(".settings-controls").addEventListener("input", () => {
+  const state = client.state;
+  const changed = renderBootEdits(state.dashboard.configuration, state.dashboard.identity);
+  updateSaveButton(state, changed);
+});
 $(".channel-panels").addEventListener("click", event => {
   const button = event.target.closest(".channel-value");
   if (!button || client.state.phase !== "connected") return;

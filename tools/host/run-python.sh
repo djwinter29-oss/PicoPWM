@@ -5,6 +5,7 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 VENV_DIR="${VENV_DIR:-$REPO_ROOT/host/python/.venv}"
 BASE_PYTHON="${PYTHON:-python3}"
+PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.org/simple}"
 
 case "${1:-}" in
     -h|--help)
@@ -27,6 +28,8 @@ EOF
         ;;
 esac
 
+    "$SCRIPT_DIR/hid-permissions-check.sh"
+
 if [ ! -x "$VENV_DIR/bin/python" ]; then
     if ! command -v "$BASE_PYTHON" >/dev/null 2>&1; then
         echo "Python interpreter not found: $BASE_PYTHON" >&2
@@ -46,9 +49,10 @@ fi
 
 PYTHON_EXE="$VENV_DIR/bin/python"
 if "$PYTHON_EXE" -m pip --version >/dev/null 2>&1; then
-    "$PYTHON_EXE" -m pip install --editable "$REPO_ROOT/host/python"
+    "$PYTHON_EXE" -m pip install --index-url "$PIP_INDEX_URL" --editable "$REPO_ROOT/host/python"
 elif "$BASE_PYTHON" -m pip --version >/dev/null 2>&1; then
-    "$BASE_PYTHON" -m pip --python "$PYTHON_EXE" install --editable "$REPO_ROOT/host/python"
+    "$BASE_PYTHON" -m pip --python "$PYTHON_EXE" install --index-url "$PIP_INDEX_URL" \
+        --editable "$REPO_ROOT/host/python"
 else
     echo "pip is unavailable. Install pip or your Python venv package, then rerun this script." >&2
     exit 1

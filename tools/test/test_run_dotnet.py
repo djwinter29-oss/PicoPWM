@@ -27,10 +27,15 @@ class RunDotnetTests(unittest.TestCase):
                     'esac\n'
                 )
                 executable.chmod(0o755)
+                bin_dir = root / "bin"
+                bin_dir.mkdir()
+                udevadm = bin_dir / "udevadm"
+                udevadm.write_text('#!/bin/sh\nprintf "/devices/not-picopwm\\n"\n')
+                udevadm.chmod(0o755)
                 calls = root / "calls"
                 env = {**os.environ, "DOTNET": str(executable), "DOTNET_ROLL_FORWARD": policy,
                        "PICOPWM_PORT": "5002", "PICOPWM_HOST": "127.0.0.1", "CALLS": str(calls),
-                       "SDK": sdk, "RUNTIME": runtime}
+                       "SDK": sdk, "RUNTIME": runtime, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
                 env.pop("ASPNETCORE_URLS", None)
                 result = subprocess.run(
                     ["sh", str(ROOT / "tools/host/run-dotnet.sh")], env=env, capture_output=True, text=True)

@@ -181,10 +181,13 @@ add_executable(usb_cdc_test
     usb_cdc_test.c
     cdc_stub.c
     ${SOURCE_ROOT}/app/usb/usb_cdc.c
+    ${SOURCE_ROOT}/app/cli/shell.c
+    ${EMBEDDED_CLI_ROOT}/src/embedded_cli.c
 )
 target_include_directories(usb_cdc_test PRIVATE
     ${TEST_ROOT}/stubs_cdc
     ${SOURCE_ROOT}
+    ${EMBEDDED_CLI_ROOT}/include
 )
 pico_pwm_test_warnings(usb_cdc_test)
 add_test(NAME usb_cdc COMMAND usb_cdc_test)

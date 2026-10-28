@@ -41,6 +41,7 @@ int main(void) {
     bool cli_connection_output_complete = false;
     bool cli_init_error_pending;
     bool usb_was_connected = false;
+    uint32_t handled_cdc_disconnects = 0u;
 
     // Load boot settings first: the clock must be set before any PWM backend caches it for timing calculations.
     boot_config_load();
@@ -86,18 +87,20 @@ int main(void) {
         usb_hid_poll();
         // Retry connection output until the bounded CDC queue accepts it.
         usb_connected = usb_cdc_is_connected();
-        if (!usb_connected) {
-            usb_cdc_reset_rx();
+        uint32_t cdc_disconnects = usb_cdc_disconnect_count();
+        if ((cdc_disconnects != handled_cdc_disconnects) || (!usb_connected && usb_was_connected)) {
+            handled_cdc_disconnects = cdc_disconnects;
+            usb_cdc_reset_session();
+            cli_initialized = pwm_commands_on_disconnected(&pwm_command_session);
+            usb_cdc_acknowledge_session_reset();
+            cli_connection_output_complete = false;
+            cli_init_error_pending = !cli_initialized;
         }
         if (usb_connected && cli_initialized && !cli_connection_output_complete) {
             cli_connection_output_complete = pwm_commands_on_connected(&pwm_command_session);
         } else if (usb_connected && cli_init_error_pending &&
                    usb_cdc_write(NULL, (const uint8_t *)cli_init_error, sizeof(cli_init_error) - 1u)) {
             cli_init_error_pending = false;
-        } else if (!usb_connected && usb_was_connected) {
-            cli_initialized = pwm_commands_on_disconnected(&pwm_command_session);
-            cli_connection_output_complete = false;
-            cli_init_error_pending = !cli_initialized;
         }
         usb_was_connected = usb_connected;
         if (usb_connected && cli_initialized) {

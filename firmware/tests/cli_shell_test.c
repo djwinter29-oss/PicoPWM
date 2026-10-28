@@ -100,6 +100,21 @@ static void test_independent_sessions_and_line_endings(void) {
     assert(strstr(transport_b.output, "handled\r\n") != NULL);
 }
 
+static void test_poll_dispatches_one_command(void) {
+    test_transport_t transport = {.input = "ping\rping\r"};
+    shell_t shell;
+    test_context_t context = {.shell = &shell};
+    shell_transport_t binding = {.read = test_read, .write = test_write, .context = &transport};
+    shell_config_t config = test_config(&context, &binding);
+
+    assert(shell_init(&shell, &config));
+    shell_poll(&shell);
+    assert(context.command_calls == 1u);
+
+    shell_poll(&shell);
+    assert(context.command_calls == 2u);
+}
+
 static bool test_args(void *context, int argc, const char *const *argv) {
     (void)context;
     assert(argc == 3);
@@ -331,6 +346,7 @@ static void test_line_write_is_atomic(void) {
 
 int main(void) {
     test_independent_sessions_and_line_endings();
+    test_poll_dispatches_one_command();
     test_arguments();
     test_completion();
     test_overlong_line_is_truncated_at_documented_limit();

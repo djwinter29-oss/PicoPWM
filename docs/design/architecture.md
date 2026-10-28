@@ -148,7 +148,9 @@ receive queue is full, firmware stops draining the USB FIFO until space becomes
 available. A transmit write returns failure when the local queue cannot accept
 the complete response. This fixed-resource policy prevents unbounded memory
 growth; hosts should keep the connection open and retry commands whose response
-could not be queued.
+could not be queued. On DTR disconnect, CDC RX/TX queues and TinyUSB FIFOs are
+cleared; the application resets the shell before allowing transport I/O for the
+next session.
 
 ### 2. Shared Control Layer
 

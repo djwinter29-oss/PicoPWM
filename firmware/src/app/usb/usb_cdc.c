@@ -41,6 +41,17 @@ static uint32_t usb_cdc_tx_head;
 static uint32_t usb_cdc_tx_tail;
 /** @brief Number of bytes currently stored in the transmit queue. */
 static uint32_t usb_cdc_tx_count;
+/** @brief Number of DTR disconnect transitions observed by TinyUSB. */
+static uint32_t usb_cdc_disconnects;
+/** @brief Disconnect count whose application-level shell reset is complete. */
+static uint32_t usb_cdc_handled_disconnects;
+/** @brief Most recently observed host DTR state. */
+static bool usb_cdc_dtr;
+
+/** @brief Check whether the current CDC session may exchange transport data. */
+static bool usb_cdc_session_io_allowed(void) {
+    return usb_cdc_is_connected() && (usb_cdc_disconnects == usb_cdc_handled_disconnects);
+}
 
 /** @brief Queue one received CDC byte when local receive space remains. */
 static void usb_cdc_queue_byte(uint8_t byte) {
@@ -102,7 +113,7 @@ static bool usb_cdc_tx_queue_push(const uint8_t *data, uint32_t length) {
 static void usb_cdc_poll_tx(void) {
     bool flushed = false;
 
-    if (!tud_ready()) {
+    if (!usb_cdc_session_io_allowed()) {
         return;
     }
 
@@ -146,6 +157,9 @@ void usb_cdc_init(void) {
     usb_cdc_tx_head = 0u;
     usb_cdc_tx_tail = 0u;
     usb_cdc_tx_count = 0u;
+    usb_cdc_disconnects = 0u;
+    usb_cdc_handled_disconnects = 0u;
+    usb_cdc_dtr = false;
 
     board_init();
     tusb_init();
@@ -153,11 +167,15 @@ void usb_cdc_init(void) {
 
 void usb_cdc_poll(void) {
     tud_task();
-    usb_cdc_drain_rx();
-    usb_cdc_poll_tx();
+    if (usb_cdc_session_io_allowed()) {
+        usb_cdc_drain_rx();
+        usb_cdc_poll_tx();
+    } else {
+        usb_cdc_reset_session();
+    }
 }
 
-void usb_cdc_reset_rx(void) {
+void usb_cdc_reset_session(void) {
     uint8_t discard[USB_CDC_PACKET_SIZE];
 
     while (tud_cdc_n_available(USB_CDC_ITF) != 0u) {
@@ -171,10 +189,22 @@ void usb_cdc_reset_rx(void) {
     usb_cdc_rx_head = 0u;
     usb_cdc_rx_tail = 0u;
     usb_cdc_rx_count = 0u;
+    usb_cdc_tx_head = 0u;
+    usb_cdc_tx_tail = 0u;
+    usb_cdc_tx_count = 0u;
+    (void)tud_cdc_n_write_clear(USB_CDC_ITF);
 }
 
 bool usb_cdc_is_connected(void) {
-    return tud_ready() && tud_cdc_n_connected(USB_CDC_ITF);
+    return tud_ready() && tud_cdc_n_connected(USB_CDC_ITF) && usb_cdc_dtr;
+}
+
+uint32_t usb_cdc_disconnect_count(void) {
+    return usb_cdc_disconnects;
+}
+
+void usb_cdc_acknowledge_session_reset(void) {
+    usb_cdc_handled_disconnects = usb_cdc_disconnects;
 }
 
 uint32_t usb_cdc_read(void *context, uint8_t *data, uint32_t capacity) {
@@ -182,7 +212,7 @@ uint32_t usb_cdc_read(void *context, uint8_t *data, uint32_t capacity) {
 
     (void)context;
 
-    if ((data == NULL) || (capacity == 0u)) {
+    if ((data == NULL) || (capacity == 0u) || !usb_cdc_session_io_allowed()) {
         return 0u;
     }
 
@@ -199,7 +229,7 @@ uint32_t usb_cdc_read(void *context, uint8_t *data, uint32_t capacity) {
 bool usb_cdc_write(void *context, const uint8_t *data, uint32_t length) {
     (void)context;
 
-    if ((data == NULL) || (length == 0u) || !tud_ready()) {
+    if ((data == NULL) || (length == 0u) || !usb_cdc_session_io_allowed()) {
         return false;
     }
 
@@ -217,7 +247,9 @@ bool usb_cdc_write(void *context, const uint8_t *data, uint32_t length) {
  */
 void tud_cdc_rx_cb(uint8_t itf) {
     (void)itf;
-    usb_cdc_drain_rx();
+    if (usb_cdc_session_io_allowed()) {
+        usb_cdc_drain_rx();
+    }
 }
 
 /**
@@ -228,6 +260,13 @@ void tud_cdc_rx_cb(uint8_t itf) {
  */
 void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts) {
     (void)itf;
-    (void)dtr;
     (void)rts;
+
+    if (usb_cdc_dtr && !dtr) {
+        usb_cdc_disconnects += 1u;
+    }
+    usb_cdc_dtr = dtr;
+    if (!dtr) {
+        usb_cdc_reset_session();
+    }
 }

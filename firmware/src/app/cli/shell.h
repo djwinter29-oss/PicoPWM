@@ -103,8 +103,9 @@ typedef struct {
     CLI_UINT cli_buffer[SHELL_CLI_BUFFER_UINTS]; /**< Static backing store for @ref cli. */
     bool prompted;                               /**< Indicates the initial prompt has been emitted by embedded-cli. */
     bool busy;                                   /**< Guards against re-entrant poll or prompt calls. */
-    bool transport_write_failed;                 /**< A transport write failed during the current command dispatch. */
-    bool initialized;                            /**< Indicates whether @ref shell_init completed successfully. */
+    bool command_dispatched;     /**< Indicates a complete command was handled during the current poll. */
+    bool transport_write_failed; /**< A transport write failed during the current command dispatch. */
+    bool initialized;            /**< Indicates whether @ref shell_init completed successfully. */
 } shell_t;
 
 /**

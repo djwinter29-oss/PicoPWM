@@ -13,9 +13,6 @@
 /** @brief Maximum response line bytes, including CRLF. */
 #define SHELL_WRITE_LINE_BUFFER_SIZE (SHELL_MAX_OUTPUT_LINE_LENGTH + 2u)
 
-/** @brief Maximum bytes read from the transport per poll iteration. */
-#define CLI_EDITOR_RX_CHUNK_SIZE 16u
-
 /**
  * @brief Write raw bytes through the active shell transport.
  * @param data Source bytes to write.
@@ -91,6 +88,7 @@ static void shell_on_command(EmbeddedCli *cli, CliCommand *cli_command) {
     int argc = 0;
     const shell_command_t *command = shell_find_command(shell, cli_command->name);
 
+    shell->command_dispatched = true;
     shell->transport_write_failed = false;
     if (command == NULL) {
         if ((shell->unknown_handler == NULL) || !shell->unknown_handler(shell->command_context, cli_command->name)) {
@@ -194,23 +192,25 @@ bool shell_init(shell_t *shell, const shell_config_t *config) {
 
 /** @copydoc shell_poll */
 void shell_poll(shell_t *shell) {
-    uint8_t rx_data[CLI_EDITOR_RX_CHUNK_SIZE];
+    uint8_t rx_data;
 
     if ((shell == NULL) || !shell->initialized || shell->busy) {
         return;
     }
 
     while (true) {
-        uint32_t rx_length = shell->transport.read(shell->transport.context, rx_data, sizeof(rx_data));
+        uint32_t rx_length = shell->transport.read(shell->transport.context, &rx_data, 1u);
 
         if (rx_length == 0u) {
             return;
         }
 
-        for (uint32_t index = 0u; index < rx_length; ++index) {
-            embeddedCliReceiveChar(shell->cli, (char)rx_data[index]);
-        }
+        shell->command_dispatched = false;
+        embeddedCliReceiveChar(shell->cli, (char)rx_data);
         (void)shell_process(shell);
+        if (shell->command_dispatched) {
+            return;
+        }
     }
 }
 

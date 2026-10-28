@@ -10,6 +10,11 @@ terminal's baud-rate setting does not affect USB packet timing; this shell does
 not configure a physical UART. The firmware prints command help when a host
 connection is opened and displays the `pico> ` prompt.
 
+Disconnecting discards any incomplete command and pending response bytes in
+both the application and USB transmit queues. The application resets the line
+editor before accepting input from a new session; a command already in progress
+is not cancelled.
+
 Commands are entered one line at a time and responses end with CRLF (`\r\n`).
 The interactive editor supports backspace, cursor movement, command history,
 and Tab completion of command names. A command line is limited to 100

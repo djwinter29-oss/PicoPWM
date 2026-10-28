@@ -101,7 +101,6 @@ running:
   (default keeps the SDK clock: 125 MHz on Pico, 150 MHz on Pico 2), and `config save` persists the target. A reboot applies the target. Saving disables interrupts and locks the PWM core for the flash sector erase, so USB and I2C stall until programming finishes or the 5 second watchdog resets the board. Hosts allow 2 seconds.
 - `set` applies to output-capable channels and returns `ERR unavailable` for
   monitor channels.
-- `stop` drives generator outputs low (`freq = 0 Hz`, `duty = 0%`). Monitor channels are left unchanged.
 - `led` and `reboot` remain board-level commands.
 
 The CLI must not require the host to know which backend owns a logical channel.

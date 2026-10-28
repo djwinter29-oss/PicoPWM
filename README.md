@@ -45,7 +45,7 @@ These are generator request ranges; `0 Hz` is a special static output level (`0%
 - GPIO signals are **3.3 V only**; do not connect 5 V signals.
 - I2C needs external pull-ups on SDA and SCL. Start at 100 kHz.
 - The default configuration is monitor-only, so no PWM output is driven after power-up. Generator banks start at
-  0 Hz and 0% duty; `stop` drives generator outputs low and leaves monitor banks unchanged.
+   0 Hz and 0% duty.
 - Bank roles are set in the startup configuration, not at build time. Change the target over CDC (`config set`), I2C
   (`REG_CONFIG_SET`) or HID, then save it with that interface's own operation (`config save`, `REG_CONFIG_SAVE`, or the
   dashboard's **Save & Reboot**) and reboot to apply it.
@@ -81,8 +81,8 @@ reboot
 ```
 
 After the board reconnects, run `set 0 1000 50` and `get 0` to request 1 kHz at 50% duty and inspect the realized
-output. When finished, run `stop` to drive generator outputs low; this does not change the saved bank role. See the
-[CDC CLI guide](docs/guides/control/usb_cdc_cli.md) for command details.
+output. When finished, run `reboot` to return generator outputs to their startup state; the saved bank role remains
+unchanged. See the [CDC CLI guide](docs/guides/control/usb_cdc_cli.md) for command details.
 
 ## Troubleshooting
 

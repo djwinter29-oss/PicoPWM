@@ -9,8 +9,6 @@ identity, and board-control operations.
 - `get` and `status` report realized channel state.
 - `set` applies only to output-capable channels in the configured banks.
 - Monitor-only or disabled channels report an unavailable operation.
-- `stop` uses configured generator banks' safe reset behavior; monitor banks do
-  not modify measured input state.
 - `config` changes only the next-boot target; it never changes active PWM
   hardware until the board reboots.
 - Channel backend, direction, GPIO, and capabilities come from the fixed Bank

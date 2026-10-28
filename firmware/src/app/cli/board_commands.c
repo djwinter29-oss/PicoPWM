@@ -122,16 +122,19 @@ static bool board_commands_parse_assignment(char *assignment, board_config_updat
         }
         if (strcmp(equal, "default") == 0) {
             update->clock_profile = BOOT_CONFIG_SYSCLK_DEFAULT;
-        } else if (board_commands_parse_decimal(equal, &number)) {
-            update->clock_profile = (number == 150u)   ? BOOT_CONFIG_SYSCLK_150MHZ
-                                    : (number == 200u) ? BOOT_CONFIG_SYSCLK_200MHZ
-                                    : (number == 250u) ? BOOT_CONFIG_SYSCLK_250MHZ
-                                                       : (boot_config_sysclk_t)(BOOT_CONFIG_SYSCLK_250MHZ + 1u);
-            if ((unsigned)update->clock_profile > BOOT_CONFIG_SYSCLK_250MHZ) {
+        } else {
+            if (!board_commands_parse_decimal(equal, &number)) {
                 return false;
             }
-        } else {
-            return false;
+            if (number == 150u) {
+                update->clock_profile = BOOT_CONFIG_SYSCLK_150MHZ;
+            } else if (number == 200u) {
+                update->clock_profile = BOOT_CONFIG_SYSCLK_200MHZ;
+            } else if (number == 250u) {
+                update->clock_profile = BOOT_CONFIG_SYSCLK_250MHZ;
+            } else {
+                return false;
+            }
         }
         update->clock_changed = true;
         return true;

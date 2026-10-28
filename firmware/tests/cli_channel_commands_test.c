@@ -74,7 +74,7 @@ static void test_status_failure_is_reported(void) {
 
     output[0] = '\0';
     get_available = false;
-    assert(!channel_commands_status(NULL, 1, argv));
+    assert(channel_commands_status(NULL, 1, argv));
     assert(strstr(output, "ERR channel 0 unavailable") != NULL);
     assert(channel_commands_status(NULL, 2, argv));
     assert(strstr(output, "usage") != NULL);
@@ -86,6 +86,8 @@ static void test_get_and_set_results(void) {
     const char *negative[] = {"get", "-1"};
     const char *junk[] = {"set", "0x", "10"};
     const char *set_argv[] = {"set", "1", "1000", "25"};
+    const char *max_duty[] = {"set", "1", "1000", "100"};
+    const char *over_duty[] = {"set", "1", "1000", "101"};
     const char *bad_duty[] = {"set", "1", "1000", "256"};
     const char *set_bad_channel[] = {"set", "24", "10"};
     const char *empty_channel[] = {"set", "", "10"};
@@ -118,6 +120,9 @@ static void test_get_and_set_results(void) {
     assert(channel_commands_set(NULL, 4, set_argv));
     assert(set_calls == 1u);
     assert(strstr(output, "OK CH1 freq=1000 Hz duty=25%") != NULL);
+    assert(channel_commands_set(NULL, 4, max_duty));
+    assert(set_calls == 2u);
+    assert(strstr(output, "duty=100%") != NULL);
 
     assert(channel_commands_set(NULL, 4, bad_duty));
     assert(strstr(output, "usage") != NULL);
@@ -128,6 +133,10 @@ static void test_get_and_set_results(void) {
     assert(channel_commands_set(NULL, 3, empty_channel));
     assert(channel_commands_set(NULL, 3, negative_freq));
     assert(channel_commands_set(NULL, 4, empty_duty));
+    assert(strstr(output, "usage") != NULL);
+    set_calls = 0u;
+    assert(channel_commands_set(NULL, 4, over_duty));
+    assert(set_calls == 0u);
     assert(strstr(output, "usage") != NULL);
 
     for (size_t index = 0u; index < sizeof(results) / sizeof(results[0]); ++index) {

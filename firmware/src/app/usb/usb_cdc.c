@@ -17,7 +17,7 @@
 /** @brief Local receive queue capacity in bytes. */
 #define USB_CDC_RX_QUEUE_SIZE 128u
 /** @brief Local transmit queue capacity in bytes. */
-#define USB_CDC_TX_QUEUE_SIZE 256u
+#define USB_CDC_TX_QUEUE_SIZE 2048u
 
 /**
  * Receive and transmit queues are touched only on Core 0. TinyUSB callbacks run

@@ -50,7 +50,8 @@ typedef struct {
  * @param context Command context supplied during shell initialization.
  * @param argc Number of parsed argument tokens.
  * @param argv Null-terminated token strings backed by the shell line buffer.
- * @return `true` when the handler completed normally, otherwise `false`.
+ * @return `true` when the response completed; otherwise `false`. The shell emits
+ * a generic error for a handler failure unless a transport write already failed.
  */
 typedef bool (*shell_command_handler_t)(void *context, int argc, const char *const *argv);
 
@@ -96,6 +97,7 @@ typedef struct {
     CLI_UINT cli_buffer[SHELL_CLI_BUFFER_UINTS]; /**< Static backing store for @ref cli. */
     bool prompted;                               /**< Indicates the initial prompt has been emitted by embedded-cli. */
     bool busy;                                   /**< Guards against re-entrant poll or prompt calls. */
+    bool transport_write_failed; /**< A transport write failed during the current command dispatch. */
     bool initialized; /**< Indicates whether @ref shell_init completed successfully. */
 } shell_t;
 

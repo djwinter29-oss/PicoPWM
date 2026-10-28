@@ -250,8 +250,11 @@ static void test_rejected_inputs(void) {
     config.commands = failing;
     transport.input = "fail\r";
     transport.input_offset = 0u;
+    transport.output_length = 0u;
+    transport.output[0] = '\0';
     shell_init(&shell, &config);
     shell_poll(&shell);
+    assert(strstr(transport.output, "ERR command handler failed") != NULL);
 
     config.commands = reenter;
     transport.input = "re\r";

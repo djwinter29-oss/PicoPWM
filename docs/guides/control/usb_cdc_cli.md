@@ -24,7 +24,7 @@ target (`pwm`, `board`, or `config`); the verb describes the operation.
 | PWM | `pwm get <channel>`, `pwm get all`, `pwm set <channel> <freq_hz> [duty_percent]`, `pwm stop all` | Read realized channel state, set a generator channel, or stop every generator output. |
 | Board | `board get <clock\|led\|version>`, `board set led <on\|off>`, `board reboot` | Read board state, control the LED, or restart. |
 | Configuration | `config get [banka\|bankb\|bankc\|clock\|address]`, `config set <key=value>[, <key=value>...]` | Read configuration or update several settings together. |
-| Help | `help [group [verb]]`, `?` | List commands or show contextual options and syntax. |
+| Help | `help [group]`, `?` | List commands or show contextual options and syntax. |
 
 ### PWM Commands
 
@@ -38,6 +38,10 @@ target (`pwm`, `board`, or `config`); the verb describes the operation.
 The stop command attempts every generator channel even if one channel fails.
 If it reports an error, some outputs may have stopped while others may remain
 active; inspect the channels with `pwm get all` before relying on their state.
+
+The `pwm get all` listing is bounded to the configured channel count and is
+buffered by the CDC transport before delivery. Keep the terminal connected
+while the response is being transmitted.
 
 Channel numbers are logical IDs. Their backend and GPIO are fixed by bank;
 configuration changes only the bank's role (generator or monitor).
@@ -92,19 +96,17 @@ while the flash sector is programmed; the operation can take up to 2 seconds.
 
 ### Help
 
-`help` is the canonical help command. Use `help [group [verb]]` to ask about
-the command tree by name (for example, `help pwm get`). Enter `?` by itself
-for the top-level list, or append it to a partial command to see valid next
-options (for example, `pwm get ?`). Help is informational only and never
-changes device state.
+`help` is the canonical help command. Use `help <group>` for a group's command
+summary. Enter `?` by itself for the top-level list, or append it to a partial
+command to see valid syntax and options (for example, `pwm get ?`). Help is
+informational only and never changes device state.
 
 | Input | Result |
 | --- | --- |
 | `help` or `?` | List command groups and their forms. |
 | `help pwm` | List PWM commands. |
-| `help pwm get` | Explain PWM read syntax. |
 | `pwm ?` | Show PWM verbs and their options. |
-| `pwm get ?` | Show `<channel>` or `all`. |
+| `pwm get ?` | Show the channel or `all` option. |
 | `config set ?` | Show accepted setting keys and values. |
 
 Incomplete or invalid commands should show the relevant syntax and choices

@@ -4,18 +4,21 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 
 void tud_cdc_rx_cb(uint8_t itf);
 void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts);
 
 int main(void) {
     uint8_t payload[200];
+    uint8_t bulk[2048];
     uint8_t readback[128];
     uint8_t chunk[64];
 
     for (uint32_t i = 0u; i < sizeof(payload); ++i) {
         payload[i] = (uint8_t)i;
     }
+    memset(bulk, 0xA5, sizeof(bulk));
 
     usb_cdc_init();
     cdc_test_set_ready(false);
@@ -26,9 +29,12 @@ int main(void) {
     assert(!usb_cdc_write(NULL, NULL, 4u));
     assert(!usb_cdc_write(NULL, payload, 0u));
     assert(usb_cdc_write(NULL, payload, 4u));
-    assert(!usb_cdc_write(NULL, payload, 300u));
     cdc_test_set_tx_space(0u);
     assert(usb_cdc_write(NULL, payload, 4u));
+    assert(usb_cdc_write(NULL, bulk, 900u));
+    assert(usb_cdc_write(NULL, bulk, 120u));
+    assert(usb_cdc_write(NULL, bulk, 1024u));
+    assert(!usb_cdc_write(NULL, bulk, 1u));
     assert(usb_cdc_read(NULL, NULL, 4u) == 0u);
 
     cdc_test_load_rx(payload, sizeof(payload));

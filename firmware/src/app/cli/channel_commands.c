@@ -143,7 +143,7 @@ bool channel_commands_set(void *context, int argc, const char *const *argv) {
         return shell_write_line(COMMAND_SHELL, line);
     }
 
-    if ((argc == 4) && !channel_commands_parse_u8(argv[3], &duty)) {
+    if ((argc == 4) && (!channel_commands_parse_u8(argv[3], &duty) || (duty > 100u))) {
         return shell_write_line(COMMAND_SHELL, "ERR usage: " CLI_SYNTAX_PWM_SET);
     }
 
@@ -171,16 +171,19 @@ bool channel_commands_status(void *context, int argc, const char *const *argv) {
     unsigned int last_channel = (channel_count > 0u) ? (unsigned int)channel_count - 1u : 0u;
 
     snprintf(line, sizeof(line), "=== All PWM channels (logical 0..%u) ===", last_channel);
-    shell_write_line(COMMAND_SHELL, line);
-    shell_write_line(COMMAND_SHELL, "Ch  Backend  State  Freq(Hz)   Duty(%)");
+    if (!shell_write_line(COMMAND_SHELL, line) ||
+        !shell_write_line(COMMAND_SHELL, "Ch  Backend  State  Freq(Hz)   Duty(%)")) {
+        return false;
+    }
     for (uint8_t channel = 0u; channel < channel_count; ++channel) {
         state = (pwm_state_t){0u, 50u};
         if (!device_get_channel(channel, &state)) {
             snprintf(line, sizeof(line), "ERR channel %d unavailable", channel);
-            shell_write_line(COMMAND_SHELL, line);
+            return shell_write_line(COMMAND_SHELL, line);
+        }
+        if (!channel_commands_write_status_row(COMMAND_SHELL, (int)channel, &state)) {
             return false;
         }
-        channel_commands_write_status_row(COMMAND_SHELL, (int)channel, &state);
     }
     return shell_write_line(COMMAND_SHELL, NULL);
 }

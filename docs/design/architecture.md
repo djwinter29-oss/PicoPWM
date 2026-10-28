@@ -143,11 +143,12 @@ Core 0 owns the host-facing transports:
 - `driver/i2c/i2c_slave.*` for the I2C slave ISR, read responses, and deferred write scheduling; `i2c_slave_hw.*` is its SDK-facing peripheral port
 - `app/i2c/i2c_control_map.*` for the I2C register map and payload translation
 
-USB CDC uses bounded 128-byte receive and 256-byte transmit queues. When a
-queue is full, additional received bytes or transmit responses are dropped and
-the transport reports failure where the API permits it. This fixed-resource
-policy prevents unbounded memory growth; applications requiring reliable bulk
-transfer must provide host-side pacing and retry at the command level.
+USB CDC uses bounded 128-byte receive and 2048-byte transmit queues. When the
+receive queue is full, firmware stops draining the USB FIFO until space becomes
+available. A transmit write returns failure when the local queue cannot accept
+the complete response. This fixed-resource policy prevents unbounded memory
+growth; hosts should keep the connection open and retry commands whose response
+could not be queued.
 
 ### 2. Shared Control Layer
 

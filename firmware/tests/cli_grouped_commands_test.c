@@ -13,6 +13,7 @@ typedef struct {
     size_t input_offset;
     char output[4096];
     size_t output_length;
+    size_t output_limit;
 } test_transport_t;
 
 static pwm_role_t target_roles[PWM_BANK_COUNT] = {PWM_ROLE_MONITOR, PWM_ROLE_MONITOR, PWM_ROLE_MONITOR};
@@ -40,7 +41,8 @@ static uint32_t test_read(void *context, uint8_t *data, uint32_t capacity) {
 static bool test_write(void *context, const uint8_t *data, uint32_t length) {
     test_transport_t *transport = context;
 
-    if ((transport->output_length + length) >= sizeof(transport->output)) {
+    if (((transport->output_limit != 0u) && ((transport->output_length + length) > transport->output_limit)) ||
+        ((transport->output_length + length) >= sizeof(transport->output))) {
         return false;
     }
     memcpy(transport->output + transport->output_length, data, length);
@@ -186,6 +188,14 @@ static void test_grouped_commands(void) {
     run_command(&commands, &transport, "pwm get all\r");
     assert(strstr(transport.output, "All PWM channels") != NULL);
     assert(strstr(transport.output, "23  HW") != NULL);
+    assert(transport.output_length <= 2048u);
+
+    transport.output_limit = 150u;
+    run_command(&commands, &transport, "pwm get all\r");
+    assert(transport.output_length <= transport.output_limit);
+    assert(strstr(transport.output, "ERR command handler failed") == NULL);
+    transport.output_limit = 0u;
+    assert(transport.output_length <= 2048u);
 
     set_calls = 0u;
     run_command(&commands, &transport, "pwm set 0 1000 25\r");
@@ -257,18 +267,18 @@ static void test_help_commands(void) {
     run_command(&commands, &transport, "?\r");
     assert(strstr(transport.output, "Groups: pwm, board, config") != NULL);
 
-    run_command(&commands, &transport, "pwm get ?\r");
-    assert(strstr(transport.output, "Usage: pwm get <channel|all>") != NULL);
+    run_command(&commands, &transport, "help pwm\r");
+    assert(strstr(transport.output, "pwm get <channel|all>") != NULL);
 
     run_command(&commands, &transport, "config set ?\r");
     assert(strstr(transport.output, "banka/bankb/bankc=generator|monitor") != NULL);
     assert(strstr(transport.output, "clock=default|150|200|250") != NULL);
     assert(strstr(transport.output, "address=8..119") != NULL);
 
-    run_command(&commands, &transport, "help pwm get\r");
+    run_command(&commands, &transport, "pwm get ?\r");
     assert(strstr(transport.output, "Usage: pwm get <channel|all>") != NULL);
 
-    run_command(&commands, &transport, "help board reboot\r");
+    run_command(&commands, &transport, "board reboot ?\r");
     assert(strstr(transport.output, "Usage: board reboot") != NULL);
 }
 

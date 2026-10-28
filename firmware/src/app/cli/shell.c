@@ -28,7 +28,12 @@ static bool shell_write_bytes(shell_t *shell, const uint8_t *data, uint32_t leng
         return true;
     }
 
-    return shell->transport.write(shell->transport.context, data, length);
+    if (!shell->transport.write(shell->transport.context, data, length)) {
+        shell->transport_write_failed = true;
+        return false;
+    }
+
+    return true;
 }
 
 /** @copydoc shell_write */
@@ -75,9 +80,12 @@ static void shell_on_command(EmbeddedCli *cli, CliCommand *cli_command) {
     int argc = 0;
     const shell_command_t *command = shell_find_command(shell, cli_command->name);
 
+    shell->transport_write_failed = false;
     if (command == NULL) {
         if ((shell->unknown_handler == NULL) || !shell->unknown_handler(shell->command_context, cli_command->name)) {
-            shell_write_line(shell, shell->unknown_message);
+            if (!shell->transport_write_failed) {
+                shell_write_line(shell, shell->unknown_message);
+            }
         }
         return;
     }
@@ -97,7 +105,9 @@ static void shell_on_command(EmbeddedCli *cli, CliCommand *cli_command) {
         }
     }
 
-    command->handler(shell->command_context, argc, argv);
+    if (!command->handler(shell->command_context, argc, argv) && !shell->transport_write_failed) {
+        shell_write_line(shell, "ERR command handler failed");
+    }
 }
 
 /** @brief Run embedded-cli processing unless a handler is already running on this shell. */

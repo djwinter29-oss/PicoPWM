@@ -27,31 +27,23 @@ static const shell_command_t pwm_commands[] = {
 /** @brief Print the commands belonging to one group. */
 static bool pwm_commands_write_group_help(shell_t *shell, const char *group) {
     if (group == NULL) {
-        shell_write_line(shell, "Groups: pwm, board, config");
-        shell_write_line(shell, "Use 'help <group> [verb]' or '<group> ?' for command syntax.");
-        return true;
+        return shell_write_line(shell, "Groups: pwm, board, config") &&
+               shell_write_line(shell, "Use 'help <group>' or '<group> ?' for command syntax.");
     }
 
     if (strcmp(group, "pwm") == 0) {
-        shell_write_line(shell, CLI_SYNTAX_PWM_GET);
-        shell_write_line(shell, CLI_SYNTAX_PWM_SET);
-        shell_write_line(shell, CLI_SYNTAX_PWM_STOP);
-        return true;
+        return shell_write_line(shell, CLI_SYNTAX_PWM_GET) && shell_write_line(shell, CLI_SYNTAX_PWM_SET) &&
+               shell_write_line(shell, CLI_SYNTAX_PWM_STOP);
     }
     if (strcmp(group, "board") == 0) {
-        shell_write_line(shell, CLI_SYNTAX_BOARD_GET);
-        shell_write_line(shell, CLI_SYNTAX_BOARD_SET);
-        shell_write_line(shell, CLI_SYNTAX_BOARD_REBOOT);
-        return true;
+        return shell_write_line(shell, CLI_SYNTAX_BOARD_GET) && shell_write_line(shell, CLI_SYNTAX_BOARD_SET) &&
+               shell_write_line(shell, CLI_SYNTAX_BOARD_REBOOT);
     }
     if (strcmp(group, "config") == 0) {
-        shell_write_line(shell, CLI_SYNTAX_CONFIG_GET);
-        shell_write_line(shell, CLI_SYNTAX_CONFIG_SET);
-        return true;
+        return shell_write_line(shell, CLI_SYNTAX_CONFIG_GET) && shell_write_line(shell, CLI_SYNTAX_CONFIG_SET);
     }
 
-    shell_write_line(shell, "ERR unknown command group (pwm, board, config)");
-    return false;
+    return shell_write_line(shell, "ERR unknown command group (pwm, board, config)");
 }
 
 /** @brief Dispatch PWM verbs and their parameters. */
@@ -65,8 +57,7 @@ static bool pwm_commands_pwm(void *context, int argc, const char *const *argv) {
     }
     if (strcmp(argv[1], "get") == 0) {
         if ((argc == 2) || ((argc == 3) && (strcmp(argv[2], "?") == 0))) {
-            shell_write_line(shell, CLI_USAGE_PWM_GET);
-            return true;
+            return shell_write_line(shell, CLI_USAGE_PWM_GET);
         }
         if ((argc == 3) && (strcmp(argv[2], "all") == 0)) {
             return channel_commands_status(shell, 1, get_all);
@@ -75,35 +66,29 @@ static bool pwm_commands_pwm(void *context, int argc, const char *const *argv) {
             const char *channel_argv[] = {"get", argv[2]};
             return channel_commands_get(shell, 2, channel_argv);
         }
-        shell_write_line(shell, "ERR " CLI_SYNTAX_PWM_GET);
-        return false;
+        return shell_write_line(shell, "ERR " CLI_SYNTAX_PWM_GET);
     }
     if (strcmp(argv[1], "set") == 0) {
         if ((argc == 2) || ((argc == 3) && (strcmp(argv[2], "?") == 0))) {
-            shell_write_line(shell, CLI_USAGE_PWM_SET);
-            return true;
+            return shell_write_line(shell, CLI_USAGE_PWM_SET);
         }
         if ((argc == 4) || (argc == 5)) {
             const char *set_argv[] = {"set", argv[2], argv[3], argc == 5 ? argv[4] : NULL};
             return channel_commands_set(shell, argc - 1, set_argv);
         }
-        shell_write_line(shell, "ERR " CLI_SYNTAX_PWM_SET);
-        return false;
+        return shell_write_line(shell, "ERR " CLI_SYNTAX_PWM_SET);
     }
     if (strcmp(argv[1], "stop") == 0) {
         if ((argc == 2) || ((argc == 3) && (strcmp(argv[2], "?") == 0))) {
-            shell_write_line(shell, CLI_USAGE_PWM_STOP);
-            return true;
+            return shell_write_line(shell, CLI_USAGE_PWM_STOP);
         }
         if ((argc == 3) && (strcmp(argv[2], "all") == 0)) {
             return board_commands_stop(shell, 1, stop_all);
         }
-        shell_write_line(shell, "ERR " CLI_SYNTAX_PWM_STOP);
-        return false;
+        return shell_write_line(shell, "ERR " CLI_SYNTAX_PWM_STOP);
     }
 
-    shell_write_line(shell, "ERR unknown PWM command; use 'pwm ?'");
-    return false;
+    return shell_write_line(shell, "ERR unknown PWM command; use 'pwm ?'");
 }
 
 /** @brief Dispatch board verbs and their parameters. */
@@ -115,25 +100,21 @@ static bool pwm_commands_board(void *context, int argc, const char *const *argv)
     }
     if (strcmp(argv[1], "get") == 0) {
         if ((argc == 2) || ((argc == 3) && (strcmp(argv[2], "?") == 0))) {
-            shell_write_line(shell, CLI_USAGE_BOARD_GET);
-            return true;
+            return shell_write_line(shell, CLI_USAGE_BOARD_GET);
         }
         if (argc == 3) {
             return board_commands_get(shell, 3, argv);
         }
-        shell_write_line(shell, "ERR " CLI_SYNTAX_BOARD_GET);
-        return false;
+        return shell_write_line(shell, "ERR " CLI_SYNTAX_BOARD_GET);
     }
     if (strcmp(argv[1], "set") == 0) {
         if ((argc == 2) || ((argc == 3) && (strcmp(argv[2], "?") == 0))) {
-            shell_write_line(shell, CLI_USAGE_BOARD_SET);
-            return true;
+            return shell_write_line(shell, CLI_USAGE_BOARD_SET);
         }
         if (argc == 4) {
             return board_commands_set(shell, argc, argv);
         }
-        shell_write_line(shell, "ERR " CLI_SYNTAX_BOARD_SET);
-        return false;
+        return shell_write_line(shell, "ERR " CLI_SYNTAX_BOARD_SET);
     }
     if ((strcmp(argv[1], "reboot") == 0) && ((argc == 2) || ((argc == 3) && (strcmp(argv[2], "?") == 0)))) {
         if (argc == 3) {
@@ -141,8 +122,7 @@ static bool pwm_commands_board(void *context, int argc, const char *const *argv)
         }
         return board_commands_reboot(shell, 1, (const char *const[]){"reboot"});
     }
-    shell_write_line(shell, "ERR unknown board command; use 'board ?'");
-    return false;
+    return shell_write_line(shell, "ERR unknown board command; use 'board ?'");
 }
 
 /** @brief Dispatch configuration verbs and their parameters. */
@@ -156,8 +136,7 @@ static bool pwm_commands_config(void *context, int argc, const char *const *argv
         return board_commands_config(shell, argc, argv);
     }
 
-    shell_write_line(shell, "ERR unknown config command; use 'config ?'");
-    return false;
+    return shell_write_line(shell, "ERR unknown config command; use 'config ?'");
 }
 
 /** @brief Dispatch the top-level question-mark help alias. */
@@ -174,9 +153,9 @@ static bool pwm_commands_question(void *context, int argc, const char *const *ar
 /** @brief Handle commands that do not match a registered group. */
 static bool pwm_commands_unknown(void *context, const char *command_name) {
     shell_t *shell = context;
-    shell_write_line(shell, "ERR unknown command; use 'help' or '?'");
+
     (void)command_name;
-    return true;
+    return shell_write_line(shell, "ERR unknown command; use 'help' or '?'");
 }
 
 /** @copydoc pwm_commands_init */

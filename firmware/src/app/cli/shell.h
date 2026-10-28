@@ -103,17 +103,23 @@ typedef struct {
 
 /**
  * @brief Initialize the generic CLI shell.
+ * @param shell Caller-owned shell state.
  * @param config Caller-owned shell configuration.
+ * @return `true` when the shell and all command bindings initialized successfully.
  */
-void shell_init(shell_t *shell, const shell_config_t *config);
+bool shell_init(shell_t *shell, const shell_config_t *config);
 
 /** @brief Poll the shell transport, assemble input lines, and dispatch complete commands.
  * @note Calls must not be nested across shell instances.
  */
 void shell_poll(shell_t *shell);
 
-/** @brief Emit the configured interactive prompt through the shell transport. */
-void shell_prompt(shell_t *shell);
+/**
+ * @brief Emit the configured interactive prompt through the shell transport.
+ * @param shell Initialized shell session.
+ * @return `true` when the prompt was accepted by the transport.
+ */
+bool shell_prompt(shell_t *shell);
 
 /**
  * @brief Write raw text through the shell transport.

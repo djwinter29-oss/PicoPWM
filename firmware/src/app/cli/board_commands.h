@@ -10,21 +10,20 @@
 
 /**
  * @brief Read one board property.
- * @param context Shell session.
- * @param argc Argument count for `board get <item>`.
- * @param argv Command tokens.
+ * @param shell Shell session.
+ * @param item Property name.
  * @return True when the response was written.
  */
-bool board_commands_get(void *context, int argc, const char *const *argv);
+bool board_commands_get(shell_t *shell, const char *item);
 
 /**
  * @brief Set a board property.
- * @param context Shell session.
- * @param argc Argument count for `board set <item> <value>`.
- * @param argv Command tokens.
+ * @param shell Shell session.
+ * @param item Property name.
+ * @param value Requested property value.
  * @return True when the operation completed and its response was written.
  */
-bool board_commands_set(void *context, int argc, const char *const *argv);
+bool board_commands_set(shell_t *shell, const char *item, const char *value);
 
 /**
  * @brief Read or update startup configuration.
@@ -37,20 +36,9 @@ bool board_commands_config(void *context, int argc, const char *const *argv);
 
 /**
  * @brief Schedule a board reboot after acknowledging the request.
- * @param context Shell session.
- * @param argc Argument count.
- * @param argv Command tokens.
+ * @param shell Shell session.
  * @return True when the reboot response was written.
  */
-bool board_commands_reboot(void *context, int argc, const char *const *argv);
-
-/**
- * @brief Stop all configured generator channels.
- * @param context Shell session.
- * @param argc Argument count.
- * @param argv Command tokens.
- * @return True when the operation completed and its response was written.
- */
-bool board_commands_stop(void *context, int argc, const char *const *argv);
+bool board_commands_reboot(shell_t *shell);
 
 #endif

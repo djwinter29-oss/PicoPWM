@@ -338,7 +338,10 @@ In ordered form:
 6. Core 0 initializes the I2C slave transport.
 7. The main loop services `usb_cdc_poll()`, `pwm_commands_poll()`, and `i2c_slave_poll()`.
 
-When the USB CDC host opens the connection, the CLI prints help once through `pwm_commands_on_connected()`.
+When the USB CDC host opens the connection, the CLI prints help and a prompt.
+If the bounded transmit queue cannot accept the output, Core 0 retries it while
+the connection remains open. If CLI initialization fails, the host receives an
+explicit error when the CDC connection is available.
 
 ## Where To Read Next
 

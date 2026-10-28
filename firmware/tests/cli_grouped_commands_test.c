@@ -180,7 +180,7 @@ static void test_grouped_commands(void) {
     shell_transport_t binding = {.read = test_read, .write = test_write, .context = &transport};
     pwm_commands_t commands;
 
-    pwm_commands_init(&commands, &binding);
+    assert(pwm_commands_init(&commands, &binding));
 
     run_command(&commands, &transport, "pwm get 0\r");
     assert(strstr(transport.output, "CH0: freq=1000 Hz, duty=50%, enabled=yes") != NULL);
@@ -262,7 +262,7 @@ static void test_help_commands(void) {
     shell_transport_t binding = {.read = test_read, .write = test_write, .context = &transport};
     pwm_commands_t commands;
 
-    pwm_commands_init(&commands, &binding);
+    assert(pwm_commands_init(&commands, &binding));
 
     run_command(&commands, &transport, "?\r");
     assert(strstr(transport.output, "Groups: pwm, board, config") != NULL);
@@ -282,9 +282,37 @@ static void test_help_commands(void) {
     assert(strstr(transport.output, "Usage: board reboot") != NULL);
 }
 
+static void test_connection_output_retries(void) {
+    static const char help[] =
+        "Groups: pwm, board, config\r\n"
+        "Use 'help <group>' or '<group> ?' for command syntax.\r\n";
+    test_transport_t transport = {0};
+    shell_transport_t binding = {.read = test_read, .write = test_write, .context = &transport};
+    pwm_commands_t commands;
+
+    assert(!pwm_commands_init(NULL, &binding));
+    assert(pwm_commands_init(&commands, &binding));
+
+    transport.output_limit = sizeof(help) - 1u;
+    assert(!pwm_commands_on_connected(&commands));
+    assert(strcmp(transport.output, help) == 0);
+
+    reset_output(&transport, "");
+    transport.output_limit = 0u;
+    assert(pwm_commands_on_connected(&commands));
+    assert(strcmp(transport.output, "pico> ") == 0);
+
+    pwm_commands_on_disconnected(&commands);
+    reset_output(&transport, "");
+    assert(pwm_commands_on_connected(&commands));
+    assert(strstr(transport.output, "Groups: pwm, board, config") != NULL);
+    assert(strstr(transport.output, "pico> ") != NULL);
+}
+
 int main(void) {
     test_grouped_commands();
     test_help_commands();
+    test_connection_output_retries();
     puts("cli_grouped_commands_test ok");
     return 0;
 }

@@ -31,11 +31,15 @@ static void core0_service_while_pwm_applies(void) {
  */
 int main(void) {
     static pwm_commands_t pwm_command_session;
+    static const char cli_init_error[] = "ERR CDC CLI initialization failed\r\n";
     static const shell_transport_t shell_transport = {
         .read = usb_cdc_read,
         .write = usb_cdc_write,
         .context = NULL,
     };
+    bool cli_initialized;
+    bool cli_connection_output_complete = false;
+    bool cli_init_error_pending;
     bool usb_was_connected = false;
 
     // Load boot settings first: the clock must be set before any PWM backend caches it for timing calculations.
@@ -47,7 +51,8 @@ int main(void) {
     // USB CDC command interface.
     usb_cdc_init();
     pwm_driver_set_wait_hook(core0_service_while_pwm_applies);
-    pwm_commands_init(&pwm_command_session, &shell_transport);
+    cli_initialized = pwm_commands_init(&pwm_command_session, &shell_transport);
+    cli_init_error_pending = !cli_initialized;
 
     // Configure and launch all three PWM banks before starting Core 1.
     const pwm_role_t bank_roles[PWM_BANK_COUNT] = {boot_config_get_bank(PWM_BANK_A), boot_config_get_bank(PWM_BANK_B),
@@ -79,13 +84,22 @@ int main(void) {
         system_watchdog_kick();
         usb_cdc_poll();
         usb_hid_poll();
-        // Detect USB connection events and print the initial CLI help.
+        // Retry connection output until the bounded CDC queue accepts it.
         usb_connected = usb_cdc_is_connected();
-        if (usb_connected && !usb_was_connected) {
-            pwm_commands_on_connected(&pwm_command_session);
+        if (usb_connected && cli_initialized && !cli_connection_output_complete) {
+            cli_connection_output_complete = pwm_commands_on_connected(&pwm_command_session);
+        } else if (usb_connected && cli_init_error_pending &&
+                   usb_cdc_write(NULL, (const uint8_t *)cli_init_error, sizeof(cli_init_error) - 1u)) {
+            cli_init_error_pending = false;
+        } else if (!usb_connected && usb_was_connected) {
+            pwm_commands_on_disconnected(&pwm_command_session);
+            cli_connection_output_complete = false;
+            cli_init_error_pending = !cli_initialized;
         }
         usb_was_connected = usb_connected;
-        pwm_commands_poll(&pwm_command_session);
+        if (cli_initialized) {
+            pwm_commands_poll(&pwm_command_session);
+        }
         i2c_slave_poll();
         system_record_service((uint32_t)absolute_time_diff_us(service_start, get_absolute_time()));
         sleep_us(100);

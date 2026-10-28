@@ -198,6 +198,7 @@ static void test_rejected_inputs(void) {
     const shell_command_t nameless[] = {{NULL, "help", test_command}};
     const shell_command_t failing[] = {{"fail", "fail", test_command_fails}};
     const shell_command_t reenter[] = {{"re", "re", test_reenter}};
+    const shell_command_t too_many[SHELL_MAX_COMMANDS + 1u] = {{.name = "ping", .help = "ping", .handler = test_command}};
 
     memset(&shell, 0, sizeof(shell));
     shell_init(NULL, &config);
@@ -217,21 +218,27 @@ static void test_rejected_inputs(void) {
 
     config = test_config(&context, &binding);
     config.transport = &unread;
-    shell_init(&shell, &config);
+    assert(!shell_init(&shell, &config));
     assert(!shell.initialized);
 
     config = test_config(&context, &binding);
     config.commands = NULL;
-    shell_init(&shell, &config);
+    assert(!shell_init(&shell, &config));
     assert(!shell.initialized);
 
     config = test_config(&context, &binding);
     config.commands = nameless;
-    shell_init(&shell, &config);
+    assert(!shell_init(&shell, &config));
     assert(!shell.initialized);
 
     config = test_config(&context, &binding);
-    shell_init(&shell, &config);
+    config.commands = too_many;
+    config.command_count = SHELL_MAX_COMMANDS + 1u;
+    assert(!shell_init(&shell, &config));
+    assert(!shell.initialized);
+
+    config = test_config(&context, &binding);
+    assert(shell_init(&shell, &config));
     shell_poll(&shell);
     assert(strstr(transport.output, "unknown") != NULL);
     assert(shell_write_line(&shell, NULL));
@@ -241,8 +248,8 @@ static void test_rejected_inputs(void) {
     transport.input_offset = 0u;
     transport.output_length = 0u;
     transport.output[0] = '\0';
-    shell_init(&shell, &config);
-    shell_prompt(&shell);
+    assert(shell_init(&shell, &config));
+    assert(shell_prompt(&shell));
     shell_poll(&shell);
     assert(strstr(transport.output, "unknown") == NULL);
 
@@ -252,14 +259,14 @@ static void test_rejected_inputs(void) {
     transport.input_offset = 0u;
     transport.output_length = 0u;
     transport.output[0] = '\0';
-    shell_init(&shell, &config);
+    assert(shell_init(&shell, &config));
     shell_poll(&shell);
     assert(strstr(transport.output, "ERR command handler failed") != NULL);
 
     config.commands = reenter;
     transport.input = "re\r";
     transport.input_offset = 0u;
-    shell_init(&shell, &config);
+    assert(shell_init(&shell, &config));
     shell_poll(&shell);
 }
 

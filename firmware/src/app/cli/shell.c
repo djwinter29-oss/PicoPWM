@@ -111,35 +111,41 @@ static void shell_on_command(EmbeddedCli *cli, CliCommand *cli_command) {
 }
 
 /** @brief Run embedded-cli processing unless a handler is already running on this shell. */
-static void shell_process(shell_t *shell) {
+static bool shell_process(shell_t *shell) {
     if (shell->busy) {
-        return;
+        return false;
     }
 
     shell->busy = true;
     shell->prompted = true;
+    shell->transport_write_failed = false;
     embeddedCliProcess(shell->cli);
     shell->busy = false;
+    return !shell->transport_write_failed;
 }
 
 /** @copydoc shell_init */
-void shell_init(shell_t *shell, const shell_config_t *config) {
+bool shell_init(shell_t *shell, const shell_config_t *config) {
     EmbeddedCliConfig cli_config;
 
     if (shell == NULL) {
-        return;
+        return false;
     }
 
     memset(shell, 0, sizeof(*shell));
 
     if ((config == NULL) || (config->transport == NULL) || (config->transport->read == NULL) ||
         (config->transport->write == NULL) || ((config->command_count > 0u) && (config->commands == NULL))) {
-        return;
+        return false;
+    }
+
+    if (config->command_count > SHELL_MAX_COMMANDS) {
+        return false;
     }
 
     for (uint32_t index = 0u; index < config->command_count; ++index) {
         if ((config->commands[index].name == NULL) || (config->commands[index].handler == NULL)) {
-            return;
+            return false;
         }
     }
 
@@ -149,9 +155,6 @@ void shell_init(shell_t *shell, const shell_config_t *config) {
     shell->unknown_message = (config->unknown_message != NULL) ? config->unknown_message : "Unknown command";
     shell->unknown_handler = config->unknown_handler;
     shell->command_context = config->command_context;
-    if (config->command_count > SHELL_MAX_COMMANDS) {
-        return;
-    }
 
     cli_config = *embeddedCliDefaultConfig();
     cli_config.invitation = SHELL_PROMPT;
@@ -161,7 +164,7 @@ void shell_init(shell_t *shell, const shell_config_t *config) {
     cli_config.cliBufferSize = sizeof(shell->cli_buffer);
     shell->cli = embeddedCliNew(&cli_config);
     if (shell->cli == NULL) {
-        return;
+        return false;
     }
 
     shell->cli->appContext = shell;
@@ -171,10 +174,11 @@ void shell_init(shell_t *shell, const shell_config_t *config) {
         CliCommandBinding binding = {.name = config->commands[index].name, .help = config->commands[index].help};
 
         if (!embeddedCliAddBinding(shell->cli, binding)) {
-            return;
+            return false;
         }
     }
     shell->initialized = true;
+    return true;
 }
 
 /** @copydoc shell_poll */
@@ -195,19 +199,20 @@ void shell_poll(shell_t *shell) {
         for (uint32_t index = 0u; index < rx_length; ++index) {
             embeddedCliReceiveChar(shell->cli, (char)rx_data[index]);
         }
-        shell_process(shell);
+        (void)shell_process(shell);
     }
 }
 
 /** @copydoc shell_prompt */
-void shell_prompt(shell_t *shell) {
+bool shell_prompt(shell_t *shell) {
     if ((shell == NULL) || !shell->initialized || shell->busy) {
-        return;
+        return false;
     }
 
     if (shell->prompted) {
-        shell_write(shell, SHELL_PROMPT);
-    } else {
-        shell_process(shell);
+        shell->transport_write_failed = false;
+        return shell_write(shell, SHELL_PROMPT);
     }
+
+    return shell_process(shell);
 }

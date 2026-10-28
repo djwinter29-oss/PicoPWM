@@ -252,48 +252,45 @@ static bool board_commands_apply_update(shell_t *shell, const board_config_updat
 }
 
 /** @copydoc board_commands_get */
-bool board_commands_get(void *context, int argc, const char *const *argv) {
+bool board_commands_get(shell_t *shell, const char *item) {
     char line[64];
 
-    if (argc != 3) {
-        return shell_write_line(COMMAND_SHELL, "ERR " CLI_SYNTAX_BOARD_GET);
-    }
-    if (strcmp(argv[2], "clock") == 0) {
+    if (strcmp(item, "clock") == 0) {
         snprintf(line, sizeof(line), "clock=%lu Hz target=%s", (unsigned long)device_system_clock_hz(),
                  system_clock_is_at_target() ? "met" : "fallback");
-        return shell_write_line(COMMAND_SHELL, line);
+        return shell_write_line(shell, line);
     }
-    if (strcmp(argv[2], "led") == 0) {
+    if (strcmp(item, "led") == 0) {
         bool on;
         if (!device_led_read(&on)) {
-            return shell_write_line(COMMAND_SHELL, "ERR LED unavailable");
+            return shell_write_line(shell, "ERR LED unavailable");
         }
-        return shell_write_line(COMMAND_SHELL, on ? "led=on" : "led=off");
+        return shell_write_line(shell, on ? "led=on" : "led=off");
     }
-    if (strcmp(argv[2], "version") == 0) {
-        return shell_write_line(COMMAND_SHELL, device_firmware_version());
+    if (strcmp(item, "version") == 0) {
+        return shell_write_line(shell, device_firmware_version());
     }
-    return shell_write_line(COMMAND_SHELL, "ERR board item must be clock, led or version");
+    return shell_write_line(shell, "ERR board item must be clock, led or version");
 }
 
 /** @copydoc board_commands_set */
-bool board_commands_set(void *context, int argc, const char *const *argv) {
+bool board_commands_set(shell_t *shell, const char *item, const char *value) {
     bool on;
 
-    if ((argc != 4) || (strcmp(argv[2], "led") != 0)) {
-        return shell_write_line(COMMAND_SHELL, "ERR " CLI_SYNTAX_BOARD_SET);
+    if (strcmp(item, "led") != 0) {
+        return shell_write_line(shell, "ERR " CLI_SYNTAX_BOARD_SET);
     }
-    if (strcmp(argv[3], "on") == 0) {
+    if (strcmp(value, "on") == 0) {
         on = true;
-    } else if (strcmp(argv[3], "off") == 0) {
+    } else if (strcmp(value, "off") == 0) {
         on = false;
     } else {
-        return shell_write_line(COMMAND_SHELL, "ERR " CLI_SYNTAX_BOARD_SET);
+        return shell_write_line(shell, "ERR " CLI_SYNTAX_BOARD_SET);
     }
     if (!device_led_set(on)) {
-        return shell_write_line(COMMAND_SHELL, "ERR LED unavailable");
+        return shell_write_line(shell, "ERR LED unavailable");
     }
-    return shell_write_line(COMMAND_SHELL, on ? "OK led on" : "OK led off");
+    return shell_write_line(shell, on ? "OK led on" : "OK led off");
 }
 
 /** @copydoc board_commands_config */
@@ -333,33 +330,11 @@ bool board_commands_config(void *context, int argc, const char *const *argv) {
 }
 
 /** @copydoc board_commands_reboot */
-bool board_commands_reboot(void *context, int argc, const char *const *argv) {
-    (void)argv;
-
-    if (argc != 1) {
-        return shell_write_line(COMMAND_SHELL, "ERR " CLI_SYNTAX_BOARD_REBOOT);
-    }
-    if (!shell_write_line(COMMAND_SHELL, "OK rebooting")) {
+bool board_commands_reboot(shell_t *shell) {
+    if (!shell_write_line(shell, "OK rebooting")) {
         device_schedule_reboot(500u);
         return false;
     }
     device_schedule_reboot(500u);
     return true;
-}
-
-/** @copydoc board_commands_stop */
-bool board_commands_stop(void *context, int argc, const char *const *argv) {
-    pwm_driver_result_t result;
-
-    (void)argv;
-    if (argc != 1) {
-        return shell_write_line(COMMAND_SHELL, "ERR " CLI_SYNTAX_PWM_STOP);
-    }
-
-    result = device_restore_defaults();
-    if (result == PWM_DRIVER_RESULT_OK) {
-        return shell_write_line(COMMAND_SHELL, "OK generator outputs stopped; monitor channels unchanged");
-    }
-
-    return shell_write_line(COMMAND_SHELL, "ERR stop failed; some generator outputs may remain active");
 }

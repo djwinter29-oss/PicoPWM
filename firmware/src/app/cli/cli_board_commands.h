@@ -1,12 +1,12 @@
 /**
- * @file board_commands.h
+ * @file cli_board_commands.h
  * @brief Board and startup-configuration command handlers for the CDC shell.
  */
 
-#ifndef BOARD_COMMANDS_H
-#define BOARD_COMMANDS_H
+#ifndef CLI_BOARD_COMMANDS_H
+#define CLI_BOARD_COMMANDS_H
 
-#include "shell.h"
+#include "app/cli/cli_shell.h"
 
 /**
  * @brief Read one board property.

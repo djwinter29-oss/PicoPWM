@@ -1,4 +1,4 @@
-#include "app/cli/channel_commands.h"
+#include "app/cli/cli_channel_commands.h"
 
 #include "driver/pwm/pwm_driver.h"
 #include "device.h"

@@ -1,12 +1,12 @@
 /**
- * @file pwm_commands.h
+ * @file cli_pwm_commands.h
  * @brief PicoPWM device commands layered on top of the CLI editor.
  */
 
-#ifndef PWM_COMMANDS_H
-#define PWM_COMMANDS_H
+#ifndef CLI_PWM_COMMANDS_H
+#define CLI_PWM_COMMANDS_H
 
-#include "app/cli/shell.h"
+#include "app/cli/cli_shell.h"
 
 /** @brief CDC command session and connection-output retry state. */
 typedef struct {

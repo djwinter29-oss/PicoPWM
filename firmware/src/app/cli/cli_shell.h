@@ -1,10 +1,10 @@
 /**
- * @file shell.h
+ * @file cli_shell.h
  * @brief embedded-cli-backed interactive command shell for PicoPWM CLI transports.
  */
 
-#ifndef SHELL_H
-#define SHELL_H
+#ifndef CLI_SHELL_H
+#define CLI_SHELL_H
 
 #include "embedded_cli.h"
 

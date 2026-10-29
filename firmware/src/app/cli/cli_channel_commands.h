@@ -1,7 +1,7 @@
-#ifndef CHANNEL_COMMANDS_H
-#define CHANNEL_COMMANDS_H
+#ifndef CLI_CHANNEL_COMMANDS_H
+#define CLI_CHANNEL_COMMANDS_H
 
-#include "app/cli/shell.h"
+#include "app/cli/cli_shell.h"
 
 /**
  * @brief Read one channel and write its realized state.

@@ -1,13 +1,13 @@
 /**
- * @file pwm_commands.c
+ * @file cli_pwm_commands.c
  * @brief PicoPWM command groups and shell integration.
  */
 
-#include "app/cli/pwm_commands.h"
+#include "app/cli/cli_pwm_commands.h"
 
-#include "app/cli/board_commands.h"
-#include "app/cli/channel_commands.h"
-#include "app/cli/cli_usage.h"
+#include "app/cli/cli_board_commands.h"
+#include "app/cli/cli_channel_commands.h"
+#include "app/cli/cli_syntax.h"
 
 #include <string.h>
 

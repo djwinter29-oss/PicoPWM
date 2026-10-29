@@ -1,6 +1,8 @@
-#include "app/cli/pwm_commands.h"
+#include "app/cli/cli_app.h"
+#include "app/cli/cli_pwm_commands.h"
 
 #include "device.h"
+#include "app/usb/usb_cdc.h"
 #include "platform/boot_config.h"
 #include "platform/system.h"
 
@@ -27,6 +29,49 @@ static bool led_state;
 static uint32_t set_calls;
 static uint32_t restore_defaults_calls;
 static pwm_driver_result_t restore_defaults_result = PWM_DRIVER_RESULT_OK;
+static uint32_t cdc_disconnects;
+static uint32_t cdc_acknowledged_disconnects;
+static uint32_t cdc_session_resets;
+static bool cdc_connected;
+static uint8_t cdc_input[128];
+static size_t cdc_input_length;
+static size_t cdc_input_offset;
+static test_transport_t *cdc_output;
+
+static bool test_write(void *context, const uint8_t *data, uint32_t length);
+
+uint32_t usb_cdc_disconnect_count(void) {
+    return cdc_disconnects;
+}
+
+bool usb_cdc_is_connected(void) {
+    return cdc_connected;
+}
+
+uint32_t usb_cdc_read(void *context, uint8_t *data, uint32_t capacity) {
+    size_t remaining = cdc_input_length - cdc_input_offset;
+    size_t count = remaining < capacity ? remaining : capacity;
+
+    (void)context;
+    memcpy(data, cdc_input + cdc_input_offset, count);
+    cdc_input_offset += count;
+    return (uint32_t)count;
+}
+
+bool usb_cdc_write(void *context, const uint8_t *data, uint32_t length) {
+    (void)context;
+    return (cdc_output != NULL) && test_write(cdc_output, data, length);
+}
+
+void usb_cdc_reset_session(void) {
+    ++cdc_session_resets;
+    cdc_input_length = 0u;
+    cdc_input_offset = 0u;
+}
+
+void usb_cdc_acknowledge_session_reset(void) {
+    cdc_acknowledged_disconnects = cdc_disconnects;
+}
 
 static uint32_t test_read(void *context, uint8_t *data, uint32_t capacity) {
     test_transport_t *transport = context;
@@ -168,6 +213,13 @@ static void reset_output(test_transport_t *transport, const char *input) {
     transport->input_offset = 0u;
     transport->output_length = 0u;
     transport->output[0] = '\0';
+}
+
+static void load_cdc_input(const char *input) {
+    cdc_input_length = strlen(input);
+    assert(cdc_input_length <= sizeof(cdc_input));
+    memcpy(cdc_input, input, cdc_input_length);
+    cdc_input_offset = 0u;
 }
 
 static void run_command(pwm_commands_t *commands, test_transport_t *transport, const char *input) {
@@ -329,11 +381,47 @@ static void test_disconnect_resets_incomplete_command(void) {
     assert(strstr(transport.output, "OK led on") != NULL);
 }
 
+static void test_disconnect_transition_resets_shell_before_reconnect_input(void) {
+    test_transport_t transport = {0};
+
+    cdc_disconnects = 0u;
+    cdc_acknowledged_disconnects = 0u;
+    cdc_session_resets = 0u;
+    led_state = false;
+    cdc_connected = false;
+    cdc_output = &transport;
+    cli_app_t app;
+    assert(cli_app_init(&app));
+    cli_app_poll(&app);
+    cdc_connected = true;
+    cli_app_poll(&app);
+
+    load_cdc_input("board set led ");
+    cli_app_poll(&app);
+    assert(!led_state);
+
+    ++cdc_disconnects;
+    load_cdc_input("on\r");
+    cli_app_poll(&app);
+    assert(app.commands.shell.initialized);
+    assert(cdc_session_resets == 1u);
+    assert(cdc_acknowledged_disconnects == cdc_disconnects);
+
+    assert(!led_state);
+    assert(strstr(transport.output, "OK led on") == NULL);
+    load_cdc_input("board set led on\r");
+    cli_app_poll(&app);
+    assert(led_state);
+    assert(strstr(transport.output, "OK led on") != NULL);
+    cdc_output = NULL;
+}
+
 int main(void) {
     test_grouped_commands();
     test_help_commands();
     test_connection_output_retries();
     test_disconnect_resets_incomplete_command();
+    test_disconnect_transition_resets_shell_before_reconnect_input();
     puts("cli_grouped_commands_test ok");
     return 0;
 }

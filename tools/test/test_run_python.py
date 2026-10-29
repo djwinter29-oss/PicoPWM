@@ -40,6 +40,7 @@ class RunPythonTests(unittest.TestCase):
                     capture_output=True, text=True,
                 )
                 log = calls.read_text()
+                normalized_log = log.replace("\\", "/")
                 root_paths = {str(ROOT).replace("\\", "/")}
                 if os.name == "nt":
                     drive, tail = os.path.splitdrive(str(ROOT))
@@ -51,7 +52,8 @@ class RunPythonTests(unittest.TestCase):
                 )
                 self.assertIn("-m picopwm.app", log)
                 if pip_available == "1":
-                    self.assertIn(f"base -m pip --python {interpreter}", log)
+                    expected_interpreter = str(interpreter).replace("\\", "/")
+                    self.assertIn(f"base -m pip --python {expected_interpreter}", normalized_log)
 
 
 if __name__ == "__main__":

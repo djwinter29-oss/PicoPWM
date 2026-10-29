@@ -1,10 +1,10 @@
 /**
- * @file cli_usage.h
- * @brief Shared user-facing CDC command syntax.
+ * @file cli_syntax.h
+ * @brief Shared user-facing CLI command syntax.
  */
 
-#ifndef CLI_USAGE_H
-#define CLI_USAGE_H
+#ifndef CLI_SYNTAX_H
+#define CLI_SYNTAX_H
 
 /** @brief User-facing syntax for reading PWM channel state. */
 #define CLI_SYNTAX_PWM_GET "pwm get <channel|all>"

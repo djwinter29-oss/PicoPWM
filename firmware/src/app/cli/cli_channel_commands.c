@@ -1,11 +1,11 @@
 /**
- * @file channel_commands.c
+ * @file cli_channel_commands.c
  * @brief PWM channel validation, operation, and response formatting for the CDC CLI.
  */
 
-#include "app/cli/channel_commands.h"
+#include "app/cli/cli_channel_commands.h"
 
-#include "app/cli/cli_usage.h"
+#include "app/cli/cli_syntax.h"
 #include "driver/pwm/pwm_driver.h"
 #include "device.h"
 

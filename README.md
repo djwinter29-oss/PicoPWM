@@ -151,9 +151,9 @@ mapping or board profile.
 | Need | Guide |
 | --- | --- |
 | Wire and configure the board | [Hardware setup](docs/guides/hardware-setup.md), [Firmware configuration](docs/guides/configuration.md) |
-| Control it | [USB CDC shell](docs/guides/usb_cdc_shell.md), [I2C protocol](docs/guides/i2c_protocol.md), [CDC/HID overview](docs/design/usb/cdc-hid-overview.md) |
+| Control it | [USB CDC shell](docs/guides/usb_cdc_shell.md), [I2C protocol](docs/guides/i2c_protocol.md), [USB interface overview](docs/design/usb/usb-interface-overview.md) |
 | Understand the design | [Architecture](docs/design/architecture.md), [PWM driver design](docs/design/pwm_driver_design.md), [generators](docs/design/generator/) and [monitors](docs/design/monitor/) |
-| Write a HID host | [CDC/HID overview](docs/design/usb/cdc-hid-overview.md), [HID report reference](docs/design/usb/hid-report-reference.md) |
+| Write a HID host | [USB interface overview](docs/design/usb/usb-interface-overview.md), [HID report reference](docs/design/usb/hid-report-reference.md) |
 | Build, test and release | [Build structure](BUILD_STRUCTURE.md), [Builds and publishing](docs/guides/releases.md) |
 | Contribute | [Contributing](CONTRIBUTING.md), [Code of Conduct](CODE_OF_CONDUCT.md), [Security](SECURITY.md) |
 

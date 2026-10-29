@@ -20,7 +20,7 @@ endfunction()
 
 add_executable(cli_shell_test
     cli_shell_test.c
-    ${SOURCE_ROOT}/app/cli/shell.c
+    ${SOURCE_ROOT}/app/cli/cli_shell.c
     ${EMBEDDED_CLI_ROOT}/src/embedded_cli.c
 )
 target_include_directories(cli_shell_test PRIVATE
@@ -32,7 +32,7 @@ add_test(NAME cli_shell COMMAND cli_shell_test)
 
 add_executable(cli_channel_commands_test
     cli_channel_commands_test.c
-    ${SOURCE_ROOT}/app/cli/channel_commands.c
+    ${SOURCE_ROOT}/app/cli/cli_channel_commands.c
 )
 target_include_directories(cli_channel_commands_test PRIVATE
     ${TEST_STUB_ROOT}
@@ -44,10 +44,11 @@ add_test(NAME cli_channel_commands COMMAND cli_channel_commands_test)
 
 add_executable(cli_grouped_commands_test
     cli_grouped_commands_test.c
-    ${SOURCE_ROOT}/app/cli/shell.c
-    ${SOURCE_ROOT}/app/cli/pwm_commands.c
-    ${SOURCE_ROOT}/app/cli/channel_commands.c
-    ${SOURCE_ROOT}/app/cli/board_commands.c
+    ${SOURCE_ROOT}/app/cli/cli_shell.c
+    ${SOURCE_ROOT}/app/cli/cli_pwm_commands.c
+    ${SOURCE_ROOT}/app/cli/cli_app.c
+    ${SOURCE_ROOT}/app/cli/cli_channel_commands.c
+    ${SOURCE_ROOT}/app/cli/cli_board_commands.c
     ${EMBEDDED_CLI_ROOT}/src/embedded_cli.c
 )
 target_include_directories(cli_grouped_commands_test PRIVATE
@@ -181,7 +182,7 @@ add_executable(usb_cdc_test
     usb_cdc_test.c
     cdc_stub.c
     ${SOURCE_ROOT}/app/usb/usb_cdc.c
-    ${SOURCE_ROOT}/app/cli/shell.c
+    ${SOURCE_ROOT}/app/cli/cli_shell.c
     ${EMBEDDED_CLI_ROOT}/src/embedded_cli.c
 )
 target_include_directories(usb_cdc_test PRIVATE

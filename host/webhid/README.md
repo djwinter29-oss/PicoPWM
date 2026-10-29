@@ -120,4 +120,4 @@ node --test host/webhid/tests/*.test.mjs
 
 - [Project, firmware, and wiring](../../README.md)
 - [HID report reference](../../docs/design/usb/hid-report-reference.md)
-- [CDC and HID overview](../../docs/design/usb/cdc-hid-overview.md)
+- [USB interface overview](../../docs/design/usb/usb-interface-overview.md)

@@ -5,7 +5,7 @@
 
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
-#include "app/cli/pwm_commands.h"
+#include "app/cli/cli_app.h"
 #include "app/i2c/i2c_control_map.h"
 #include "platform/led.h"
 #include "platform/system.h"
@@ -30,18 +30,7 @@ static void core0_service_while_pwm_applies(void) {
  * @return Never returns during normal firmware operation.
  */
 int main(void) {
-    static pwm_commands_t pwm_command_session;
-    static const char cli_init_error[] = "ERR CDC CLI initialization failed\r\n";
-    static const shell_transport_t shell_transport = {
-        .read = usb_cdc_read,
-        .write = usb_cdc_write,
-        .context = NULL,
-    };
-    bool cli_initialized;
-    bool cli_connection_output_complete = false;
-    bool cli_init_error_pending;
-    bool usb_was_connected = false;
-    uint32_t handled_cdc_disconnects = 0u;
+    static cli_app_t cli_app;
 
     // Load boot settings first: the clock must be set before any PWM backend caches it for timing calculations.
     boot_config_load();
@@ -52,8 +41,7 @@ int main(void) {
     // USB CDC command interface.
     usb_cdc_init();
     pwm_driver_set_wait_hook(core0_service_while_pwm_applies);
-    cli_initialized = pwm_commands_init(&pwm_command_session, &shell_transport);
-    cli_init_error_pending = !cli_initialized;
+    (void)cli_app_init(&cli_app);
 
     // Configure and launch all three PWM banks before starting Core 1.
     const pwm_role_t bank_roles[PWM_BANK_COUNT] = {boot_config_get_bank(PWM_BANK_A), boot_config_get_bank(PWM_BANK_B),
@@ -79,33 +67,12 @@ int main(void) {
 
     // Core 0 main loop: service USB CDC, USB HID, and I2C.
     while (true) {
-        bool usb_connected;
         absolute_time_t service_start = get_absolute_time();
 
         system_watchdog_kick();
         usb_cdc_poll();
+        cli_app_poll(&cli_app);
         usb_hid_poll();
-        // Retry connection output until the bounded CDC queue accepts it.
-        usb_connected = usb_cdc_is_connected();
-        uint32_t cdc_disconnects = usb_cdc_disconnect_count();
-        if ((cdc_disconnects != handled_cdc_disconnects) || (!usb_connected && usb_was_connected)) {
-            handled_cdc_disconnects = cdc_disconnects;
-            usb_cdc_reset_session();
-            cli_initialized = pwm_commands_on_disconnected(&pwm_command_session);
-            usb_cdc_acknowledge_session_reset();
-            cli_connection_output_complete = false;
-            cli_init_error_pending = !cli_initialized;
-        }
-        if (usb_connected && cli_initialized && !cli_connection_output_complete) {
-            cli_connection_output_complete = pwm_commands_on_connected(&pwm_command_session);
-        } else if (usb_connected && cli_init_error_pending &&
-                   usb_cdc_write(NULL, (const uint8_t *)cli_init_error, sizeof(cli_init_error) - 1u)) {
-            cli_init_error_pending = false;
-        }
-        usb_was_connected = usb_connected;
-        if (usb_connected && cli_initialized) {
-            pwm_commands_poll(&pwm_command_session);
-        }
         i2c_slave_poll();
         system_record_service((uint32_t)absolute_time_diff_us(service_start, get_absolute_time()));
         sleep_us(100);

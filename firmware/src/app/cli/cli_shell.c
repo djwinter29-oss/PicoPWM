@@ -1,9 +1,9 @@
 /**
- * @file shell.c
+ * @file cli_shell.c
  * @brief embedded-cli-backed interactive command shell for PicoPWM CLI transports.
  */
 
-#include "app/cli/shell.h"
+#include "app/cli/cli_shell.h"
 
 #include <string.h>
 

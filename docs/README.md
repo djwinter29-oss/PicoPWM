@@ -25,7 +25,7 @@ Architecture and implementation details for contributors:
 - [PIO PWM Design](design/pio_pwm_design.md)
 - [Generator designs](design/generator/)
 - [Monitor designs](design/monitor/)
-- [CDC/HID Overview](design/usb/cdc-hid-overview.md) and
+- [USB Interface Overview](design/usb/usb-interface-overview.md) and
   [HID Report Reference](design/usb/hid-report-reference.md)
 
 ## Tests

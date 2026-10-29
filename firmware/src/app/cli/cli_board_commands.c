@@ -1,11 +1,11 @@
 /**
- * @file board_commands.c
+ * @file cli_board_commands.c
  * @brief Board and startup-configuration command handlers for the CDC shell.
  */
 
-#include "app/cli/board_commands.h"
+#include "app/cli/cli_board_commands.h"
 
-#include "app/cli/cli_usage.h"
+#include "app/cli/cli_syntax.h"
 #include "device.h"
 #include "platform/boot_config.h"
 #include "platform/system.h"

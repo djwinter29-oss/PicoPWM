@@ -59,11 +59,12 @@ rejects the request.
 Use the architecture-related pages as follows:
 
 - [Architecture](architecture.md) — system structure, layer boundaries, and request flow
+- [USB CDC CLI Design](usb/cdc-cli-design.md) — CLI responsibilities, session rules, and command extension workflow
 - [Firmware Configuration](../guides/configuration.md) — startup bank configuration and channel rules
 - [Hardware Setup](../guides/hardware-setup.md) — physical PWM, I2C, and shared-pin mapping
 - [PWM Driver Configuration](pwm_driver_config.md) — fixed channel allocation and capabilities
 - [PWM Driver Design](pwm_driver_design.md) — detailed `pwm` and backend internals
-- [CDC/HID Overview](usb/cdc-hid-overview.md) — USB interface roles and HID rules
+- [USB Interface Overview](usb/usb-interface-overview.md) — USB interface roles and HID rules
 - [HID Report Reference](usb/hid-report-reference.md) — HID report layouts and action semantics
 - [Hardware PWM Generator](generator/hardware_generator.md) — hardware output timing and slice constraints
 - [PIO PWM Generator](generator/pio_generator.md) — PIO output timing and state-machine constraints
@@ -137,9 +138,11 @@ Core 0 owns the host-facing transports:
 
 - `app/usb/usb_cdc.*` for TinyUSB CDC byte transport
 - USB HID is an additional Core 0 management transport; see
-  [CDC/HID Overview](usb/cdc-hid-overview.md)
-- `app/cli/shell.*` for the embedded-cli-backed line editor and command dispatch
-- `app/cli/pwm_commands.*` for human-readable CLI commands
+  [USB Interface Overview](usb/usb-interface-overview.md)
+- `app/cli/cli_shell.*` for the embedded-cli-backed line editor and command dispatch
+- `app/cli/cli_*_commands.*` for human-readable command groups
+- `app/cli/cli_app.*` for CDC command-shell lifecycle and connection output
+- `app/cli/cli_syntax.h` for shared command syntax
 - `driver/i2c/i2c_slave.*` for the I2C slave ISR, read responses, and deferred write scheduling; `i2c_slave_hw.*` is its SDK-facing peripheral port
 - `app/i2c/i2c_control_map.*` for the I2C register map and payload translation
 
@@ -348,6 +351,7 @@ explicit error when the CDC connection is available.
 ## Where To Read Next
 
 - [USB CDC Shell](../guides/usb_cdc_shell.md) for interactive text commands
+- [USB CDC CLI Design](usb/cdc-cli-design.md) for developer guidance on extending the CLI
 - [I2C Protocol](../guides/i2c_protocol.md) for binary register values
 - Source headers under `firmware/src` for current C declarations and APIs
 - [PWM Driver Design](pwm_driver_design.md) for backend and mailbox internals

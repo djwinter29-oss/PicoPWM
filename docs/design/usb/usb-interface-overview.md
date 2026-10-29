@@ -1,16 +1,21 @@
-# CDC/HID Overview
+# USB Interface Overview
 
 PicoPWM exposes one composite USB device with two host-facing interface types:
 
 - one CDC ACM serial port for the interactive text shell
 - one vendor HID interface for identity, configuration, per-bank channel status, and narrow management actions
 
+This document covers the USB interfaces and their shared device-control
+boundaries. I2C is included only as context when comparing host-facing control
+options; its protocol is documented separately in the
+[I2C guide](../../guides/i2c_protocol.md).
+
 The device advertises USB 2.0 and uses the standard composite, CDC ACM, and HID
 drivers on Windows. It does not expose a BOS descriptor; WebHID uses the HID
 interface and does not require WebUSB descriptors.
 
 Use CDC for interactive control. Use HID for browser-based WebHID tools and other HID-capable clients that need
-structured reads. I2C remains the binary controller interface. HID is not a second control model: it reuses the
+structured reads. I2C remains a separate binary controller interface. HID is not a second control model: it reuses the
 shared channel IDs, capability checks, and result codes.
 
 ## Interface Roles

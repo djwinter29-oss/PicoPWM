@@ -1,5 +1,5 @@
 #include "app/usb/usb_cdc.h"
-#include "app/cli/shell.h"
+#include "app/cli/cli_shell.h"
 #include "tusb.h"
 
 #include <assert.h>

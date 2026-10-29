@@ -1,7 +1,7 @@
 # PicoPWM HIL
 
 A repository-local Python project for CDC loopback tests. Requires Python 3.10+ and the
-[HIL fixture](../../docs/tests/hil-test-connection.md).
+[HIL fixture](../../docs/tests/hil-test-connections.md).
 
 The [launcher](../host/run-hil.sh) creates an environment and installs this project automatically:
 

@@ -1,232 +1,240 @@
 #include "app/i2c/i2c_control_map.h"
+#include "app/i2c/i2c_command_queue.h"
 
-#include "platform/led.h"
-#include "platform/system.h"
-#include "platform/boot_config.h"
-#include "device.h"
+#include "control_api.h"
 
 #include <assert.h>
 #include <string.h>
 
-static bool set_bank_ok = true;
-static bool save_ok = true;
-static bool address_ok = true;
-static bool rebooted;
-static int led_calls;
+static const char *firmware_version = "12.3.4";
+static pwm_role_t bank_roles[PWM_BANK_COUNT] = {PWM_ROLE_GENERATOR, PWM_ROLE_MONITOR, PWM_ROLE_GENERATOR};
+static pwm_state_t channel_state = {0x12345678u, 81u};
+static pwm_driver_result_t set_result = PWM_DRIVER_RESULT_OK;
+static pwm_driver_result_t stop_result = PWM_DRIVER_RESULT_OK;
+static unsigned set_calls;
+static unsigned stop_calls;
+static uint set_channel;
+static uint32_t set_frequency;
+static uint8_t set_duty;
 
-const char *device_name(void) {
-    return "PicoPWM";
+const char *control_api_firmware_version(void) {
+    return firmware_version;
 }
 
-const char *device_firmware_version(void) {
-    return "test";
+pwm_role_t control_api_bank_role(pwm_bank_t bank) {
+    return bank_roles[bank];
 }
 
-pwm_role_t boot_config_get_bank(pwm_bank_t bank) {
-    (void)bank;
-    return PWM_ROLE_GENERATOR;
-}
-
-uint8_t boot_config_get_i2c_address(void) {
-    return 0u;
-}
-
-pwm_role_t device_bank_role(pwm_bank_t bank) {
-    return boot_config_get_bank(bank);
-}
-
-uint8_t device_i2c_address(void) {
-    return boot_config_get_i2c_address();
-}
-
-bool boot_config_set_bank(pwm_bank_t bank, pwm_role_t role) {
-    (void)bank;
-    (void)role;
-    return set_bank_ok;
-}
-
-bool boot_config_save(void) {
-    return save_ok;
-}
-
-bool boot_config_set_i2c_address(uint8_t address) {
-    (void)address;
-    return address_ok;
-}
-
-uint8_t device_channel_count(void) {
+uint8_t control_api_channel_count(void) {
     return PWM_DRIVER_CHANNEL_COUNT;
 }
 
-bool device_get_channel(uint channel, pwm_state_t *state) {
-    if ((channel >= PWM_DRIVER_CHANNEL_COUNT) || (state == NULL) || (channel >= 8u)) {
+bool control_api_get_channel(uint channel, pwm_state_t *state) {
+    if (channel >= PWM_DRIVER_CHANNEL_COUNT || state == NULL) {
         return false;
     }
-
-    *state = (pwm_state_t){1000u, 50u};
+    *state = channel_state;
     return true;
 }
 
-pwm_driver_result_t device_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
-    (void)channel;
-    (void)freq_hz;
-    (void)duty;
-    return PWM_DRIVER_RESULT_OK;
+pwm_driver_result_t control_api_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
+    set_calls++;
+    set_channel = channel;
+    set_frequency = freq_hz;
+    set_duty = duty;
+    return set_result;
 }
 
-pwm_driver_result_t device_restore_defaults(void) {
-    return PWM_DRIVER_RESULT_OK;
+pwm_driver_result_t control_api_restore_defaults(void) {
+    stop_calls++;
+    return stop_result;
 }
 
-void led_set(bool enabled) {
-    led_calls += enabled ? 1 : 0;
+static void reset(void) {
+    firmware_version = "12.3.4";
+    set_result = PWM_DRIVER_RESULT_OK;
+    stop_result = PWM_DRIVER_RESULT_OK;
+    set_calls = stop_calls = 0u;
+    i2c_control_map_init();
 }
 
-void system_reboot(void) {
-    rebooted = true;
+static void write_frame(const uint8_t *frame, uint8_t length, bool overflow) {
+    i2c_control_map_ops.write_frame(frame, length, overflow);
 }
 
-static void test_expected_lengths(void) {
-    assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_INFO) == 1u);
-    assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_LED) == 2u);
-    assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_SET_BASE) == 6u);
-    assert(i2c_control_map_expected_write_length(0xffu) == 0u);
+static uint8_t read_response(uint8_t *response, uint8_t capacity) {
+    uint8_t length = 0u;
+    assert(i2c_control_map_ops.read_response(response, capacity, &length));
+    return length;
 }
 
-static void test_read_responses(void) {
-    uint8_t response[64] = {0u};
-    uint8_t response_len = 0u;
+static void test_info_register(void) {
+    uint8_t response[8] = {0u};
 
-    assert(i2c_control_map_read_register(I2C_CONTROL_MAP_REG_INFO, 0u, response, sizeof(response), &response_len));
-    assert(response_len == 8u);
-    assert(strcmp((const char *)response, "PicoPWM") == 0);
+    reset();
+    assert(read_response(response, sizeof(response)) == 0u);
+    const uint8_t select[] = {I2C_CONTROL_MAP_REG_INFO};
+    write_frame(select, sizeof(select), false);
+    assert(read_response(response, sizeof(response)) == I2C_CONTROL_MAP_INFO_SIZE);
+    assert(memcmp(response, "PPWM", 4u) == 0);
+    assert(response[4] == 12u);
+    assert(response[5] == PWM_DRIVER_CHANNEL_COUNT);
+    assert(response[6] == 0x05u);
 
-    assert(i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CONFIG, 0u, response, sizeof(response), &response_len));
-    assert(response_len == 14u);
-    assert(response[0] == 0u);
-    assert(response[2] == 1u);
-    assert(response[4] == 2u);
+    firmware_version = "99.0.0";
+    assert(read_response(response, sizeof(response)) == I2C_CONTROL_MAP_INFO_SIZE);
+    assert(response[4] == 12u);
 
-    assert(i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CH_BASE, 0u, response, sizeof(response), &response_len));
-    assert(response_len == 5u);
-    assert(response[0] == 0xe8u);
-    assert(response[1] == 0x03u);
-    assert(response[4] == 50u);
-
-    assert(i2c_control_map_read_register((uint8_t)(I2C_CONTROL_MAP_REG_CH_BASE + 8u), 0u, response, sizeof(response),
-                                         &response_len));
-    assert(response_len == 1u);
-    assert(response[0] == PWM_DRIVER_RESULT_UNAVAILABLE);
-    assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CONFIG, 0u, response, 13u, &response_len));
+    firmware_version = "256.0.0";
+    i2c_control_map_init();
+    const uint8_t invalid_info_select[] = {I2C_CONTROL_MAP_REG_INFO};
+    write_frame(invalid_info_select, sizeof(invalid_info_select), false);
+    assert(!i2c_control_map_ops.read_response(response, sizeof(response), &(uint8_t){0u}));
 }
 
-static void test_write_validation(void) {
-    const uint8_t channel_payload[] = {0u, 0u, 0u, 0u, 50u};
-    const uint8_t address_payload[] = {0x40u};
+static void test_channel_read_encoding_and_unknown_register(void) {
+    uint8_t response[5] = {0u};
+    const uint8_t select[] = {I2C_CONTROL_MAP_REG_CH_BASE};
 
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_SET_BASE, channel_payload, 4u) ==
-           PWM_DRIVER_RESULT_INVALID);
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_SET_BASE, channel_payload, 5u) == PWM_DRIVER_RESULT_OK);
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_ADDRESS, address_payload, 0u) ==
-           PWM_DRIVER_RESULT_INVALID);
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_ADDRESS, address_payload, 1u) ==
-           PWM_DRIVER_RESULT_OK);
+    reset();
+    write_frame(select, sizeof(select), false);
+    assert(read_response(response, sizeof(response)) == sizeof(response));
+    assert(response[0] == 0x78u && response[1] == 0x56u && response[2] == 0x34u && response[3] == 0x12u);
+    assert(response[4] == 81u);
+
+    const uint8_t unknown[] = {0xffu};
+    write_frame(unknown, sizeof(unknown), false);
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_INVALID);
 }
 
-static void test_remaining_registers(void) {
-    uint8_t response[64];
-    uint8_t response_len = 0u;
-    const uint8_t led_on[] = {1u};
-    const uint8_t led_off[] = {0u};
-    const uint8_t led_bad[] = {2u};
-    const uint8_t bank_payload[] = {0u, PWM_ROLE_MONITOR};
-    const uint8_t address_payload[] = {0x41u};
-    const uint8_t address_low[] = {0x01u};
-    uint8_t extra = 1u;
+static void test_malformed_read_only_selector_does_not_replace_selection(void) {
+    uint8_t response[8] = {0u};
+    const uint8_t channel_select[] = {I2C_CONTROL_MAP_REG_CH_BASE};
+    const uint8_t malformed_info[] = {I2C_CONTROL_MAP_REG_INFO, 0x55u};
 
-    assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_INFO, 0u, NULL, sizeof(response), &response_len));
-    assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_INFO, 0u, response, sizeof(response), NULL));
-    assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_INFO, 0u, response, 1u, &response_len));
-    assert(i2c_control_map_read_register(I2C_CONTROL_MAP_REG_VERSION, 0u, response, sizeof(response), &response_len));
-    assert(strcmp((const char *)response, "test") == 0);
-    assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_VERSION, 0u, response, 1u, &response_len));
+    reset();
+    write_frame(channel_select, sizeof(channel_select), false);
+    write_frame(malformed_info, sizeof(malformed_info), false);
+    assert(read_response(response, sizeof(response)) == 5u);
+    assert(response[0] == 0x78u && response[1] == 0x56u && response[2] == 0x34u && response[3] == 0x12u);
+    assert(response[4] == 81u);
+}
 
-    assert(i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CHANNEL_COUNT, 0u, response, sizeof(response),
-                                         &response_len));
-    assert(response_len == 1u);
-    assert(response[0] == PWM_DRIVER_CHANNEL_COUNT);
-    assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CHANNEL_COUNT, 0u, response, 0u, &response_len));
-    assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CH_BASE, 0u, response, 4u, &response_len));
+static void test_channel_command_status_validation_and_dispatch(void) {
+    uint8_t response[1] = {0u};
+    const uint8_t select[] = {I2C_CONTROL_MAP_REG_SET_BASE};
+    const uint8_t command[] = {I2C_CONTROL_MAP_REG_SET_BASE, 0x78u, 0x56u, 0x34u, 0x12u, 50u};
+    const uint8_t short_command[] = {I2C_CONTROL_MAP_REG_SET_BASE, 0x78u};
+    const uint8_t overlong[] = {I2C_CONTROL_MAP_REG_SET_BASE, 0x78u, 0x56u, 0x34u, 0x12u, 50u, 0u};
 
-    assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_CONFIG, 0u, response, 13u, &response_len));
+    reset();
+    write_frame(select, sizeof(select), false);
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_NOT_RUN);
 
-    assert(i2c_control_map_is_write_register(I2C_CONTROL_MAP_REG_STOP_ALL));
-    assert(i2c_control_map_is_write_register(I2C_CONTROL_MAP_REG_LED));
-    assert(i2c_control_map_is_write_register(I2C_CONTROL_MAP_REG_CONFIG_SET));
-    assert(!i2c_control_map_is_write_register(I2C_CONTROL_MAP_REG_INFO));
-    assert(i2c_control_map_read_register(I2C_CONTROL_MAP_REG_STOP_ALL, PWM_DRIVER_RESULT_BUSY, response,
-                                         sizeof(response), &response_len));
-    assert(response_len == 1u);
-    assert(response[0] == PWM_DRIVER_RESULT_BUSY);
-    assert(!i2c_control_map_read_register(I2C_CONTROL_MAP_REG_STOP_ALL, 0u, response, 0u, &response_len));
-    assert(!i2c_control_map_read_register(0xffu, 0u, response, sizeof(response), &response_len));
-    assert(!i2c_control_map_read_register(0xffu, 0u, response, 0u, &response_len));
+    write_frame(short_command, sizeof(short_command), false);
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_INVALID);
+    write_frame(overlong, sizeof(overlong), false);
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_INVALID);
 
-    assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_VERSION) == 1u);
-    assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_CHANNEL_COUNT) == 1u);
-    assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_CONFIG) == 1u);
-    assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_STOP_ALL) == 1u);
-    assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_REBOOT) == 1u);
-    assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_CONFIG_SAVE) == 1u);
-    assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_CONFIG_SET) == 3u);
-    assert(i2c_control_map_expected_write_length(I2C_CONTROL_MAP_REG_CONFIG_ADDRESS) == 2u);
+    write_frame(command, sizeof(command), false);
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_BUSY);
+    assert(set_calls == 0u);
+    i2c_control_map_poll();
+    assert(set_calls == 1u && set_channel == 0u);
+    assert(set_frequency == 0x12345678u && set_duty == 50u);
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_OK);
+}
 
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_STOP_ALL, &extra, 1u) == PWM_DRIVER_RESULT_INVALID);
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_STOP_ALL, NULL, 0u) == PWM_DRIVER_RESULT_OK);
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_LED, NULL, 1u) == PWM_DRIVER_RESULT_INVALID);
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_LED, led_bad, 1u) == PWM_DRIVER_RESULT_INVALID);
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_LED, led_off, 1u) == PWM_DRIVER_RESULT_OK);
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_LED, led_on, 1u) == PWM_DRIVER_RESULT_OK);
-    assert(led_calls == 1);
+static void test_malformed_overflow_and_status_shortcut(void) {
+    uint8_t response[1];
+    const uint8_t select[] = {I2C_CONTROL_MAP_REG_SET_BASE};
+    const uint8_t frame[] = {I2C_CONTROL_MAP_REG_SET_BASE, 1u, 2u, 3u, 4u, 5u};
 
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_REBOOT, &extra, 1u) == PWM_DRIVER_RESULT_INVALID);
-    assert(!rebooted);
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_REBOOT, NULL, 0u) == PWM_DRIVER_RESULT_OK);
-    assert(rebooted);
+    reset();
+    write_frame(select, sizeof(select), true);
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_INVALID);
 
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_SET, bank_payload, 1u) ==
-           PWM_DRIVER_RESULT_INVALID);
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_SET, NULL, 2u) == PWM_DRIVER_RESULT_INVALID);
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_SET, bank_payload, 2u) == PWM_DRIVER_RESULT_OK);
-    set_bank_ok = false;
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_SET, bank_payload, 2u) ==
-           PWM_DRIVER_RESULT_INVALID);
-    set_bank_ok = true;
+    write_frame(frame, sizeof(frame), true);
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_INVALID);
+    assert(set_calls == 0u);
 
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_ADDRESS, NULL, 1u) == PWM_DRIVER_RESULT_INVALID);
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_ADDRESS, address_low, 1u) ==
-           PWM_DRIVER_RESULT_INVALID);
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_ADDRESS, address_payload, 1u) ==
-           PWM_DRIVER_RESULT_OK);
-    address_ok = false;
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_ADDRESS, address_payload, 1u) ==
-           PWM_DRIVER_RESULT_INVALID);
-    address_ok = true;
+    reset();
+    write_frame(select, sizeof(select), false);
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_NOT_RUN);
+    i2c_control_map_poll();
+    assert(set_calls == 0u);
+}
 
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_SAVE, &extra, 1u) == PWM_DRIVER_RESULT_INVALID);
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_SAVE, NULL, 0u) == PWM_DRIVER_RESULT_OK);
-    save_ok = false;
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_CONFIG_SAVE, NULL, 0u) == PWM_DRIVER_RESULT_INVALID);
-    save_ok = true;
+static void test_stop_all_and_queue_full(void) {
+    uint8_t response[1];
+    const uint8_t stop[] = {I2C_CONTROL_MAP_REG_STOP_ALL};
 
-    assert(i2c_control_map_execute_write(I2C_CONTROL_MAP_REG_SET_BASE, NULL, 5u) == PWM_DRIVER_RESULT_INVALID);
-    assert(i2c_control_map_execute_write(0xffu, NULL, 0u) == PWM_DRIVER_RESULT_INVALID);
+    reset();
+    for (unsigned index = 0u; index < I2C_COMMAND_QUEUE_DEPTH; ++index) {
+        write_frame(stop, sizeof(stop), false);
+    }
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_BUSY);
+    write_frame(stop, sizeof(stop), false);
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_UNAVAILABLE);
+    i2c_control_map_poll();
+    assert(stop_calls == 1u);
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_UNAVAILABLE);
+}
+
+static void test_stale_command_completion_does_not_replace_new_attempt(void) {
+    uint8_t response[1];
+    const uint8_t command[] = {I2C_CONTROL_MAP_REG_SET_BASE, 1u, 2u, 3u, 4u, 5u};
+
+    reset();
+    write_frame(command, sizeof(command), false);
+    write_frame(command, sizeof(command), false);
+    set_result = PWM_DRIVER_RESULT_APPLY_FAILED;
+    i2c_control_map_poll();
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_BUSY);
+    set_result = PWM_DRIVER_RESULT_OK;
+    i2c_control_map_poll();
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_OK);
+}
+
+static void test_stale_command_completion_does_not_replace_malformed_attempt(void) {
+    uint8_t response[1];
+    const uint8_t command[] = {I2C_CONTROL_MAP_REG_SET_BASE, 1u, 2u, 3u, 4u, 5u};
+    const uint8_t malformed[] = {I2C_CONTROL_MAP_REG_SET_BASE, 1u};
+
+    reset();
+    write_frame(command, sizeof(command), false);
+    write_frame(malformed, sizeof(malformed), false);
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_INVALID);
+
+    i2c_control_map_poll();
+    assert(set_calls == 1u);
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_INVALID);
 }
 
 int main(void) {
-    test_expected_lengths();
-    test_read_responses();
-    test_write_validation();
-    test_remaining_registers();
+    test_info_register();
+    test_channel_read_encoding_and_unknown_register();
+    test_malformed_read_only_selector_does_not_replace_selection();
+    test_channel_command_status_validation_and_dispatch();
+    test_malformed_overflow_and_status_shortcut();
+    test_stop_all_and_queue_full();
+    test_stale_command_completion_does_not_replace_new_attempt();
+    test_stale_command_completion_does_not_replace_malformed_attempt();
     return 0;
 }

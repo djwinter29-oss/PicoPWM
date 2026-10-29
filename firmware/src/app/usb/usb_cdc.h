@@ -15,8 +15,17 @@ void usb_cdc_init(void);
 /** @brief Run TinyUSB background work and flush queued CDC TX bytes. */
 void usb_cdc_poll(void);
 
-/** @brief Return whether the CDC interface is enumerated and the host is connected. */
+/** @brief Discard buffered CDC RX and TX bytes belonging to the current session. */
+void usb_cdc_reset_session(void);
+
+/** @brief Return whether the CDC interface is enumerated and host DTR is asserted. */
 bool usb_cdc_is_connected(void);
+
+/** @brief Return the count of observed host disconnect transitions. */
+uint32_t usb_cdc_disconnect_count(void);
+
+/** @brief Allow CDC I/O after the application has reset its shell for a disconnect. */
+void usb_cdc_acknowledge_session_reset(void);
 
 /**
  * @brief Read queued CDC bytes from the local receive queue.

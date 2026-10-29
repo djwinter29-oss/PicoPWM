@@ -18,7 +18,7 @@ const i2c_board_config_t i2c_board_config = {
     .clock_hz = 400000u,
 };
 
-/** @brief Bank A hardware PWM settings; see docs/guides/pinout.md. */
+/** @brief Bank A hardware PWM settings; see docs/guides/hardware-setup.md. */
 const hardware_pwm_config_t hardware_pwm_config = {
     .channels = {{1u}, {3u}, {5u}, {7u}, {9u}, {11u}, {13u}, {15u}},
 };

@@ -16,12 +16,12 @@ test("HTML references only WebHID-owned assets", () => {
   assert.match(html, /aria-label="Host application version">0\.0\.0-debug<\/span>/);
 });
 
-test("Device identity matches PicoUart field names and order", () => {
-  const section = html.slice(html.indexOf('id="identity-title"'), html.indexOf('aria-labelledby="configuration-title"'));
+test("Device information matches PicoUart field names and order", () => {
+  const section = html.slice(html.indexOf('id="device-information-title"'), html.indexOf('aria-labelledby="configuration-title"'));
   const labels = [...section.matchAll(/class="summary-item"><span>([^<]+)<\/span>/g)].map(match => match[1]);
   assert.deepEqual(labels, ["Product", "Board model", "Serial / UID", "System clock",
     "Firmware RAM reserved / total", "Firmware version"]);
-  assert.match(section, />Device identity<\/h2>/);
+  assert.match(section, />Device information<\/h2>/);
 });
 
 test("channel editing uses a dialog instead of detached channel controls", () => {
@@ -29,19 +29,21 @@ test("channel editing uses a dialog instead of detached channel controls", () =>
   assert.doesNotMatch(html, /channel-controls|id="set-channel"/);
   assert.match(html, /<dialog[^>]*id="channel-dialog"/);
   assert.match(html, /id="channel-frequency"[^>]*max="4294967295"/);
+  assert.match(html, /id="channel-frequency-unit" aria-label="Frequency unit">[\s\S]*?<option value="MHz">MHz<\/option>/);
   assert.match(html, /id="channel-duty"[^>]*max="100"/);
+  assert.match(html, /id="channel-preset" type="button">Use 1 kHz \/ 50%<\/button>/);
   assert.match(html, /id="apply-channel" type="submit">Apply/);
 });
 
-test("monitoring has three backend tables with channel, GPIO, frequency, and duty columns", () => {
+test("monitoring has three backend tables with channel/GPIO, frequency, and duty columns", () => {
   const panels = html.slice(html.indexOf('class="channel-panels"'), html.indexOf('id="read-errors"'));
   assert.equal([...panels.matchAll(/<table>/g)].length, 3);
   for (const backend of ["hw", "pio", "sw"]) {
     assert.ok(panels.includes(`id="${backend}-running-role"`));
     assert.ok(panels.includes(`id="${backend}-channel-rows"`));
   }
-  assert.equal([...panels.matchAll(/<th scope="col">Channel<\/th>/g)].length, 3);
-  assert.equal([...panels.matchAll(/<th scope="col" title="[^"]+">GPIO<\/th>/g)].length, 3);
+  assert.equal([...panels.matchAll(/<th scope="col" title="[^"]+">Channel \(GPIO\)<\/th>/g)].length, 3);
+  assert.doesNotMatch(panels, /<th[^>]*>GPIO<\/th>/);
   assert.equal([...panels.matchAll(/<th scope="col">Frequency<\/th>/g)].length, 3);
   assert.equal([...panels.matchAll(/<th scope="col">Duty<\/th>/g)].length, 3);
   assert.doesNotMatch(panels, /<th[^>]*>(Bank|Role)<\/th>/);
@@ -78,8 +80,8 @@ test("settings follow board order with fixed backend role controls", () => {
   }
   assert.doesNotMatch(html, /id="bank-(index|backend|role)"/);
   assert.doesNotMatch(html, /id="apply-(hw|pio|sw|clock|i2c)"/);
-  assert.match(html, /id="save-configuration"[^>]*>Save and Reboot/);
-  assert.match(html, /id="save-dialog-title">Save and Reboot\?/);
+  assert.match(html, /id="save-configuration"[^>]*>Save &amp; Reboot/);
+  assert.match(html, /id="save-dialog-title">Save &amp; Reboot\?/);
   assert.match(html, /id="i2c-input"[^>]*min="8" max="119"/);
   assert.match(html, /for="hw-role">Hardware PWM role \(Channels 0-7\)<\/label>/);
   assert.match(html, /for="pio-role">PIO PWM role \(Channels 8-15\)<\/label>/);

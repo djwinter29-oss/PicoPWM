@@ -1,7 +1,7 @@
 #include "app/usb/hid_protocol.h"
 
 #include "platform/boot_config.h"
-#include "device.h"
+#include "control_api.h"
 
 #include <assert.h>
 #include <string.h>
@@ -18,7 +18,7 @@ static int reboots;
 static bool led_on;
 static bool led_available = true;
 
-void device_get_pin_assignment(device_pin_assignment_t *pins) {
+void control_api_get_pin_assignment(control_api_pin_assignment_t *pins) {
     for (uint channel = 0; channel < PWM_DRIVER_CHANNEL_COUNT; ++channel) {
         pins->channels[channel] = (uint8_t)channel;
     }
@@ -27,32 +27,32 @@ void device_get_pin_assignment(device_pin_assignment_t *pins) {
     pins->led = led_available ? 25u : UINT8_MAX;
 }
 
-uint32_t device_ram_reserved_bytes(void) {
+uint32_t control_api_ram_reserved_bytes(void) {
     return 32768u;
 }
 
-uint32_t device_ram_total_bytes(void) {
+uint32_t control_api_ram_total_bytes(void) {
     return 270336u;
 }
 
-uint32_t device_uptime_seconds(void) {
+uint32_t control_api_uptime_seconds(void) {
     return 123u;
 }
 
-int32_t device_temperature_millic(void) {
+int32_t control_api_temperature_millic(void) {
     return -5000;
 }
 
-uint16_t device_service_load(bool core1) {
+uint16_t control_api_service_load(bool core1) {
     return core1 ? 2500u : 100u;
 }
 
-bool device_led_read(bool *on) {
+bool control_api_led_read(bool *on) {
     *on = led_on;
     return led_available;
 }
 
-bool device_led_set(bool on) {
+bool control_api_led_set(bool on) {
     if (!led_available) {
         return false;
     }
@@ -60,12 +60,12 @@ bool device_led_set(bool on) {
     return true;
 }
 
-void device_schedule_reboot(uint32_t delay_ms) {
+void control_api_schedule_reboot(uint32_t delay_ms) {
     reboot_delay = delay_ms;
     ++reboots;
 }
 
-const char *device_firmware_version(void) {
+const char *control_api_firmware_version(void) {
     return "1.2.3-dev";
 }
 
@@ -77,11 +77,11 @@ uint8_t boot_config_get_i2c_address(void) {
     return 0x20u;
 }
 
-pwm_role_t device_bank_role(pwm_bank_t bank) {
+pwm_role_t control_api_bank_role(pwm_bank_t bank) {
     return boot_config_get_bank(bank);
 }
 
-uint8_t device_i2c_address(void) {
+uint8_t control_api_i2c_address(void) {
     return 0x20u;
 }
 
@@ -111,26 +111,26 @@ bool boot_config_set_i2c_address(uint8_t address) {
     return address != 0u;
 }
 
-void device_get_uid(uint8_t uid[8]) {
+void control_api_get_uid(uint8_t uid[8]) {
     for (uint8_t i = 0; i < 8u; ++i) {
         uid[i] = (uint8_t)(0xA0u + i);
     }
 }
 
-uint32_t device_system_clock_hz(void) {
+uint32_t control_api_system_clock_hz(void) {
     return 0x08F0D180u;
 }
 
-uint8_t device_channel_count(void) {
+uint8_t control_api_channel_count(void) {
     return PWM_DRIVER_CHANNEL_COUNT;
 }
 
-bool device_get_channel(uint channel, pwm_state_t *state) {
+bool control_api_get_channel(uint channel, pwm_state_t *state) {
     *state = (pwm_state_t){1000u + channel, (uint8_t)channel};
     return true;
 }
 
-pwm_driver_result_t device_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
+pwm_driver_result_t control_api_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
     ++channel_sets;
     last_channel = channel;
     last_freq = freq_hz;
@@ -138,7 +138,7 @@ pwm_driver_result_t device_set_channel(uint channel, uint32_t freq_hz, uint8_t d
     return PWM_DRIVER_RESULT_OK;
 }
 
-pwm_driver_result_t device_restore_defaults(void) {
+pwm_driver_result_t control_api_restore_defaults(void) {
     return PWM_DRIVER_RESULT_OK;
 }
 

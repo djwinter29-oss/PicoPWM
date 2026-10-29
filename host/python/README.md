@@ -13,13 +13,16 @@ From `host/python`:
 python -m pip install -e '.[test]'
 ```
 
-The `hidapi` dependency needs HID access to the board (on Linux, a udev rule or access
-to `/dev/hidraw*`). From the repository root, `tools/host/run-python.sh` creates a
+The `hidapi` dependency needs HID access to the board. On Linux, configure it with the
+[setup and troubleshooting guide](../../docs/guides/setup-and-troubleshooting.md#linux-hid-access).
+From the repository root, `tools/host/run-python.sh` creates a
 virtualenv, installs the host and runs it.
 The launcher refreshes the editable installation and runtime dependencies on each
 start, including dependency version constraints. If Python lacks `ensurepip`, it
 can create a pip-free venv and use the base interpreter's pip (`--python`) to install
 into it. Install pip or the OS Python venv package if neither interpreter has pip.
+The launcher uses `https://pypi.org/simple` by default for these public dependencies;
+set `PIP_INDEX_URL` to use another package index.
 
 ## Run the web interface
 
@@ -41,7 +44,8 @@ Open <http://127.0.0.1:5000>. The dashboard mirrors the WebHID page: device iden
 and RAM, boot configuration with one confirmed **Save and Reboot**, compact pin
 assignment, runtime telemetry, LED/reboot controls, and three eight-channel tables.
 Click a generator frequency or duty to edit its live output; monitor values are
-read-only. Old firmware disables unsupported actions and reports missing telemetry.
+read-only. Frequency uses Hz, kHz, or MHz units, and the optional 1 kHz / 50% preset
+only fills the dialog until Apply is clicked. Old firmware disables unsupported actions and reports missing telemetry.
 Pin assignment, monitoring GPIOs and dialog GPIOs come from the connected board's
 capability-gated HID pin report, not a host-side map. Missing pins show `--`;
 older firmware shows update guidance and malformed reports show an error.

@@ -16,7 +16,7 @@ pico_sdk_init()
 
 add_executable(pico_pwm
     src/main.c
-    src/device.c
+    src/control_api.c
     src/platform/boot_config.c
     src/platform/led.c
     src/platform/system.c
@@ -27,10 +27,11 @@ add_executable(pico_pwm
     src/driver/pwm/hardware/hardware_monitor.c
     src/driver/pwm/pio/pio_monitor.c
     src/driver/pwm/software/software_monitor.c
-    src/app/cli/shell.c
-    src/app/cli/pwm_commands.c
-    src/app/cli/channel_commands.c
-    src/app/cli/board_commands.c
+    src/app/cli/cli_shell.c
+    src/app/cli/cli_pwm_commands.c
+    src/app/cli/cli_app.c
+    src/app/cli/cli_channel_commands.c
+    src/app/cli/cli_board_commands.c
     third_party/embedded-cli/lib/src/embedded_cli.c
     src/config/board.c
     src/app/i2c/i2c_control_map.c

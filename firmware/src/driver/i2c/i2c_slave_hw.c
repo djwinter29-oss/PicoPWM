@@ -11,7 +11,7 @@
 /** @brief Interrupts that are always unmasked; TX_EMPTY is added only by `i2c_slave_hw_set_tx_empty_irq()`. */
 #define I2C_SLAVE_BASE_MASK                                                                                            \
     (I2C_IC_INTR_MASK_M_RX_FULL_BITS | I2C_IC_INTR_MASK_M_RD_REQ_BITS | I2C_IC_INTR_MASK_M_STOP_DET_BITS |             \
-     I2C_IC_INTR_MASK_M_TX_ABRT_BITS)
+     I2C_IC_INTR_MASK_M_TX_ABRT_BITS | I2C_IC_INTR_MASK_M_RESTART_DET_BITS)
 
 static i2c_hw_t *i2c_slave_hw(void) {
     return i2c_get_hw(i2c_board_config.instance);
@@ -35,13 +35,16 @@ void i2c_slave_hw_init(uint8_t address, void (*isr)(void)) {
     irq_set_enabled(i2c_board_config.irq, true);
 }
 
-bool i2c_slave_hw_rx_pop(uint8_t *byte) {
+bool i2c_slave_hw_rx_pop(uint8_t *byte, bool *first_data_byte) {
     i2c_hw_t *hw = i2c_slave_hw();
+    uint32_t data_cmd;
 
     if (hw->rxflr == 0u) {
         return false;
     }
-    *byte = (uint8_t)(hw->data_cmd & 0xFFu);
+    data_cmd = hw->data_cmd;
+    *byte = (uint8_t)(data_cmd & 0xFFu);
+    *first_data_byte = (data_cmd & I2C_IC_DATA_CMD_FIRST_DATA_BYTE_BITS) != 0u;
     return true;
 }
 
@@ -54,11 +57,6 @@ uint32_t i2c_slave_hw_events(void) {
     uint32_t status;
     uint32_t events = 0u;
 
-    // A transmit abort flushes the FIFOs until IC_CLR_TX_ABRT is read.
-    if ((hw->raw_intr_stat & I2C_IC_RAW_INTR_STAT_TX_ABRT_BITS) != 0u) {
-        (void)hw->clr_tx_abrt;
-    }
-
     /*
      * Never use IC_CLR_INTR: it also clears STOP_DET and RD_REQ that assert after this
      * sample. Those bits stay set until `i2c_slave_hw_clear()` reads their own register.
@@ -67,6 +65,8 @@ uint32_t i2c_slave_hw_events(void) {
     events |= (status & I2C_IC_INTR_STAT_R_STOP_DET_BITS) != 0u ? I2C_SLAVE_EVENT_STOP : 0u;
     events |= (status & I2C_IC_INTR_STAT_R_RD_REQ_BITS) != 0u ? I2C_SLAVE_EVENT_RD_REQ : 0u;
     events |= (status & I2C_IC_INTR_STAT_R_TX_EMPTY_BITS) != 0u ? I2C_SLAVE_EVENT_TX_EMPTY : 0u;
+    events |= (status & I2C_IC_INTR_STAT_R_RESTART_DET_BITS) != 0u ? I2C_SLAVE_EVENT_RESTART : 0u;
+    events |= (status & I2C_IC_INTR_STAT_R_TX_ABRT_BITS) != 0u ? I2C_SLAVE_EVENT_TX_ABORT : 0u;
     return events;
 }
 
@@ -78,6 +78,12 @@ void i2c_slave_hw_clear(uint32_t events) {
     }
     if ((events & I2C_SLAVE_EVENT_RD_REQ) != 0u) {
         (void)hw->clr_rd_req;
+    }
+    if ((events & I2C_SLAVE_EVENT_RESTART) != 0u) {
+        (void)hw->clr_restart_det;
+    }
+    if ((events & I2C_SLAVE_EVENT_TX_ABORT) != 0u) {
+        (void)hw->clr_tx_abrt;
     }
 }
 

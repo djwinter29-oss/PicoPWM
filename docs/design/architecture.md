@@ -2,13 +2,13 @@
 
 This page describes the current PicoPWM runtime structure. It focuses on module ownership and request flow, not backend implementation detail.
 
-For mailbox state machines, publication internals, and backend-specific behavior, see [PWM Driver Design](pwm_driver_design.md).
+For mailbox state machines and publication internals, see [PWM Driver Design](pwm-driver/driver-design.md). Backend-specific behavior is covered in the hardware, PIO, and software design pages below.
 
 ## At A Glance
 
 The firmware has two deliberately different responsibilities:
 
-- **Core 0** owns control requests and responses for both USB CDC and I2C.
+- **Core 0** owns host-facing control requests and responses for USB CDC, USB HID, and I2C.
 - **Core 1** owns real-time work for every configured channel, whether that
   channel is a PWM generator or a PWM monitor.
 
@@ -22,7 +22,7 @@ flowchart LR
     subgraph Core0[Core 0: control and responses]
         CDC[USB CDC shell]
         I2C[I2C slave]
-        Control[device]
+        Control[control_api]
         Response[Format response]
     end
 
@@ -59,18 +59,16 @@ rejects the request.
 Use the architecture-related pages as follows:
 
 - [Architecture](architecture.md) — system structure, layer boundaries, and request flow
-- [Firmware Configuration](../guides/configuration.md) — startup bank configuration and channel rules
-- [Pinout](../guides/pinout.md) — physical PWM, I2C, and shared-pin mapping
-- [PWM Driver Configuration](pwm_driver_config.md) — fixed channel allocation and capabilities
-- [PWM Driver Design](pwm_driver_design.md) — detailed `pwm` and backend internals
-- [CDC/HID Overview](usb/cdc-hid-overview.md) — USB interface roles and HID rules
+- [USB CDC CLI Design](usb/cdc-cli-design.md) — CLI responsibilities, session rules, and command extension workflow
+- [Setup and Troubleshooting](../guides/setup-and-troubleshooting.md) — operating configuration and common problems
+- [Hardware Setup](../guides/hardware-setup.md) — physical PWM, I2C, and shared-pin mapping
+- [PWM Driver Configuration](pwm-driver/configuration.md) — fixed channel allocation and capabilities
+- [PWM Driver Design](pwm-driver/driver-design.md) — shared PWM ownership, mailbox, and state publication
+- [USB Interface Overview](usb/usb-interface-overview.md) — USB interface roles and HID rules
 - [HID Report Reference](usb/hid-report-reference.md) — HID report layouts and action semantics
-- [Hardware PWM Generator](generator/hardware_generator.md) — hardware output timing and slice constraints
-- [PIO PWM Generator](generator/pio_generator.md) — PIO output timing and state-machine constraints
-- [Software PWM Generator](generator/software_generator.md) — shared timer output generation
-- [Hardware PWM Monitor](monitor/hardware_monitor.md) — GPIO interrupt measurement limits
-- [PIO PWM Monitor](monitor/pio_monitor.md) — one-period high/low measurement
-- [Software PWM Monitor](monitor/software_monitor.md) — low-frequency polling/edge measurement
+- [Hardware PWM](pwm-driver/hardware.md) — hardware generator and monitor design
+- [PIO PWM](pwm-driver/pio.md) — PIO generator and monitor design
+- [Software PWM](pwm-driver/software.md) — software generator and monitor design
 
 ## System Model
 
@@ -123,12 +121,12 @@ high-rate capture, trend analysis, or waveform history, DMA or a dedicated
 buffered capture design should be reconsidered as a new requirement rather than
 added preemptively.
 
-The hardware PWM bank intentionally uses PWM slice channel B pins so the external pin order stays aligned with the monitoring-oriented wiring plan. See [Pinout](../guides/pinout.md) for the physical mapping.
+The hardware PWM bank intentionally uses PWM slice channel B pins so the external pin order stays aligned with the monitoring-oriented wiring plan. See [Hardware Setup](../guides/hardware-setup.md) for the physical mapping.
 
 ## Runtime Layers
 
 The current firmware is split into four practical layers. The important rule is
-that transport code reaches PWM hardware only through `device` and
+that transport code reaches PWM hardware only through `control_api` and
 `pwm_driver`.
 
 ### 1. Transport Layer
@@ -137,21 +135,26 @@ Core 0 owns the host-facing transports:
 
 - `app/usb/usb_cdc.*` for TinyUSB CDC byte transport
 - USB HID is an additional Core 0 management transport; see
-  [CDC/HID Overview](usb/cdc-hid-overview.md)
-- `app/cli/shell.*` for the embedded-cli-backed line editor and command dispatch
-- `app/cli/pwm_commands.*` for human-readable CLI commands
-- `driver/i2c/i2c_slave.*` for the I2C slave ISR, read responses, and deferred write scheduling; `i2c_slave_hw.*` is its SDK-facing peripheral port
-- `app/i2c/i2c_control_map.*` for the I2C register map and payload translation
+  [USB Interface Overview](usb/usb-interface-overview.md)
+- `app/cli/cli_shell.*` for the embedded-cli-backed line editor and command dispatch
+- `app/cli/cli_*_commands.*` for human-readable command groups
+- `app/cli/cli_app.*` for CDC command-shell lifecycle and connection output
+- `app/cli/cli_syntax.h` for shared command syntax
+- `driver/i2c/i2c_slave.*` for generic I2C transaction framing and response-byte transport; `i2c_slave_hw.*` is its SDK-facing peripheral port
+- `app/i2c/i2c_control_map.*` for register selection, frame validation, protocol status, response construction, and PWM command dispatch
 
-USB CDC uses bounded 128-byte receive and 256-byte transmit queues. When a
-queue is full, additional received bytes or transmit responses are dropped and
-the transport reports failure where the API permits it. This fixed-resource
-policy prevents unbounded memory growth; applications requiring reliable bulk
-transfer must provide host-side pacing and retry at the command level.
+USB CDC uses bounded 128-byte receive and 2048-byte transmit queues. When the
+receive queue is full, firmware stops draining the USB FIFO until space becomes
+available. A transmit write returns failure when the local queue cannot accept
+the complete response. This fixed-resource policy prevents unbounded memory
+growth; hosts should keep the connection open and retry commands whose response
+could not be queued. On DTR disconnect, CDC RX/TX queues and TinyUSB FIFOs are
+cleared; the application resets the shell before allowing transport I/O for the
+next session.
 
 ### 2. Shared Control Layer
 
-`device.*` is the transport-neutral Core 0 API shared by USB CDC and I2C.
+`control_api.*` is the transport-neutral Core 0 API used by USB CDC, USB HID, and I2C.
 
 Responsibilities:
 
@@ -212,13 +215,13 @@ Core 0 must not call backend driver APIs directly.
 
 ## Request Flow
 
-USB and I2C converge at the same Core 0 control facade. Reads are answered
+USB CDC, USB HID, and I2C converge at the same Core 0 control facade. Reads are answered
 from the published snapshot; mutations cross the mailbox boundary:
 
 ```mermaid
 sequenceDiagram
     participant Host
-    participant Transport as USB CDC or I2C
+    participant Transport as USB CDC, USB HID, or I2C
     participant Control as device
     participant Mailbox as Command mailbox
     participant Router as Core 1 profile router
@@ -246,9 +249,9 @@ sequenceDiagram
 Transport-specific details:
 
 - I2C reads can be served directly from the published snapshot or last command status.
-- I2C writes are captured in the ISR, queued, and executed from normal Core 0 polling through the same shared control path used by USB CDC. I2C read responses are built in the ISR from non-blocking getters when a read starts, so SCL is never stretched.
-- USB commands are parsed by `shell` and the CLI command handlers before they reach `device`.
-- I2C commands are decoded by `i2c_slave` and `i2c_control_map` before they reach `device`.
+- The generic I2C driver captures opaque frames and sends response bytes. The PWM protocol layer validates and queues commands from the ISR; foreground polling executes them through the shared `control_api` path used by USB CDC and HID. Read responses use bounded getters when a read starts; a short cross-core snapshot lock can briefly stretch SCL.
+- USB commands are parsed by `shell` and the CLI command handlers before they reach `control_api`.
+- I2C register and payload semantics are decoded by `i2c_control_map` before they reach `control_api`.
 
 This keeps the ISR transport-focused and avoids running backend-affecting logic in interrupt context.
 
@@ -277,10 +280,10 @@ sees coherent realized snapshots.
 
 ## Cross-Core Mutation Boundary
 
-`device` is the only public Core 0 mutation facade.
+`control_api` is the only public Core 0 mutation facade.
 
-- Core 0 transport code enters through `device`.
-- `device` forwards writes into the internal `pwm` mailbox API.
+- Core 0 transport code enters through `control_api`.
+- `control_api` forwards writes into the internal `pwm` mailbox API.
 - Core 1 applies the write to the selected backend.
 - Core 1 publishes the realized state after successful apply.
 - Core 0 waits for the result and reports `ok`, `busy`, `invalid`, `timeout`, `unavailable`, or `apply failed` to the caller.
@@ -294,8 +297,8 @@ The single source of truth for channel state is the snapshot published by `pwm`.
 That means:
 
 - reads report realized backend state, not just the last requested values
-- `device` does not keep a second cache
-- both USB CDC and I2C observe the same logical channel view
+- `control_api` does not keep a second cache
+- USB CDC, USB HID, and I2C observe the same logical channel view
 
 `stop` disables generator outputs by driving them low (`freq = 0 Hz`, `duty = 0%`).
 
@@ -304,7 +307,8 @@ That means:
 Logical IDs are configuration-defined and stable for host software. The
 current default profile exposes `0..23`; backend ownership and GPIO assignment
 must be read from the selected profile rather than inferred from an ID range.
-See [Firmware Configuration](../guides/configuration.md) and [Pinout](../guides/pinout.md).
+See [PWM Driver Configuration](pwm-driver/configuration.md) and
+[Hardware Setup](../guides/hardware-setup.md).
 
 ## Startup Sequence
 
@@ -319,11 +323,12 @@ flowchart TD
     USB --> Launch[Initialize Core 1 with pwm_driver_init]
     Launch --> Ready{pwm_driver_is_ready?}
     Ready -- No --> Ready
-    Ready -- Yes --> I2C[Initialize I2C slave]
+    Ready -- Yes --> I2C[Initialize I2C protocol and slave]
     I2C --> Loop[Run Core 0 polling loop]
     Loop --> USBPoll[usb_cdc_poll]
-    USBPoll --> CLIPoll[pwm_commands_poll]
-    CLIPoll --> I2CPoll[i2c_slave_poll]
+    USBPoll --> CLIPoll[cli_app_poll]
+    CLIPoll --> HIDPoll[usb_hid_poll]
+    HIDPoll --> I2CPoll[i2c_control_map_poll]
     I2CPoll --> Loop
 ```
 
@@ -334,14 +339,18 @@ In ordered form:
 3. Core 0 initializes TinyUSB CDC and the CLI transport binding.
 4. Core 0 initializes and launches Core 1 with `pwm_driver_init(roles)`.
 5. Core 0 waits for `pwm_driver_is_ready()`.
-6. Core 0 initializes the I2C slave transport.
-7. The main loop services `usb_cdc_poll()`, `pwm_commands_poll()`, and `i2c_slave_poll()`.
+6. Core 0 initializes the I2C protocol state and slave transport.
+7. The main loop services `usb_cdc_poll()`, `cli_app_poll()`, `usb_hid_poll()`, and `i2c_control_map_poll()`.
 
-When the USB CDC host opens the connection, the CLI prints help once through `pwm_commands_on_connected()`.
+When the USB CDC host opens the connection, the CLI prints help and a prompt.
+If the bounded transmit queue cannot accept the output, Core 0 retries it while
+the connection remains open. If CLI initialization fails, the host receives an
+explicit error when the CDC connection is available.
 
 ## Where To Read Next
 
-- [Control Interfaces](../guides/control/README.md) for shared semantics and transport links
-- [I2C Protocol](../guides/control/i2c_protocol.md) for binary register values
+- [USB CDC Shell](../guides/usb-cdc-shell.md) for interactive text commands
+- [USB CDC CLI Design](usb/cdc-cli-design.md) for developer guidance on extending the CLI
+- [I2C Protocol Reference](i2c/i2c-protocol.md) for binary register values
 - Source headers under `firmware/src` for current C declarations and APIs
-- [PWM Driver Design](pwm_driver_design.md) for backend and mailbox internals
+- [PWM Driver Design](pwm-driver/driver-design.md) for backend and mailbox internals

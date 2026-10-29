@@ -13,13 +13,43 @@ validating PWM output, timing and monitor accuracy requires hardware.
 
 ## Development Setup
 
-- Firmware builds, versioning and test commands: [BUILD_STRUCTURE.md](BUILD_STRUCTURE.md).
+- Firmware build and test instructions are below; CI and release workflows are described in
+  [Builds and Publishing](docs/deployment/releases.md).
 - Architecture and driver internals: [docs/design/architecture.md](docs/design/architecture.md) and
-  [docs/design/pwm_driver_design.md](docs/design/pwm_driver_design.md).
+  [docs/design/pwm-driver/driver-design.md](docs/design/pwm-driver/driver-design.md).
 - Host tools: [host/python](host/python/README.md), [host/dotnet](host/dotnet/README.md) and
   [host/webhid](host/webhid/README.md).
 
 Use Linux or WSL2 Ubuntu for firmware development. Host tests also run on macOS and Windows in CI.
+
+### Firmware Builds
+
+Install `git`, `cmake`, a build tool, and `arm-none-eabi-gcc`, then build either supported board:
+
+```sh
+./tools/firmware/build.sh --board pico
+./tools/firmware/build.sh --board pico2
+```
+
+The helper initializes the `firmware/third_party` submodules, including the pinned Pico SDK, and writes outputs to
+`build/<board>/`. Fresh builds prefer Ninja when it is available; otherwise CMake uses its platform default. Existing
+build directories keep their cached generator. Set `CMAKE_GENERATOR` to choose one explicitly; switching an existing
+directory to another generator requires a fresh build directory. The helper does not delete build state.
+
+The UF2 for USB flashing is `build/<board>/pico_pwm.uf2`; `pico_pwm.elf` is available for debug tools. Local firmware
+builds use version `0.0.0-dev`; pass `--firmware-version x.y.z` with an optional `-dev` or `-rcN` suffix to override
+it. Release versions and packaging are covered in [Builds and Publishing](docs/deployment/releases.md).
+
+## Documentation
+
+- Put user task guidance in `docs/guides/`, implementation details and protocol
+  contracts in `docs/design/`, release workflows in `docs/deployment/`, and
+  validation material in `docs/tests/`.
+- Use kebab-case for documentation filenames.
+- Link to authoritative pages instead of duplicating detailed instructions or
+  tables.
+- Update the [documentation index](docs/README.md) and affected links when
+  adding, moving, or renaming a page.
 
 ## Validate Your Change
 
@@ -41,7 +71,7 @@ claiming hardware validation.
 - Respect the core split: Core 0 owns CDC, I2C and HID; Core 1 owns PWM backends, and
   `firmware/src/driver/pwm/pwm_driver.c` is the multicore boundary.
 - Add a focused regression test for non-trivial fixes or new behavior.
-- Update matching docs when behavior changes; do not duplicate content across docs.
+- Update matching docs when behavior changes.
 - Explain the problem, the change, and any compatibility impact (for example I2C, HID or flash layout changes); link
   the related issue when applicable.
 - List checks run and their results, and identify skipped checks and why they were skipped.

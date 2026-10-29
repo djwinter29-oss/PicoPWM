@@ -168,7 +168,22 @@ class PicoPwmHid:
             raise ValueError("freq_hz must be an unsigned 32-bit integer")
         if not 0 <= duty <= 100:
             raise ValueError("duty must be between 0 and 100")
-        return self._run(p.OP_SET_CHANNEL, False, channel=channel, arg0=freq_hz, arg1=duty)
+        try:
+            return self._run(p.OP_SET_CHANNEL, False, channel=channel, arg0=freq_hz, arg1=duty)
+        except DeviceError as error:
+            if str(error) != "command failed: INVALID":
+                raise
+            for attempt in range(3):
+                state = self.status()
+                actual = state["channels"][channel]
+                if actual["freq_hz"] == freq_hz and actual["duty"] == duty:
+                    return state
+                if attempt < 2:
+                    self._sleep(POLL_S)
+            readback = (f"{actual['freq_hz']} Hz / {actual['duty']}%"
+                        if actual["freq_hz"] is not None else "unavailable")
+            raise DeviceError(
+                f"command failed: INVALID (requested {freq_hz} Hz / {duty}%, readback {readback})") from error
 
     def stop(self) -> dict[str, Any]:
         return self._run(p.OP_STOP, False)

@@ -53,6 +53,10 @@ test("module imports resolve to served host or WebHID assets", () => {
 
 test("host dashboard matches WebHID sections and controls except browser pairing", () => {
   const hid = readFileSync(resolve(root, "../webhid/index.html"), "utf8");
+  const stylesheets = source => [...source.matchAll(/href="(css\/webhid\.css\?v=\d+)"/g)]
+    .map(match => match[1]);
+  assert.equal(stylesheets(html).length, 1);
+  assert.deepEqual(stylesheets(html), stylesheets(hid));
   const ids = source => [...source.matchAll(/id="([^"]+)"/g)].map(match => match[1]);
   const hostIds = new Set(ids(html));
   for (const id of ids(hid).filter(id => id !== "connect")) assert.ok(hostIds.has(id), id);

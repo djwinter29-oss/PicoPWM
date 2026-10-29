@@ -7,8 +7,8 @@
   <title>PicoPWM Control | WebHID</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="css/dashboard.css?v=26">
-  <link rel="stylesheet" href="css/webhid.css?v=19">
-  <script type="module" src="js/app.mjs?v=14"></script>
+  <link rel="stylesheet" href="css/webhid.css?v=23">
+  <script type="module" src="js/app.mjs?v=19"></script>
 </head>
 <body>
   <header class="topbar">
@@ -29,12 +29,12 @@
 
   <main>
     <section class="page-heading">
-      <div><h1>PWM control</h1></div>
+      <div><h1>Dashboard</h1></div>
     </section>
 
-    <section aria-labelledby="identity-title">
+    <section aria-labelledby="device-information-title">
       <div class="section-heading">
-        <h2 id="identity-title">Device identity</h2>
+        <h2 id="device-information-title">Device information</h2>
         <div class="actions" aria-label="Connection controls">
           <button class="button button-led" id="toggle-led" type="button" data-state="unknown"
             aria-pressed="false" title="Connect to read the board LED state" disabled>Board LED: --</button>
@@ -56,8 +56,8 @@
       <div class="section-heading">
         <h2 id="configuration-title">Boot configuration <span id="boot-edits" role="status" hidden></span></h2>
         <div class="actions" aria-label="Configuration controls">
-          <button class="button button-secondary" id="save-configuration" type="button" aria-describedby="settings-help" disabled>Save and Reboot</button>
-          <button class="button button-danger" id="reboot-board" type="button" disabled>Reboot board</button>
+          <button class="button button-secondary" id="save-configuration" type="button" aria-describedby="settings-help" disabled>Save &amp; Reboot</button>
+          <button class="button button-danger" id="reboot-board" type="button" disabled>Reboot Board</button>
         </div>
       </div>
       <p class="settings-note" id="settings-help">Edit the boot settings, then save and reboot to apply them.</p>
@@ -124,17 +124,17 @@
     </section>
 
     <dialog class="confirmation-dialog" id="reboot-dialog" aria-labelledby="reboot-dialog-title">
-      <h2 id="reboot-dialog-title">Reboot board?</h2>
+      <h2 id="reboot-dialog-title">Reboot Board?</h2>
       <p>The board will restart and USB will disconnect. Unsaved settings will not be saved.
         PWM outputs will be interrupted. Reconnect after restart.</p>
       <div class="dialog-actions">
         <button class="button button-cancel" id="cancel-reboot" type="button" autofocus>Cancel</button>
-        <button class="button button-danger" id="confirm-reboot" type="button">Reboot board</button>
+        <button class="button button-danger" id="confirm-reboot" type="button">Reboot Board</button>
       </div>
     </dialog>
 
     <dialog class="confirmation-dialog" id="save-dialog" aria-labelledby="save-dialog-title">
-      <h2 id="save-dialog-title">Save and Reboot?</h2>
+      <h2 id="save-dialog-title">Save &amp; Reboot?</h2>
       <p id="save-summary"></p>
       <p class="configuration-warning">
         Saving erases and programs flash. The board stops answering HID, CDC, and I2C for a moment, and software
@@ -147,7 +147,7 @@
       </label>
       <div class="dialog-actions">
         <button class="button button-cancel" id="cancel-save" type="button" autofocus>Cancel</button>
-        <button class="button button-danger" id="confirm-save" type="button" disabled>Save and Reboot</button>
+        <button class="button button-danger" id="confirm-save" type="button" disabled>Save &amp; Reboot</button>
       </div>
     </dialog>
 
@@ -174,21 +174,21 @@
         <div class="table-scroll">
           <table>
             <caption>Hardware PWM <span id="hw-running-role">--</span></caption>
-            <thead><tr><th scope="col">Channel</th><th scope="col" title="GPIO number, not physical header pin">GPIO</th><th scope="col">Frequency</th><th scope="col">Duty</th></tr></thead>
+            <thead><tr><th scope="col" title="Logical channel and GPIO number; GPIO is not a physical header pin">Channel (GPIO)</th><th scope="col">Frequency</th><th scope="col">Duty</th></tr></thead>
             <tbody id="hw-channel-rows"></tbody>
           </table>
         </div>
         <div class="table-scroll">
           <table>
             <caption>PIO PWM <span id="pio-running-role">--</span></caption>
-            <thead><tr><th scope="col">Channel</th><th scope="col" title="GPIO number, not physical header pin">GPIO</th><th scope="col">Frequency</th><th scope="col">Duty</th></tr></thead>
+            <thead><tr><th scope="col" title="Logical channel and GPIO number; GPIO is not a physical header pin">Channel (GPIO)</th><th scope="col">Frequency</th><th scope="col">Duty</th></tr></thead>
             <tbody id="pio-channel-rows"></tbody>
           </table>
         </div>
         <div class="table-scroll">
           <table>
             <caption>Software PWM <span id="sw-running-role">--</span></caption>
-            <thead><tr><th scope="col">Channel</th><th scope="col" title="GPIO number, not physical header pin">GPIO</th><th scope="col">Frequency</th><th scope="col">Duty</th></tr></thead>
+            <thead><tr><th scope="col" title="Logical channel and GPIO number; GPIO is not a physical header pin">Channel (GPIO)</th><th scope="col">Frequency</th><th scope="col">Duty</th></tr></thead>
             <tbody id="sw-channel-rows"></tbody>
           </table>
         </div>
@@ -203,13 +203,19 @@
         <p id="channel-dialog-note">Values start from the current realized output, which may differ from the
           requested frequency due to hardware rounding. Apply changes the live output immediately; no save or reboot.</p>
         <div class="control-grid">
-          <label>Frequency (Hz)
-            <input id="channel-frequency" type="number" min="0" max="4294967295" step="1" required autofocus>
+          <label>Frequency
+            <span class="frequency-input">
+              <input id="channel-frequency" type="number" min="0" max="4294967295" step="any" required autofocus>
+              <select id="channel-frequency-unit" aria-label="Frequency unit">
+                <option value="Hz">Hz</option><option value="kHz">kHz</option><option value="MHz">MHz</option>
+              </select>
+            </span>
           </label>
           <label>Duty (%)
             <input id="channel-duty" type="number" min="0" max="100" step="1" required>
           </label>
         </div>
+        <button class="button button-small channel-preset" id="channel-preset" type="button">Use 1 kHz / 50%</button>
         <p class="configuration-message" id="channel-error" role="alert" data-error="true"></p>
         <div class="dialog-actions">
           <button class="button button-cancel" id="cancel-channel" type="button">Cancel</button>

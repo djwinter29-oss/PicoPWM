@@ -10,7 +10,7 @@ The ranges are the convention shared with PicoUart and PicoForge; the assignment
 
 | IDs | Generic role | PicoPWM assignments |
 | --- | ------------ | ------------------- |
-| `1`-`9` | Device information and monitoring | `1` Identity, `2` Board Configuration, `3` Firmware Memory, `4` Runtime Status; `5`-`9` unassigned. |
+| `1`-`9` | Device information and monitoring | `1` Identity, `2` Board Configuration, `3` Firmware Memory, `4` Runtime Status, `5` Pin Assignment; `6`-`9` unassigned. |
 | `10`-`19` | Application monitoring | Three Bank Status reports, addressed as `10 + bank`; `13`-`19` unassigned. |
 | `20`-`29` | Device and application control | `20` Board Action & Result; `21`-`29` unassigned. |
 | `30`-`255` | Unassigned expansion | None. |
@@ -23,8 +23,9 @@ PicoPWM exposes one vendor-defined USB HID interface alongside its CDC interface
 
 ### Identity And Collision Avoidance
 
-PicoPWM shares the lab `0xCAFE` vendor ID with its sibling projects, so the
-identifiers below are chosen so a host can never confuse the products.
+PicoPWM shares the unallocated lab `0xCAFE` vendor ID with sibling projects.
+The product IDs distinguish these projects from one another, but do not provide
+a globally allocated USB identity.
 
 | Identifier | Value | Notes |
 | ---------- | ----- | ----- |
@@ -44,8 +45,8 @@ because VID/PID alone are not an allocated identity.
 | --------- | --------- | -------- |
 | Interactive shell | USB CDC | Text commands; unchanged by HID. |
 | Controller register access | I2C | Binary register map; unchanged by HID. |
-| Identity, configuration, channel status | HID reports 1, 2, 10-12 | Read-only; realized state from `device`, no HID shadow cache. |
-| Channel set and stop | HID report 20 | Same `device` path as CDC and I2C. |
+| Identity, configuration, memory, runtime status, pin assignment, channel status | HID reports 1-5, 10-12 | Read-only; optional reports 3-5 are capability-gated; realized state from `control_api`, no HID shadow cache. |
+| Channel set and stop | HID report 20 | Same `control_api` path as CDC and I2C. |
 | Bank, I2C address, clock profile, save | HID report 20 | Target configuration only; takes effect after save and restart. Optional save-and-reboot applies the saved target. |
 
 HID does not call `pwm`, backends, or `platform/system.*` directly.
@@ -81,7 +82,7 @@ Feature report, host reads, 18-byte payload.
 | 12 | 1 | `firmware_minor` | Firmware version minor. |
 | 13 | 1 | `firmware_patch` | Firmware version patch. |
 | 14 | 1 | `mcu` | `1` RP2040, `2` RP2350. |
-| 15 | 1 | `channel_count` | From `device_channel_count()`; `24` (three banks of eight). |
+| 15 | 1 | `channel_count` | From `control_api_channel_count()`; `24` (three banks of eight). |
 | 16 | 1 | `capabilities` | Bit 0 config save, bit 1 clock profile, bit 2 save-and-reboot, bit 3 LED control/readback, bit 4 standalone reboot, bit 5 firmware memory report, bit 6 runtime report, bit 7 pin assignment report. A host sends no operation whose capability is absent. Without bit 1, `clock_profile_mask` is zero. LED capability is absent on boards without a default LED. |
 | 17 | 1 | `clock_profile_mask` | Bit *n* set when clock profile *n* (0-4) is accepted by this firmware build on this MCU; bits 5-7 zero. Profile `1` is always set. This firmware sends `0x0F`. The running I2C address is read from report 2. |
 
@@ -132,7 +133,7 @@ Feature report, 28 bytes, available only with identity capability bit 7:
 
 Each GPIO is 0-47, or `255` when unavailable (including a board without a GPIO LED).
 These are GPIO numbers, not physical header pins. The report is built through
-`device_get_pin_assignment()`: PWM assignments come through the PWM driver boundary
+`control_api_get_pin_assignment()`: PWM assignments come through the PWM driver boundary
 from the compiled board configuration, I2C from its board configuration, and LED
 from the SDK board definition. It does not change pins or access Core 1 runtime state.
 
@@ -147,7 +148,7 @@ Earlier host releases that reject identity bit 7 must be updated for this firmwa
 
 Feature report, host reads, 21-byte payload.
 
-Running values come from the live modules (`device_bank_role()`, `device_i2c_address()`); target values come from `boot_config`.
+Running values come from the live modules (`control_api_bank_role()`, `control_api_i2c_address()`); target values come from `boot_config`.
 
 | Offset | Size | Field | Meaning |
 | -----: | ---: | ----- | ------- |
@@ -158,8 +159,10 @@ Running values come from the live modules (`device_bank_role()`, `device_i2c_add
 | 16 | 1 | `clock_profile` | Target system clock request (profile table below). Always a valid, accepted profile. Takes effect after save and restart. |
 | 17 | 4 | `system_clock_hz` | Running `clk_sys`, from `system_clock_hz()`; separate from the request. |
 
-Bank enums: backend `0` HW, `1` PIO, `2` SW. The backend is fixed per bank (A is HW, B is PIO, C is SW) and is
-not stored by the firmware; it is reported as a constant and a `SET_BANK` with any other value is rejected (the I2C `REG_CONFIG_SET` carries only bank and role); role `0` generator, `1` monitor.
+Bank enums: backend `0` HW, `1` PIO, `2` SW. The backend is fixed per bank
+(A is HW, B is PIO, C is SW) and is not stored by the firmware; it is reported
+as a constant and a `SET_BANK` with any other value is rejected. Role `0` is
+generator and role `1` is monitor.
 
 The target is changed and saved through report 20, never by writing report 2. A saved target takes effect only after
 the device restarts. Hosts may use capability-gated `SAVE_REBOOT`, or ask the user to power-cycle or reset after
@@ -210,7 +213,7 @@ no timestamp or validity flag; a host that needs freshness compares successive r
 | 0 | 1 | `version` | Layout version, `1`. |
 | 1 | 40 | `channels[8]` | 5 bytes each: `freq_hz` u32, `duty` u8. Entry *n* is logical channel `8 * bank + n`. |
 
-Each entry is the realized `freq_hz` and `duty` from `device_get_channel()`; HID keeps no shadow cache.
+Each entry is the realized `freq_hz` and `duty` from `control_api_get_channel()`; HID keeps no shadow cache.
 Firmware reads the eight channels back to back on Core 0 in one polling pass, so entries within a report are
 individually coherent but not captured at one instant, and the three banks are separate captures. A failed read of
 any channel fails the whole report instead of returning partial or zero-filled data. The read must stay bounded and
@@ -236,20 +239,20 @@ length because a report ID has a single descriptor length.
 
 | Op | Name | Maps to |
 | -: | ---- | ------- |
-| 1 | `SET_CHANNEL` | `device_set_channel(channel, freq_hz, duty)`. |
-| 2 | `STOP` | `device_restore_defaults()`; outputs stop and defaults are restored. |
+| 1 | `SET_CHANNEL` | `control_api_set_channel(channel, freq_hz, duty)`. |
+| 2 | `STOP` | `control_api_restore_defaults()`; attempts to stop every generator output. A failure status can mean the stop was partial. |
 | 3 | `SET_BANK` | `boot_config_set_bank()`; `channel` is the bank (`0`-`2`), `arg0` byte 0 backend, byte 1 role. |
 | 4 | `SET_I2C_ADDRESS` | `boot_config_set_i2c_address()`; `arg0` low byte is the 7-bit address. |
 | 5 | `SAVE_CONFIG` | `boot_config_save()`; requires flag bit 0, plus bit 1 when the target clock profile is above `1`. Persists only; it does not restart the device. See Save Cost. |
 | 6 | `SET_CLOCK_PROFILE` | Sets the target clock profile from `arg0` low byte; profiles above `1` require flag bit 1. |
-| 7 | `SAVE_REBOOT` | Same validation and persistence as `SAVE_CONFIG`; requires capability bit 2. After a successful save, the first full result read schedules a reboot in 500 ms through `device`. New actions are rejected while awaiting the result read or reboot. Storage failure never schedules a reboot. |
-| 8 | `SET_LED` | Requires capability bit 3; `arg0` is 0 (off) or 1 (on); all other fields and flags zero. Uses `device_led_set()`; returns `UNAVAILABLE` on a board without an LED. Read back report 2 to verify. |
+| 7 | `SAVE_REBOOT` | Same validation and persistence as `SAVE_CONFIG`; requires capability bit 2. After a successful save, the first full result read schedules a reboot in 500 ms through `control_api`. New actions are rejected while awaiting the result read or reboot. Storage failure never schedules a reboot. |
+| 8 | `SET_LED` | Requires capability bit 3; `arg0` is 0 (off) or 1 (on); all other fields and flags zero. Uses `control_api_led_set()`; returns `UNAVAILABLE` on a board without an LED. Read back report 2 to verify. |
 | 9 | `REBOOT` | Requires capability bit 4 and explicit user confirmation (flag bit 0); all other fields zero. No save occurs. Like `SAVE_REBOOT`, the first full successful result read schedules restart in 500 ms and new actions are rejected until reboot. |
 
 Operation validity, checked before any side effect; every failure returns `INVALID` and changes nothing:
 
 - `SET_CHANNEL`: `channel` below `channel_count`, the channel is a generator in the running configuration, `arg1`
-  is `[0, 100]`, and `freq_hz` is accepted by `device_set_channel()`.
+  is `[0, 100]`, and `freq_hz` is accepted by `control_api_set_channel()`.
 - `STOP`: `channel`, `arg0`, and `arg1` are zero.
 - `SET_BANK`: `channel` is `0`-`2`, and the backend/role pair is allowed for that bank.
 - `SET_I2C_ADDRESS`: the address is accepted by `boot_config_set_i2c_address()`.
@@ -323,8 +326,9 @@ Serialize transactions per device. The rules are:
 - **Result lifetime:** the result persists until the next accepted SET and is never consumed by a GET. A reset or
   disconnect clears it to that initial state, so hosts discard pending-transaction assumptions and reread identity.
 - **Stale results:** clients match `transaction_id` and `operation` and never treat a stale result as success.
-- **Concurrent interfaces:** CDC, I2C, and HID may all change channels or the target configuration; the last write
-  wins, and the realized state in reports 10-12 and 2 is authoritative.
+- **Concurrent interfaces:** CDC, I2C, and HID may all change channels; CDC and HID may also change the target
+  configuration. The last write wins, and the realized state in reports 10-12 and 2 is authoritative. The
+  documented I2C contract does not include configuration writes.
 
 ### Conformance Examples
 

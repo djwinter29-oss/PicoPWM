@@ -1,5 +1,41 @@
 import { CLOCK_PROFILES, ROLES } from "./device.mjs?v=6";
 
+const FREQUENCY_MULTIPLIERS = Object.freeze({ Hz: 1, kHz: 1_000, MHz: 1_000_000 });
+const MAX_FREQUENCY_HZ = 0xffffffff;
+
+export function frequencyEditorValue(frequencyHz) {
+  const unit = frequencyHz >= FREQUENCY_MULTIPLIERS.MHz ? "MHz"
+    : frequencyHz >= FREQUENCY_MULTIPLIERS.kHz ? "kHz" : "Hz";
+  return { unit, value: String(frequencyHz / FREQUENCY_MULTIPLIERS[unit]) };
+}
+
+export function frequencyMax(unit) {
+  return String(MAX_FREQUENCY_HZ / FREQUENCY_MULTIPLIERS[unit]);
+}
+
+export function convertFrequencyValue(value, fromUnit, toUnit) {
+  const from = FREQUENCY_MULTIPLIERS[fromUnit];
+  const to = FREQUENCY_MULTIPLIERS[toUnit];
+  const frequency = Number(value);
+  if (!from || !to || value === "" || !Number.isFinite(frequency) || frequency < 0) return "";
+  return String(frequency * from / to);
+}
+
+export function frequencyToHertz(value, unit) {
+  const multiplier = FREQUENCY_MULTIPLIERS[unit];
+  const frequency = Number(value);
+  const frequencyHz = frequency * multiplier;
+  if (!multiplier || value === "" || !Number.isFinite(frequency) || frequency < 0
+    || !Number.isFinite(frequencyHz) || frequencyHz > MAX_FREQUENCY_HZ + 0.000001) {
+    throw new RangeError("Frequency must be between 0 and 4294967295 Hz.");
+  }
+  const roundedHz = Math.round(frequencyHz);
+  if (Math.abs(frequencyHz - roundedHz) > 0.000001) {
+    throw new RangeError("Frequency must resolve to a whole number of hertz.");
+  }
+  return Math.min(roundedHz, MAX_FREQUENCY_HZ);
+}
+
 function setText(selector, text) {
   document.querySelector(selector).textContent = text ?? "--";
 }
@@ -13,8 +49,8 @@ function cell(text, className) {
 
 export function formatFrequency(hz) {
   if (hz === null) return "--";
-  if (hz >= 1e6) return `${(hz / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} MHz`;
-  if (hz >= 1e3) return `${(hz / 1e3).toLocaleString(undefined, { maximumFractionDigits: 3 })} kHz`;
+  if (hz >= 1e6 && hz % 1e6 === 0) return `${hz / 1e6} MHz`;
+  if (hz >= 1e3 && hz % 1e3 === 0) return `${hz / 1e3} kHz`;
   return `${hz} Hz`;
 }
 
@@ -45,7 +81,7 @@ function syncTarget(selector, value) {
   }
 }
 
-export function renderBootEdits(configuration) {
+export function renderBootEdits(configuration, identity) {
   const selectors = ["#clock-profile-select", "#i2c-input", "#hw-role", "#pio-role", "#sw-role"];
   const targets = configuration
     ? [configuration.clock_profile, configuration.target.i2c_address, ...configuration.target.roles] : [];
@@ -56,13 +92,20 @@ export function renderBootEdits(configuration) {
     control.dataset.edited = String(changed);
     edited ||= changed;
   });
-  const pending = configuration && (configuration.target.i2c_address !== configuration.running.i2c_address
-    || configuration.target.roles.some((role, bank) => role !== configuration.running.roles[bank]));
+  const expectedClockHz = configuration?.clock_profile === 0
+    ? { RP2040: 125_000_000, RP2350: 150_000_000 }[identity?.mcu]
+    : [null, 150_000_000, 200_000_000, 250_000_000, 280_000_000][configuration?.clock_profile];
+  const pending = Boolean(configuration && (
+    configuration.system_clock_hz !== expectedClockHz
+    || configuration.target.i2c_address !== configuration.running.i2c_address
+    || configuration.target.roles.some((role, bank) => role !== configuration.running.roles[bank])));
+  const needsSave = Boolean(edited || pending);
   const status = document.querySelector("#boot-edits");
-  status.hidden = !edited && !pending;
+  status.hidden = !needsSave;
   status.textContent = edited ? "Unsaved edits" : pending ? "Target differs from running" : "";
   status.title = edited ? "Local edits have not been sent. Save and Reboot applies them."
-    : "Bank roles or I2C address differ from the running settings. Save and Reboot applies the target.";
+    : "Boot settings differ from the running configuration. Save and Reboot applies the target.";
+  return needsSave;
 }
 
 function renderConfiguration(data) {
@@ -103,13 +146,14 @@ function renderChannels(data, editable) {
   for (const channel of data.channels) {
     const bank = Math.floor(channel.channel / 8);
     const row = document.createElement("tr");
-    row.append(cell(String(channel.channel)), cell(String(data.pins?.channels[channel.channel] ?? "--")),
+    const gpio = data.pins?.channels[channel.channel] ?? "--";
+    row.append(cell(`${channel.channel} (GPIO ${gpio})`),
       cell(formatFrequency(channel.freq_hz), channel.freq_hz === null ? "number missing" : "number"),
       cell(channel.duty === null ? "--" : `${channel.duty}%`, channel.duty === null ? "number missing" : "number"));
     if (editable && data.configuration?.running.roles[bank] === 0 && !data.bank_errors[bank]
       && channel.freq_hz !== null && channel.duty !== null) {
       ["frequency", "duty"].forEach((field, index) => {
-        const target = row.children[index + 2];
+        const target = row.children[index + 1];
         const button = document.createElement("button");
         button.type = "button";
         button.className = "channel-value";
@@ -171,8 +215,9 @@ export function renderDashboard(data, editable = false) {
   document.querySelector("#runtime-message").dataset.error = String(Boolean(data.runtime_error));
   renderConfiguration(data);
   renderPins(data);
-  renderBootEdits(data.configuration);
+  const bootConfigurationChanged = renderBootEdits(data.configuration, identity);
   renderChannels(data, editable);
   const problems = [data.identity_error, data.configuration_error, ...data.bank_errors].filter(Boolean);
   setText("#read-errors", problems.length ? problems.join("; ") : "");
+  return bootConfigurationChanged;
 }

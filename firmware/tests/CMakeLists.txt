@@ -20,7 +20,7 @@ endfunction()
 
 add_executable(cli_shell_test
     cli_shell_test.c
-    ${SOURCE_ROOT}/app/cli/shell.c
+    ${SOURCE_ROOT}/app/cli/cli_shell.c
     ${EMBEDDED_CLI_ROOT}/src/embedded_cli.c
 )
 target_include_directories(cli_shell_test PRIVATE
@@ -32,7 +32,7 @@ add_test(NAME cli_shell COMMAND cli_shell_test)
 
 add_executable(cli_channel_commands_test
     cli_channel_commands_test.c
-    ${SOURCE_ROOT}/app/cli/channel_commands.c
+    ${SOURCE_ROOT}/app/cli/cli_channel_commands.c
 )
 target_include_directories(cli_channel_commands_test PRIVATE
     ${TEST_STUB_ROOT}
@@ -41,6 +41,23 @@ target_include_directories(cli_channel_commands_test PRIVATE
 )
 pico_pwm_test_warnings(cli_channel_commands_test)
 add_test(NAME cli_channel_commands COMMAND cli_channel_commands_test)
+
+add_executable(cli_grouped_commands_test
+    cli_grouped_commands_test.c
+    ${SOURCE_ROOT}/app/cli/cli_shell.c
+    ${SOURCE_ROOT}/app/cli/cli_pwm_commands.c
+    ${SOURCE_ROOT}/app/cli/cli_app.c
+    ${SOURCE_ROOT}/app/cli/cli_channel_commands.c
+    ${SOURCE_ROOT}/app/cli/cli_board_commands.c
+    ${EMBEDDED_CLI_ROOT}/src/embedded_cli.c
+)
+target_include_directories(cli_grouped_commands_test PRIVATE
+    ${TEST_STUB_ROOT}
+    ${SOURCE_ROOT}
+    ${EMBEDDED_CLI_ROOT}/include
+)
+pico_pwm_test_warnings(cli_grouped_commands_test)
+add_test(NAME cli_grouped_commands COMMAND cli_grouped_commands_test)
 
 add_executable(boot_config_test
     boot_config_test.c
@@ -74,14 +91,14 @@ target_include_directories(generator_math_test PRIVATE
 pico_pwm_test_warnings(generator_math_test)
 add_test(NAME generator_math COMMAND generator_math_test)
 
-add_executable(i2c_write_queue_test
-    i2c_write_queue_test.c
+add_executable(i2c_command_queue_test
+    i2c_command_queue_test.c
 )
-target_include_directories(i2c_write_queue_test PRIVATE
+target_include_directories(i2c_command_queue_test PRIVATE
     ${SOURCE_ROOT}
 )
-pico_pwm_test_warnings(i2c_write_queue_test)
-add_test(NAME i2c_write_queue COMMAND i2c_write_queue_test)
+pico_pwm_test_warnings(i2c_command_queue_test)
+add_test(NAME i2c_command_queue COMMAND i2c_command_queue_test)
 
 add_executable(i2c_slave_test
     i2c_slave_test.c
@@ -165,10 +182,13 @@ add_executable(usb_cdc_test
     usb_cdc_test.c
     cdc_stub.c
     ${SOURCE_ROOT}/app/usb/usb_cdc.c
+    ${SOURCE_ROOT}/app/cli/cli_shell.c
+    ${EMBEDDED_CLI_ROOT}/src/embedded_cli.c
 )
 target_include_directories(usb_cdc_test PRIVATE
     ${TEST_ROOT}/stubs_cdc
     ${SOURCE_ROOT}
+    ${EMBEDDED_CLI_ROOT}/include
 )
 pico_pwm_test_warnings(usb_cdc_test)
 add_test(NAME usb_cdc COMMAND usb_cdc_test)

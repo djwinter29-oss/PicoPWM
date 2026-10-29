@@ -56,8 +56,8 @@ Hardware-free runner regression tests:
 python -m unittest discover -s tools/hil/tests -p 'test_*.py'
 ```
 
-Follow [HIL Test Connections](hil-test-connection.md) for wiring and safety. Protocol expectations come from the
-[CDC CLI](../guides/control/usb_cdc_cli.md), [I2C protocol](../guides/control/i2c_protocol.md) and
+Follow [HIL Test Connections](hil-test-connections.md) for wiring and safety. Protocol expectations come from the
+[CDC shell](../guides/usb-cdc-shell.md), [I2C protocol](../design/i2c/i2c-protocol.md) and
 [HID report reference](../design/usb/hid-report-reference.md).
 
 ## Preconditions
@@ -95,9 +95,9 @@ use an independent signal source or measurement instrument instead of exceeding 
 | ID | Procedure | Expected result |
 | --- | --- | --- |
 | BOOT-01 | Boot with invalid/erased configuration on a designated test board. Inspect configuration before attaching loopbacks. | Monitor-only defaults, I2C address `0x40`, SDK default clock, and no active PWM generator outputs. |
-| BOOT-02 | Read version, configuration and channel state through CDC, HID and I2C where exposed. | Values agree with the artifact and running configuration; host tools connect without a reset loop. |
-| CFG-01 | Change a target bank role and I2C address without saving. Read running/target values, then power-cycle. | Running roles/address remain unchanged until reboot; unsaved target changes are lost. |
-| CFG-02 | Save known roles and an address, then power-cycle. | Saved roles/address become running values; I2C responds at the saved address. Restore the fixture configuration afterward. |
+| BOOT-02 | Read version and configuration through CDC/HID, and channel count/state through I2C. | Values agree with the artifact and running configuration; host tools connect without a reset loop. |
+| CFG-01 | Through CDC/HID, change a target bank role and I2C address without saving. Read running/target values, then power-cycle. | Running roles/address remain unchanged until reboot; unsaved target changes are lost. |
+| CFG-02 | Through CDC/HID, save known roles and an address, then power-cycle. | Saved roles/address become running values; I2C responds at the saved address. Restore the fixture configuration afterward. |
 | CFG-03 | Change the clock profile through CDC and HID, observing HID report 2 before saving. | Both interfaces share the target profile; running clock does not change immediately. |
 | CFG-04 | Save an explicitly selected clock profile and reboot. | Running clock matches the requested value or reports fallback explicitly; all backend measurements are repeated for that clock. |
 | CFG-05 | Exercise invalid bank, address, profile and missing HID confirmation/overclock flags. | Requests are rejected without changing the prior valid target or saving it. |
@@ -131,9 +131,9 @@ solely by a waveform or a passing initialization check.
 | --- | --- | --- |
 | IO-01 | Exercise CDC editing/help and valid/invalid channel commands; disconnect/reconnect USB. | Shell remains usable; failures are explicit; reconnection does not corrupt running configuration. |
 | IO-02 | Exercise HID identity, configuration, bank status, actions and completion status. | Report lengths, transaction IDs and results match the reference; reconnecting the host remains possible. |
-| IO-03 | At 100 and 400 kHz, exercise I2C register selection, repeated-start reads, short/long reads and queued writes. | Data, padding and completion status match the protocol; no permanent bus lockup. |
+| IO-03 | At 100 and 400 kHz, exercise I2C register selection, repeated-start reads, short/long reads and queued writes. Include a short read that ends with the master's NACK, then immediately start a fresh read and a repeated-start transaction. | Data, padding and completion status match the protocol; the aborted response does not continue into the next transaction and the bus remains usable. |
 | IO-04 | Poll the same active channels over all three transports while changing generator settings. | Each interface eventually reports the same realized state; no deadlock or cross-channel corruption. |
-| SAVE-01 | Save configuration while generators are active and an I2C controller polls. Capture bus and PWM waveforms. | Save completes or reports failure explicitly; control recovers without reset. Record flash-induced I2C stalls/errors and PWM gaps, rather than assuming uninterrupted operation. |
+| SAVE-01 | Save configuration through CDC or HID while generators are active and an I2C controller polls. Capture bus and PWM waveforms. | Save completes or reports failure explicitly; control recovers without reset. Record flash-induced I2C stalls/errors and PWM gaps, rather than assuming uninterrupted operation. |
 | REC-01 | Power-cycle after a completed save, then verify every saved field. | Valid configuration survives; outputs start in the documented safe state. |
 | REC-02 | Reflash using BOOTSEL on a designated recovery board. | Board enumerates and accepts firmware again. Reflashing alone must not be assumed to erase saved configuration. |
 

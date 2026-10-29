@@ -1,4 +1,4 @@
-#include "app/cli/shell.h"
+#include "app/cli/cli_shell.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -9,13 +9,15 @@
 typedef struct {
     const char *input;
     size_t input_offset;
-    char output[512];
+    char output[2048];
     size_t output_length;
+    size_t output_limit;
 } test_transport_t;
 
 typedef struct {
     shell_t *shell;
     uint32_t command_calls;
+    int last_argc;
 } test_context_t;
 
 static uint32_t test_read(void *context, uint8_t *data, uint32_t capacity) {
@@ -31,6 +33,9 @@ static uint32_t test_read(void *context, uint8_t *data, uint32_t capacity) {
 static bool test_write(void *context, const uint8_t *data, uint32_t length) {
     test_transport_t *transport = context;
 
+    if ((transport->output_limit != 0u) && ((transport->output_length + length) > transport->output_limit)) {
+        return false;
+    }
     assert(transport->output_length + length < sizeof(transport->output));
     memcpy(transport->output + transport->output_length, data, length);
     transport->output_length += length;
@@ -44,7 +49,17 @@ static bool test_command(void *context, int argc, const char *const *argv) {
     assert(argc == 1);
     assert(strcmp(argv[0], "ping") == 0);
     test->command_calls++;
+    test->last_argc = argc;
     return shell_write_line(test->shell, "handled");
+}
+
+static bool test_count_arguments(void *context, int argc, const char *const *argv) {
+    test_context_t *test = context;
+
+    (void)argv;
+    test->last_argc = argc;
+    test->command_calls++;
+    return true;
 }
 
 static shell_config_t test_config(test_context_t *context, const shell_transport_t *transport) {
@@ -85,6 +100,21 @@ static void test_independent_sessions_and_line_endings(void) {
     assert(strstr(transport_b.output, "handled\r\n") != NULL);
 }
 
+static void test_poll_dispatches_one_command(void) {
+    test_transport_t transport = {.input = "ping\rping\r"};
+    shell_t shell;
+    test_context_t context = {.shell = &shell};
+    shell_transport_t binding = {.read = test_read, .write = test_write, .context = &transport};
+    shell_config_t config = test_config(&context, &binding);
+
+    assert(shell_init(&shell, &config));
+    shell_poll(&shell);
+    assert(context.command_calls == 1u);
+
+    shell_poll(&shell);
+    assert(context.command_calls == 2u);
+}
+
 static bool test_args(void *context, int argc, const char *const *argv) {
     (void)context;
     assert(argc == 3);
@@ -119,6 +149,26 @@ static void test_completion(void) {
     shell_poll(&shell);
 
     assert(context.command_calls == 1u);
+}
+
+static void test_overlong_line_is_truncated_at_documented_limit(void) {
+    char input[SHELL_MAX_INPUT_LENGTH + sizeof(" bad\r")];
+    test_transport_t transport = {0};
+    shell_t shell;
+    test_context_t context = {.shell = &shell};
+    shell_transport_t binding = {.read = test_read, .write = test_write, .context = &transport};
+    shell_config_t config = test_config(&context, &binding);
+
+    memcpy(input, "ping", 4u);
+    memset(input + 4u, ' ', SHELL_MAX_INPUT_LENGTH - 4u);
+    memcpy(input + SHELL_MAX_INPUT_LENGTH, " bad\r", sizeof(" bad\r"));
+    transport.input = input;
+
+    assert(shell_init(&shell, &config));
+    shell_poll(&shell);
+
+    assert(context.command_calls == 1u);
+    assert(strstr(transport.output, "handled\r\n") != NULL);
 }
 
 static void test_interleaved_escape_sequences(void) {
@@ -187,6 +237,8 @@ static void test_rejected_inputs(void) {
     const shell_command_t nameless[] = {{NULL, "help", test_command}};
     const shell_command_t failing[] = {{"fail", "fail", test_command_fails}};
     const shell_command_t reenter[] = {{"re", "re", test_reenter}};
+    const shell_command_t too_many[SHELL_MAX_COMMANDS + 1u] = {
+        {.name = "ping", .help = "ping", .handler = test_command}};
 
     memset(&shell, 0, sizeof(shell));
     shell_init(NULL, &config);
@@ -206,21 +258,27 @@ static void test_rejected_inputs(void) {
 
     config = test_config(&context, &binding);
     config.transport = &unread;
-    shell_init(&shell, &config);
+    assert(!shell_init(&shell, &config));
     assert(!shell.initialized);
 
     config = test_config(&context, &binding);
     config.commands = NULL;
-    shell_init(&shell, &config);
+    assert(!shell_init(&shell, &config));
     assert(!shell.initialized);
 
     config = test_config(&context, &binding);
     config.commands = nameless;
-    shell_init(&shell, &config);
+    assert(!shell_init(&shell, &config));
     assert(!shell.initialized);
 
     config = test_config(&context, &binding);
-    shell_init(&shell, &config);
+    config.commands = too_many;
+    config.command_count = SHELL_MAX_COMMANDS + 1u;
+    assert(!shell_init(&shell, &config));
+    assert(!shell.initialized);
+
+    config = test_config(&context, &binding);
+    assert(shell_init(&shell, &config));
     shell_poll(&shell);
     assert(strstr(transport.output, "unknown") != NULL);
     assert(shell_write_line(&shell, NULL));
@@ -230,8 +288,8 @@ static void test_rejected_inputs(void) {
     transport.input_offset = 0u;
     transport.output_length = 0u;
     transport.output[0] = '\0';
-    shell_init(&shell, &config);
-    shell_prompt(&shell);
+    assert(shell_init(&shell, &config));
+    assert(shell_prompt(&shell));
     shell_poll(&shell);
     assert(strstr(transport.output, "unknown") == NULL);
 
@@ -239,21 +297,62 @@ static void test_rejected_inputs(void) {
     config.commands = failing;
     transport.input = "fail\r";
     transport.input_offset = 0u;
-    shell_init(&shell, &config);
+    transport.output_length = 0u;
+    transport.output[0] = '\0';
+    assert(shell_init(&shell, &config));
     shell_poll(&shell);
+    assert(strstr(transport.output, "ERR command handler failed") != NULL);
 
     config.commands = reenter;
     transport.input = "re\r";
     transport.input_offset = 0u;
+    assert(shell_init(&shell, &config));
+    shell_poll(&shell);
+}
+
+static void test_excess_arguments_are_rejected(void) {
+    static const shell_command_t commands[] = {{"args", "args", test_count_arguments}};
+    test_transport_t transport = {.input = "args a b c d e f g h\r"};
+    shell_t shell;
+    test_context_t context = {.shell = &shell};
+    shell_transport_t binding = {.read = test_read, .write = test_write, .context = &transport};
+    shell_config_t config = test_config(&context, &binding);
+
+    config.commands = commands;
     shell_init(&shell, &config);
     shell_poll(&shell);
+
+    assert(context.command_calls == 0u);
+    assert(strstr(transport.output, "ERR too many command arguments") != NULL);
+}
+
+static void test_line_write_is_atomic(void) {
+    test_transport_t transport = {.input = ""};
+    shell_t shell;
+    test_context_t context = {.shell = &shell};
+    shell_transport_t binding = {.read = test_read, .write = test_write, .context = &transport};
+    shell_config_t config = test_config(&context, &binding);
+
+    assert(shell_init(&shell, &config));
+    transport.output_limit = 5u;
+    assert(!shell_write_line(&shell, "text"));
+    assert(transport.output_length == 0u);
+    assert(transport.output[0] == '\0');
+
+    transport.output_limit = 6u;
+    assert(shell_write_line(&shell, "text"));
+    assert(strcmp(transport.output, "text\r\n") == 0);
 }
 
 int main(void) {
     test_independent_sessions_and_line_endings();
+    test_poll_dispatches_one_command();
     test_arguments();
     test_completion();
+    test_overlong_line_is_truncated_at_documented_limit();
     test_interleaved_escape_sequences();
     test_rejected_inputs();
+    test_excess_arguments_are_rejected();
+    test_line_write_is_atomic();
     return 0;
 }

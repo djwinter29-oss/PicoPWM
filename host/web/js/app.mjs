@@ -1,5 +1,8 @@
-import { CLOCK_PROFILES, ROLES } from "./device.mjs?v=6";
-import { renderBootEdits, renderDashboard, updateReportAge } from "./view.mjs?v=12";
+import { CLOCK_PROFILES, ROLES } from "./device.mjs?v=8";
+import {
+  convertFrequencyValue, frequencyEditorValue, frequencyMax, frequencyToHertz,
+  renderBootEdits, renderDashboard, updateReportAge,
+} from "./view.mjs?v=16";
 import { PicoPwmHost, request } from "./client.mjs?v=1";
 
 const $ = selector => document.querySelector(selector);
@@ -15,11 +18,24 @@ let pendingSettings = null;
 let scanning = false;
 let scanError = null;
 
+function updateSaveButton(state, bootConfigurationChanged) {
+  const data = state.dashboard;
+  const ready = state.phase === "connected" && data.identity && data.configuration;
+  const help = state.phase === "writing" ? "A command is in progress. Wait before saving."
+    : !ready ? "Select a board and read its configuration to enable Save & Reboot."
+      : !data.identity.can_save_reboot ? "Update board firmware to enable Save & Reboot."
+        : !bootConfigurationChanged ? "Boot configuration is unchanged."
+          : "Save changed boot settings and reboot to apply them.";
+  $("#settings-help").textContent = help;
+  $("#save-configuration").disabled = !ready || !data.identity.can_save_reboot || !bootConfigurationChanged;
+  $("#save-configuration").title = help;
+}
+
 function render(state) {
   const data = state.dashboard;
   const connected = ["connected", "writing"].includes(state.phase);
   const ready = state.phase === "connected" && data.identity && data.configuration;
-  renderDashboard(data, Boolean(ready));
+  const bootConfigurationChanged = renderDashboard(data, Boolean(ready));
   $("#connection").dataset.state = connected ? "connected" : "disconnected";
   $("#connection-label").textContent = connected ? "Connected" : "Disconnected";
   boardSelect.disabled = state.phase === "writing" || scanning || !boardSelect.options.length
@@ -28,12 +44,7 @@ function render(state) {
   for (const selector of ["#hw-role", "#pio-role", "#sw-role", "#i2c-input"])
     $(selector).disabled = !ready;
   $("#clock-profile-select").disabled = !ready || !data.identity.can_set_clock;
-  const help = !ready ? "Select a board and read its configuration to enable Save and Reboot."
-    : !data.identity.can_save_reboot ? "Update board firmware to enable Save and Reboot."
-      : "Edit the boot settings, then save and reboot to apply them.";
-  $("#settings-help").textContent = help;
-  $("#save-configuration").disabled = !ready || !data.identity.can_save_reboot;
-  $("#save-configuration").title = help;
+  updateSaveButton(state, bootConfigurationChanged);
   $("#reboot-board").disabled = !ready || !data.identity.can_reboot;
   const ledAvailable = Boolean(data.identity?.can_set_led && data.configuration);
   const ledOn = ledAvailable && data.configuration.led_on;
@@ -45,7 +56,9 @@ function render(state) {
     : "Board LED unavailable; update firmware if unsupported";
   $("#apply-channel").disabled = !ready || channelApplying;
   $("#channel-frequency").disabled = channelApplying;
+  $("#channel-frequency-unit").disabled = channelApplying;
   $("#channel-duty").disabled = channelApplying;
+  $("#channel-preset").disabled = channelApplying;
   if (!connected && channelDialog.open) channelDialog.close();
   if (!ready && rebootDialog.open) rebootDialog.close();
   if (!ready && saveDialog.open) { saveDialog.close(); pendingSettings = null; }
@@ -73,7 +86,7 @@ async function rescan() {
     for (const board of result.boards) {
       const option = document.createElement("option");
       option.value = board.id;
-      option.textContent = `${board.product_name} / ${board.serial_number || board.device_path}`;
+      option.textContent = `PicoPWM - ${board.serial_number || board.device_path}`;
       boardSelect.append(option);
     }
     if (selected && !result.boards.some(board => board.id === selected)) {
@@ -110,7 +123,11 @@ boardSelect.addEventListener("change", () => {
   client.refresh();
 });
 rescanButton.addEventListener("click", rescan);
-$(".settings-controls").addEventListener("input", () => renderBootEdits(client.state.dashboard.configuration));
+$(".settings-controls").addEventListener("input", () => {
+  const state = client.state;
+  const changed = renderBootEdits(state.dashboard.configuration, state.dashboard.identity);
+  updateSaveButton(state, changed);
+});
 $(".channel-panels").addEventListener("click", event => {
   const button = event.target.closest(".channel-value");
   if (!button || client.state.phase !== "connected") return;
@@ -123,11 +140,30 @@ $(".channel-panels").addEventListener("click", event => {
   editingChannel = channel;
   $("#channel-dialog-title").textContent =
     `${["Hardware PWM", "PIO PWM", "Software PWM"][bank]} - Channel ${channel} - GPIO ${data.pins?.channels[channel] ?? "--"}`;
-  $("#channel-frequency").value = String(reading.freq_hz);
+  const frequency = frequencyEditorValue(reading.freq_hz);
+  $("#channel-frequency").value = frequency.value;
+  $("#channel-frequency-unit").value = frequency.unit;
+  $("#channel-frequency").dataset.unit = frequency.unit;
+  $("#channel-frequency").max = frequencyMax(frequency.unit);
   $("#channel-duty").value = String(reading.duty);
   $("#channel-error").textContent = "";
   channelDialog.showModal();
   $(button.dataset.field === "duty" ? "#channel-duty" : "#channel-frequency").focus();
+});
+$("#channel-frequency-unit").addEventListener("change", () => {
+  const input = $("#channel-frequency");
+  const unit = $("#channel-frequency-unit");
+  input.value = convertFrequencyValue(input.value, input.dataset.unit, unit.value);
+  input.dataset.unit = unit.value;
+  input.max = frequencyMax(unit.value);
+});
+$("#channel-preset").addEventListener("click", () => {
+  $("#channel-frequency-unit").value = "kHz";
+  $("#channel-frequency").dataset.unit = "kHz";
+  $("#channel-frequency").max = frequencyMax("kHz");
+  $("#channel-frequency").value = "1";
+  $("#channel-duty").value = "50";
+  $("#channel-error").textContent = "";
 });
 $("#cancel-channel").addEventListener("click", () => channelDialog.close());
 $("#channel-form").addEventListener("submit", async event => {
@@ -139,11 +175,19 @@ $("#channel-form").addEventListener("submit", async event => {
     $("#channel-error").textContent = "Channel is no longer available for editing. Reconnect and read its status.";
     return;
   }
+  if (!$("#channel-frequency").reportValidity() || !$("#channel-duty").reportValidity()) return;
+  let frequencyHz;
+  try {
+    frequencyHz = frequencyToHertz($("#channel-frequency").value, $("#channel-frequency-unit").value);
+  } catch (error) {
+    $("#channel-error").textContent = error.message;
+    return;
+  }
   channelApplying = true;
   $("#channel-error").textContent = "";
   render(client.state);
   try {
-    await client.setChannel(editingChannel, integer("#channel-frequency"), integer("#channel-duty"));
+    await client.setChannel(editingChannel, frequencyHz, integer("#channel-duty"));
     channelDialog.close();
   } catch (error) {
     $("#channel-error").textContent = error.message;

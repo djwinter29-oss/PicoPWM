@@ -10,13 +10,15 @@
 #include "app/i2c/i2c_control_map.h"
 
 #include "app/i2c/i2c_command_queue.h"
-#include "device.h"
+#include "control_api.h"
 #include "hardware/sync.h"
 
 #include <stdlib.h>
 
 #define I2C_CONTROL_MAP_COMMAND_COUNT (PWM_DRIVER_CHANNEL_COUNT + 1u)
 
+_Static_assert(I2C_COMMAND_QUEUE_PAYLOAD == I2C_CONTROL_MAP_CHANNEL_COMMAND_PAYLOAD_SIZE,
+               "I2C queue payload must hold the largest protocol command");
 _Static_assert((int)I2C_STATUS_OK == (int)PWM_DRIVER_RESULT_OK, "I2C OK must match the PWM result");
 _Static_assert((int)I2C_STATUS_BUSY == (int)PWM_DRIVER_RESULT_BUSY, "I2C BUSY must match the PWM result");
 _Static_assert((int)I2C_STATUS_INVALID == (int)PWM_DRIVER_RESULT_INVALID, "I2C INVALID must match the PWM result");
@@ -31,6 +33,8 @@ static uint8_t command_status[I2C_CONTROL_MAP_COMMAND_COUNT];
 static uint32_t command_epoch[I2C_CONTROL_MAP_COMMAND_COUNT];
 static uint8_t selected_register;
 static bool selected_register_valid;
+static uint8_t cached_firmware_major;
+static bool cached_firmware_major_valid;
 
 static bool is_channel_read(uint8_t reg) {
     return reg >= I2C_CONTROL_MAP_REG_CH_BASE &&
@@ -58,11 +62,16 @@ static uint8_t expected_write_length(uint8_t reg) {
     if (reg == I2C_CONTROL_MAP_REG_INFO || is_channel_read(reg) || reg == I2C_CONTROL_MAP_REG_STOP_ALL) {
         return 1u;
     }
-    return is_channel_command(reg) ? 6u : 0u;
+    return is_channel_command(reg) ? (uint8_t)(1u + I2C_CONTROL_MAP_CHANNEL_COMMAND_PAYLOAD_SIZE) : 0u;
 }
 
+/**
+ * @brief Parse the firmware major version for the REG_INFO response.
+ * @param major Receives the parsed major version.
+ * @return True when the version contains a uint8 major component.
+ */
 static bool firmware_major(uint8_t *major) {
-    const char *version = device_firmware_version();
+    const char *version = control_api_firmware_version();
     char *end;
     unsigned long parsed;
 
@@ -81,7 +90,7 @@ static uint8_t bank_roles(void) {
     uint8_t roles = 0u;
 
     for (uint8_t bank = 0u; bank < PWM_BANK_COUNT; ++bank) {
-        if (device_bank_role((pwm_bank_t)bank) == PWM_ROLE_GENERATOR) {
+        if (control_api_bank_role((pwm_bank_t)bank) == PWM_ROLE_GENERATOR) {
             roles |= (uint8_t)(1u << bank);
         }
     }
@@ -90,19 +99,19 @@ static uint8_t bank_roles(void) {
 
 static pwm_driver_result_t execute_command(uint8_t reg, const uint8_t *payload, uint8_t payload_len) {
     if (reg == I2C_CONTROL_MAP_REG_STOP_ALL) {
-        return payload_len == 0u ? device_restore_defaults() : PWM_DRIVER_RESULT_INVALID;
+        return payload_len == 0u ? control_api_restore_defaults() : PWM_DRIVER_RESULT_INVALID;
     }
     if (is_channel_command(reg)) {
         uint32_t frequency;
         uint channel;
 
-        if (payload == NULL || payload_len != 5u) {
+        if (payload == NULL || payload_len != I2C_CONTROL_MAP_CHANNEL_COMMAND_PAYLOAD_SIZE) {
             return PWM_DRIVER_RESULT_INVALID;
         }
         channel = (uint)(reg - I2C_CONTROL_MAP_REG_SET_BASE);
         frequency = (uint32_t)payload[0] | ((uint32_t)payload[1] << 8u) |
                     ((uint32_t)payload[2] << 16u) | ((uint32_t)payload[3] << 24u);
-        return device_set_channel(channel, frequency, payload[4]);
+        return control_api_set_channel(channel, frequency, payload[4]);
     }
     return PWM_DRIVER_RESULT_INVALID;
 }
@@ -123,13 +132,26 @@ static void handle_write_frame(const uint8_t *frame, uint8_t length, bool overfl
     }
 
     reg = frame[0];
-    selected_register = reg;
-    selected_register_valid = true;
     expected = expected_write_length(reg);
 
     if (expected == 0u) {
+        if (!overflow && length == 1u) {
+            selected_register = reg;
+            selected_register_valid = true;
+        }
         return;
     }
+
+    if (reg == I2C_CONTROL_MAP_REG_INFO || is_channel_read(reg)) {
+        if (!overflow && length == 1u) {
+            selected_register = reg;
+            selected_register_valid = true;
+        }
+        return;
+    }
+
+    selected_register = reg;
+    selected_register_valid = true;
 
     if (is_channel_command(reg) && !overflow && length == 1u) {
         return;
@@ -167,16 +189,15 @@ static bool build_read_response(uint8_t *response, uint8_t capacity, uint8_t *le
     }
 
     if (selected_register == I2C_CONTROL_MAP_REG_INFO) {
-        uint8_t major;
-        if (capacity < I2C_CONTROL_MAP_INFO_SIZE || !firmware_major(&major)) {
+        if (capacity < I2C_CONTROL_MAP_INFO_SIZE || !cached_firmware_major_valid) {
             return false;
         }
         response[0] = 'P';
         response[1] = 'P';
         response[2] = 'W';
         response[3] = 'M';
-        response[4] = major;
-        response[5] = device_channel_count();
+        response[4] = cached_firmware_major;
+        response[5] = control_api_channel_count();
         response[6] = bank_roles();
         *length = I2C_CONTROL_MAP_INFO_SIZE;
         return true;
@@ -185,7 +206,7 @@ static bool build_read_response(uint8_t *response, uint8_t capacity, uint8_t *le
     if (is_channel_read(selected_register)) {
         pwm_state_t state;
         if (capacity < 5u ||
-            !device_get_channel((uint)(selected_register - I2C_CONTROL_MAP_REG_CH_BASE), &state)) {
+            !control_api_get_channel((uint)(selected_register - I2C_CONTROL_MAP_REG_CH_BASE), &state)) {
             return false;
         }
         response[0] = (uint8_t)state.freq_hz;
@@ -219,6 +240,7 @@ void i2c_control_map_init(void) {
     command_queue = (i2c_command_queue_t){0};
     selected_register = 0u;
     selected_register_valid = false;
+    cached_firmware_major_valid = firmware_major(&cached_firmware_major);
     for (uint8_t index = 0u; index < I2C_CONTROL_MAP_COMMAND_COUNT; ++index) {
         command_status[index] = (uint8_t)I2C_STATUS_NOT_RUN;
         command_epoch[index] = 0u;

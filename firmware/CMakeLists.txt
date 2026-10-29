@@ -16,7 +16,7 @@ pico_sdk_init()
 
 add_executable(pico_pwm
     src/main.c
-    src/device.c
+    src/control_api.c
     src/platform/boot_config.c
     src/platform/led.c
     src/platform/system.c

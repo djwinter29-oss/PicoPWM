@@ -167,6 +167,8 @@ S  address+W  register  Sr  address+R  response bytes...  NACK  P
 normal termination of a read. A register selection takes effect at the
 repeated START or STOP ending the one-byte write. The selected register
 remains available after STOP for the following pure read.
+Writes that contain extra bytes or overflow the transport frame are malformed
+and do not change the selected register.
 
 The read length is chosen by the master. A shorter read returns a prefix of
 the response; bytes requested beyond the response length are zero-padded.
@@ -232,13 +234,18 @@ generator channel even if an earlier stop fails, then returns the first
 non-`OK` channel result in ascending channel order. This includes `TIMEOUT` if
 an individual stop was not claimed before its one-second apply deadline.
 
-Because status is per register and there is no transaction ID, allow at most
-one outstanding command per command register. A newer attempt replaces that
-register's status; an older completion cannot overwrite the newer status. A
-malformed short or overlong write leaves `INVALID` as the status for that
-attempt. Status is volatile and resets to `NOT_RUN` on device startup or
-reboot. After a reset or lost connection, treat any prior command completion
-as unknown and reconcile with the realized channel state before retrying.
+Because status is per register and there is no transaction ID, hosts must send
+at most one outstanding command per command register. Firmware does not reject
+same-register writes while another attempt is queued or being applied: valid
+writes are each queued and executed in FIFO order. The status reports only the
+most recent attempt, so it cannot identify which queued command completed if
+the host violates this constraint.
+A newer attempt replaces that register's status; an older completion cannot
+overwrite the newer status. A malformed short or overlong write leaves
+`INVALID` as the status for that attempt. Status is volatile and resets to
+`NOT_RUN` on device startup or reboot. After a reset or lost connection, treat
+any prior command completion as unknown and reconcile with the realized
+channel state before retrying.
 
 ## Examples
 

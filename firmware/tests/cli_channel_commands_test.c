@@ -1,7 +1,7 @@
 #include "app/cli/cli_channel_commands.h"
 
 #include "driver/pwm/pwm_driver.h"
-#include "device.h"
+#include "control_api.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -32,7 +32,7 @@ const char *pwm_driver_config_channel_name(uint channel) {
     return "HW";
 }
 
-bool device_get_channel(uint channel, pwm_state_t *state) {
+bool control_api_get_channel(uint channel, pwm_state_t *state) {
     if ((channel >= PWM_DRIVER_CONFIG_CHANNEL_COUNT) || (state == NULL) || !get_available) {
         return false;
     }
@@ -41,11 +41,11 @@ bool device_get_channel(uint channel, pwm_state_t *state) {
     return true;
 }
 
-uint8_t device_channel_count(void) {
+uint8_t control_api_channel_count(void) {
     return channel_count;
 }
 
-pwm_driver_result_t device_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
+pwm_driver_result_t control_api_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
     (void)channel;
     (void)freq_hz;
     (void)duty;
@@ -53,7 +53,7 @@ pwm_driver_result_t device_set_channel(uint channel, uint32_t freq_hz, uint8_t d
     return set_result;
 }
 
-pwm_driver_result_t device_restore_defaults(void) {
+pwm_driver_result_t control_api_restore_defaults(void) {
     ++restore_defaults_calls;
     return restore_defaults_result;
 }

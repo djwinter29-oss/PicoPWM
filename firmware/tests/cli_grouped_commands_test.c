@@ -1,7 +1,7 @@
 #include "app/cli/cli_app.h"
 #include "app/cli/cli_pwm_commands.h"
 
-#include "device.h"
+#include "control_api.h"
 #include "app/usb/usb_cdc.h"
 #include "platform/boot_config.h"
 #include "platform/system.h"
@@ -96,19 +96,19 @@ static bool test_write(void *context, const uint8_t *data, uint32_t length) {
     return true;
 }
 
-bool device_get_channel(uint channel, pwm_state_t *state) {
-    if ((channel >= device_channel_count()) || (state == NULL)) {
+bool control_api_get_channel(uint channel, pwm_state_t *state) {
+    if ((channel >= control_api_channel_count()) || (state == NULL)) {
         return false;
     }
     *state = (pwm_state_t){1000u + channel, 50u};
     return true;
 }
 
-uint8_t device_channel_count(void) {
+uint8_t control_api_channel_count(void) {
     return 24u;
 }
 
-pwm_driver_result_t device_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
+pwm_driver_result_t control_api_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
     (void)channel;
     (void)freq_hz;
     (void)duty;
@@ -116,7 +116,7 @@ pwm_driver_result_t device_set_channel(uint channel, uint32_t freq_hz, uint8_t d
     return PWM_DRIVER_RESULT_OK;
 }
 
-pwm_driver_result_t device_restore_defaults(void) {
+pwm_driver_result_t control_api_restore_defaults(void) {
     ++restore_defaults_calls;
     return restore_defaults_result;
 }
@@ -130,23 +130,23 @@ bool pwm_driver_config_is_monitor(void) {
     return false;
 }
 
-uint32_t device_system_clock_hz(void) {
+uint32_t control_api_system_clock_hz(void) {
     return 125000000u;
 }
 
-uint8_t device_i2c_address(void) {
+uint8_t control_api_i2c_address(void) {
     return running_address;
 }
 
-pwm_role_t device_bank_role(pwm_bank_t bank) {
+pwm_role_t control_api_bank_role(pwm_bank_t bank) {
     return running_roles[bank];
 }
 
-const char *device_firmware_version(void) {
+const char *control_api_firmware_version(void) {
     return "test-version";
 }
 
-bool device_led_read(bool *on) {
+bool control_api_led_read(bool *on) {
     if (on == NULL) {
         return false;
     }
@@ -154,12 +154,12 @@ bool device_led_read(bool *on) {
     return true;
 }
 
-bool device_led_set(bool on) {
+bool control_api_led_set(bool on) {
     led_state = on;
     return true;
 }
 
-void device_schedule_reboot(uint32_t delay_ms) {
+void control_api_schedule_reboot(uint32_t delay_ms) {
     assert(delay_ms == 500u);
     reboot_scheduled = true;
 }

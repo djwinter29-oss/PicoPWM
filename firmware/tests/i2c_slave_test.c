@@ -241,6 +241,7 @@ static void test_transmit_abort_cancels_response_and_allows_next_read(void) {
     fake_isr();
     assert(tx_count == sent);
 
+    master_restart();
     master_read(out, sizeof(out), true);
     assert(read_calls == 2u);
     assert(out[0] == response[0]);

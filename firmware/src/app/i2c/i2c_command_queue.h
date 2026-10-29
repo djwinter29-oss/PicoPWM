@@ -13,7 +13,7 @@
 /** @brief Maximum number of complete command writes retained by the protocol. */
 #define I2C_COMMAND_QUEUE_DEPTH 4u
 /** @brief Maximum command payload bytes. */
-#define I2C_COMMAND_QUEUE_PAYLOAD 8u
+#define I2C_COMMAND_QUEUE_PAYLOAD 5u
 
 /** @brief One PWM protocol command waiting for foreground execution. */
 typedef struct {

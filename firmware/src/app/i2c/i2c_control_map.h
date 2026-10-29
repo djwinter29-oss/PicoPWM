@@ -33,6 +33,8 @@ typedef enum {
 
 /** @brief Fixed byte count returned by `REG_INFO`. */
 #define I2C_CONTROL_MAP_INFO_SIZE 7u
+/** @brief Frequency and duty bytes in a channel command payload. */
+#define I2C_CONTROL_MAP_CHANNEL_COMMAND_PAYLOAD_SIZE 5u
 
 /** @brief Reset protocol selection, command queue, and command status for startup. */
 void i2c_control_map_init(void);

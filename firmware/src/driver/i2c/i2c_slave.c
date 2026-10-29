@@ -49,16 +49,6 @@ static void finish_request(void) {
     reset_request_capture();
 }
 
-static void handle_transaction_end(uint32_t event);
-
-static void handle_stop(void) {
-    handle_transaction_end(I2C_SLAVE_EVENT_STOP);
-}
-
-static void handle_restart(void) {
-    handle_transaction_end(I2C_SLAVE_EVENT_RESTART);
-}
-
 static void handle_transaction_end(uint32_t event) {
     finish_request();
     i2c_slave_hw_clear(event);
@@ -123,10 +113,10 @@ static void i2c_slave_isr(void) {
             handle_tx_abort();
         }
         if ((events & I2C_SLAVE_EVENT_STOP) != 0u) {
-            handle_stop();
+            handle_transaction_end(I2C_SLAVE_EVENT_STOP);
         }
         if ((events & I2C_SLAVE_EVENT_RESTART) != 0u) {
-            handle_restart();
+            handle_transaction_end(I2C_SLAVE_EVENT_RESTART);
         }
         if ((events & I2C_SLAVE_EVENT_RD_REQ) != 0u) {
             handle_read_request();

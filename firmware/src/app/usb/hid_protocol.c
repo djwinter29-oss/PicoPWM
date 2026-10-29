@@ -1,12 +1,12 @@
 /**
  * @file hid_protocol.c
- * @brief PicoPWM HID report layouts and the report 20 transaction, over `device`.
+ * @brief PicoPWM HID report layouts and the report 20 transaction, over `control_api`.
  */
 
 #include "app/usb/hid_protocol.h"
 
 #include "platform/boot_config.h"
-#include "device.h"
+#include "control_api.h"
 
 #include <string.h>
 
@@ -85,9 +85,9 @@ static void pack_bank_config(uint8_t *out, bool running) {
     out[2] = 2u;
     for (uint8_t bank = 0u; bank < PWM_BANK_COUNT; ++bank) {
         out[3 + bank] =
-            (uint8_t)(running ? device_bank_role((pwm_bank_t)bank) : boot_config_get_bank((pwm_bank_t)bank));
+            (uint8_t)(running ? control_api_bank_role((pwm_bank_t)bank) : boot_config_get_bank((pwm_bank_t)bank));
     }
-    out[6] = running ? device_i2c_address() : boot_config_get_i2c_address();
+    out[6] = running ? control_api_i2c_address() : boot_config_get_i2c_address();
 }
 
 static bool build_identity(uint8_t *payload) {
@@ -95,17 +95,17 @@ static bool build_identity(uint8_t *payload) {
     memset(payload, 0, HID_IDENTITY_SIZE);
     payload[0] = HID_LAYOUT_VERSION;
     payload[1] = HID_PRODUCT_ID;
-    device_get_uid(&payload[3]);
-    parse_version(device_firmware_version(), &payload[11]);
+    control_api_get_uid(&payload[3]);
+    parse_version(control_api_firmware_version(), &payload[11]);
 #ifdef PICO_RP2350
     payload[14] = 2u;
 #else
     payload[14] = 1u;
 #endif
-    payload[15] = device_channel_count();
+    payload[15] = control_api_channel_count();
     payload[16] = HID_CAP_SAVE | HID_CAP_CLOCK | HID_CAP_SAVE_REBOOT | HID_CAP_REBOOT | HID_CAP_MEMORY |
                   HID_CAP_RUNTIME | HID_CAP_PINS;
-    if (device_led_read(&led_on)) {
+    if (control_api_led_read(&led_on)) {
         payload[16] |= HID_CAP_LED;
     }
     payload[17] = HID_CLOCK_PROFILE_MASK;
@@ -118,11 +118,11 @@ static bool build_configuration(uint8_t *payload) {
     payload[0] = HID_LAYOUT_VERSION;
     pack_bank_config(&payload[1], true);
     pack_bank_config(&payload[8], false);
-    if (device_led_read(&led_on)) {
+    if (control_api_led_read(&led_on)) {
         payload[15] = led_on ? 1u : 0u;
     }
     payload[16] = (uint8_t)boot_config_get_sysclk();
-    put_le32(&payload[17], device_system_clock_hz());
+    put_le32(&payload[17], control_api_system_clock_hz());
     return true;
 }
 
@@ -131,7 +131,7 @@ static bool build_bank_status(uint8_t bank, uint8_t *payload) {
     for (uint i = 0; i < HID_BANK_SIZE; ++i) {
         pwm_state_t state;
 
-        if (!device_get_channel(bank * HID_BANK_SIZE + i, &state)) {
+        if (!control_api_get_channel(bank * HID_BANK_SIZE + i, &state)) {
             return false;
         }
         put_le32(&payload[1 + i * 5u], state.freq_hz);
@@ -157,24 +157,24 @@ uint16_t hid_protocol_get(uint8_t report_id, uint8_t *payload, uint16_t capacity
     } else if (report_id == HID_REPORT_ID_MEMORY) {
         length = HID_MEMORY_SIZE;
         scratch[0] = HID_LAYOUT_VERSION;
-        put_le32(&scratch[1], device_ram_reserved_bytes());
-        put_le32(&scratch[5], device_ram_total_bytes());
+        put_le32(&scratch[1], control_api_ram_reserved_bytes());
+        put_le32(&scratch[5], control_api_ram_total_bytes());
         ok = true;
     } else if (report_id == HID_REPORT_ID_RUNTIME) {
         length = HID_RUNTIME_SIZE;
         scratch[0] = HID_LAYOUT_VERSION;
-        put_le32(&scratch[1], device_uptime_seconds());
-        put_le32(&scratch[5], (uint32_t)device_temperature_millic());
-        uint16_t core0 = device_service_load(false);
-        uint16_t core1 = device_service_load(true);
+        put_le32(&scratch[1], control_api_uptime_seconds());
+        put_le32(&scratch[5], (uint32_t)control_api_temperature_millic());
+        uint16_t core0 = control_api_service_load(false);
+        uint16_t core1 = control_api_service_load(true);
         scratch[9] = (uint8_t)core0;
         scratch[10] = (uint8_t)(core0 >> 8);
         scratch[11] = (uint8_t)core1;
         scratch[12] = (uint8_t)(core1 >> 8);
         ok = true;
     } else if (report_id == HID_REPORT_ID_PINS) {
-        device_pin_assignment_t pins;
-        device_get_pin_assignment(&pins);
+        control_api_pin_assignment_t pins;
+        control_api_get_pin_assignment(&pins);
         length = HID_PINS_SIZE;
         scratch[0] = HID_LAYOUT_VERSION;
         memcpy(&scratch[1], pins.channels, PWM_DRIVER_CHANNEL_COUNT);
@@ -204,7 +204,7 @@ uint16_t hid_protocol_get(uint8_t report_id, uint8_t *payload, uint16_t capacity
         (action.operation == HID_OP_SAVE_REBOOT || action.operation == HID_OP_REBOOT) &&
         action.status == HID_STATUS_OK && !action.reboot_scheduled) {
         action.reboot_scheduled = true;
-        device_schedule_reboot(500u);
+        control_api_schedule_reboot(500u);
     }
     return length;
 }
@@ -250,19 +250,19 @@ static hid_status_t execute(const uint8_t *r) {
     case HID_OP_SET_CHANNEL: {
         uint8_t bank = (uint8_t)(channel / HID_BANK_SIZE);
 
-        if (channel >= device_channel_count() || arg1 > 100u || flags != 0u) {
+        if (channel >= control_api_channel_count() || arg1 > 100u || flags != 0u) {
             return HID_STATUS_INVALID;
         }
-        if (device_bank_role((pwm_bank_t)bank) != PWM_ROLE_GENERATOR) {
+        if (control_api_bank_role((pwm_bank_t)bank) != PWM_ROLE_GENERATOR) {
             return HID_STATUS_INVALID;
         }
-        return (hid_status_t)device_set_channel(channel, arg0, arg1);
+        return (hid_status_t)control_api_set_channel(channel, arg0, arg1);
     }
     case HID_OP_STOP:
         if (channel != 0u || arg0 != 0u || arg1 != 0u || flags != 0u) {
             return HID_STATUS_INVALID;
         }
-        return (hid_status_t)device_restore_defaults();
+        return (hid_status_t)control_api_restore_defaults();
     case HID_OP_SET_BANK:
         if (channel >= HID_BANK_COUNT || (arg0 & 0xFFFF0000u) != 0u || arg1 != 0u || flags != 0u ||
             (arg0 & 0xFFu) != channel ||
@@ -285,7 +285,7 @@ static hid_status_t execute(const uint8_t *r) {
         if (channel != 0u || arg0 > 1u || arg1 != 0u || flags != 0u) {
             return HID_STATUS_INVALID;
         }
-        return device_led_set(arg0 != 0u) ? HID_STATUS_OK : HID_STATUS_UNAVAILABLE;
+        return control_api_led_set(arg0 != 0u) ? HID_STATUS_OK : HID_STATUS_UNAVAILABLE;
     case HID_OP_REBOOT:
         if (channel != 0u || arg0 != 0u || arg1 != 0u || flags != HID_FLAG_CONFIRM_SAVE) {
             return HID_STATUS_INVALID;

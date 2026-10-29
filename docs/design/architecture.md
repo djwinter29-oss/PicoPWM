@@ -22,7 +22,7 @@ flowchart LR
     subgraph Core0[Core 0: control and responses]
         CDC[USB CDC shell]
         I2C[I2C slave]
-        Control[device]
+        Control[control_api]
         Response[Format response]
     end
 
@@ -126,7 +126,7 @@ The hardware PWM bank intentionally uses PWM slice channel B pins so the externa
 ## Runtime Layers
 
 The current firmware is split into four practical layers. The important rule is
-that transport code reaches PWM hardware only through `device` and
+that transport code reaches PWM hardware only through `control_api` and
 `pwm_driver`.
 
 ### 1. Transport Layer
@@ -249,9 +249,9 @@ sequenceDiagram
 Transport-specific details:
 
 - I2C reads can be served directly from the published snapshot or last command status.
-- The generic I2C driver captures opaque frames and sends response bytes. The PWM protocol layer validates and queues commands from the ISR; foreground polling executes them through the shared `device` control path used by USB CDC and HID. Read responses use bounded getters when a read starts; a short cross-core snapshot lock can briefly stretch SCL.
-- USB commands are parsed by `shell` and the CLI command handlers before they reach `device`.
-- I2C register and payload semantics are decoded by `i2c_control_map` before they reach `device`.
+- The generic I2C driver captures opaque frames and sends response bytes. The PWM protocol layer validates and queues commands from the ISR; foreground polling executes them through the shared `control_api` path used by USB CDC and HID. Read responses use bounded getters when a read starts; a short cross-core snapshot lock can briefly stretch SCL.
+- USB commands are parsed by `shell` and the CLI command handlers before they reach `control_api`.
+- I2C register and payload semantics are decoded by `i2c_control_map` before they reach `control_api`.
 
 This keeps the ISR transport-focused and avoids running backend-affecting logic in interrupt context.
 
@@ -280,10 +280,10 @@ sees coherent realized snapshots.
 
 ## Cross-Core Mutation Boundary
 
-`device` is the only public Core 0 mutation facade.
+`control_api` is the only public Core 0 mutation facade.
 
-- Core 0 transport code enters through `device`.
-- `device` forwards writes into the internal `pwm` mailbox API.
+- Core 0 transport code enters through `control_api`.
+- `control_api` forwards writes into the internal `pwm` mailbox API.
 - Core 1 applies the write to the selected backend.
 - Core 1 publishes the realized state after successful apply.
 - Core 0 waits for the result and reports `ok`, `busy`, `invalid`, `timeout`, `unavailable`, or `apply failed` to the caller.
@@ -297,7 +297,7 @@ The single source of truth for channel state is the snapshot published by `pwm`.
 That means:
 
 - reads report realized backend state, not just the last requested values
-- `device` does not keep a second cache
+- `control_api` does not keep a second cache
 - USB CDC, USB HID, and I2C observe the same logical channel view
 
 `stop` disables generator outputs by driving them low (`freq = 0 Hz`, `duty = 0%`).

@@ -116,11 +116,6 @@ if ! grep -q "rxflr" "$SLAVE_HW_FILE" || ! grep -q "i2c_slave_hw_rx_pop" "$SLAVE
     exit 1
 fi
 
-if ! grep -q "is_status_select" "$SLAVE_FILE"; then
-    echo "i2c_slave.c: a one-byte write to a longer command must select status instead of queueing" >&2
-    exit 1
-fi
-
 if ! grep "I2C_IC_INTR_MASK_M_TX_EMPTY_BITS" "$SLAVE_HW_FILE" | grep -q "enabled"; then
     echo "i2c_slave_hw.c: TX_EMPTY mask must follow the enabled flag" >&2
     exit 1

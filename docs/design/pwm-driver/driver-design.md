@@ -51,7 +51,7 @@ The subsystem is designed around the following goals:
 Core 1 measures wall time around mailbox processing and monitor refresh, excluding
 its WFE/timeout wait. Approximately once per second it publishes one aligned
 32-bit service-load value in basis points (0-10000), read through
-`pwm_driver_service_load()` and the Core 0 `device` facade. This is a workload
+`pwm_driver_service_load()` and the Core 0 `control_api` facade. This is a workload
 proxy, not CPU utilization: IRQ work outside measured service passes is excluded,
 and lockout or preemption during a pass can affect the result. It does not change
 backend ownership or IRQ/timer placement. The initial value is zero until the
@@ -68,10 +68,10 @@ The current implementation is split as follows:
 
 | File | Responsibility |
 | ------ | ---------------- |
-| `firmware/src/device.h` | Shared Core 0 device API surface used by CDC, HID, and I2C |
-| `firmware/src/device.c` | Shared device info, channel reads, and channel write helpers above the Core 1 mailbox boundary |
+| `firmware/src/control_api.h` | Shared Core 0 device API surface used by CDC, HID, and I2C |
+| `firmware/src/control_api.c` | Shared device info, channel reads, and channel write helpers above the Core 1 mailbox boundary |
 | `firmware/src/app/i2c/i2c_control_map.h` | I2C register map definitions and protocol helpers |
-| `firmware/src/app/i2c/i2c_control_map.c` | I2C register encode/decode and deferred write translation into `device` |
+| `firmware/src/app/i2c/i2c_control_map.c` | I2C register encode/decode and deferred write translation into `control_api` |
 | `firmware/src/driver/pwm/pwm_driver.h` | Public wrapper API, bank/role types, board GPIO structs and channel capacity constants |
 | `firmware/src/driver/pwm/pwm_driver.c` | Core 1 launch, mailbox loop, bank roles, channel lookups, frequency limits, board GPIO validation, shared snapshot |
 | `firmware/src/platform/boot_config.[ch]` | Persisted clock profile, bank roles and I2C address (CRC-protected flash record) |
@@ -89,15 +89,15 @@ The current implementation is split as follows:
 The transport-facing control/status layer is:
 
 ```c
-const char *device_name(void);
-const char *device_firmware_version(void);
-uint8_t device_channel_count(void);
-bool device_get_channel(uint channel, pwm_state_t *state);
-pwm_driver_result_t device_set_channel(uint channel, uint32_t freq_hz, uint8_t duty);
-pwm_driver_result_t device_restore_defaults(void);
+const char *control_api_name(void);
+const char *control_api_firmware_version(void);
+uint8_t control_api_channel_count(void);
+bool control_api_get_channel(uint channel, pwm_state_t *state);
+pwm_driver_result_t control_api_set_channel(uint channel, uint32_t freq_hz, uint8_t duty);
+pwm_driver_result_t control_api_restore_defaults(void);
 ```
 
-Below that, `pwm` owns the internal cross-core mailbox boundary used by `device`:
+Below that, `pwm` owns the internal cross-core mailbox boundary used by `control_api`:
 
 ```c
 bool pwm_driver_init(const pwm_role_t roles[PWM_BANK_COUNT]);
@@ -125,7 +125,7 @@ typedef struct {
 
 Architecturally, `pwm_driver_set()` is an internal command-ingress API.
 
-- Top-level command paths such as the CDC CLI, HID action handler, and I2C register map should enter through `device`.
+- Top-level command paths such as the CDC CLI, HID action handler, and I2C register map should enter through `control_api`.
 - The I2C write path should continue to defer out of the ISR before it reaches this mailbox API.
 - It is not intended as a general-purpose helper for arbitrary internal call sites.
 - Core 1 callers must not use this API; it returns `PWM_DRIVER_RESULT_UNAVAILABLE` outside the Core 0 command path.
@@ -170,7 +170,7 @@ For I2C specifically, the transport layer includes an ISR-facing slave module an
 
 ### 2. Shared Control Layer
 
-Owned by `firmware/src/device.c`.
+Owned by `firmware/src/control_api.c`.
 
 Responsibilities:
 
@@ -331,7 +331,7 @@ sequenceDiagram
     C1->>WR: publish ready state
 ```
 
-### `device_set_channel()` to `pwm_driver_set()`
+### `control_api_set_channel()` to `pwm_driver_set()`
 
 ```mermaid
 sequenceDiagram
@@ -341,7 +341,7 @@ sequenceDiagram
     participant C1 as Core 1 mailbox loop
     participant BE as selected backend
 
-    CLI->>CTL: device_set_channel(ch, freq, duty)
+    CLI->>CTL: control_api_set_channel(ch, freq, duty)
     CTL->>WR: pwm_driver_set(ch, freq, duty)
     WR->>WR: admit one in-flight mailbox command
     WR->>C1: __sev()
@@ -353,7 +353,7 @@ sequenceDiagram
     CTL-->>CLI: result
 ```
 
-### `device_restore_defaults()` to `pwm_driver_restore_defaults()`
+### `control_api_restore_defaults()` to `pwm_driver_restore_defaults()`
 
 ```mermaid
 sequenceDiagram
@@ -362,7 +362,7 @@ sequenceDiagram
     participant WR as pwm_driver.c
     participant C1 as Core 1 mailbox loop
 
-    CLI->>CTL: device_restore_defaults()
+    CLI->>CTL: control_api_restore_defaults()
     CTL->>WR: pwm_driver_restore_defaults()
     loop each generator channel
         WR->>C1: pwm_driver_set(ch, 0, 0)
@@ -381,7 +381,7 @@ sequenceDiagram
     participant WR as pwm_driver.c
     participant SS as shared snapshot
 
-    UI->>CTL: device_get_channel(ch, &state)
+    UI->>CTL: control_api_get_channel(ch, &state)
     CTL->>WR: pwm_driver_get(ch, &state)
     WR->>SS: read snapshot under the cache lock
     SS-->>WR: coherent state struct
@@ -389,7 +389,7 @@ sequenceDiagram
     CTL-->>UI: coherent state struct
 ```
 
-The coherent higher-layer read boundary is `device_get_channel()`, which forwards one channel snapshot from `pwm_driver_get()`.
+The coherent higher-layer read boundary is `control_api_get_channel()`, which forwards one channel snapshot from `pwm_driver_get()`.
 
 ## Mailbox Command Structure
 
@@ -541,12 +541,12 @@ Restore-defaults is a loop of per-channel stop requests through the normal sette
 
 The current design assumes:
 
-1. Core 0 is the normal producer of `pwm_driver_set()` and `pwm_driver_restore_defaults()` requests through `device`.
+1. Core 0 is the normal producer of `pwm_driver_set()` and `pwm_driver_restore_defaults()` requests through `control_api`.
 2. Backend drivers remain Core 1 implementation details.
 3. CDC CLI and I2C both use the same shared Core 0 control facade.
 4. The shared snapshot is the only read model exposed upward.
 
-I2C writes should continue to defer out of ISR context before they enter `device` and the internal `pwm` mailbox boundary.
+I2C writes should continue to defer out of ISR context before they enter `control_api` and the internal `pwm` mailbox boundary.
 
 ## Startup Bank Configuration
 

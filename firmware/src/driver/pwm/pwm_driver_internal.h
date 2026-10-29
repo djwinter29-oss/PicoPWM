@@ -16,7 +16,7 @@
  * @param freq_hz Requested frequency in Hz.
  * @param duty Requested duty in percent in the range `[0, 100]`; values above `100` are clamped.
  * @return Result code for the admitted command attempt.
- * @note This is the internal Core 0 command-ingress API underneath `device`.
+ * @note This is the internal Core 0 command-ingress API underneath `control_api`.
  */
 pwm_driver_result_t pwm_driver_set(uint channel, uint32_t freq_hz, uint8_t duty);
 

@@ -1,7 +1,7 @@
 #include "app/i2c/i2c_control_map.h"
 #include "app/i2c/i2c_command_queue.h"
 
-#include "device.h"
+#include "control_api.h"
 
 #include <assert.h>
 #include <string.h>
@@ -17,19 +17,19 @@ static uint set_channel;
 static uint32_t set_frequency;
 static uint8_t set_duty;
 
-const char *device_firmware_version(void) {
+const char *control_api_firmware_version(void) {
     return firmware_version;
 }
 
-pwm_role_t device_bank_role(pwm_bank_t bank) {
+pwm_role_t control_api_bank_role(pwm_bank_t bank) {
     return bank_roles[bank];
 }
 
-uint8_t device_channel_count(void) {
+uint8_t control_api_channel_count(void) {
     return PWM_DRIVER_CHANNEL_COUNT;
 }
 
-bool device_get_channel(uint channel, pwm_state_t *state) {
+bool control_api_get_channel(uint channel, pwm_state_t *state) {
     if (channel >= PWM_DRIVER_CHANNEL_COUNT || state == NULL) {
         return false;
     }
@@ -37,7 +37,7 @@ bool device_get_channel(uint channel, pwm_state_t *state) {
     return true;
 }
 
-pwm_driver_result_t device_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
+pwm_driver_result_t control_api_set_channel(uint channel, uint32_t freq_hz, uint8_t duty) {
     set_calls++;
     set_channel = channel;
     set_frequency = freq_hz;
@@ -45,7 +45,7 @@ pwm_driver_result_t device_set_channel(uint channel, uint32_t freq_hz, uint8_t d
     return set_result;
 }
 
-pwm_driver_result_t device_restore_defaults(void) {
+pwm_driver_result_t control_api_restore_defaults(void) {
     stop_calls++;
     return stop_result;
 }
@@ -81,7 +81,14 @@ static void test_info_register(void) {
     assert(response[5] == PWM_DRIVER_CHANNEL_COUNT);
     assert(response[6] == 0x05u);
 
+    firmware_version = "99.0.0";
+    assert(read_response(response, sizeof(response)) == I2C_CONTROL_MAP_INFO_SIZE);
+    assert(response[4] == 12u);
+
     firmware_version = "256.0.0";
+    i2c_control_map_init();
+    const uint8_t invalid_info_select[] = {I2C_CONTROL_MAP_REG_INFO};
+    write_frame(invalid_info_select, sizeof(invalid_info_select), false);
     assert(!i2c_control_map_ops.read_response(response, sizeof(response), &(uint8_t){0u}));
 }
 
@@ -99,6 +106,19 @@ static void test_channel_read_encoding_and_unknown_register(void) {
     write_frame(unknown, sizeof(unknown), false);
     assert(read_response(response, sizeof(response)) == 1u);
     assert(response[0] == I2C_STATUS_INVALID);
+}
+
+static void test_malformed_read_only_selector_does_not_replace_selection(void) {
+    uint8_t response[8] = {0u};
+    const uint8_t channel_select[] = {I2C_CONTROL_MAP_REG_CH_BASE};
+    const uint8_t malformed_info[] = {I2C_CONTROL_MAP_REG_INFO, 0x55u};
+
+    reset();
+    write_frame(channel_select, sizeof(channel_select), false);
+    write_frame(malformed_info, sizeof(malformed_info), false);
+    assert(read_response(response, sizeof(response)) == 5u);
+    assert(response[0] == 0x78u && response[1] == 0x56u && response[2] == 0x34u && response[3] == 0x12u);
+    assert(response[4] == 81u);
 }
 
 static void test_channel_command_status_validation_and_dispatch(void) {
@@ -150,6 +170,8 @@ static void test_malformed_overflow_and_status_shortcut(void) {
     write_frame(select, sizeof(select), false);
     assert(read_response(response, sizeof(response)) == 1u);
     assert(response[0] == I2C_STATUS_NOT_RUN);
+    i2c_control_map_poll();
+    assert(set_calls == 0u);
 }
 
 static void test_stop_all_and_queue_full(void) {
@@ -191,6 +213,7 @@ static void test_stale_command_completion_does_not_replace_new_attempt(void) {
 int main(void) {
     test_info_register();
     test_channel_read_encoding_and_unknown_register();
+    test_malformed_read_only_selector_does_not_replace_selection();
     test_channel_command_status_validation_and_dispatch();
     test_malformed_overflow_and_status_shortcut();
     test_stop_all_and_queue_full();

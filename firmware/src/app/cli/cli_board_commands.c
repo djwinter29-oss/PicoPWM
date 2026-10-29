@@ -6,7 +6,7 @@
 #include "app/cli/cli_board_commands.h"
 
 #include "app/cli/cli_syntax.h"
-#include "device.h"
+#include "control_api.h"
 #include "platform/boot_config.h"
 #include "platform/system.h"
 
@@ -56,20 +56,20 @@ static bool board_commands_parse_decimal(const char *text, unsigned long *value_
 /** @brief Print one setting's active and saved-target values. */
 static bool board_commands_config_item(shell_t *shell, const char *item) {
     char line[96];
-    unsigned long running_clock = (unsigned long)device_system_clock_hz();
+    unsigned long running_clock = (unsigned long)control_api_system_clock_hz();
     uint16_t target_clock = boot_config_get_sysclk_mhz();
 
     if (strcmp(item, "banka") == 0) {
         snprintf(line, sizeof(line), "banka running=%s target=%s",
-                 board_commands_role_name(device_bank_role(PWM_BANK_A)),
+                 board_commands_role_name(control_api_bank_role(PWM_BANK_A)),
                  board_commands_role_name(boot_config_get_bank(PWM_BANK_A)));
     } else if (strcmp(item, "bankb") == 0) {
         snprintf(line, sizeof(line), "bankb running=%s target=%s",
-                 board_commands_role_name(device_bank_role(PWM_BANK_B)),
+                 board_commands_role_name(control_api_bank_role(PWM_BANK_B)),
                  board_commands_role_name(boot_config_get_bank(PWM_BANK_B)));
     } else if (strcmp(item, "bankc") == 0) {
         snprintf(line, sizeof(line), "bankc running=%s target=%s",
-                 board_commands_role_name(device_bank_role(PWM_BANK_C)),
+                 board_commands_role_name(control_api_bank_role(PWM_BANK_C)),
                  board_commands_role_name(boot_config_get_bank(PWM_BANK_C)));
     } else if (strcmp(item, "clock") == 0) {
         if (target_clock == 0u) {
@@ -78,7 +78,7 @@ static bool board_commands_config_item(shell_t *shell, const char *item) {
             snprintf(line, sizeof(line), "clock running=%lu Hz target=%u MHz", running_clock, (unsigned)target_clock);
         }
     } else if (strcmp(item, "address") == 0) {
-        snprintf(line, sizeof(line), "address running=%u target=%u", (unsigned)device_i2c_address(),
+        snprintf(line, sizeof(line), "address running=%u target=%u", (unsigned)control_api_i2c_address(),
                  (unsigned)boot_config_get_i2c_address());
     } else {
         return shell_write_line(shell, "ERR config item must be banka, bankb, bankc, clock or address");
@@ -243,10 +243,10 @@ static bool board_commands_apply_update(shell_t *shell, const board_config_updat
     }
 
     if (!shell_write_line(shell, "OK config saved; rebooting")) {
-        device_schedule_reboot(500u);
+        control_api_schedule_reboot(500u);
         return false;
     }
-    device_schedule_reboot(500u);
+    control_api_schedule_reboot(500u);
     return true;
 }
 
@@ -255,19 +255,19 @@ bool board_commands_get(shell_t *shell, const char *item) {
     char line[64];
 
     if (strcmp(item, "clock") == 0) {
-        snprintf(line, sizeof(line), "clock=%lu Hz target=%s", (unsigned long)device_system_clock_hz(),
+        snprintf(line, sizeof(line), "clock=%lu Hz target=%s", (unsigned long)control_api_system_clock_hz(),
                  system_clock_is_at_target() ? "met" : "fallback");
         return shell_write_line(shell, line);
     }
     if (strcmp(item, "led") == 0) {
         bool on;
-        if (!device_led_read(&on)) {
+        if (!control_api_led_read(&on)) {
             return shell_write_line(shell, "ERR LED unavailable");
         }
         return shell_write_line(shell, on ? "led=on" : "led=off");
     }
     if (strcmp(item, "version") == 0) {
-        return shell_write_line(shell, device_firmware_version());
+        return shell_write_line(shell, control_api_firmware_version());
     }
     return shell_write_line(shell, "ERR board item must be clock, led or version");
 }
@@ -286,7 +286,7 @@ bool board_commands_set(shell_t *shell, const char *item, const char *value) {
     } else {
         return shell_write_line(shell, "ERR " CLI_SYNTAX_BOARD_SET);
     }
-    if (!device_led_set(on)) {
+    if (!control_api_led_set(on)) {
         return shell_write_line(shell, "ERR LED unavailable");
     }
     return shell_write_line(shell, on ? "OK led on" : "OK led off");
@@ -331,9 +331,9 @@ bool board_commands_config(void *context, int argc, const char *const *argv) {
 /** @copydoc board_commands_reboot */
 bool board_commands_reboot(shell_t *shell) {
     if (!shell_write_line(shell, "OK rebooting")) {
-        device_schedule_reboot(500u);
+        control_api_schedule_reboot(500u);
         return false;
     }
-    device_schedule_reboot(500u);
+    control_api_schedule_reboot(500u);
     return true;
 }

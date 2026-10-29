@@ -60,7 +60,7 @@ shortcuts out of reusable transport code.
 4. The protocol validates the frame and updates its own state. If the frame is
    a valid command, it places the command in its own queue.
 5. The Core 0 foreground loop calls the protocol's poll function, which removes
-   at most one command and forwards it through `device`.
+   at most one command and forwards it through `control_api`.
 
 The transport does not queue writes or decide whether a frame is valid. The
 protocol queue is owned by the application layer because its payload size,

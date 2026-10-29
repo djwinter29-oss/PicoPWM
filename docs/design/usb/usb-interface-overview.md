@@ -28,12 +28,12 @@ shared channel IDs, capability checks, and result codes.
 
 ## Architectural Boundaries
 
-The Core 0 and Core 1 split, the `device` facade, and the `pwm_driver` multicore boundary are defined in the
+The Core 0 and Core 1 split, the `control_api` facade, and the `pwm_driver` multicore boundary are defined in the
 [architecture](../architecture.md). HID adds these rules on top:
 
 - HID is another Core 0 transport. It never calls generator or monitor backends and never bypasses
   `driver/pwm/pwm_driver.*`.
-- Reads report the realized `pwm` snapshot through `device`. HID keeps no shadow channel-state cache.
+- Reads report the realized `pwm` snapshot through `control_api`. HID keeps no shadow channel-state cache.
 - USB callbacks stay short and bounded. A set-report callback only copies the request into a single pending slot;
   Core 0 polling validates and executes it. A callback never persists configuration or waits for Core 1.
 - HID leaves the CDC interface behavior, the I2C register map, and channel semantics unchanged.
@@ -59,7 +59,7 @@ frequency and duty, not waveform history; there are no input reports or periodic
 
 The HID interface is added to the composite USB configuration alongside CDC. Descriptor and report changes are
 tested on RP2040 and RP2350 builds and with the target host APIs, including WebHID report-ID handling. Core 0
-services HID from its normal polling loop alongside CDC and I2C, and validates framing before calling `device`.
+services HID from its normal polling loop alongside CDC and I2C, and validates framing before calling `control_api`.
 
 ## Typical Host Workflow
 

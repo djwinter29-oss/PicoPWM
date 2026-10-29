@@ -131,7 +131,7 @@ solely by a waveform or a passing initialization check.
 | --- | --- | --- |
 | IO-01 | Exercise CDC editing/help and valid/invalid channel commands; disconnect/reconnect USB. | Shell remains usable; failures are explicit; reconnection does not corrupt running configuration. |
 | IO-02 | Exercise HID identity, configuration, bank status, actions and completion status. | Report lengths, transaction IDs and results match the reference; reconnecting the host remains possible. |
-| IO-03 | At 100 and 400 kHz, exercise I2C register selection, repeated-start reads, short/long reads and queued writes. | Data, padding and completion status match the protocol; no permanent bus lockup. |
+| IO-03 | At 100 and 400 kHz, exercise I2C register selection, repeated-start reads, short/long reads and queued writes. Include a short read that ends with the master's NACK, then immediately start a fresh read and a repeated-start transaction. | Data, padding and completion status match the protocol; the aborted response does not continue into the next transaction and the bus remains usable. |
 | IO-04 | Poll the same active channels over all three transports while changing generator settings. | Each interface eventually reports the same realized state; no deadlock or cross-channel corruption. |
 | SAVE-01 | Save configuration through CDC or HID while generators are active and an I2C controller polls. Capture bus and PWM waveforms. | Save completes or reports failure explicitly; control recovers without reset. Record flash-induced I2C stalls/errors and PWM gaps, rather than assuming uninterrupted operation. |
 | REC-01 | Power-cycle after a completed save, then verify every saved field. | Valid configuration survives; outputs start in the documented safe state. |

@@ -7,7 +7,7 @@
 
 #include "app/cli/cli_syntax.h"
 #include "driver/pwm/pwm_driver.h"
-#include "device.h"
+#include "control_api.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -98,7 +98,7 @@ static bool channel_commands_write_status_row(shell_t *shell, int channel, const
 }
 
 static uint8_t channel_commands_channel_count(void) {
-    return device_channel_count();
+    return control_api_channel_count();
 }
 
 static void channel_commands_format_invalid_channel(char *line, size_t line_size, int channel) {
@@ -123,7 +123,7 @@ bool channel_commands_get(shell_t *shell, const char *channel_text) {
         return shell_write_line(shell, line);
     }
 
-    if (!device_get_channel((uint)channel, &state)) {
+    if (!control_api_get_channel((uint)channel, &state)) {
         return shell_write_line(shell, "ERR channel unavailable");
     }
     snprintf(line, sizeof(line), "CH%d: freq=%lu Hz, duty=%u%%, enabled=%s", channel, (unsigned long)state.freq_hz,
@@ -153,7 +153,7 @@ bool channel_commands_set(shell_t *shell, const char *channel_text, const char *
         return shell_write_line(shell, "ERR usage: " CLI_SYNTAX_PWM_SET);
     }
 
-    result = device_set_channel((uint)channel, frequency, duty);
+    result = control_api_set_channel((uint)channel, frequency, duty);
     if (result == PWM_DRIVER_RESULT_OK) {
         snprintf(line, sizeof(line), "OK CH%d freq=%lu Hz duty=%u%%", channel, (unsigned long)frequency,
                  (unsigned)duty);
@@ -178,7 +178,7 @@ bool channel_commands_status(shell_t *shell) {
     }
     for (uint8_t channel = 0u; channel < channel_count; ++channel) {
         state = (pwm_state_t){0u, 50u};
-        if (!device_get_channel(channel, &state)) {
+        if (!control_api_get_channel(channel, &state)) {
             snprintf(line, sizeof(line), "ERR channel %d unavailable", channel);
             return shell_write_line(shell, line);
         }
@@ -191,7 +191,7 @@ bool channel_commands_status(shell_t *shell) {
 
 /** @copydoc channel_commands_stop */
 bool channel_commands_stop(shell_t *shell) {
-    pwm_driver_result_t result = device_restore_defaults();
+    pwm_driver_result_t result = control_api_restore_defaults();
 
     if (result == PWM_DRIVER_RESULT_OK) {
         return shell_write_line(shell, "OK generator outputs stopped; monitor channels unchanged");

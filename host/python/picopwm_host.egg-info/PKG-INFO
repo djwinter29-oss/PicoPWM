@@ -1,9 +1,0 @@
-Metadata-Version: 2.4
-Name: picopwm-host
-Version: 0.1.0
-Summary: Python host tools and Flask management interface for PicoPWM
-Requires-Python: >=3.10
-Requires-Dist: Flask<4,>=3.0
-Requires-Dist: hidapi>=0.14
-Provides-Extra: test
-Requires-Dist: pytest>=8; extra == "test"

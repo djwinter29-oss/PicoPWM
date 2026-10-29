@@ -55,7 +55,7 @@ jobs:
             --json isDraft,isPrerelease --jq '.isDraft == false and .isPrerelease == false')" = true
           python3 tools/release/require_release_checks.py --tag "$RELEASE_TAG" --expected-sha "$SOURCE_SHA"
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern 'picopwm_host-*-py3-none-any.whl' --pattern SHA256SUMS-python.txt --dir incoming
+            --pattern 'picopwm-*-py3-none-any.whl' --pattern SHA256SUMS-python.txt --dir incoming
 
       - name: Setup Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -78,13 +78,13 @@ jobs:
           wheels = list(incoming.glob('*.whl'))
           assert len(wheels) == 1, 'Expected exactly one released wheel'
           wheel = wheels[0]
-          assert wheel.name == f'picopwm_host-{version}-py3-none-any.whl', 'Wheel filename does not match release'
+          assert wheel.name == f'picopwm-{version}-py3-none-any.whl', 'Wheel filename does not match release'
           checksums = dict(line.split(maxsplit=1)[::-1]
                            for line in (incoming / 'SHA256SUMS-python.txt').read_text().splitlines())
           assert hashlib.sha256(wheel.read_bytes()).hexdigest() == checksums.get(wheel.name), 'Wheel checksum mismatch'
           with ZipFile(wheel) as archive:
-              metadata = BytesParser().parsebytes(archive.read(f'picopwm_host-{version}.dist-info/METADATA'))
-          assert metadata['Name'] == 'picopwm-host', 'Unexpected package name'
+              metadata = BytesParser().parsebytes(archive.read(f'picopwm-{version}.dist-info/METADATA'))
+          assert metadata['Name'] == 'picopwm', 'Unexpected package name'
           assert metadata['Version'] == version, 'Package version does not match release'
           Path('dist').mkdir()
           shutil.copyfile(wheel, Path('dist') / wheel.name)
@@ -105,7 +105,7 @@ jobs:
       id-token: write
     environment:
       name: pypi
-      url: https://pypi.org/project/picopwm-host/
+      url: https://pypi.org/project/picopwm/
     steps:
       - name: Download verified distribution
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -168,7 +168,7 @@ jobs:
           from importlib.metadata import version
           import os
           from picopwm.app import create_app
-          assert version('picopwm-host') == os.environ['VERSION']
+          assert version('picopwm') == os.environ['VERSION']
           client = create_app(object()).test_client()
           for asset in ('/', '/css/webhid.css', '/js/view.mjs', '/js/device.mjs', '/js/client.mjs'):
               assert client.get(asset).status_code == 200, asset
@@ -189,7 +189,7 @@ jobs:
       id-token: write
     environment:
       name: pypi
-      url: https://pypi.org/project/picopwm-host/
+      url: https://pypi.org/project/picopwm/
     steps:
       - name: Download development wheel
         uses: actions/download-artifact@v8

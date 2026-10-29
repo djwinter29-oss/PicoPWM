@@ -94,8 +94,8 @@ Use a dashboard for interactive control and monitoring. USB CDC and I2C remain a
 applications.
 
 The source-checkout launchers below require a repository checkout. For a published Python release, install the wheel
-with `python -m pip install picopwm-host`, start it with `picopwm-web`, then open <http://127.0.0.1:5000/>. For the
-standalone .NET host, download and extract the `picopwm-host-v<VERSION>-<RID>` archive for your platform, then run
+with `python -m pip install picopwm`, start it with `picopwm-web`, then open <http://127.0.0.1:5000/>. For the
+standalone .NET PicoPWM application, download and extract the `picopwm-host-v<VERSION>-<RID>` archive for your platform, then run
 `./PicoPwm` (Linux/macOS) or `PicoPwm.exe` (Windows) from the extracted directory and open
 <http://127.0.0.1:5000/>. In Windows PowerShell, invoke the executable as `.\PicoPwm.exe`. The .NET archive includes
 its runtime. See

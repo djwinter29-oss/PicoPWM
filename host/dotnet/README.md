@@ -1,4 +1,4 @@
-# PicoPWM .NET host
+# PicoPWM (.NET)
 
 This ASP.NET Core application serves the PicoPWM dashboard and controls the board over
 the USB HID vendor interface (VID `0xCAFE`, PID `0x4012`) described in
@@ -11,7 +11,7 @@ implements it in `firmware/src/usb`.
 - HID access to the board. On Linux, configure it with the
   [setup and troubleshooting guide](../../docs/guides/setup-and-troubleshooting.md#linux-hid-access).
 
-From the repository root, `tools/host/run-dotnet.sh` runs the host. Set `PICOPWM_SERIAL`
+From the repository root, `tools/host/run-dotnet.sh` runs PicoPWM. Set `PICOPWM_SERIAL`
 or `PICOPWM_DEVICE_PATH` to preselect a board when desired.
 The launcher restores NuGet dependencies and builds before starting. Set
 `PICOPWM_PORT` / `PICOPWM_HOST` (default `127.0.0.1:5000`), `ASPNETCORE_URLS`, or

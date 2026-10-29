@@ -12,6 +12,8 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+/host/python/build/
+/host/python/*.egg-info/
 /tools/hil/*.egg-info/
 /tools/hil/src/*.egg-info/
 

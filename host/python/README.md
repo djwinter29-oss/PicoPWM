@@ -7,6 +7,8 @@ The firmware implements this interface in `firmware/src/usb`.
 
 ## Install
 
+Install the published package with `python -m pip install picopwm`.
+
 From `host/python`:
 
 ```sh

@@ -13,6 +13,8 @@ options; its protocol is documented separately in the
 The device advertises USB 2.0 and uses the standard composite, CDC ACM, and HID
 drivers on Windows. It does not expose a BOS descriptor; WebHID uses the HID
 interface and does not require WebUSB descriptors.
+The HID interface name shown by host device pickers is `picopwm-<serial number>`,
+using the board's USB serial string.
 
 Use CDC for interactive control. Use HID for browser-based WebHID tools and other HID-capable clients that need
 structured reads. I2C remains a separate binary controller interface. HID is not a second control model: it reuses the

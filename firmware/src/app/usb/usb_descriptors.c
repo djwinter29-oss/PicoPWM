@@ -22,8 +22,8 @@
 #define USB_STR_PRODUCT "PicoPWM USB CDC HID"
 /** @brief Interface string for the CDC command interface. */
 #define USB_STR_CDC "CDC Command"
-/** @brief Interface string for the HID configuration interface. */
-#define USB_STR_HID "HID Control"
+/** @brief Prefix for the board-specific HID interface name shown to hosts. */
+#define USB_STR_HID_PREFIX "picopwm-"
 
 /** @brief USB interface numbering used inside the configuration descriptor. */
 typedef enum {
@@ -122,7 +122,7 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
 
 /** @brief USB string table backing the TinyUSB string-descriptor callback. */
 static char const *string_desc_arr[] = {
-    (const char[]){0x09, 0x04}, USB_STR_MANUFACTURER, USB_STR_PRODUCT, NULL, USB_STR_CDC, USB_STR_HID,
+    (const char[]){0x09, 0x04}, USB_STR_MANUFACTURER, USB_STR_PRODUCT, NULL, USB_STR_CDC, NULL,
 };
 
 /** @brief Scratch UTF-16 string descriptor buffer returned by TinyUSB string callbacks. */
@@ -145,6 +145,13 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
         break;
     case STRID_SERIAL:
         chr_count = board_usb_get_serial(desc_str + 1, 32);
+        break;
+    case STRID_HID:
+        chr_count = strlen(USB_STR_HID_PREFIX);
+        for (size_t i = 0; i < chr_count; i++) {
+            desc_str[1 + i] = (uint16_t)USB_STR_HID_PREFIX[i];
+        }
+        chr_count += board_usb_get_serial(desc_str + 1 + chr_count, 32 - chr_count);
         break;
     default:
         if (index >= sizeof(string_desc_arr) / sizeof(string_desc_arr[0])) {

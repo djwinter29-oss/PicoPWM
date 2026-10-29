@@ -3,7 +3,7 @@
 This document describes the design principles for the USB CDC command-line
 interface and the workflow for extending it. It is intended for firmware
 developers. User-facing syntax and behavior are documented in the
-[USB CDC shell guide](../../guides/usb_cdc_shell.md).
+[USB CDC shell guide](../../guides/usb-cdc-shell.md).
 
 The design is described in terms of responsibilities and boundaries rather
 than specific functions or source-file names. Those implementation details may
@@ -116,7 +116,7 @@ Use this workflow when extending the CLI:
 2. **Define the user-facing contract.** Specify the command shape, required
    and optional arguments, valid values, side effects, and response before
    implementing it. Keep the contract consistent with the
-   [shell guide](../../guides/usb_cdc_shell.md).
+   [shell guide](../../guides/usb-cdc-shell.md).
 3. **Wire discoverability.** Ensure the command is reachable through normal
    command dispatch and is represented in top-level and contextual help,
    syntax hints, and completion behavior as appropriate.

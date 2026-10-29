@@ -2,19 +2,20 @@
 
 Use this guide to configure the board, resolve common connection issues, and
 find the right next check when a command or output does not behave as expected.
-For command syntax, see the [USB CDC shell guide](usb_cdc_shell.md). For
+For command syntax, see the [USB CDC shell guide](usb-cdc-shell.md). For
 implementation and backend constraints, see [PWM Driver Configuration](../design/pwm-driver/configuration.md).
 
 ## Configure Bank Roles
 
-The three banks have fixed backend and GPIO assignments. Their roles can be
-selected independently as generator or monitor:
+Each bank has a fixed backend and logical channel range, and its role can be
+selected as generator or monitor. See [Hardware Setup](hardware-setup.md) for
+the authoritative channel-to-GPIO map.
 
-| Bank | Backend | Logical channels | GPIOs |
-| --- | --- | --- | --- |
-| A | Hardware PWM | `0..7` | `1, 3, 5, 7, 9, 11, 13, 15` |
-| B | PIO | `8..15` | `0, 2, 4, 6, 8, 10, 12, 14` |
-| C | Software | `16..23` | `16, 17, 18, 19, 20, 21, 22, 28` |
+| Bank | Backend | Logical channels |
+| --- | --- | --- |
+| A | Hardware PWM | `0..7` |
+| B | PIO | `8..15` |
+| C | Software | `16..23` |
 
 The default roles are monitor-only, so the board does not drive PWM outputs
 until a bank is configured as a generator. Role changes are applied at startup

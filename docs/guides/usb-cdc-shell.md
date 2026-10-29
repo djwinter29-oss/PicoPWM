@@ -51,17 +51,9 @@ The `pwm get all` listing includes the configured channels and is queued for
 transmission while it is produced. Keep the terminal connected until the
 listing finishes; rerun the command if the output appears incomplete.
 
-Channel numbers are logical IDs. Their backend and GPIO are fixed by bank;
-configuration changes only the bank's role (generator or monitor).
-
-| Bank | Channels | Backend | GPIOs |
-| --- | --- | --- | --- |
-| A | `0..7` | Hardware PWM | `1, 3, 5, 7, 9, 11, 13, 15` |
-| B | `8..15` | PIO PWM | `0, 2, 4, 6, 8, 10, 12, 14` |
-| C | `16..23` | Software PWM | `16, 17, 18, 19, 20, 21, 22, 28` |
-
-For example, channel `0` is GPIO 1. See [Hardware Setup](hardware-setup.md)
-for the full pin map and board-specific notes.
+Channel numbers are stable logical IDs. Their backend and GPIO are fixed by
+bank; configuration changes only the bank's role (generator or monitor). See
+[Hardware Setup](hardware-setup.md) for the authoritative channel-to-GPIO map.
 
 The duty argument is an integer percentage from `0` to `100`; if omitted it
 defaults to `50`. Generator request ranges are Bank A `10 Hz..1 MHz`, Bank B

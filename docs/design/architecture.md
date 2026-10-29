@@ -8,7 +8,7 @@ For mailbox state machines and publication internals, see [PWM Driver Design](pw
 
 The firmware has two deliberately different responsibilities:
 
-- **Core 0** owns control requests and responses for both USB CDC and I2C.
+- **Core 0** owns host-facing control requests and responses for USB CDC, USB HID, and I2C.
 - **Core 1** owns real-time work for every configured channel, whether that
   channel is a PWM generator or a PWM monitor.
 
@@ -154,7 +154,7 @@ next session.
 
 ### 2. Shared Control Layer
 
-`device.*` is the transport-neutral Core 0 API shared by USB CDC and I2C.
+`device.*` is the transport-neutral Core 0 API used by USB CDC, USB HID, and I2C.
 
 Responsibilities:
 
@@ -215,13 +215,13 @@ Core 0 must not call backend driver APIs directly.
 
 ## Request Flow
 
-USB and I2C converge at the same Core 0 control facade. Reads are answered
+USB CDC, USB HID, and I2C converge at the same Core 0 control facade. Reads are answered
 from the published snapshot; mutations cross the mailbox boundary:
 
 ```mermaid
 sequenceDiagram
     participant Host
-    participant Transport as USB CDC or I2C
+    participant Transport as USB CDC, USB HID, or I2C
     participant Control as device
     participant Mailbox as Command mailbox
     participant Router as Core 1 profile router
@@ -249,7 +249,7 @@ sequenceDiagram
 Transport-specific details:
 
 - I2C reads can be served directly from the published snapshot or last command status.
-- I2C writes are captured in the ISR, queued, and executed from normal Core 0 polling through the same shared control path used by USB CDC. I2C read responses are built in the ISR from non-blocking getters when a read starts, so SCL is never stretched.
+- I2C writes are captured in the ISR, queued, and executed from normal Core 0 polling through the shared `device` control path used by USB CDC and HID. I2C read responses are built in the ISR from non-blocking getters when a read starts, so SCL is never stretched.
 - USB commands are parsed by `shell` and the CLI command handlers before they reach `device`.
 - I2C commands are decoded by `i2c_slave` and `i2c_control_map` before they reach `device`.
 
@@ -298,7 +298,7 @@ That means:
 
 - reads report realized backend state, not just the last requested values
 - `device` does not keep a second cache
-- both USB CDC and I2C observe the same logical channel view
+- USB CDC, USB HID, and I2C observe the same logical channel view
 
 `stop` disables generator outputs by driving them low (`freq = 0 Hz`, `duty = 0%`).
 
@@ -326,8 +326,9 @@ flowchart TD
     Ready -- Yes --> I2C[Initialize I2C slave]
     I2C --> Loop[Run Core 0 polling loop]
     Loop --> USBPoll[usb_cdc_poll]
-    USBPoll --> CLIPoll[pwm_commands_poll]
-    CLIPoll --> I2CPoll[i2c_slave_poll]
+    USBPoll --> CLIPoll[cli_app_poll]
+    CLIPoll --> HIDPoll[usb_hid_poll]
+    HIDPoll --> I2CPoll[i2c_slave_poll]
     I2CPoll --> Loop
 ```
 
@@ -339,7 +340,7 @@ In ordered form:
 4. Core 0 initializes and launches Core 1 with `pwm_driver_init(roles)`.
 5. Core 0 waits for `pwm_driver_is_ready()`.
 6. Core 0 initializes the I2C slave transport.
-7. The main loop services `usb_cdc_poll()`, `pwm_commands_poll()`, and `i2c_slave_poll()`.
+7. The main loop services `usb_cdc_poll()`, `cli_app_poll()`, `usb_hid_poll()`, and `i2c_slave_poll()`.
 
 When the USB CDC host opens the connection, the CLI prints help and a prompt.
 If the bounded transmit queue cannot accept the output, Core 0 retries it while
@@ -348,7 +349,7 @@ explicit error when the CDC connection is available.
 
 ## Where To Read Next
 
-- [USB CDC Shell](../guides/usb_cdc_shell.md) for interactive text commands
+- [USB CDC Shell](../guides/usb-cdc-shell.md) for interactive text commands
 - [USB CDC CLI Design](usb/cdc-cli-design.md) for developer guidance on extending the CLI
 - [I2C Protocol Reference](i2c/i2c-protocol.md) for binary register values
 - Source headers under `firmware/src` for current C declarations and APIs

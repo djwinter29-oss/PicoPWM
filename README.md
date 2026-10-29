@@ -13,7 +13,7 @@ generator and frequency monitor, controlled through USB CDC, I2C or USB HID. The
 [Hardware setup](docs/guides/hardware-setup.md) ·
 [Open browser dashboard](https://djwinter29-oss.github.io/PicoPWM/) ·
 [Python dashboard](host/python/README.md) ·
-[USB CDC shell](docs/guides/usb_cdc_shell.md) ·
+[USB CDC shell](docs/guides/usb-cdc-shell.md) ·
 [I2C protocol](docs/design/i2c/i2c-protocol.md)
 
 ## Why PicoPWM?
@@ -65,11 +65,11 @@ These are generator request ranges; `0 Hz` is a special static output level (`0%
 3. **Wire your signals.** Follow the [hardware setup guide](docs/guides/hardware-setup.md) for the channel GPIO map,
    I2C pins and board-specific pin considerations.
 4. **Connect to PicoPWM.** Open the board's USB CDC serial port in a terminal (see the
-   [USB CDC shell guide](docs/guides/usb_cdc_shell.md)), or connect an I2C controller to the default 7-bit
+   [USB CDC shell guide](docs/guides/usb-cdc-shell.md)), or connect an I2C controller to the default 7-bit
    address `0x40`. Serial device names vary by OS; common examples are `/dev/ttyACM0` on Linux, `COMx` on Windows,
    and `/dev/cu.usbmodem*` on macOS. USB CDC does not require a particular terminal baud-rate setting.
 5. **Verify.** In the CDC shell, run `board get version` to confirm the firmware is running, then
-   `config get` to see the bank roles. See the [USB CDC shell guide](docs/guides/usb_cdc_shell.md) for command details.
+   `config get` to see the bank roles. See the [USB CDC shell guide](docs/guides/usb-cdc-shell.md) for command details.
 6. **Open a dashboard (optional).** Use the [browser dashboard](https://djwinter29-oss.github.io/PicoPWM/) or run one
    locally as described below.
 
@@ -82,21 +82,11 @@ config set banka=generator
 
 The command saves the target setting and reboots the board. After it reconnects, run `pwm set 0 1000 50` and
 `pwm get 0` to request 1 kHz at 50% duty and inspect the realized output. When finished, run `pwm stop all` to stop
-generator outputs; the saved bank role remains unchanged. See the [CDC shell guide](docs/guides/usb_cdc_shell.md)
+generator outputs; the saved bank role remains unchanged. See the [CDC shell guide](docs/guides/usb-cdc-shell.md)
 for command details.
 
-## Troubleshooting
-
-### When an output stays low
-
-1. Check that the bank is configured as a generator; monitor banks measure inputs and never drive outputs.
-2. Check the realized state. A generator at `0 Hz / 0%` is intentionally held low, while `0 Hz / 100%` is held high.
-3. Check the wiring: confirm the channel's GPIO in the [hardware setup guide](docs/guides/hardware-setup.md) and that
-   the load shares ground with the board.
-
-Use `config get` to inspect running and target bank roles and `pwm get <channel>` to inspect a channel's realized
-frequency and duty; both are described in the [USB CDC shell guide](docs/guides/usb_cdc_shell.md). For more setup
-and symptom-based checks, see the [setup and troubleshooting guide](docs/guides/setup-and-troubleshooting.md).
+For symptom-based checks, configuration help, and HID access troubleshooting,
+see the [setup and troubleshooting guide](docs/guides/setup-and-troubleshooting.md).
 
 ## Dashboards
 
@@ -137,7 +127,7 @@ The `pico` and `pico2` profiles use the standard Pico and Pico 2 GPIO assignment
 compatible: verify it exposes the profile's channel GPIOs `0-22` and `28`; I2C additionally requires GPIOs `26` and
 `27`. The standard profile also assumes the board's LED is on GPIO 25. Verify SWD access only if programming it with a
 Debug Probe.
-`tools/firmware/load.sh` is the developer workflow for programming a local build through a Debug Probe; see
+`tools/firmware/load.sh` programs a local build through a Debug Probe; see
 [Program with a Pico Debug Probe](docs/guides/hardware-setup.md#program-with-a-pico-debug-probe). Its
 `--flash-size <bytes>` option overrides OpenOCD's flash-size assumption only; it does not change the firmware's GPIO
 mapping or board profile.
@@ -146,18 +136,17 @@ mapping or board profile.
 
 ## Documentation
 
-| Need | Guide |
+| Need | Resource |
 | --- | --- |
 | Wire, configure, and troubleshoot | [Hardware setup](docs/guides/hardware-setup.md), [Setup and troubleshooting](docs/guides/setup-and-troubleshooting.md) |
-| Control it | [USB CDC shell](docs/guides/usb_cdc_shell.md), [I2C protocol](docs/design/i2c/i2c-protocol.md), [USB interface overview](docs/design/usb/usb-interface-overview.md) |
+| Control it | [USB CDC shell](docs/guides/usb-cdc-shell.md), [I2C protocol](docs/design/i2c/i2c-protocol.md), [USB interface overview](docs/design/usb/usb-interface-overview.md) |
 | Understand the design | [Architecture](docs/design/architecture.md), [PWM driver design](docs/design/pwm-driver/driver-design.md), [PWM backend designs](docs/design/pwm-driver/) |
 | Write a HID host | [USB interface overview](docs/design/usb/usb-interface-overview.md), [HID report reference](docs/design/usb/hid-report-reference.md) |
-| Build, test and release | [Build structure](BUILD_STRUCTURE.md), [Builds and publishing](docs/deployment/releases.md) |
+| Build, test and release | [Contributing](CONTRIBUTING.md), [Builds and publishing](docs/deployment/releases.md) |
 | Contribute | [Contributing](CONTRIBUTING.md), [Code of Conduct](CODE_OF_CONDUCT.md), [Security](SECURITY.md) |
 
 The USB identity `0xCAFE:0x4012` is for development and lab use, not commercial derivatives. The CDC, HID and I2C
-interfaces are unauthenticated; see [SECURITY.md](SECURITY.md). Build prerequisites, version handling and test commands
-are in [BUILD_STRUCTURE.md](BUILD_STRUCTURE.md).
+interfaces are unauthenticated; see [SECURITY.md](SECURITY.md).
 
 Related projects: [PicoUART](https://github.com/djwinter29-oss/PicoUart) (six USB serial ports) and
 [PicoForge](https://github.com/djwinter29-oss/PicoForge) (host-controlled board services). They share no runtime

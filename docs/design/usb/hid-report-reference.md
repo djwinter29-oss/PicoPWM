@@ -10,7 +10,7 @@ The ranges are the convention shared with PicoUart and PicoForge; the assignment
 
 | IDs | Generic role | PicoPWM assignments |
 | --- | ------------ | ------------------- |
-| `1`-`9` | Device information and monitoring | `1` Identity, `2` Board Configuration, `3` Firmware Memory, `4` Runtime Status; `5`-`9` unassigned. |
+| `1`-`9` | Device information and monitoring | `1` Identity, `2` Board Configuration, `3` Firmware Memory, `4` Runtime Status, `5` Pin Assignment; `6`-`9` unassigned. |
 | `10`-`19` | Application monitoring | Three Bank Status reports, addressed as `10 + bank`; `13`-`19` unassigned. |
 | `20`-`29` | Device and application control | `20` Board Action & Result; `21`-`29` unassigned. |
 | `30`-`255` | Unassigned expansion | None. |
@@ -23,8 +23,9 @@ PicoPWM exposes one vendor-defined USB HID interface alongside its CDC interface
 
 ### Identity And Collision Avoidance
 
-PicoPWM shares the lab `0xCAFE` vendor ID with its sibling projects, so the
-identifiers below are chosen so a host can never confuse the products.
+PicoPWM shares the unallocated lab `0xCAFE` vendor ID with sibling projects.
+The product IDs distinguish these projects from one another, but do not provide
+a globally allocated USB identity.
 
 | Identifier | Value | Notes |
 | ---------- | ----- | ----- |
@@ -44,7 +45,7 @@ because VID/PID alone are not an allocated identity.
 | --------- | --------- | -------- |
 | Interactive shell | USB CDC | Text commands; unchanged by HID. |
 | Controller register access | I2C | Binary register map; unchanged by HID. |
-| Identity, configuration, channel status | HID reports 1, 2, 10-12 | Read-only; realized state from `device`, no HID shadow cache. |
+| Identity, configuration, memory, runtime status, pin assignment, channel status | HID reports 1-5, 10-12 | Read-only; optional reports 3-5 are capability-gated; realized state from `device`, no HID shadow cache. |
 | Channel set and stop | HID report 20 | Same `device` path as CDC and I2C. |
 | Bank, I2C address, clock profile, save | HID report 20 | Target configuration only; takes effect after save and restart. Optional save-and-reboot applies the saved target. |
 

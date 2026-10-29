@@ -3,6 +3,10 @@
 The Pico acts as an I2C slave on **I2C1**. See [Hardware Setup](../../guides/hardware-setup.md) for the
 SDA and SCL GPIO assignments.
 
+The slave is configured for 400 kHz and also supports 100 kHz masters. Its
+default 7-bit address is `0x40`; configuration and address limits are covered
+in the [setup guide](../../guides/setup-and-troubleshooting.md#configure-bank-roles).
+
 ### Electrical
 
 External pull-up resistors (typically 4.7 kΩ) are required on SDA and SCL. The firmware does enable the MCU internal pull-ups, but external pull-ups are recommended for reliable operation, especially at higher clock speeds.
@@ -14,7 +18,7 @@ All transactions are initiated by an I2C master. The protocol is **write-then-re
 1. **Write phase**: master sends one register byte and, when required, its payload.
 2. **Read phase**: master reads the response bytes.
 
-Read commands are answered from the realized channel snapshot published by the PWM driver layer. The ISR builds each read response when the master starts reading, using only non-blocking getters, so the clock is never stretched and every read transaction sees the newest value. Write commands are queued by the ISR and applied from Core 0 polling through the same shared control path used by the USB CDC shell.
+Read commands are answered from the realized channel snapshot published by the PWM driver layer. The ISR builds each read response when the master starts reading, using only non-blocking getters, so the clock is never stretched and every read transaction sees the newest value. Write commands are queued by the ISR and applied from Core 0 polling through the shared `device` control path used by USB CDC and HID.
 
 The firmware keeps four complete writes. A write that arrives while that queue
 is full is dropped, and the register status becomes `PWM_DRIVER_RESULT_UNAVAILABLE`

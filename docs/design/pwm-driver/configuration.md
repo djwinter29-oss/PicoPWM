@@ -27,11 +27,11 @@ starting an unsafe erase.
 
 ## Fixed Bank Mapping
 
-| Bank | Logical channels | Backend | GPIOs |
-| --- | --- | --- | --- |
-| A | `0..7` | Hardware PWM | `1, 3, 5, 7, 9, 11, 13, 15` (slice-B) |
-| B | `8..15` | PIO | `0, 2, 4, 6, 8, 10, 12, 14` (companion slice-A) |
-| C | `16..23` | Software | `16, 17, 18, 19, 20, 21, 22, 28` |
+| Bank | Logical channels | Backend |
+| --- | --- | --- |
+| A | `0..7` | Hardware PWM |
+| B | `8..15` | PIO |
+| C | `16..23` | Software |
 
 The default layout exposes 24 logical channels. Each bank maps to one backend
 family; startup roles select that backend's generator or monitor
@@ -74,10 +74,10 @@ The board mapping and startup configuration must preserve these invariants:
 - A bank's generator and monitor implementations do not claim the same
   resources simultaneously.
 
-The USB CDC and I2C interfaces translate requests into the shared device
-control path. They do not select a different backend or bypass the PWM driver
-ownership boundary. Unsupported operations are rejected through the shared
-control result.
+The USB CDC, USB HID, and I2C interfaces translate requests into the shared
+device control path. They do not select a different backend or bypass the PWM
+driver ownership boundary. Unsupported operations are rejected through the
+shared control result.
 
 ## Changing the Layout
 

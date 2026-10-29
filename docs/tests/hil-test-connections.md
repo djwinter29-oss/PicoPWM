@@ -81,25 +81,25 @@ and do not use a power rail as a junction. Repeat for the other seven rows below
 With the loopback disconnected, connect USB and configure the first pass through CDC:
 
 ```text
-config set a gen
-config set b mon
-config set c mon
-config save
-reboot
-config
+config set banka=generator, bankb=monitor, bankc=monitor
+config get
 ```
 
-Confirm the running roles, disconnect power, attach the loopback and reconnect USB. Start channel 0:
+`config set` validates, saves, and reboots automatically. Confirm the running
+roles with `config get`, disconnect power, attach the loopback, and reconnect
+USB. Start channel 0:
 
 ```text
-set 0 1000 50
-get 8
-get 16
+pwm set 0 1000 50
+pwm get 8
+pwm get 16
 ```
 
 Allow the monitor windows to settle. Probe junction 0 with an independent instrument referenced to board GND.
-Before changing the generator bank, stop output and disconnect the loopback; configure, save and reboot, then
-verify the running roles before powering down and reconnecting it.
+Before changing the generator bank, run `pwm stop all` and disconnect the
+loopback. Set all three bank roles in one `config set` command, which saves and
+reboots automatically. Verify the running roles with `config get` before
+powering down and reconnecting the loopback.
 
 ### Three-Bank Passes
 

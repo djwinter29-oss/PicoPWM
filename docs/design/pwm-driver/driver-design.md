@@ -68,7 +68,7 @@ The current implementation is split as follows:
 
 | File | Responsibility |
 | ------ | ---------------- |
-| `firmware/src/device.h` | Shared Core 0 device API surface used by CDC and I2C |
+| `firmware/src/device.h` | Shared Core 0 device API surface used by CDC, HID, and I2C |
 | `firmware/src/device.c` | Shared device info, channel reads, and channel write helpers above the Core 1 mailbox boundary |
 | `firmware/src/app/i2c/i2c_control_map.h` | I2C register map definitions and protocol helpers |
 | `firmware/src/app/i2c/i2c_control_map.c` | I2C register encode/decode and deferred write translation into `device` |
@@ -125,7 +125,7 @@ typedef struct {
 
 Architecturally, `pwm_driver_set()` is an internal command-ingress API.
 
-- Top-level command paths such as the CDC CLI and I2C register map should enter through `device`.
+- Top-level command paths such as the CDC CLI, HID action handler, and I2C register map should enter through `device`.
 - The I2C write path should continue to defer out of the ISR before it reaches this mailbox API.
 - It is not intended as a general-purpose helper for arbitrary internal call sites.
 - Core 1 callers must not use this API; it returns `PWM_DRIVER_RESULT_UNAVAILABLE` outside the Core 0 command path.
@@ -158,7 +158,7 @@ The subsystem has four internal layers.
 
 ### 1. Transport Layer
 
-Owned by the CDC CLI and I2C transport modules.
+Owned by the CDC CLI, HID, and I2C transport modules.
 
 Responsibilities:
 
@@ -174,7 +174,7 @@ Owned by `firmware/src/device.c`.
 
 Responsibilities:
 
-- expose one shared Core 0 control/status API to both transports
+- expose one shared Core 0 control/status API to all three transports
 - centralize device identity and version reporting
 - centralize logical channel reads and writes above `pwm`
 - avoid maintaining a second shadow copy of realized channel state

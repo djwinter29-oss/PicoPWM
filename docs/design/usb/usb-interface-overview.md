@@ -3,7 +3,7 @@
 PicoPWM exposes one composite USB device with two host-facing interface types:
 
 - one CDC ACM serial port for the interactive text shell
-- one vendor HID interface for identity, configuration, per-bank channel status, and narrow management actions
+- one vendor HID interface for identity, configuration, memory and runtime status, pin assignments, per-bank channel status, and narrow management actions
 
 This document covers the USB interfaces and their shared device-control
 boundaries. I2C is included only as context when comparing host-facing control
@@ -41,13 +41,14 @@ The Core 0 and Core 1 split, the `device` facade, and the `pwm_driver` multicore
 ## CDC Behavior
 
 CDC carries the text shell only; its line behavior is unchanged by HID. Commands follow the
-[USB CDC shell guide](../../guides/usb_cdc_shell.md).
+[USB CDC shell guide](../../guides/usb-cdc-shell.md).
 
 ## HID Behavior
 
-HID carries no shell traffic. It reports device identity, the running and target configuration, and the realized
-state of every channel in three per-bank reports, and it accepts a small set of actions. Configuration changes take
-effect only after save and restart. Capability-gated save-and-reboot combines persistence
+HID carries no shell traffic. It reports device identity, the running and target configuration, firmware memory,
+runtime status, pin assignments, and the realized state of every channel in three per-bank reports. Reports 3-5 are
+capability-gated. HID also accepts a small set of actions. Configuration changes take effect only after save and
+restart. Capability-gated save-and-reboot combines persistence
 with a restart after the host reads success. Capability-gated standalone reboot
 requires confirmation and never saves; identification LED control is immediate,
 with state readback in configuration report 2. The

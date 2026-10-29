@@ -1,7 +1,7 @@
 # PicoPWM GitHub Copilot Instructions
 Read [README.md](../README.md) first for product intent, channel map, and user-facing behavior.
 
-Use the docs directly: [docs/guides/usb_cdc_shell.md](../docs/guides/usb_cdc_shell.md) for CDC behavior, [docs/design/i2c/i2c-protocol.md](../docs/design/i2c/i2c-protocol.md) for I2C behavior, [docs/design/architecture.md](../docs/design/architecture.md) for system structure, source headers under `firmware/src` for C interfaces, and [docs/design/pwm-driver/driver-design.md](../docs/design/pwm-driver/driver-design.md) for `pwm` internals.
+Use the docs directly: [docs/guides/usb-cdc-shell.md](../docs/guides/usb-cdc-shell.md) for CDC behavior, [docs/design/i2c/i2c-protocol.md](../docs/design/i2c/i2c-protocol.md) for I2C behavior, [docs/design/architecture.md](../docs/design/architecture.md) for system structure, source headers under `firmware/src` for C interfaces, and [docs/design/pwm-driver/driver-design.md](../docs/design/pwm-driver/driver-design.md) for `pwm` internals.
 
 For `pwm` internals, use [docs/design/pwm-driver/driver-design.md](../docs/design/pwm-driver/driver-design.md) as the source of truth.
 
@@ -21,7 +21,7 @@ Key repo constraints:
   confirms the port, board, flashed artifact and permission to drive outputs:
   `tools/host/run-hil.sh --port <CDC_PORT> --board <pico|pico2> --firmware <FLASHED_ARTIFACT> --confirm-fixture`.
   The launcher creates its venv and installs the editable HIL project.
-- Follow the [HIL connection guide](../docs/tests/hil-test-connection.md) and
+- Follow the [HIL connection guide](../docs/tests/hil-test-connections.md) and
   [test plan](../docs/tests/hil-test-plan.md). Require exactly one running generator bank and two monitor banks;
   never change roles, save flash, reboot or rewire automatically to make a run possible.
 - The runner replaces `docs/tests/records/latest.md`. Preserve an existing record under a dated filename before

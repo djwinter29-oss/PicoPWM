@@ -17,18 +17,18 @@
 
 /** @brief One PWM protocol command waiting for foreground execution. */
 typedef struct {
-    uint8_t reg;                               /**< Protocol command register. */
-    uint8_t len;                               /**< Payload length, excluding the command register. */
-    uint32_t epoch;                            /**< Attempt generation for stale completion rejection. */
+    uint8_t reg;                                /**< Protocol command register. */
+    uint8_t len;                                /**< Payload length, excluding the command register. */
+    uint32_t epoch;                             /**< Attempt generation for stale completion rejection. */
     uint8_t payload[I2C_COMMAND_QUEUE_PAYLOAD]; /**< Command payload bytes. */
 } i2c_command_slot_t;
 
 /** @brief Ring of deferred PWM commands shared by the ISR producer and Core 0 consumer. */
 typedef struct {
     i2c_command_slot_t slots[I2C_COMMAND_QUEUE_DEPTH]; /**< Storage for queued commands. */
-    uint8_t head;                                       /**< Next slot written by the producer. */
-    uint8_t tail;                                       /**< Next slot read by the consumer. */
-    uint8_t count;                                      /**< Number of queued commands. */
+    uint8_t head;                                      /**< Next slot written by the producer. */
+    uint8_t tail;                                      /**< Next slot read by the consumer. */
+    uint8_t count;                                     /**< Number of queued commands. */
 } i2c_command_queue_t;
 
 /**

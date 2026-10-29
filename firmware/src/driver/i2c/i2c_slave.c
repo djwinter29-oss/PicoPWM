@@ -17,12 +17,12 @@ static const i2c_slave_ops_t *slave_ops;
 static uint8_t slave_address;
 
 static uint8_t req_buf[I2C_SLAVE_FRAME_CAPACITY]; /**< Bytes in the current write transaction. */
-static uint8_t req_len;                            /**< Stored bytes in the current transaction. */
-static bool req_overflow;                          /**< Transaction exceeded the fixed frame buffer. */
+static uint8_t req_len;                           /**< Stored bytes in the current transaction. */
+static bool req_overflow;                         /**< Transaction exceeded the fixed frame buffer. */
 static uint8_t resp_buf[I2C_SLAVE_RESPONSE_CAPACITY];
 static uint8_t resp_len;
 static uint8_t resp_idx;
-static bool read_open;          /**< This transaction already built its response. */
+static bool read_open; /**< This transaction already built its response. */
 
 static void reset_request_capture(void) {
     req_len = 0u;
@@ -97,8 +97,8 @@ static void i2c_slave_isr(void) {
         uint8_t byte;
         bool first_data_byte;
 
-        for (uint32_t popped = 0u;
-             popped < I2C_SLAVE_RX_FIFO_DEPTH && i2c_slave_hw_rx_pop(&byte, &first_data_byte); ++popped) {
+        for (uint32_t popped = 0u; popped < I2C_SLAVE_RX_FIFO_DEPTH && i2c_slave_hw_rx_pop(&byte, &first_data_byte);
+             ++popped) {
             if (first_data_byte) {
                 finish_request();
             }

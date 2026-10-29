@@ -14,13 +14,13 @@
 
 /** @brief Result bytes used by PWM I2C command-status reads. */
 typedef enum {
-    I2C_STATUS_OK = 0u,          /**< The command completed successfully. */
-    I2C_STATUS_BUSY = 1u,        /**< The command is queued or still being applied. */
-    I2C_STATUS_INVALID = 2u,     /**< The command or its framing is invalid. */
-    I2C_STATUS_UNAVAILABLE = 3u, /**< The operation is unavailable or command queue is full. */
-    I2C_STATUS_TIMEOUT = 4u,     /**< The channel command was not claimed before its deadline. */
+    I2C_STATUS_OK = 0u,           /**< The command completed successfully. */
+    I2C_STATUS_BUSY = 1u,         /**< The command is queued or still being applied. */
+    I2C_STATUS_INVALID = 2u,      /**< The command or its framing is invalid. */
+    I2C_STATUS_UNAVAILABLE = 3u,  /**< The operation is unavailable or command queue is full. */
+    I2C_STATUS_TIMEOUT = 4u,      /**< The channel command was not claimed before its deadline. */
     I2C_STATUS_APPLY_FAILED = 5u, /**< The backend rejected an admitted channel command. */
-    I2C_STATUS_NOT_RUN = 6u,     /**< No command attempt has been recorded since startup. */
+    I2C_STATUS_NOT_RUN = 6u,      /**< No command attempt has been recorded since startup. */
 } i2c_status_t;
 
 /** @brief I2C register and command byte assignments for the PWM control map. */

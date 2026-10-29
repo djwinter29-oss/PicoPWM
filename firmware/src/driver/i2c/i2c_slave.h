@@ -15,15 +15,18 @@
 
 /** @brief Status bytes a master reads back from a write register. */
 typedef enum {
-    I2C_STATUS_OK = 0u,       /**< The last write completed successfully. */
-    I2C_STATUS_QUEUED = 1u,   /**< The last write is queued and not finished. */
-    I2C_STATUS_INVALID = 2u,  /**< The last write was malformed or rejected by the register map. */
-    I2C_STATUS_REJECTED = 3u, /**< The last write was dropped because the queue was full. */
+    I2C_STATUS_OK = 0u,          /**< The command completed successfully. */
+    I2C_STATUS_BUSY = 1u,        /**< The command is queued or still being applied. */
+    I2C_STATUS_INVALID = 2u,     /**< The command or its framing is invalid. */
+    I2C_STATUS_UNAVAILABLE = 3u, /**< The operation is unavailable or command queue is full. */
+    I2C_STATUS_TIMEOUT = 4u,     /**< The channel command was not claimed before its deadline. */
+    I2C_STATUS_APPLY_FAILED = 5u, /**< The backend rejected an admitted channel command. */
+    I2C_STATUS_NOT_RUN = 6u,     /**< No command attempt has been recorded since startup. */
 } i2c_status_t;
 
 /** @brief Register map callbacks supplied by the application. */
 typedef struct {
-    /** @brief Total write length including the register byte, or 0 for an unknown register. */
+    /** @brief Expected write length including the register byte, or 0 for an unsupported register. */
     uint8_t (*write_length)(uint8_t reg);
     /** @brief True when a complete write to @p reg is a command to queue rather than a read select. */
     bool (*is_write)(uint8_t reg);

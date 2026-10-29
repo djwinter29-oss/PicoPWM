@@ -159,8 +159,10 @@ Running values come from the live modules (`device_bank_role()`, `device_i2c_add
 | 16 | 1 | `clock_profile` | Target system clock request (profile table below). Always a valid, accepted profile. Takes effect after save and restart. |
 | 17 | 4 | `system_clock_hz` | Running `clk_sys`, from `system_clock_hz()`; separate from the request. |
 
-Bank enums: backend `0` HW, `1` PIO, `2` SW. The backend is fixed per bank (A is HW, B is PIO, C is SW) and is
-not stored by the firmware; it is reported as a constant and a `SET_BANK` with any other value is rejected (the I2C `REG_CONFIG_SET` carries only bank and role); role `0` generator, `1` monitor.
+Bank enums: backend `0` HW, `1` PIO, `2` SW. The backend is fixed per bank
+(A is HW, B is PIO, C is SW) and is not stored by the firmware; it is reported
+as a constant and a `SET_BANK` with any other value is rejected. Role `0` is
+generator and role `1` is monitor.
 
 The target is changed and saved through report 20, never by writing report 2. A saved target takes effect only after
 the device restarts. Hosts may use capability-gated `SAVE_REBOOT`, or ask the user to power-cycle or reset after
@@ -324,8 +326,9 @@ Serialize transactions per device. The rules are:
 - **Result lifetime:** the result persists until the next accepted SET and is never consumed by a GET. A reset or
   disconnect clears it to that initial state, so hosts discard pending-transaction assumptions and reread identity.
 - **Stale results:** clients match `transaction_id` and `operation` and never treat a stale result as success.
-- **Concurrent interfaces:** CDC, I2C, and HID may all change channels or the target configuration; the last write
-  wins, and the realized state in reports 10-12 and 2 is authoritative.
+- **Concurrent interfaces:** CDC, I2C, and HID may all change channels; CDC and HID may also change the target
+  configuration. The last write wins, and the realized state in reports 10-12 and 2 is authoritative. The
+  documented I2C contract does not include configuration writes.
 
 ### Conformance Examples
 

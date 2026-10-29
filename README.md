@@ -23,6 +23,7 @@ generator and frequency monitor, controlled through USB CDC, I2C or USB HID. The
 | **24 channels, one stable map** | Three fixed 8-channel banks (A, B, C), configured independently as generators or monitors at startup. |
 | **Choose the right PWM engine** | Hardware PWM, PIO and software backends, each with distinct frequency, accuracy and resource tradeoffs. |
 | **Three control interfaces** | A USB CDC command shell, an I2C register map, and USB HID for dashboards and host applications. |
+| **PWM control over I2C** | Read realized channel state, set generator outputs, and stop all generator outputs from an external controller. |
 | **Live state, not just commands** | Read the realized channel frequency and duty as well as device configuration and status. |
 | **Configuration survives reboot** | Save bank roles, I2C address and system clock to flash; changes take effect after reboot. |
 
@@ -47,9 +48,8 @@ These are generator request ranges; `0 Hz` is a special static output level (`0%
 - I2C needs external pull-ups on SDA and SCL. Start at 100 kHz.
 - The default configuration is monitor-only, so no PWM output is driven after power-up. Generator banks start at
    0 Hz and 0% duty.
-- Bank roles are set in the startup configuration, not at build time. Change them over CDC (`config set`), I2C
-  (`REG_CONFIG_SET`) or HID. CDC validates, saves and reboots for a `config set` request; I2C and HID use their own
-  save and reboot operations (`REG_CONFIG_SAVE` or the dashboard's **Save & Reboot**).
+- Bank roles are set in the startup configuration, not at build time. Change them over CDC (`config set`) or HID.
+  The documented I2C contract is for PWM channel control and does not include bank-role or device configuration.
 - The SDK default is 125 MHz on RP2040 and 150 MHz on RP2350. The 150 MHz profile is an overclock only on RP2040.
    HID/dashboard saves require acknowledgement above 150 MHz; CDC has no separate acknowledgement step. The 200 and
    250 MHz profiles are not qualified for every board.

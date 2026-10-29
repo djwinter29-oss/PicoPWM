@@ -2,8 +2,7 @@
  * @file i2c_slave.c
  * @brief I2C slave protocol and ISR logic; the peripheral is reached through `i2c_slave_hw.h`.
  *
- * - A write is captured byte by byte. A complete command write is queued for Core 0
- *   and its status reads back as QUEUED until `i2c_slave_poll()` finishes it.
+ * - A complete write is validated at STOP or RESTART, then commands are queued for Core 0.
  * - A complete write or a lone register byte selects the register for the next read.
  * - Each read transaction rebuilds the response in the ISR, so a status read is always fresh.
  *   Bytes past the end of the response are zero pads.
@@ -26,10 +25,11 @@ static const i2c_slave_ops_t *slave_ops;
 static uint8_t slave_address;
 static bool slave_started;
 
-static uint8_t req_buf[I2C_REQ_BUF_SIZE]; /**< Bytes of the write being captured, register first. */
-static uint8_t req_len;                   /**< Bytes captured so far. */
-static uint8_t req_expected_len;          /**< Full length of the command selected by the first byte. */
-static bool req_in_error;                 /**< Drop bytes until STOP after a malformed command. */
+static uint8_t req_buf[I2C_REQ_BUF_SIZE]; /**< Bytes of the current transaction, register first. */
+static uint8_t req_len;                   /**< Captured bytes, capped at the buffer capacity. */
+static uint8_t req_expected_len;          /**< Expected total length selected by the first byte. */
+static bool req_overlong;                 /**< More transaction bytes arrived than the buffer can hold. */
+static bool req_in_error;                 /**< Ignore bytes until the next transaction boundary. */
 
 static i2c_write_queue_t write_queue;
 static uint8_t last_status[UINT8_MAX + 1u]; /**< Status a master reads back, per register. */
@@ -47,14 +47,10 @@ static uint8_t response_reg;    /**< Register the next read transaction answers.
 static bool response_reg_valid; /**< False until a register has been selected. */
 static bool read_open;          /**< This transaction already built its response. */
 
-static bool is_status_select(void) {
-    // A lone register byte of a longer command is a status select, not a new write.
-    return req_len == 1u && req_expected_len > 1u;
-}
-
 static void reset_request_capture(void) {
     req_len = 0u;
     req_expected_len = 0u;
+    req_overlong = false;
     req_in_error = false;
 }
 
@@ -90,47 +86,80 @@ static void capture_request_byte(uint8_t byte) {
         req_expected_len = slave_ops->write_length(byte);
         if (req_expected_len == 0u || req_expected_len > I2C_REQ_BUF_SIZE) {
             last_status[byte] = (uint8_t)I2C_STATUS_INVALID;
-            reset_request_capture();
             req_in_error = true;
             return;
         }
     }
 
-    req_buf[req_len++] = byte;
-    if (req_len < req_expected_len) {
+    if (req_len < I2C_REQ_BUF_SIZE) {
+        req_buf[req_len++] = byte;
+    } else {
+        req_overlong = true;
+    }
+}
+
+/**
+ * @brief Finish one I2C write transaction and publish its result only after frame validation.
+ *
+ * A one-byte write to a multi-byte command register is the status-select operation;
+ * it selects the register without creating a new command attempt.
+ */
+static void finish_request(void) {
+    uint8_t reg;
+    bool is_write;
+
+    if (req_in_error || req_len == 0u) {
+        reset_request_capture();
         return;
     }
 
-    if (slave_ops->is_write(req_buf[0])) {
-        uint8_t reg = req_buf[0];
+    reg = req_buf[0];
+    is_write = slave_ops->is_write(reg);
+
+    if (is_write && !req_overlong && req_len == 1u && req_expected_len > 1u) {
+        select_response(reg);
+        reset_request_capture();
+        return;
+    }
+
+    if (req_overlong || req_len != req_expected_len) {
+        if (is_write) {
+            status_epoch[reg]++;
+        }
+        last_status[reg] = (uint8_t)I2C_STATUS_INVALID;
+        select_response(reg);
+        reset_request_capture();
+        return;
+    }
+
+    if (is_write) {
         uint8_t epoch = (uint8_t)(status_epoch[reg] + 1u);
         bool queued;
 
         status_epoch[reg] = epoch;
         queued = i2c_write_queue_push(&write_queue, reg, &req_buf[1], (uint8_t)(req_expected_len - 1u), epoch);
-        // A full queue drops this write and finishes as REJECTED so the status read does not wait.
-        last_status[reg] = (uint8_t)(queued ? I2C_STATUS_QUEUED : I2C_STATUS_REJECTED);
+        last_status[reg] = (uint8_t)(queued ? I2C_STATUS_BUSY : I2C_STATUS_UNAVAILABLE);
     }
     select_response(req_buf[0]);
     reset_request_capture();
 }
 
 static void handle_stop(void) {
-    if (is_status_select()) {
-        select_response(req_buf[0]);
-    }
+    finish_request();
     i2c_slave_hw_clear(I2C_SLAVE_EVENT_STOP);
-    reset_request_capture();
+    read_open = false;
+    i2c_slave_hw_set_tx_empty_irq(false);
+}
+
+static void handle_restart(void) {
+    finish_request();
+    i2c_slave_hw_clear(I2C_SLAVE_EVENT_RESTART);
     read_open = false;
     i2c_slave_hw_set_tx_empty_irq(false);
 }
 
 static void handle_read_request(void) {
-    // Repeated-start read after only the register byte: answer with its status, do not queue.
-    if (is_status_select()) {
-        select_response(req_buf[0]);
-        reset_request_capture();
-    }
+    finish_request();
     if (!read_open) {
         read_open = true;
         build_response();
@@ -169,6 +198,9 @@ static void i2c_slave_isr(void) {
         if ((events & I2C_SLAVE_EVENT_STOP) != 0u) {
             handle_stop();
         }
+        if ((events & I2C_SLAVE_EVENT_RESTART) != 0u) {
+            handle_restart();
+        }
         if ((events & I2C_SLAVE_EVENT_RD_REQ) != 0u) {
             handle_read_request();
         } else if ((events & I2C_SLAVE_EVENT_TX_EMPTY) != 0u) {
@@ -191,7 +223,7 @@ void i2c_slave_init(uint8_t address, const i2c_slave_ops_t *ops) {
     response_reg_valid = false;
     read_open = false;
     for (uint16_t reg = 0u; reg <= UINT8_MAX; ++reg) {
-        last_status[reg] = (uint8_t)I2C_STATUS_OK;
+        last_status[reg] = (uint8_t)I2C_STATUS_NOT_RUN;
         status_epoch[reg] = 0u;
     }
     i2c_slave_hw_init(address, i2c_slave_isr);

@@ -31,6 +31,7 @@ typedef enum {
     I2C_SLAVE_EVENT_STOP = 1u << 0,     /**< The master ended the transaction. */
     I2C_SLAVE_EVENT_RD_REQ = 1u << 1,   /**< The master is reading and needs a byte. */
     I2C_SLAVE_EVENT_TX_EMPTY = 1u << 2, /**< The TX FIFO is empty while TX_EMPTY is unmasked. */
+    I2C_SLAVE_EVENT_RESTART = 1u << 3,  /**< The master started a new transaction without STOP. */
 } i2c_slave_event_t;
 
 /** @brief Configure pins and the peripheral as a slave and install @p isr on the I2C IRQ. */
@@ -45,7 +46,7 @@ void i2c_slave_hw_tx_push(uint8_t byte);
 /** @brief Return the pending `i2c_slave_event_t` bits. Also releases a master NACK (TX_ABRT). */
 uint32_t i2c_slave_hw_events(void);
 
-/** @brief Clear the STOP and RD_REQ bits set in @p events. Other bits are ignored. */
+/** @brief Clear latched STOP, RD_REQ, and RESTART events in @p events. Other bits are ignored. */
 void i2c_slave_hw_clear(uint32_t events);
 
 /**

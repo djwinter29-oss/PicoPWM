@@ -32,10 +32,11 @@ config set bankb=monitor, clock=default, address=64
 The complete request is validated before any setting is changed. A successful
 CDC `config set` saves the target configuration and reboots to apply it. The
 CDC command supports bank roles, clock profiles (`default`, `150`, `200`, or
-`250` MHz), and the 7-bit I2C address (`8..119`). Other control interfaces
-have their own save and reboot steps; see the [I2C Protocol
-Reference](../design/i2c/i2c-protocol.md) or [HID Report
-Reference](../design/usb/hid-report-reference.md).
+`250` MHz), and the 7-bit I2C address (`8..119`). HID supports its own
+configuration workflow; see the [HID Report
+Reference](../design/usb/hid-report-reference.md). The documented I2C
+interface is limited to PWM channel reads, writes, status, and stop-all; see the
+[I2C Protocol Reference](../design/i2c/i2c-protocol.md).
 
 The `150` MHz profile is an overclock on RP2040. The `200` and `250` MHz
 profiles are not qualified for every board. Configuration persistence uses
@@ -114,9 +115,9 @@ grant the browser access to a local USB device.
 
 - Compare the running and target values with `config get`. The running role
   changes only after reboot.
-- CDC `config set` saves and reboots automatically. I2C and HID workflows
-  require their own save and reboot operations; consult the corresponding
-  protocol reference or host guide.
+- CDC `config set` saves and reboots automatically. HID configuration changes
+  have their own save and reboot workflow; consult the
+  [HID Report Reference](../design/usb/hid-report-reference.md).
 - If a setting is rejected, check that the bank role, clock profile, or I2C
   address is supported. A rejected request is not partially applied.
 

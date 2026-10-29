@@ -11,7 +11,7 @@
 /** @brief Interrupts that are always unmasked; TX_EMPTY is added only by `i2c_slave_hw_set_tx_empty_irq()`. */
 #define I2C_SLAVE_BASE_MASK                                                                                            \
     (I2C_IC_INTR_MASK_M_RX_FULL_BITS | I2C_IC_INTR_MASK_M_RD_REQ_BITS | I2C_IC_INTR_MASK_M_STOP_DET_BITS |             \
-     I2C_IC_INTR_MASK_M_TX_ABRT_BITS)
+     I2C_IC_INTR_MASK_M_TX_ABRT_BITS | I2C_IC_INTR_MASK_M_RESTART_DET_BITS)
 
 static i2c_hw_t *i2c_slave_hw(void) {
     return i2c_get_hw(i2c_board_config.instance);
@@ -67,6 +67,7 @@ uint32_t i2c_slave_hw_events(void) {
     events |= (status & I2C_IC_INTR_STAT_R_STOP_DET_BITS) != 0u ? I2C_SLAVE_EVENT_STOP : 0u;
     events |= (status & I2C_IC_INTR_STAT_R_RD_REQ_BITS) != 0u ? I2C_SLAVE_EVENT_RD_REQ : 0u;
     events |= (status & I2C_IC_INTR_STAT_R_TX_EMPTY_BITS) != 0u ? I2C_SLAVE_EVENT_TX_EMPTY : 0u;
+    events |= (status & I2C_IC_INTR_STAT_R_RESTART_DET_BITS) != 0u ? I2C_SLAVE_EVENT_RESTART : 0u;
     return events;
 }
 
@@ -78,6 +79,9 @@ void i2c_slave_hw_clear(uint32_t events) {
     }
     if ((events & I2C_SLAVE_EVENT_RD_REQ) != 0u) {
         (void)hw->clr_rd_req;
+    }
+    if ((events & I2C_SLAVE_EVENT_RESTART) != 0u) {
+        (void)hw->clr_restart_det;
     }
 }
 

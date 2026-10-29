@@ -37,6 +37,13 @@ requested frequency within the PIO's representable range. Divider and period
 quantization mean realized frequency and duty can differ slightly from the
 request; the published state describes the applied result.
 
+Every timing update disables the state machine before changing its divider,
+clears its FIFO, restarts its internal state, and explicitly jumps to the loaded
+program's initial pulls. Both timing words are queued before execution resumes.
+The SDK restart alone preserves the program counter and does not reload the
+loop's timing registers. The same sequence handles running updates, recovery
+after a failed FIFO write, and transitions back from static output.
+
 The public policy is:
 
 - `freq_hz = 0`, `duty = 100`: static high

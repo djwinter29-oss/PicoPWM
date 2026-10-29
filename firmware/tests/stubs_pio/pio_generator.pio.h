@@ -10,9 +10,7 @@ typedef struct pio_program {
 static const pio_program_t generator_program = {0};
 
 static inline void generator_program_init(PIO pio, uint sm, uint offset, uint pin) {
-    (void)pio;
-    (void)sm;
-    (void)offset;
+    pio_test_pc[pio->id][sm] = offset;
     (void)pin;
 }
 

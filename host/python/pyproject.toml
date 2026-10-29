@@ -1,16 +1,36 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "picopwm"
 version = "0.1.0"
 description = "Python host tools and Flask management interface for PicoPWM"
+readme = "README.md"
 requires-python = ">=3.10"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+authors = [{name = "Ji Dong"}]
+keywords = ["picopwm", "raspberry-pi-pico", "pwm", "usb-hid", "dashboard"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Topic :: System :: Hardware",
+]
 dependencies = [
     "Flask>=3.0,<4",
     "hidapi>=0.14",
 ]
+
+[project.urls]
+Homepage = "https://github.com/djwinter29-oss/PicoPWM"
+Documentation = "https://github.com/djwinter29-oss/PicoPWM/blob/main/host/python/README.md"
+Repository = "https://github.com/djwinter29-oss/PicoPWM"
+Issues = "https://github.com/djwinter29-oss/PicoPWM/issues"
+Changelog = "https://github.com/djwinter29-oss/PicoPWM/releases"
 
 [project.optional-dependencies]
 test = ["pytest>=8"]

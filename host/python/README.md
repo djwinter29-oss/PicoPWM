@@ -1,107 +1,217 @@
-# PicoPWM host tools
+# PicoPWM
 
-This package provides a Python HID client and a Flask management interface for the
-firmware's 24 logical channels over the USB HID vendor interface (VID `0xCAFE`, PID
-`0x4012`; see [hid-report-reference.md](../../docs/design/usb/hid-report-reference.md)).
-The firmware implements this interface in `firmware/src/usb`.
+**Control and monitor PicoPWM boards from Python or a local web dashboard.**
 
-## Install
+[PyPI](https://pypi.org/project/picopwm/) ·
+[Source](https://github.com/djwinter29-oss/PicoPWM) ·
+[Firmware releases](https://github.com/djwinter29-oss/PicoPWM/releases) ·
+[Report an issue](https://github.com/djwinter29-oss/PicoPWM/issues)
 
-Install the published package with `python -m pip install picopwm`.
+PicoPWM provides a USB HID client and a Flask dashboard for Raspberry Pi Pico and
+Pico 2 boards running PicoPWM firmware. Read the state of 24 PWM channels, adjust
+generator outputs, and manage board configuration without writing USB protocol code.
 
-From `host/python`:
+## Features
+
+- **24 logical channels:** three fixed eight-channel banks, each configured as
+  generators or monitors.
+- **Interactive dashboard:** view frequency and duty, edit generator outputs, and
+  inspect board identity, pin assignments, and runtime telemetry.
+- **Board management:** identification LED, reboot, and confirmed configuration
+  saving with **Save and Reboot**, when supported by the firmware.
+- **Multiple boards:** select a board by product and serial number; reconnect to
+  the selected board rather than silently switching to another.
+- **Python integration:** use the HID client directly in scripts or provide a
+  client to the Flask application factory.
+
+This package communicates over **USB HID**, not the firmware's CDC serial shell
+or I2C interface. The browser talks to the local Python application, so it does
+not need WebHID support.
+
+## Requirements
+
+- Python **3.10 or later** on Windows, Linux, or macOS.
+- A Raspberry Pi Pico or Pico 2 flashed with compatible
+  [PicoPWM firmware](https://github.com/djwinter29-oss/PicoPWM/releases).
+- A USB data cable and permission to access the board's HID interface.
+
+On Linux, follow the
+[HID permissions guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/setup-and-troubleshooting.md#linux-hid-access).
+Older firmware may expose fewer features; unavailable dashboard actions are disabled.
+
+## Quick start
+
+Install the package, preferably in a virtual environment:
 
 ```sh
-python -m pip install -e '.[test]'
-```
-
-The `hidapi` dependency needs HID access to the board. On Linux, configure it with the
-[setup and troubleshooting guide](../../docs/guides/setup-and-troubleshooting.md#linux-hid-access).
-From the repository root, `tools/host/run-python.sh` creates a
-virtualenv, installs the host and runs it.
-The launcher refreshes the editable installation and runtime dependencies on each
-start, including dependency version constraints. If Python lacks `ensurepip`, it
-can create a pip-free venv and use the base interpreter's pip (`--python`) to install
-into it. Install pip or the OS Python venv package if neither interpreter has pip.
-The launcher uses `https://pypi.org/simple` by default for these public dependencies;
-set `PIP_INDEX_URL` to use another package index.
-
-## Run the web interface
-
-```sh
+python -m pip install picopwm
 picopwm-web
 ```
 
-Optionally set `PICOPWM_SERIAL` or `PICOPWM_DEVICE_PATH` to preselect a board, and
-`PICOPWM_HOST` / `PICOPWM_PORT` to change the listen address (default `127.0.0.1:5000`).
-A host other than `127.0.0.1`, `localhost`, or `::1` is refused unless `PICOPWM_TOKEN`
-is set. With that token, `/api/*` requires `Authorization: Bearer <token>` or the
-`picopwm_auth` cookie from `POST /api/login` with `{"token": "..."}`. Pages stay
-open so the browser can prompt once. A request whose `Origin` names a different
-host is rejected. Leave the token unset on loopback; the dashboard then accepts
-local API calls with no extra header. Without a token, a request whose `Host` is not
-`127.0.0.1`, `localhost`, or `::1` is rejected, including a page reached by DNS rebinding.
+Connect your board and open **<http://127.0.0.1:5000>**. Choose the board in the
+selector; use **Rescan** if it is not listed. Stop the application with `Ctrl+C`.
 
-Open <http://127.0.0.1:5000>. The dashboard mirrors the WebHID page: device identity
-and RAM, boot configuration with one confirmed **Save and Reboot**, compact pin
-assignment, runtime telemetry, LED/reboot controls, and three eight-channel tables.
-Click a generator frequency or duty to edit its live output; monitor values are
-read-only. Frequency uses Hz, kHz, or MHz units, and the optional 1 kHz / 50% preset
-only fills the dialog until Apply is clicked. Old firmware disables unsupported actions and reports missing telemetry.
-Pin assignment, monitoring GPIOs and dialog GPIOs come from the connected board's
-capability-gated HID pin report, not a host-side map. Missing pins show `--`;
-older firmware shows update guidance and malformed reports show an error.
+The board must be connected to the computer running Python, not necessarily the
+computer displaying the browser.
 
-Like PicoUart, the page scans boards attached to the **host server**, offers a
-product/serial selector and **Rescan**, and initially selects the preferred or first
-board. Each browser page keeps its own selection. Unplugging or rebooting retries
-that same board, never silently switches to another, and a rescan labels an absent
-selected board as **not found**. Select another board explicitly to switch.
+> **Before driving outputs:** GPIO signals are 3.3 V only. The default firmware
+> configuration is monitor-only. Configure the intended bank as a generator and
+> reboot before setting its output. Follow the
+> [hardware setup guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/hardware-setup.md)
+> and verify your wiring first.
 
-The Flask app factory accepts an injected `PicoPwmHid`, which keeps tests independent of
-hardware:
+## Configuration
 
-```python
-from picopwm.app import create_app
-from picopwm.client import PicoPwmHid
+Configure the application with environment variables before starting `picopwm-web`:
 
-app = create_app(PicoPwmHid(lambda: my_device))
-```
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `PICOPWM_SERIAL` | Preferred board serial number | Automatic selection |
+| `PICOPWM_DEVICE_PATH` | Preferred HID device path | Automatic selection |
+| `PICOPWM_HOST` | Listen address | `127.0.0.1` |
+| `PICOPWM_PORT` | Listen port | `5000` |
+| `PICOPWM_TOKEN` | Token required for API access when configured | Unset |
 
-## Shared Web UI
-
-The host-specific HTML and HTTP transport are in `host/web/`. Rendering, PWM styles,
-and display constants reuse `host/webhid/js/view.mjs`, `js/device.mjs`, and
-`css/webhid.css` directly; no WebHID access is needed by these server dashboards.
-Flask serves the canonical assets in source checkouts; release wheel workflows
-bundle them alongside the host assets. The .NET project links the same files at
-build/publish time. Do not edit generated or bundled copies.
-
-Both hosts expose the same JSON API (snake_case, as in the HID report layouts):
-
-- `GET /api/boards` returns `boards` (ID, product, serial, path) and `default_board_id`
-- `GET /api/host` returns the dashboard type
-- `GET /api/status?board={id}` returns identity, configuration, runtime, `pins`
-  (`channels`, `i2c_sda`, `i2c_scl`, `led`), `pins_error`, and all 24 channels, or
-  `connected: false` with an `error`
-- Every action requires `?board={id}` from the board scan; unknown/missing selections
-  are rejected. Status without a selection is disconnected, without opening HID.
-- `POST /api/channels/{channel}?board={id}` with `{"freq_hz": 1000, "duty": 50}`
-- `POST /api/led` with `{"on": true}`; `POST /api/reboot` with `{}`
-- `POST /api/save-reboot` with `{"profile": 0, "address": 64, "roles": [0,1,1],
-  "acknowledge_overclock": false}` validates all fields before sending targets.
-  Failures stop the sequence; already submitted target edits are not rolled back.
-  Reboot responses return `{"rebooting": true}` only after command confirmation.
-- `POST /api/stop`, `/api/bank`, `/api/i2c-address`, `/api/clock-profile`, `/api/save`
-  remain available for existing API clients, with a board selection.
-
-Errors return 400 for invalid input and 409 when the device rejects a command or its
-outcome is unconfirmed; board discovery/transport availability errors return 503.
-Temperature is an internal die estimate, not calibrated ambient temperature.
-Service load measures service-work wall time, not CPU utilization.
-
-Run the focused tests from this directory with:
+For example, use another port on Linux or macOS:
 
 ```sh
+PICOPWM_PORT=5002 picopwm-web
+```
+
+In Windows PowerShell:
+
+```powershell
+$env:PICOPWM_PORT = "5002"
+picopwm-web
+```
+
+### Network access
+
+Keep the default loopback address for local use. Listening beyond loopback requires
+`PICOPWM_TOKEN`; the application refuses a non-loopback bind without it.
+
+When a token is configured, the dashboard prompts for it. API clients can send
+`Authorization: Bearer <token>` or authenticate through `POST /api/login` with
+`{"token": "<token>"}` to receive a login cookie. Requests with a different
+`Origin` than the request host are rejected.
+
+The built-in server does not provide TLS. Do not expose it directly to the public
+internet; use a trusted network and an appropriately configured HTTPS reverse
+proxy if remote access is needed.
+
+## Use from Python
+
+Read board and channel state without changing outputs:
+
+```python
+from picopwm.client import PicoPwmHid
+
+client = PicoPwmHid()
+try:
+    state = client.status()
+    if not state["connected"]:
+        raise RuntimeError(state["error"])
+    print(state["identity"])
+    for channel in state["channels"]:
+        print(channel)
+finally:
+    client.close()
+```
+
+If multiple boards are connected, select one explicitly:
+
+```python
+from picopwm.client import PicoPwmHid
+from picopwm.transport import open_device
+
+client = PicoPwmHid(lambda: open_device(serial="YOUR_BOARD_SERIAL"))
+```
+
+Close the client when finished. `status()` reports connection failures in its
+result. Mutating operations can raise `DeviceError` when a command is rejected
+or its outcome cannot be confirmed.
+
+For generator channels, `client.set_channel(channel=0, freq_hz=1000, duty=50)`
+requests 1 kHz at 50% duty, and `client.stop()` stops all generator outputs.
+Only send these commands after confirming the bank role and fixture wiring.
+Read back realized channel state: backend limits and timing quantization can
+make it differ from the request.
+
+Applications and tests can inject a client with `create_app(client)` from
+`picopwm.app`. Direct HID clients use the supplied `open_device()` arguments for
+board selection; the environment variables above select boards for the dashboard.
+
+## HTTP API
+
+The dashboard exposes a JSON API using snake_case fields:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/boards` | Discover boards and obtain board IDs |
+| `GET /api/host` | Identify the dashboard implementation |
+| `GET /api/status?board=<id>` | Read identity, configuration, telemetry, pins, and channels |
+| `POST /api/channels/<channel>?board=<id>` | Set frequency and duty using `{"freq_hz": 1000, "duty": 50}` |
+| `POST /api/stop?board=<id>` | Stop generator outputs |
+| `POST /api/led?board=<id>` | Set the identification LED using `{"on": true}` |
+| `POST /api/reboot?board=<id>` | Reboot the board |
+| `POST /api/save-reboot?board=<id>` | Validate, save, and reboot with target configuration |
+
+Use board IDs returned by discovery. Board actions require an explicit selection;
+unknown or missing selections are rejected. Status without a selection is
+disconnected and does not open a HID device.
+
+The save-and-reboot payload contains `profile`, `address`, `roles`, and
+`acknowledge_overclock`, for example
+`{"profile": 0, "address": 64, "roles": [0, 1, 1], "acknowledge_overclock": false}`.
+Already submitted configuration edits are not rolled back if a later step fails.
+Legacy configuration endpoints `/api/bank`, `/api/i2c-address`, `/api/clock-profile`,
+and `/api/save` remain available with a board selection.
+
+Invalid input returns HTTP 400; rejected or unconfirmed device commands return
+409; board discovery or transport availability failures return 503. Reboot success
+is reported only after command confirmation.
+
+## Troubleshooting
+
+- **No board found:** check the USB data cable, firmware, HID permissions, and board
+  selection. The vendor interface uses VID `0xCAFE` and PID `0x4012`.
+- **Multiple boards found in a script:** pass a serial number or device path to
+  `open_device()`.
+- **A control is unavailable:** check the bank's running role and the firmware's
+  advertised capabilities. Monitor channels cannot be driven.
+- **A command outcome is unconfirmed:** reconnect and inspect realized state before
+  retrying, particularly after configuration saves or reboot.
+
+See the
+[setup and troubleshooting guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/setup-and-troubleshooting.md)
+and [HID protocol reference](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/design/usb/hid-report-reference.md)
+for details. Internal temperature is an estimate, not calibrated ambient
+temperature; service load measures service-work wall time, not CPU utilization.
+
+## Development
+
+From a repository checkout:
+
+```sh
+cd host/python
+python -m pip install -e '.[test]'
 python -m pytest -q
 ```
+
+Alternatively, run `tools/host/run-python.sh` from the repository root to create a
+virtual environment, refresh the editable installation, and start the dashboard.
+The launcher uses `https://pypi.org/simple` by default; set `PIP_INDEX_URL` to use
+another index. If `ensurepip` is unavailable, it can use the base interpreter's
+pip with `--python`; otherwise install pip or the OS Python venv package.
+
+Release wheels bundle the dashboard assets. Source checkouts serve the shared
+assets from `host/web/` and `host/webhid/`; edit those canonical files rather than
+generated or bundled copies.
+
+## License
+
+PicoPWM is released under the
+[BSD 3-Clause License](https://github.com/djwinter29-oss/PicoPWM/blob/main/LICENSE).
+For bug reports, include the package and firmware versions, operating system, and
+the exact error message in a
+[GitHub issue](https://github.com/djwinter29-oss/PicoPWM/issues).

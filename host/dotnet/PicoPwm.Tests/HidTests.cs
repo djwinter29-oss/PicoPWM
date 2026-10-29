@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using PicoPwm.Host;
 using System.Text.Json;
 
@@ -18,25 +19,59 @@ public sealed class HidTests
         public bool Closed;
         public bool InvalidPins;
         public bool Unplugged;
+        public uint[] FreqHz = Enumerable.Repeat(1000u, Protocol.ChannelCount).ToArray();
+        public byte[] Duty = Enumerable.Repeat((byte)50, Protocol.ChannelCount).ToArray();
 
-        public byte[] Get(byte reportId, int size) => Unplugged ? throw new IOException("device unplugged") : reportId switch
+        private byte[] BankReport(int bank)
         {
-            Protocol.IdentityReport => IdentityReport,
-            Protocol.ConfigurationReport => Configuration,
-            Protocol.MemoryReport => [1, 0xC0, 0xD4, 1, 0, 0, 0x20, 8, 0],
-            Protocol.RuntimeReport => [1, 123, 0, 0, 0, 0x74, 0x59, 0, 0, 0x92, 4, 0x40, 0x1A],
-            Protocol.PinsReport => InvalidPins ? new byte[28] :
-                [1, .. Enumerable.Range(0, 24).Select(pin => (byte)pin), 26, 27, 255],
-            Protocol.ActionReport => Result,
-            _ => Bank,
-        };
+            var payload = new byte[Protocol.BankStatusSize];
+            payload[0] = 1;
+            for (var index = 0; index < Protocol.BankSize; index++)
+            {
+                var offset = 1 + index * 5;
+                BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(offset), FreqHz[bank * Protocol.BankSize + index]);
+                payload[offset + 4] = Duty[bank * Protocol.BankSize + index];
+            }
+            return payload;
+        }
+
+        public byte[] Get(byte reportId, int size)
+        {
+            if (Unplugged)
+                throw new IOException("device unplugged");
+            if (reportId is >= Protocol.BankStatusReport and < Protocol.BankStatusReport + Protocol.BankCount)
+                return BankReport(reportId - Protocol.BankStatusReport);
+            return reportId switch
+            {
+                Protocol.IdentityReport => IdentityReport,
+                Protocol.ConfigurationReport => Configuration,
+                Protocol.MemoryReport => [1, 0xC0, 0xD4, 1, 0, 0, 0x20, 8, 0],
+                Protocol.RuntimeReport => [1, 123, 0, 0, 0, 0x74, 0x59, 0, 0, 0x92, 4, 0x40, 0x1A],
+                Protocol.PinsReport => InvalidPins ? new byte[28] :
+                    [1, .. Enumerable.Range(0, 24).Select(pin => (byte)pin), 26, 27, 255],
+                Protocol.ActionReport => Result,
+                _ => Bank,
+            };
+        }
 
         public void Set(byte reportId, byte[] payload)
         {
             Sent.Add(payload);
-            if (mode != "drop")
-                Result = [1, payload[1], payload[2], (byte)(mode == "pending" ? 6 :
-                    mode == "fail-bank" && payload[2] == 3 ? 2 : 0), 0, 0, 0, 0, 0, 0, 0, 0];
+            if (mode == "drop")
+                return;
+            var status = mode == "pending" ? (byte)6
+                : mode == "fail-bank" && payload[2] == 3 ? (byte)2
+                : (byte)0;
+            if (payload[2] == Protocol.OpSetChannel && mode is "invalid-channel" or "invalid-applied")
+            {
+                status = 2;
+                if (mode == "invalid-applied")
+                {
+                    FreqHz[payload[3]] = BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(4));
+                    Duty[payload[3]] = payload[8];
+                }
+            }
+            Result = [1, payload[1], payload[2], status, 0, 0, 0, 0, 0, 0, 0, 0];
         }
 
         public void Dispose() { Closed = true; }
@@ -96,6 +131,22 @@ public sealed class HidTests
         var (device, client) = Make();
         client.SetChannel(3, 2000, 25);
         Assert.Equal(new byte[] { 1, 1, 1, 3 }, device.Sent[0][..4]);
+    }
+
+    [Fact]
+    public void InvalidResultIsReconciledWhenReadbackMatches()
+    {
+        var state = Make("invalid-applied").Item2.SetChannel(0, 2000, 25);
+        Assert.Equal(2000u, state.Channels[0].FreqHz);
+        Assert.Equal(25, state.Channels[0].Duty);
+    }
+
+    [Fact]
+    public void InvalidResultRemainsAnErrorWhenReadbackDoesNotMatch()
+    {
+        var error = Assert.Throws<DeviceException>(() => Make("invalid-channel").Item2.SetChannel(0, 2000, 25));
+        Assert.Contains("requested 2000 Hz / 25%", error.Message);
+        Assert.Contains("readback 1000 Hz / 50%", error.Message);
     }
 
     [Fact]
@@ -205,6 +256,7 @@ public sealed class HidTests
         client.Reboot();
         Assert.Single(device.Sent);
         Assert.Equal(9, device.Sent[0][2]);
+        Assert.Equal(Protocol.FlagConfirmSave, device.Sent[0][9]);
     }
 
     [Fact]

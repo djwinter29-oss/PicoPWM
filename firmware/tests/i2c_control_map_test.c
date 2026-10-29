@@ -210,6 +210,23 @@ static void test_stale_command_completion_does_not_replace_new_attempt(void) {
     assert(response[0] == I2C_STATUS_OK);
 }
 
+static void test_stale_command_completion_does_not_replace_malformed_attempt(void) {
+    uint8_t response[1];
+    const uint8_t command[] = {I2C_CONTROL_MAP_REG_SET_BASE, 1u, 2u, 3u, 4u, 5u};
+    const uint8_t malformed[] = {I2C_CONTROL_MAP_REG_SET_BASE, 1u};
+
+    reset();
+    write_frame(command, sizeof(command), false);
+    write_frame(malformed, sizeof(malformed), false);
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_INVALID);
+
+    i2c_control_map_poll();
+    assert(set_calls == 1u);
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_INVALID);
+}
+
 int main(void) {
     test_info_register();
     test_channel_read_encoding_and_unknown_register();
@@ -218,5 +235,6 @@ int main(void) {
     test_malformed_overflow_and_status_shortcut();
     test_stop_all_and_queue_full();
     test_stale_command_completion_does_not_replace_new_attempt();
+    test_stale_command_completion_does_not_replace_malformed_attempt();
     return 0;
 }

@@ -154,7 +154,7 @@ next session.
 
 ### 2. Shared Control Layer
 
-`device.*` is the transport-neutral Core 0 API used by USB CDC, USB HID, and I2C.
+`control_api.*` is the transport-neutral Core 0 API used by USB CDC, USB HID, and I2C.
 
 Responsibilities:
 

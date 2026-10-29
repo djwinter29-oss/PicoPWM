@@ -84,7 +84,9 @@ and lookup table restrict processing to owned pins that changed; scans with
 no observed changes do not visit channel capture state.
 
 Complete rising-to-rising cycles and their high times accumulate over at least
-20 ms. Lower-frequency signals publish after a complete cycle. Core 1 calculates
+20 ms. A cycle lasting at least 20 ms publishes on its own, discarding any
+unfinished faster-cycle accumulation so a transition to a slow input does not
+inflate its first complete-cycle reading. Core 1 calculates
 frequency as cycle count divided by elapsed time, and duty as accumulated high
 time divided by elapsed time, outside the timer callback. This reduces
 single-period timestamp jitter without hiding changes through display rounding.
@@ -116,6 +118,12 @@ an otherwise supported frequency. Out-of-range inputs can alias to false lower
 frequencies or static levels; the sampler cannot reliably identify all such
 inputs. High-frequency input no longer causes per-edge interrupt starvation,
 but responsiveness and accuracy still require physical validation.
+
+If no scan has arrived for at least one second, the backend returns no valid
+sample rather than classifying an old GPIO level as static. The driver publishes
+0 Hz / 0% for an unavailable sample; the existing channel-state format does not
+distinguish this from a measured static LOW. A valid static HIGH result requires
+a recent scan, but cannot rule out pulses missed between scans.
 
 ### Experimental 10 kHz Target and Scan Diagnostics
 

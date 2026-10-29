@@ -55,8 +55,8 @@ void sw_mon_get_scan_timing(sw_mon_scan_timing_t *timing);
  * @param channel Backend-local software monitor channel index.
  * @param state Caller-owned destination for the latest exported state.
  * @return `true` when the returned state is a stable PWM measurement or a stable static level.
- *         Returns `false` before the first stable sample and when the exported state is the
- *         unstable sentinel.
+ *         Returns `false` before the first stable sample or when no scan has arrived for at least
+ *         one second; the returned state is the unstable sentinel.
  * @note A private Core 1 timer samples all GPIOs with a 2 us completion-relative delay.
  *       Complete observed cycles accumulate over at least 20 ms before publication;
  *       slower signals publish after a complete cycle. Narrow pulses may be missed and

@@ -88,6 +88,9 @@ static bool sw_mon_scan(repeating_timer_t *timer) {
             if (ctx->have_rise && ctx->have_high) {
                 uint64_t period = now - ctx->last_rise_us;
                 if (period <= SW_MON_STATIC_TIMEOUT_US && ctx->high_us <= period) {
+                    if (period >= SW_MON_WINDOW_US) {
+                        ctx->period_sum = ctx->high_sum = ctx->cycles = 0u;
+                    }
                     ctx->period_sum += (uint32_t)period;
                     ctx->high_sum += ctx->high_us;
                     ctx->cycles++;
@@ -168,14 +171,15 @@ bool sw_mon_get(uint channel, pwm_state_t *state) {
     sw_mon_channel_t ctx = sw_mon_channels[channel];
     uint64_t now = time_us_64();
     uint32_t levels = sw_mon_levels;
+    bool scan_current = sw_mon_scan_timing.scans != 0u && now - sw_mon_last_scan_us < SW_MON_STATIC_TIMEOUT_US;
     restore_interrupts(irq_state);
 
-    if (now - ctx.last_edge_us >= SW_MON_STATIC_TIMEOUT_US) {
+    if (scan_current && now - ctx.last_edge_us >= SW_MON_STATIC_TIMEOUT_US) {
         state->freq_hz = 0u;
         state->duty = (levels & (1u << software_pwm_config.channels[channel].gpio)) ? 100u : 0u;
         return true;
     }
-    if (ctx.sample_us == 0u) {
+    if (!scan_current || ctx.sample_us == 0u) {
         state->freq_hz = SW_MON_UNSTABLE_FREQ_HZ;
         state->duty = SW_MON_UNSTABLE_DUTY;
         return false;

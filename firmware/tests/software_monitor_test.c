@@ -181,6 +181,38 @@ int main(void) {
             assert(state.duty + 5u >= duty && state.duty <= duty + 5u);
         }
     }
+
+    /* A change to 2 Hz settles after a full cycle, including long high and low segments. */
+    for (uint duty = 10u; duty <= 90u; duty += 40u) {
+        start = now + 100u;
+        scan(start, 0u);
+        for (uint t = 0u; t <= 2000000u; t += 5u) {
+            bool high = t % 500000u < duty * 5000u;
+            scan(start + 5u + t, high ? mask : 0u);
+            if (t >= 500000u) {
+                for (uint c = 0; c < 8u; ++c) {
+                    expect(c, 2u, duty);
+                }
+            }
+        }
+    }
+
+    /* A stopped sampler must not turn its last HIGH sample into a valid static measurement. */
+    now += 1100000u;
+    levels = 0u;
+    assert(!sw_mon_get(0, &state));
+    assert(SW_MON_IS_UNSTABLE(state));
+
+    /* Short LOW pulses entirely between scans are invisible, not a high-frequency reading. */
+    start = now + 100u;
+    for (uint t = 0u; t <= 1100000u; t += 10u) {
+        scan(start + t, mask);
+        now = start + t + 1u;
+        levels = 0u;
+        now = start + t + 2u;
+        levels = mask;
+    }
+    expect(0, 0u, 100u);
     puts("software_monitor_test ok");
     return 0;
 }

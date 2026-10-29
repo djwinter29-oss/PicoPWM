@@ -36,14 +36,16 @@ Use moderate duty cycles initially; narrow high or low pulses can impose a lower
 | Backend | Recommended generation | Recommended measurement | Extended operation and limitations |
 | --- | --- | --- | --- |
 | [Hardware PWM](docs/design/pwm-driver/hardware.md) (Bank A) | 15 Hz-1 MHz | 100 Hz-1 MHz | Generator requests accepted from 10 Hz to 10 MHz; above 1 MHz is experimental with reduced duty resolution. The minimum realizable output depends on the system clock. Measurement uses separate 250 ms frequency/duty windows; 20-100 Hz is usable with coarse frequency resolution. |
-| [PIO PWM](docs/design/pwm-driver/pio.md) (Bank B) | 1 Hz-100 kHz | 2 Hz-100 kHz | Generator requests accepted up to 10 MHz. Above 100 kHz, verify duty carefully; above 1 MHz, generation is experimental. Measurement at higher rates needs independent verification because fixed instruction overhead affects decoding. |
-| [Software PWM](docs/design/pwm-driver/software.md) (Bank C) | 1 Hz-1 kHz | 2 Hz-1 kHz | Generation and measurement up to 10 kHz are experimental. At 10 kHz, generation has ten nominal ticks per period and 10-percentage-point duty steps. Measurement targets 10%-90% duty; actual scan gaps determine pulse detection and accuracy. |
+| [PIO PWM](docs/design/pwm-driver/pio.md) (Bank B) | 1 Hz-100 kHz | 10 Hz-100 kHz | Generator requests accepted up to 10 MHz. Above 100 kHz, verify duty carefully; above 1 MHz, generation is experimental. Measurement at higher rates needs independent verification because fixed instruction overhead affects decoding. |
+| [Software PWM](docs/design/pwm-driver/software.md) (Bank C) | 1 Hz-1 kHz | 10 Hz-1 kHz | Eight channels share one timer for the selected bank role. Generation and measurement up to 10 kHz are experimental. At 10 kHz, generation has ten nominal ticks per period and 10-percentage-point duty steps. Measurement targets 10%-90% duty; actual scan gaps determine pulse detection and accuracy. |
 
 Generation accepts integer duty requests from 0% to 100%; timing quantization limits achievable values.
 `0 Hz` selects a static output (`0%` low or `100%` high), rather than an oscillating signal.
 The 15 Hz hardware-generation recommendation accommodates the minimum at the documented clock profiles.
-The 2 Hz monitor starting point leaves margin around the PIO capture and software inactivity timeouts;
-operation near 1 Hz needs separate checks.
+PIO and software measurement recommendations start at 10 Hz as a precaution following
+operator-reported unstable software readings in a 2 Hz PIO-to-software loopback.
+The cause remains unresolved; this recommendation does not establish a verified 10 Hz accuracy floor.
+Measurement below 10 Hz is experimental and needs independent verification.
 
 **PIO duty caveat:** the current readback model omits fixed instruction overhead.
 At 125 MHz, a 10 MHz / 50% request can display 50% while the program's calculated high fraction is 25%.

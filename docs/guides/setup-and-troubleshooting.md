@@ -38,8 +38,10 @@ Reference](../design/usb/hid-report-reference.md). The documented I2C
 interface is limited to PWM channel reads, writes, status, and stop-all; see the
 [I2C Protocol Reference](../design/i2c/i2c-protocol.md).
 
-The `150` MHz profile is an overclock on RP2040. The `200` and `250` MHz
-profiles are not qualified for every board. Configuration persistence uses
+The SDK default is 125 MHz on RP2040 and 150 MHz on RP2350. The `150` MHz
+profile is an overclock only on RP2040. HID/dashboard saves require
+acknowledgement above 150 MHz; CDC has no separate acknowledgement step.
+The `200` and `250` MHz profiles are not qualified for every board. Configuration persistence uses
 flash and temporarily stalls CDC, HID, and I2C; allow up to two seconds for the
 operation. See [Hardware Setup](hardware-setup.md) before wiring signals.
 

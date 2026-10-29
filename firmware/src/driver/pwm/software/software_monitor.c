@@ -10,7 +10,7 @@
 #include "pico/time.h"
 
 /** @brief Minimum delay between completion of one scan and the next scan. */
-#define SW_MON_SCAN_US 10
+#define SW_MON_SCAN_US 2
 /** @brief Accumulate complete cycles over at least this measurement window. */
 #define SW_MON_WINDOW_US 20000u
 /** @brief Treat a channel with no observed transitions for this long as static. */
@@ -39,6 +39,14 @@ static alarm_pool_t *sw_mon_pool;
 static repeating_timer_t sw_mon_timer;
 /** @brief GPIO levels from the preceding bitmap read. */
 static uint32_t sw_mon_levels;
+/** @brief Mask of the eight owned GPIO inputs. */
+static uint32_t sw_mon_pin_mask;
+/** @brief GPIO-to-bank index lookup, used only for bits present in the owned mask. */
+static uint8_t sw_mon_channel_for_pin[30];
+/** @brief Last scan timestamp; zero before the first callback. */
+static uint64_t sw_mon_last_scan_us;
+/** @brief Debugger-visible lifetime scan spacing; inspect while Core 1 is halted for a coherent snapshot. */
+static volatile sw_mon_scan_timing_t sw_mon_scan_timing;
 /** @brief True only after timer registration succeeds. */
 static bool sw_mon_initialized;
 
@@ -46,16 +54,32 @@ static bool sw_mon_initialized;
 static bool sw_mon_scan(repeating_timer_t *timer) {
     (void)timer;
     uint32_t levels = gpio_get_all();
-    uint32_t changed = levels ^ sw_mon_levels;
+    uint32_t changed = (levels ^ sw_mon_levels) & sw_mon_pin_mask;
     uint64_t now = time_us_64();
 
-    sw_mon_levels = levels;
-    for (uint channel = 0; channel < PWM_DRIVER_CONFIG_BANK_SIZE; ++channel) {
-        uint32_t mask = 1u << software_pwm_config.channels[channel].gpio;
-        if ((changed & mask) == 0u) {
-            continue;
+    if (sw_mon_scan_timing.scans != 0u) {
+        uint64_t elapsed = now - sw_mon_last_scan_us;
+        uint32_t gap = elapsed > UINT32_MAX ? UINT32_MAX : (uint32_t)elapsed;
+        if (gap < sw_mon_scan_timing.min_gap_us) {
+            sw_mon_scan_timing.min_gap_us = gap;
         }
-        sw_mon_channel_t *ctx = &sw_mon_channels[channel];
+        if (gap > sw_mon_scan_timing.max_gap_us) {
+            sw_mon_scan_timing.max_gap_us = gap;
+        }
+        if (gap > 5u && sw_mon_scan_timing.gaps_over_5us != UINT32_MAX) {
+            sw_mon_scan_timing.gaps_over_5us++;
+        }
+    }
+    if (sw_mon_scan_timing.scans != UINT32_MAX) {
+        sw_mon_scan_timing.scans++;
+    }
+    sw_mon_last_scan_us = now;
+    sw_mon_levels = levels;
+    while (changed != 0u) {
+        uint pin = (uint)__builtin_ctz(changed);
+        uint32_t mask = 1u << pin;
+        changed &= ~mask;
+        sw_mon_channel_t *ctx = &sw_mon_channels[sw_mon_channel_for_pin[pin]];
         if (now - ctx->last_edge_us >= SW_MON_STATIC_TIMEOUT_US) {
             *ctx = (sw_mon_channel_t){0};
         }
@@ -104,8 +128,15 @@ bool sw_mon_init(void) {
         return false;
     }
     uint64_t now = time_us_64();
+    sw_mon_pin_mask = 0u;
+    sw_mon_scan_timing = (sw_mon_scan_timing_t){.min_gap_us = UINT32_MAX};
     for (uint channel = 0; channel < PWM_DRIVER_CONFIG_BANK_SIZE; ++channel) {
         uint pin = software_pwm_config.channels[channel].gpio;
+        if (pin >= 30u || (sw_mon_pin_mask & (1u << pin)) != 0u) {
+            return false;
+        }
+        sw_mon_pin_mask |= 1u << pin;
+        sw_mon_channel_for_pin[pin] = (uint8_t)channel;
         gpio_init(pin);
         gpio_set_dir(pin, GPIO_IN);
         sw_mon_channels[channel] = (sw_mon_channel_t){.last_edge_us = now};
@@ -119,6 +150,13 @@ bool sw_mon_init(void) {
     }
     sw_mon_initialized = true;
     return true;
+}
+
+/** @copydoc sw_mon_get_scan_timing */
+void sw_mon_get_scan_timing(sw_mon_scan_timing_t *timing) {
+    uint32_t irq_state = save_and_disable_interrupts();
+    *timing = sw_mon_scan_timing;
+    restore_interrupts(irq_state);
 }
 
 /** @copydoc sw_mon_get */

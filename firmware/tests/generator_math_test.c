@@ -31,7 +31,7 @@ static uint32_t pwm_pio_simulate_high_iterations(uint16_t period_count, uint32_t
 static uint32_t pwm_pio_sweep_worst_ppm(uint32_t sys_clk_hz, uint32_t min_freq_hz) {
     uint32_t worst_ppm = 0u;
 
-    for (uint64_t freq = min_freq_hz; freq <= 1000000u; freq += freq / 50u + 1u) {
+    for (uint64_t freq = min_freq_hz; freq <= 10000000u; freq += freq / 50u + 1u) {
         uint16_t period = 0u;
         uint32_t clkdiv = 256u;
         uint32_t realized;
@@ -55,7 +55,7 @@ static uint32_t pwm_pio_sweep_worst_ppm(uint32_t sys_clk_hz, uint32_t min_freq_h
 static uint32_t pwm_hw_sweep_worst_ppm(uint32_t sys_clk_hz, uint32_t min_freq_hz) {
     uint32_t worst_ppm = 0u;
 
-    for (uint64_t freq = min_freq_hz; freq <= 1000000u; freq += freq / 50u + 1u) {
+    for (uint64_t freq = min_freq_hz; freq <= 10000000u; freq += freq / 50u + 1u) {
         uint32_t top = 0u;
         uint16_t div = 0u;
         uint32_t realized;
@@ -106,6 +106,9 @@ int main(void) {
         for (size_t i = 0u; i < sizeof(clocks) / sizeof(clocks[0]); ++i) {
             /* Divider quantization (1/256 near a divider of 1) bounds the error at about 0.2%. */
             assert(pwm_pio_sweep_worst_ppm(clocks[i], 1u) < 4000u);
+            assert(pwm_pio_find_timing(clocks[i], 10000000u, &period, &clkdiv));
+            uint32_t actual = pwm_pio_realized_freq_hz(clocks[i], period, clkdiv);
+            assert(actual >= 9960000u && actual <= 10040000u);
         }
         assert(!pwm_pio_find_timing(125000000u, 0u, &period, &clkdiv));
         assert(!pwm_pio_find_timing(125000000u, 60000000u, &period, &clkdiv));
@@ -119,6 +122,9 @@ int main(void) {
         for (size_t i = 0u; i < sizeof(clocks) / sizeof(clocks[0]); ++i) {
             /* 15 Hz is above the slowest divider at every supported clock. */
             assert(pwm_hw_sweep_worst_ppm(clocks[i], 15u) < 6000u);
+            assert(pwm_hw_find_timing(clocks[i], 10000000u, &top, &div));
+            uint32_t actual = pwm_hw_realized_freq_hz(clocks[i], top, div);
+            assert(actual >= 9940000u && actual <= 10060000u);
             assert(!pwm_hw_find_timing(clocks[i], 1u, &top, &div));
             assert(!pwm_hw_find_timing(clocks[i], clocks[i], &top, &div));
         }

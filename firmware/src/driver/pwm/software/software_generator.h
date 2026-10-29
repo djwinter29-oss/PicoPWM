@@ -9,7 +9,7 @@
 #include "../pwm_driver.h"
 
 /** @brief Maximum supported software PWM frequency in Hz. */
-#define SW_GEN_MAX_FREQ_HZ 1000u
+#define SW_GEN_MAX_FREQ_HZ 10000u
 
 /** @brief Initialize the software PWM generator on Core 1; the tick timer is armed on demand by the first active
  * channel. */

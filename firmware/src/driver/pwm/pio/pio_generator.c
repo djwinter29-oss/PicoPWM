@@ -32,7 +32,7 @@
 #include "pio_math.h"
 
 /** @brief Intended upper frequency limit for the PIO generator backend. */
-#define PIO_GEN_MAX_FREQ_HZ 1000000u
+#define PIO_GEN_MAX_FREQ_HZ 10000000u
 /** @brief How long a TX FIFO push may block before the apply fails. Two words fit in a cleared FIFO. */
 #define PIO_GEN_FIFO_PUT_TIMEOUT_US 1000u
 

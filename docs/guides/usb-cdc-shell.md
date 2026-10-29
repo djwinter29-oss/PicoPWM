@@ -56,8 +56,12 @@ bank; configuration changes only the bank's role (generator or monitor). See
 [Hardware Setup](hardware-setup.md) for the authoritative channel-to-GPIO map.
 
 The duty argument is an integer percentage from `0` to `100`; if omitted it
-defaults to `50`. Generator request ranges are Bank A `10 Hz..1 MHz`, Bank B
-`1 Hz..1 MHz`, and Bank C `1 Hz..1 kHz`. A `0 Hz` request selects a static
+defaults to `50`. Generator request ranges are Bank A `10 Hz..10 MHz`, Bank B
+`1 Hz..10 MHz`, and Bank C `1 Hz..10 kHz`. Bank C above 1 kHz is experimental,
+with coarse duty resolution and software timing jitter. Banks A and B above 1 MHz are experimental;
+duty resolution is reduced and clock-dependent (see [hardware PWM limits](../design/pwm-driver/hardware.md#target-working-range)
+and [PIO limits](../design/pwm-driver/pio.md#high-frequency-generation)).
+A `0 Hz` request selects a static
 output: `0%` holds the pin low and `100%` holds it high. These are accepted
 request ranges, not accuracy guarantees. Monitor banks measure inputs instead
 of driving outputs. A nonzero `pwm set` request takes effect immediately, so

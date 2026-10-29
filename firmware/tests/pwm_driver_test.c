@@ -141,6 +141,17 @@ int main(void) {
         usleep(1000);
     }
     assert(pwm_driver_is_ready());
+    assert(pwm_driver_config_frequency_supported(8u, 10000000u));
+    assert(!pwm_driver_config_frequency_supported(8u, 10000001u));
+    assert(pwm_driver_config_frequency_supported(0u, 1000000u));
+    assert(pwm_driver_config_frequency_supported(0u, 10000000u));
+    assert(!pwm_driver_config_frequency_supported(0u, 10000001u));
+    assert(pwm_driver_set(8u, 10000000u, 50u) == PWM_DRIVER_RESULT_OK);
+    expect_state(8u, 10000000u, 50u);
+    assert(pwm_driver_set(8u, 10000001u, 50u) == PWM_DRIVER_RESULT_INVALID);
+    assert(pwm_driver_set(0u, 10000000u, 50u) == PWM_DRIVER_RESULT_OK);
+    expect_state(0u, 10000000u, 50u);
+    assert(pwm_driver_set(0u, 10000001u, 50u) == PWM_DRIVER_RESULT_INVALID);
 
     /* Set goes through the mailbox, Core 1 applies it, and the result is readable from the cache. */
     assert(pwm_driver_set(0u, 1000u, 50u) == PWM_DRIVER_RESULT_OK);

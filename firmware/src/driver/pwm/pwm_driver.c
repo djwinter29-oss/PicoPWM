@@ -77,8 +77,11 @@ bool pwm_driver_config_frequency_supported(uint channel, uint32_t frequency_hz) 
 
     if (channel / PWM_DRIVER_CONFIG_BANK_SIZE == PWM_BANK_A && role == PWM_ROLE_GENERATOR) {
         min_hz = 10u;
+        max_hz = 10000000u;
+    } else if (channel / PWM_DRIVER_CONFIG_BANK_SIZE == PWM_BANK_B && role == PWM_ROLE_GENERATOR) {
+        max_hz = 10000000u;
     } else if (channel / PWM_DRIVER_CONFIG_BANK_SIZE == PWM_BANK_C) {
-        max_hz = 1000u;
+        max_hz = role == PWM_ROLE_GENERATOR ? 10000u : 1000u;
     }
 
     return frequency_hz >= min_hz && frequency_hz <= max_hz;

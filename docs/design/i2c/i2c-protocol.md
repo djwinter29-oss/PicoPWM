@@ -143,9 +143,9 @@ Nonzero generator frequency limits depend on the bank:
 
 | Bank | Backend | Accepted request range |
 | --- | --- | --- |
-| A | Hardware PWM | 10 Hz-1 MHz |
-| B | PIO | 1 Hz-1 MHz |
-| C | Software PWM | 1 Hz-1 kHz |
+| A | Hardware PWM | 10 Hz-10 MHz (above 1 MHz experimental; reduced duty resolution) |
+| B | PIO | 1 Hz-10 MHz (above 1 MHz experimental; coarse duty resolution) |
+| C | Software PWM | 1 Hz-10 kHz (above 1 kHz experimental; coarse duty resolution and software jitter) |
 
 These are accepted request ranges, not accuracy guarantees. Read back the
 channel to inspect its realized frequency and duty; backend quantization can

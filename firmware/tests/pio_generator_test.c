@@ -63,12 +63,12 @@ int main(void) {
     assert(published_freq != 0u);
 
     assert(!pio_gen_set(8u, 1000u, 50u));
-    assert(!pio_gen_set(0u, 2000000u, 50u));
+    assert(!pio_gen_set(0u, 10000001u, 50u));
     assert(pio_gen_set(0u, 0u, 100u));
     assert(published_freq == 0u && published_duty == 100u);
     assert(pio_test_gpio_level[0] == 1);
     pio_test_tx_fifo_full = false;
-    const uint32_t frequencies[] = {1000u, 100000u, 1000u, 1000000u, 100u};
+    const uint32_t frequencies[] = {1000u, 100000u, 1000u, 1000000u, 2000000u, 10000000u, 100u};
     for (uint channel = 0; channel < 8u; ++channel) {
         for (uint i = 0; i < sizeof(frequencies) / sizeof(frequencies[0]); ++i) {
             unsigned before = pio_test_starts;

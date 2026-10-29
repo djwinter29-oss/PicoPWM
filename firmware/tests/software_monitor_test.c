@@ -38,7 +38,7 @@ uint alarm_pool_core_num(alarm_pool_t *p) {
 }
 bool alarm_pool_add_repeating_timer_us(alarm_pool_t *p, int64_t delay, alarm_callback_t callback, void *data,
                                        repeating_timer_t *timer) {
-    assert(p == &pool && delay == 10 && data == NULL && timer != NULL);
+    assert(p == &pool && delay == 2 && data == NULL && timer != NULL);
     tick = callback;
     return !arm_fail;
 }
@@ -133,6 +133,54 @@ int main(void) {
         scan(start + t, ((uint64_t)t * 300000u % 1000000u) < 500000u ? mask : 0u);
     }
     assert(reads - before == 1000u);
+
+    /* Experimental 10 kHz target at all duty extremes, with 4 us actual scan spacing. */
+    start += 2000000u;
+    for (uint t = 0; t <= 100000u; t += 4u) {
+        uint32_t bitmap = 0u;
+        for (uint c = 0; c < 8; ++c) {
+            uint high = c == 7u ? 90u : (c + 1u) * 10u;
+            if ((t + c * 3u) % 100u < high) {
+                bitmap |= 1u << software_pwm_config.channels[c].gpio;
+            }
+        }
+        scan(start + t, bitmap);
+    }
+    for (uint c = 0; c < 8; ++c) {
+        assert(sw_mon_get(c, &state));
+        uint target_duty = c == 7u ? 90u : (c + 1u) * 10u;
+        assert(state.freq_hz >= 9500u && state.freq_hz <= 10500u);
+        assert(state.duty + 5u >= target_duty && state.duty <= target_duty + 5u);
+    }
+    sw_mon_scan_timing_t timing;
+    sw_mon_get_scan_timing(&timing);
+    assert(timing.min_gap_us == 4u);
+    assert(timing.max_gap_us > 5u && timing.gaps_over_5us != 0u);
+    unsigned long_gaps = timing.gaps_over_5us;
+    scan(now + 12u, levels ^ (1u << 25u));
+    sw_mon_get_scan_timing(&timing);
+    assert(timing.gaps_over_5us == long_gaps + 1u);
+    expect(0, 10000u, 12u);
+
+    /* All nine duty targets and asynchronous scan phases with variable 3..5 us spacing. */
+    for (uint duty = 10u; duty <= 90u; duty += 10u) {
+        start = now + 2000000u;
+        scan(start, 0u);
+        for (uint t = 0u, n = 0u; t <= 50000u; t += 3u + n++ % 3u) {
+            uint32_t bitmap = 0u;
+            for (uint c = 0; c < 8u; ++c) {
+                if ((t + c * 7u) % 100u < duty) {
+                    bitmap |= 1u << software_pwm_config.channels[c].gpio;
+                }
+            }
+            scan(start + 100u + t, bitmap);
+        }
+        for (uint c = 0; c < 8u; ++c) {
+            assert(sw_mon_get(c, &state));
+            assert(state.freq_hz >= 9500u && state.freq_hz <= 10500u);
+            assert(state.duty + 5u >= duty && state.duty <= duty + 5u);
+        }
+    }
     puts("software_monitor_test ok");
     return 0;
 }

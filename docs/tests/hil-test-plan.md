@@ -57,7 +57,7 @@ python -m unittest discover -s tools/hil/tests -p 'test_*.py'
 ```
 
 Follow [HIL Test Connections](hil-test-connection.md) for wiring and safety. Protocol expectations come from the
-[CDC shell](../guides/usb_cdc_shell.md), [I2C protocol](../guides/i2c_protocol.md) and
+[CDC shell](../guides/usb_cdc_shell.md), [I2C protocol](../design/i2c/i2c-protocol.md) and
 [HID report reference](../design/usb/hid-report-reference.md).
 
 ## Preconditions

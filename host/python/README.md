@@ -14,7 +14,7 @@ python -m pip install -e '.[test]'
 ```
 
 The `hidapi` dependency needs HID access to the board. On Linux, configure it with the
-[HID permissions guide](../../docs/guides/linux_hid_permissions.md).
+[setup and troubleshooting guide](../../docs/guides/setup-and-troubleshooting.md#linux-hid-access).
 From the repository root, `tools/host/run-python.sh` creates a
 virtualenv, installs the host and runs it.
 The launcher refreshes the editable installation and runtime dependencies on each

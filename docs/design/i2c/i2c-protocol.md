@@ -1,6 +1,6 @@
-# I2C Protocol
+# I2C Protocol Reference
 
-The Pico acts as an I2C slave on **I2C1**. See [Hardware Setup](hardware-setup.md) for the
+The Pico acts as an I2C slave on **I2C1**. See [Hardware Setup](../../guides/hardware-setup.md) for the
 SDA and SCL GPIO assignments.
 
 ### Electrical

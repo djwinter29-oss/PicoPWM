@@ -5,7 +5,7 @@ It is a wiring plan, not a record of a completed test. Save actual results in [r
 Use the [HIL test plan](hil-test-plan.md) to select cases and define acceptance limits.
 
 Use the [hardware setup guide](../guides/hardware-setup.md) as the source of truth for channel assignments and the
-[configuration guide](../guides/configuration.md) for bank roles.
+[setup and troubleshooting guide](../guides/setup-and-troubleshooting.md) for bank roles.
 
 ## Equipment
 
@@ -41,7 +41,7 @@ For optional I2C tests:
 Pull SDA and SCL up to **3.3 V**, typically with 4.7 kOhm resistors; account for any pull-ups already fitted to the
 controller. Do not connect a controller's power output to the USB-powered board unless the power arrangement is
 explicitly designed for it. Start at 100 kHz and use the running slave address (default `0x40`).
-See the [I2C protocol](../guides/i2c_protocol.md).
+See the [I2C protocol reference](../design/i2c/i2c-protocol.md).
 
 ## PWM Loopback
 

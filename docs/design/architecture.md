@@ -2,7 +2,7 @@
 
 This page describes the current PicoPWM runtime structure. It focuses on module ownership and request flow, not backend implementation detail.
 
-For mailbox state machines, publication internals, and backend-specific behavior, see [PWM Driver Design](pwm_driver_design.md).
+For mailbox state machines and publication internals, see [PWM Driver Design](pwm-driver/driver-design.md). Backend-specific behavior is covered in the hardware, PIO, and software design pages below.
 
 ## At A Glance
 
@@ -60,18 +60,15 @@ Use the architecture-related pages as follows:
 
 - [Architecture](architecture.md) — system structure, layer boundaries, and request flow
 - [USB CDC CLI Design](usb/cdc-cli-design.md) — CLI responsibilities, session rules, and command extension workflow
-- [Firmware Configuration](../guides/configuration.md) — startup bank configuration and channel rules
+- [Setup and Troubleshooting](../guides/setup-and-troubleshooting.md) — operating configuration and common problems
 - [Hardware Setup](../guides/hardware-setup.md) — physical PWM, I2C, and shared-pin mapping
-- [PWM Driver Configuration](pwm_driver_config.md) — fixed channel allocation and capabilities
-- [PWM Driver Design](pwm_driver_design.md) — detailed `pwm` and backend internals
+- [PWM Driver Configuration](pwm-driver/configuration.md) — fixed channel allocation and capabilities
+- [PWM Driver Design](pwm-driver/driver-design.md) — shared PWM ownership, mailbox, and state publication
 - [USB Interface Overview](usb/usb-interface-overview.md) — USB interface roles and HID rules
 - [HID Report Reference](usb/hid-report-reference.md) — HID report layouts and action semantics
-- [Hardware PWM Generator](generator/hardware_generator.md) — hardware output timing and slice constraints
-- [PIO PWM Generator](generator/pio_generator.md) — PIO output timing and state-machine constraints
-- [Software PWM Generator](generator/software_generator.md) — shared timer output generation
-- [Hardware PWM Monitor](monitor/hardware_monitor.md) — GPIO interrupt measurement limits
-- [PIO PWM Monitor](monitor/pio_monitor.md) — one-period high/low measurement
-- [Software PWM Monitor](monitor/software_monitor.md) — low-frequency polling/edge measurement
+- [Hardware PWM](pwm-driver/hardware.md) — hardware generator and monitor design
+- [PIO PWM](pwm-driver/pio.md) — PIO generator and monitor design
+- [Software PWM](pwm-driver/software.md) — software generator and monitor design
 
 ## System Model
 
@@ -310,7 +307,8 @@ That means:
 Logical IDs are configuration-defined and stable for host software. The
 current default profile exposes `0..23`; backend ownership and GPIO assignment
 must be read from the selected profile rather than inferred from an ID range.
-See [Firmware Configuration](../guides/configuration.md) and [Hardware Setup](../guides/hardware-setup.md).
+See [PWM Driver Configuration](pwm-driver/configuration.md) and
+[Hardware Setup](../guides/hardware-setup.md).
 
 ## Startup Sequence
 
@@ -352,6 +350,6 @@ explicit error when the CDC connection is available.
 
 - [USB CDC Shell](../guides/usb_cdc_shell.md) for interactive text commands
 - [USB CDC CLI Design](usb/cdc-cli-design.md) for developer guidance on extending the CLI
-- [I2C Protocol](../guides/i2c_protocol.md) for binary register values
+- [I2C Protocol Reference](i2c/i2c-protocol.md) for binary register values
 - Source headers under `firmware/src` for current C declarations and APIs
-- [PWM Driver Design](pwm_driver_design.md) for backend and mailbox internals
+- [PWM Driver Design](pwm-driver/driver-design.md) for backend and mailbox internals

@@ -14,7 +14,7 @@ generator and frequency monitor, controlled through USB CDC, I2C or USB HID. The
 [Open browser dashboard](https://djwinter29-oss.github.io/PicoPWM/) ·
 [Python dashboard](host/python/README.md) ·
 [USB CDC shell](docs/guides/usb_cdc_shell.md) ·
-[I2C protocol](docs/guides/i2c_protocol.md)
+[I2C protocol](docs/design/i2c/i2c-protocol.md)
 
 ## Why PicoPWM?
 
@@ -95,7 +95,8 @@ for command details.
    the load shares ground with the board.
 
 Use `config get` to inspect running and target bank roles and `pwm get <channel>` to inspect a channel's realized
-frequency and duty; both are described in the [USB CDC shell guide](docs/guides/usb_cdc_shell.md).
+frequency and duty; both are described in the [USB CDC shell guide](docs/guides/usb_cdc_shell.md). For more setup
+and symptom-based checks, see the [setup and troubleshooting guide](docs/guides/setup-and-troubleshooting.md).
 
 ## Dashboards
 
@@ -108,7 +109,7 @@ standalone .NET host, download and extract the `picopwm-host-v<VERSION>-<RID>` a
 `./PicoPwm` (Linux/macOS) or `PicoPwm.exe` (Windows) from the extracted directory and open
 <http://127.0.0.1:5000/>. In Windows PowerShell, invoke the executable as `.\PicoPwm.exe`. The .NET archive includes
 its runtime. See
-[Builds and Publishing](docs/guides/releases.md) for package availability and release details.
+[Builds and Publishing](docs/deployment/releases.md) for package availability and release details.
 
 ### Browser Dashboard
 
@@ -126,11 +127,8 @@ HID. See the [Python guide](host/python/README.md) for configuration and API det
 Run `tools/host/run-dotnet.sh`, then open <http://127.0.0.1:5000/>. The .NET server also connects to the board over
 USB HID. See the [.NET guide](host/dotnet/README.md) for configuration and API details.
 
-### Linux HID Permissions
-
-On Linux, configure HID access once with `tools/host/hid-permissions-setup.sh`; the Python and .NET launchers check
-permissions before starting. For WebHID, run setup on the computer connected to the board, not only on a remote server.
-See [Linux HID permissions](docs/guides/linux_hid_permissions.md).
+For configuration help and connection or HID troubleshooting, see the
+[setup and troubleshooting guide](docs/guides/setup-and-troubleshooting.md).
 
 ## Hardware Compatibility
 
@@ -150,11 +148,11 @@ mapping or board profile.
 
 | Need | Guide |
 | --- | --- |
-| Wire and configure the board | [Hardware setup](docs/guides/hardware-setup.md), [Firmware configuration](docs/guides/configuration.md) |
-| Control it | [USB CDC shell](docs/guides/usb_cdc_shell.md), [I2C protocol](docs/guides/i2c_protocol.md), [USB interface overview](docs/design/usb/usb-interface-overview.md) |
-| Understand the design | [Architecture](docs/design/architecture.md), [PWM driver design](docs/design/pwm_driver_design.md), [generators](docs/design/generator/) and [monitors](docs/design/monitor/) |
+| Wire, configure, and troubleshoot | [Hardware setup](docs/guides/hardware-setup.md), [Setup and troubleshooting](docs/guides/setup-and-troubleshooting.md) |
+| Control it | [USB CDC shell](docs/guides/usb_cdc_shell.md), [I2C protocol](docs/design/i2c/i2c-protocol.md), [USB interface overview](docs/design/usb/usb-interface-overview.md) |
+| Understand the design | [Architecture](docs/design/architecture.md), [PWM driver design](docs/design/pwm-driver/driver-design.md), [PWM backend designs](docs/design/pwm-driver/) |
 | Write a HID host | [USB interface overview](docs/design/usb/usb-interface-overview.md), [HID report reference](docs/design/usb/hid-report-reference.md) |
-| Build, test and release | [Build structure](BUILD_STRUCTURE.md), [Builds and publishing](docs/guides/releases.md) |
+| Build, test and release | [Build structure](BUILD_STRUCTURE.md), [Builds and publishing](docs/deployment/releases.md) |
 | Contribute | [Contributing](CONTRIBUTING.md), [Code of Conduct](CODE_OF_CONDUCT.md), [Security](SECURITY.md) |
 
 The USB identity `0xCAFE:0x4012` is for development and lab use, not commercial derivatives. The CDC, HID and I2C

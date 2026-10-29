@@ -9,7 +9,7 @@ The focus of this page is:
 - mailbox and snapshot behavior
 - state machines
 - API call sequences
-- detailed behavior of each PWM backend
+- backend selection and routing boundaries
 
 This document is implementation-oriented and follows the current firmware under `firmware/src/driver/pwm/`.
 
@@ -149,8 +149,8 @@ selects its backend family and role:
 | `16..23` (Bank C) | SW generator only | SW monitor only |
 
 The physical mapping and slice assignments are documented in
-[Hardware Setup](../guides/hardware-setup.md). Startup bank configuration is documented in
-[Firmware Configuration](../guides/configuration.md#startup-bank-configuration).
+[Hardware Setup](../../guides/hardware-setup.md). Startup bank configuration is documented in
+[PWM Driver Configuration](configuration.md).
 
 ## Internal Separation
 
@@ -459,237 +459,18 @@ A monitor with no valid sample (signal lost, or nothing captured yet) is publish
 valid sample. `0 Hz` therefore means "no periodic signal" for a monitor; the duty of a static input is reported by
 backends that can sample the level.
 
-## Hardware PWM Summary
+## Backend Designs
 
-The hardware PWM implementation is now split into:
+The backend-specific design pages each cover both generation and monitoring
+for one hardware family:
 
-- `firmware/src/driver/pwm/hardware/hardware_generator.c` for the integrated generator backend
-- `firmware/src/driver/pwm/hardware/hardware_monitor.c` for the hardware monitor backend
+- [Hardware PWM](hardware.md)
+- [PIO PWM](pio.md)
+- [Software PWM](software.md)
 
-The integrated generator backend:
-
-- accepts integer `freq_hz` and integer duty percent
-- uses one PWM slice per logical hardware channel
-- treats `freq_hz = 0` as a static-output policy case
-- publishes realized `freq_hz` and `duty` as the external read model
-
-The hardware monitor backend:
-
-- measures the same slice-B pins with the PWM slice counters in input mode
-- alternates a rising-edge window (frequency) and a high-time window (duty)
-- refreshes a sample about every 500 ms and is reliable above about 20 Hz
-
-For the current hardware timing equations, counter-width limits, divider limits, and the recommended operating range, see [Hardware PWM Generator](generator/hardware_generator.md). For input measurement limits, see [Hardware PWM Monitor](monitor/hardware_monitor.md).
-
-## Software PWM Summary
-
-The software PWM implementation is now split into:
-
-- `firmware/src/driver/pwm/software/software_generator.c` for the integrated generator backend
-- `firmware/src/driver/pwm/software/software_monitor.c` for the software monitor backend
-
-The integrated generator backend:
-
-- accepts integer `freq_hz` and integer duty percent
-- uses one shared software scheduler tick for the software channel bank
-- treats `freq_hz = 0` and endpoint duties as static-output policy cases
-- publishes realized `freq_hz` and `duty`
-- owns the software-PWM maximum frequency policy directly in the backend
-
-The software monitor backend:
-
-- measures the same slice-B pins with the PWM slice counters in input mode
-- alternates a rising-edge window (frequency) and a high-time window (duty)
-- refreshes a sample about every 500 ms and is reliable above about 20 Hz
-- owns software-monitor channels selected by the active profile
-
-For the current software timing model, target range, and monitor role, see [Software PWM Generator](generator/software_generator.md) and [Software PWM Monitor](monitor/software_monitor.md).
-
-## PIO Generator Detailed Design
-
-### Purpose
-
-The PIO backend provides better timing quality than software PWM without consuming the dedicated hardware PWM slice bank.
-
-### Resource Allocation
-
-- 8 logical channels
-- distributed over `pio0` and `pio1`
-- 4 state machines on each PIO block
-- one output pin per state machine
-- no per-period IRQ or DMA path in the current generator implementation
-
-### Channel Distribution
-
-| Local Channel | PIO | State Machine |
-| --------------- | ----- | --------------- |
-| 0 | `pio0` | 0 |
-| 1 | `pio0` | 1 |
-| 2 | `pio0` | 2 |
-| 3 | `pio0` | 3 |
-| 4 | `pio1` | 0 |
-| 5 | `pio1` | 1 |
-| 6 | `pio1` | 2 |
-| 7 | `pio1` | 3 |
-
-### PIO Program Role
-
-The PIO program:
-
-1. loads a duty level and a period value
-2. compares the running counter against the desired level
-3. drives the side-set output high or low
-4. loops with the period cached in `ISR` until the channel is reconfigured
-
-### Initialization
-
-Initialization steps:
-
-1. load the PIO program into each used PIO block once
-2. assign each logical channel to one PIO block and one state machine
-3. initialize output GPIO low
-4. initialize per-channel cached timing state
-
-### Timing Search
-
-The PIO driver computes timing by searching `period_count` and deriving a quantized `clkdiv`.
-
-In steady state, one PWM period costs:
-
-$$
-cycles\_per\_period = 3 \times (period\_count + 1) + 2
-$$
-
-The `+2` term comes from the `mov y, isr` reload and the `jmp restart` at the end of each period. The two initial `pull` instructions are startup cost only and are not part of steady-state frequency calculation.
-
-For each candidate `period_count`:
-
-1. compute cycles per period used by the program
-2. derive the ideal divider from system clock and target frequency
-3. quantize divider to PIO fractional precision
-4. compute realized frequency
-5. track the minimum error solution
-
-The driver rejects requests that cannot be represented within PIO period and divider constraints.
-
-The current generator firmware also rejects requests above `1 MHz` so the backend behavior stays aligned with the documented intended operating range.
-
-### Enable Sequence
-
-When enabling or updating a channel, the backend first resolves one target mode:
-
-- static low
-- static high
-- running PWM
-
-Then one internal apply helper performs the full transition for that resolved mode:
-
-1. either drive a static SIO level or program and enable the PIO state machine
-2. publish the resulting realized frequency and duty
-
-The static-output rule (`pwm_generator_resolve_static` in `pwm_math.h`) is shared by the hardware, PIO and software
-generators. The PIO divider and period search (`pwm_pio_find_timing` in `pio_math.h`) is pure integer math covered by
-a host frequency sweep; divider quantization near a divider of 1 bounds the realized error at about 0.2%.
-
-### Disable Sequence
-
-There is no separate disable-only apply path now. A disable or endpoint-duty request is handled by
-resolving one static target mode and applying it through the same internal helper used by PWM-mode
-updates.
-
-## Software PWM Driver Detailed Design
-
-### Purpose
-
-The software PWM backend provides the lowest-cost implementation for slower frequencies.
-
-### Resource Allocation
-
-- 8 output GPIOs
-- one private alarm pool created on Core 1 and one repeating timer, armed on demand
-- one per-channel runtime struct
-
-### Timing Base
-
-- timer period: `10 us`
-- base rate: `100000 Hz`
-
-Requested frequency is converted to a period measured in timer ticks.
-
-$$
-period\_ticks \approx \frac{100000}{f_{req}}
-$$
-
-Realized frequency becomes:
-
-$$
-f_{real} = \frac{100000}{period\_ticks}
-$$
-
-### Channel Runtime State
-
-Each software channel stores:
-
-- GPIO number
-- `period_ticks`
-- `duty_ticks`
-- running counter
-
-Channel activity is tracked separately by the backend-wide `sw_pwm_active_mask` rather than by a
-per-channel active field.
-
-### Initialization
-
-For each channel:
-
-1. assign GPIO
-2. clear period and duty tick values
-3. clear counter
-4. leave the channel out of the active mask
-5. initialize GPIO as output low
-
-After channel setup the backend creates a private alarm pool with `alarm_pool_create_with_unused_hardware_alarm()`.
-Init runs on Core 1, and the SDK services a pool's alarms on the core that created it, so the tick interrupt runs on
-Core 1. The default pool belongs to Core 0 and would run the tick there, racing the Core 1 writers. No timer runs yet.
-
-### Set-Frequency Behavior
-
-When applying a new configuration:
-
-1. clamp duty to `0.0..1.0`
-2. if `freq_hz <= 0`, remove the channel from the active mask and drive a static level
-3. otherwise compute `period_ticks`
-4. compute `duty_ticks`
-5. compute realized frequency and realized duty (`duty_ticks` over `period_ticks`, rounded)
-6. protect shared channel timing fields with interrupt masking
-7. write timing fields and reset the per-channel running counter
-8. add the channel to the active mask
-9. if the tick timer is not armed, arm it at `10 us` on the private pool (still on Core 1)
-10. publish the realized state
-
-### Timer Callback Behavior
-
-On every timer tick:
-
-1. iterate through all software channels
-2. skip inactive channels
-3. increment running counter
-4. when counter reaches period, reset counter
-5. drive GPIO high while `counter < duty_ticks`, otherwise low
-
-When no channel is active the callback clears the running flag and returns `false`, which disarms the timer. A board
-whose software bank is idle or static therefore takes no tick interrupts.
-
-### Concurrency Handling
-
-The timer callback and set-frequency path both touch channel timing fields.
-
-Protection method:
-
-- `save_and_disable_interrupts()` before update
-- write timing fields and update the active-mask membership
-- `restore_interrupts()` after update
-- publish the realized snapshot after the update (the timer never changes the published fields)
+Use those pages for resource constraints, timing and measurement strategies,
+and backend-specific tradeoffs. This page focuses on the shared driver,
+ownership boundary, routing, and realized-state publication.
 
 This keeps the callback from observing partially updated configuration.
 

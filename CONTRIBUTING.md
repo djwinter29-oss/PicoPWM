@@ -15,7 +15,7 @@ validating PWM output, timing and monitor accuracy requires hardware.
 
 - Firmware builds, versioning and test commands: [BUILD_STRUCTURE.md](BUILD_STRUCTURE.md).
 - Architecture and driver internals: [docs/design/architecture.md](docs/design/architecture.md) and
-  [docs/design/pwm_driver_design.md](docs/design/pwm_driver_design.md).
+  [docs/design/pwm-driver/driver-design.md](docs/design/pwm-driver/driver-design.md).
 - Host tools: [host/python](host/python/README.md), [host/dotnet](host/dotnet/README.md) and
   [host/webhid](host/webhid/README.md).
 

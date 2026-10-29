@@ -1,11 +1,7 @@
-# Hardware PWM Generator Design
+# Hardware PWM Design
 
-This document describes the current hardware PWM design under `firmware/src/driver/pwm/hardware/`.
-
-This page covers the hardware PWM generator backend. The matching monitor
-design is documented in [Hardware PWM Monitor](../monitor/hardware_monitor.md).
-
-This page is implementation-oriented and reflects the current source tree.
+This document describes the hardware PWM generator and monitor that share the
+hardware PWM bank.
 
 ## Source Layout
 
@@ -188,3 +184,28 @@ over:
 
 - float math in the timing path
 - squeezing every representable MHz into the recommended user range
+
+## Monitor Design
+
+The hardware monitor uses the PWM slice counters in input mode. Bank A is
+fixed to slice-B GPIOs, which support this input mode. Because each slice has
+one counter, measurement alternates between an edge-count window for frequency
+and a high-time window for duty.
+
+| Window | Slice mode | Measurement |
+| --- | --- | --- |
+| Edge | Rising-edge count | A 250 ms window counts edges; frequency is edges divided by the window duration. |
+| High | High-time count | A 250 ms window measures high time; duty is high time divided by the window duration. |
+
+Core 1 accumulates counter wraps while servicing the monitor. The two
+measurement windows take about 500 ms in total, so a sample is not available
+until the first pair completes and refresh is relatively slow. Frequency
+resolution is about 4 Hz; this backend is most reliable above roughly 20 Hz.
+Use the software monitor for slower signals.
+
+If no edge is counted, the monitor reports `0 Hz` and uses the sampled GPIO
+level to report duty as `0%` or `100%`. Duty assumes that the signal is stable
+across both measurement windows; a signal change between windows can produce a
+mixed sample.
+
+This design has not been validated on physical hardware.

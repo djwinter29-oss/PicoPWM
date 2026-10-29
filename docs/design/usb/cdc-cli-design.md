@@ -71,7 +71,7 @@ Core 0 services USB and dispatches shell commands. Core 1 owns real-time
 channel state and backends. A CLI command that changes PWM state must use the
 shared control path and its ownership boundary; it must not call a backend
 directly. See [Architecture](../architecture.md) and
-[PWM Driver Design](../pwm_driver_design.md) for the broader system boundaries.
+[PWM Driver Design](../pwm-driver/driver-design.md) for the broader system boundaries.
 
 ## Command Processing
 

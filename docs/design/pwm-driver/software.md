@@ -1,4 +1,4 @@
-# Software PWM Generator Design
+# Software PWM Design
 
 The software generator produces PWM through one shared repeating timer and a
 per-channel scheduler state. The timer runs on a private Core 1 alarm pool and is
@@ -40,3 +40,31 @@ flowchart TD
 
 Software generation is intentionally the simple, low-frequency backend. Use
 hardware PWM or PIO for tighter timing accuracy or higher-frequency output.
+
+## Monitor Design
+
+The software monitor observes GPIO edges using interrupts and timestamps. It
+derives an approximate frequency from the period between edges and duty from
+the high-time portion of that period.
+
+```mermaid
+sequenceDiagram
+    participant Signal as PWM input
+    participant IRQ as GPIO edge interrupt
+    participant Monitor as Software monitor
+    participant State as Published channel state
+
+    Signal->>IRQ: Rising and falling edges
+    IRQ->>Monitor: Capture timestamps
+    Monitor->>Monitor: Derive period and high width
+    Monitor->>State: Publish approximate frequency and duty
+```
+
+Software monitoring does not require a fixed PWM slice or PIO state machine.
+Its practical limits are the shared scheduler, CPU time, interrupt load, and
+timestamp granularity. The current working range is about `1 Hz .. 1 kHz`,
+subject to the selected profile's limits. Use hardware or PIO monitoring for
+higher-frequency or higher-accuracy measurements.
+
+If no transition is observed for more than one second, the monitor reports a
+static input as `0 Hz` with duty `0%` or `100%`, based on the sampled level.

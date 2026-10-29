@@ -23,7 +23,7 @@ PicoPWM/
 ## Firmware Builds
 
 For CI artifacts, release tags, manual test publishing and repository setup, see
-[Builds and Publishing](docs/guides/releases.md).
+[Builds and Publishing](docs/deployment/releases.md).
 
 The helper builds into `build/<board>` and defaults to `pico`. The Pico SDK
 is always the `firmware/third_party/pico-sdk` submodule. Fresh builds prefer Ninja
@@ -57,7 +57,7 @@ override it; the release workflow builds tags `vx.y.z` with `x.y.z`. The version
 the I2C `REG_VERSION` register, HID identity and the USB `bcdDevice`. See `firmware/version.cmake`.
 
 Channel roles are selected in the startup configuration. See
-[Firmware Configuration](docs/guides/configuration.md#startup-bank-configuration).
+[Setup and Troubleshooting](docs/guides/setup-and-troubleshooting.md#configure-bank-roles).
 
 Host-side firmware tests use the same root build directory:
 

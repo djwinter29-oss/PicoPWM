@@ -8,7 +8,7 @@ PicoPWM exposes one composite USB device with two host-facing interface types:
 This document covers the USB interfaces and their shared device-control
 boundaries. I2C is included only as context when comparing host-facing control
 options; its protocol is documented separately in the
-[I2C guide](../../guides/i2c_protocol.md).
+[I2C protocol reference](../i2c/i2c-protocol.md).
 
 The device advertises USB 2.0 and uses the standard composite, CDC ACM, and HID
 drivers on Windows. It does not expose a BOS descriptor; WebHID uses the HID

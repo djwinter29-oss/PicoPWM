@@ -134,8 +134,10 @@ realized channel state, not just the last requested values. The `enabled` field
 is `yes` when the realized frequency is nonzero and `no` when it is zero; a
 zero-frequency channel can still be held high at `100%` duty.
 
-See [Firmware Configuration](configuration.md) for bank behavior and
-[I2C Protocol](i2c_protocol.md) for the binary register protocol.
+See the [Setup and Troubleshooting guide](setup-and-troubleshooting.md) for
+bank behavior and the
+[I2C Protocol Reference](../design/i2c/i2c-protocol.md) for the binary
+register protocol.
 
 For firmware development guidance on the CLI structure and adding commands,
 see [USB CDC CLI Design](../design/usb/cdc-cli-design.md).

@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <stdatomic.h>
 
+atomic_bool test_monitor_irq_enabled;
+
 const hardware_pwm_config_t hardware_pwm_config = {.channels = {{1u}, {3u}, {5u}, {7u}, {9u}, {11u}, {13u}, {15u}}};
 const pio_pwm_config_t pio_pwm_config = {.channels = {{0u}, {2u}, {4u}, {6u}, {8u}, {10u}, {12u}, {14u}}};
 const software_pwm_config_t software_pwm_config = {
@@ -145,6 +147,7 @@ int main(void) {
         usleep(1000);
     }
     assert(pwm_driver_is_ready());
+    assert(atomic_load(&test_monitor_irq_enabled));
 
     /* Set goes through the mailbox, Core 1 applies it, and the result is readable from the cache. */
     assert(pwm_driver_set(0u, 1000u, 50u) == PWM_DRIVER_RESULT_OK);

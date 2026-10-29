@@ -102,6 +102,7 @@ static void pio_mon_start_capture(pio_mon_channel_t *ctx) {
     pio_sm_set_enabled(ctx->pio, ctx->sm, false);
     pio_sm_clear_fifos(ctx->pio, ctx->sm);
     pio_sm_restart(ctx->pio, ctx->sm);
+    pio_sm_exec(ctx->pio, ctx->sm, pio_encode_jmp(pio_mon_program_offsets[pio_mon_index(ctx->pio)]));
     ctx->capture_start_us = time_us_64();
     ctx->capture_active = true;
     pio_sm_set_enabled(ctx->pio, ctx->sm, true);

@@ -23,6 +23,7 @@
 #include "hardware/sync.h"
 
 #include "hardware/gpio.h"
+#include "hardware/irq.h"
 #include "hardware/pwm.h"
 
 #include <string.h>
@@ -334,6 +335,10 @@ static void pwm_driver_core_main(void) {
     if (!pwm_driver_initialize_backends()) {
         pwm_lifecycle = PWM_DRIVER_LIFECYCLE_FAILED;
         return;
+    }
+
+    if (pwm_driver_config_bank_roles[PWM_BANK_C] == PWM_ROLE_MONITOR) {
+        irq_set_enabled(IO_IRQ_BANK0, true);
     }
 
     pwm_lifecycle = PWM_DRIVER_LIFECYCLE_READY;

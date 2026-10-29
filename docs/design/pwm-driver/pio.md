@@ -70,6 +70,11 @@ producing samples until Core 1 reads the pair and ends the capture.
 Intermediate periods are discarded. Core 1 refreshes monitor channels
 periodically, so published values may lag rapid input changes.
 
+Both the `WAIT PIN` input base and `JMP PIN` selector point to the channel's GPIO.
+Before each capture, Core 1 clears the FIFO, restarts the state machine, and explicitly jumps to the
+loaded program's entry point. The SDK restart operation alone does not reset the program counter;
+without the jump, a completed capture remains in its terminal loop.
+
 ```mermaid
 flowchart LR
     Signal[PWM input] --> Capture[PIO captures one high/low period]

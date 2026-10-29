@@ -61,6 +61,9 @@ sequenceDiagram
 ```
 
 Software monitoring does not require a fixed PWM slice or PIO state machine.
+Core 1 registers the shared GPIO callback before backend initialization arms the edge sources,
+then enables `IO_IRQ_BANK0` on Core 1 when Bank C is a monitor. Arming GPIO edge sources alone
+does not enable interrupt delivery to the core.
 Its practical limits are the shared scheduler, CPU time, interrupt load, and
 timestamp granularity. The current working range is about `1 Hz .. 1 kHz`,
 subject to the selected profile's limits. Use hardware or PIO monitoring for

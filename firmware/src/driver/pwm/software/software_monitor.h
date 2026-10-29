@@ -6,7 +6,7 @@
  * frequency and duty cycle using the existing `pwm_state_t` shape.
  *
  * This monitor is intentionally limited to low-frequency, best-effort observation. It uses
- * one software GPIO interrupt per edge plus microsecond timestamps. That makes it a much
+ * one timer to sample all eight inputs plus microsecond timestamps. That makes it a much
  * better fit for the software PWM bank than for the hardware or PIO banks, but it is still
  * a best-effort software measurement path rather than a cycle-accurate monitor. Treat it as
  * a monitor for the slow software PWM range, roughly `1 Hz .. 1 kHz`, not as a general
@@ -36,9 +36,6 @@
  */
 bool sw_mon_init(void);
 
-/** @brief Forward one shared GPIO edge event to the software monitor bank. */
-void sw_mon_handle_gpio_irq(uint gpio, uint32_t events);
-
 /**
  * @brief Read the latest exported monitor state for one backend-local software channel.
  * @param channel Backend-local software monitor channel index.
@@ -46,8 +43,10 @@ void sw_mon_handle_gpio_irq(uint gpio, uint32_t events);
  * @return `true` when the returned state is a stable PWM measurement or a stable static level.
  *         Returns `false` before the first stable sample and when the exported state is the
  *         unstable sentinel.
- * @note The monitor timestamps GPIO edges in microseconds and derives one period from
- *       consecutive rising edges plus one high width from the falling edge between them.
+ * @note A private Core 1 timer samples all GPIOs with a 10 us completion-relative delay.
+ *       Complete observed cycles accumulate over at least 20 ms before publication;
+ *       slower signals publish after a complete cycle. Narrow pulses may be missed and
+ *       out-of-range signals may alias to lower frequencies or static levels.
  * @note This is a low-frequency, best-effort monitor only.
  * @note If no input transition is observed for more than one second, the monitor reports a
  *       static level as `freq_hz = 0` with `duty = 0` or `100` based on the sampled GPIO.

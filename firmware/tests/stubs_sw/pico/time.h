@@ -16,6 +16,7 @@ extern alarm_callback_t sw_test_tick;
 extern bool sw_test_pool_fail;
 extern bool sw_test_arm_fail;
 extern unsigned sw_test_pool_core;
+uint64_t time_us_64(void);
 
 alarm_pool_t *alarm_pool_create_with_unused_hardware_alarm(uint alarms);
 uint alarm_pool_core_num(alarm_pool_t *pool);

@@ -99,6 +99,6 @@ the GPIO level and reports a static state. An invalid capture is reported as
 an unstable sample rather than presented as valid frequency and duty data.
 This trades continuous tracking for bounded resource use and a simple
 latest-value interface. CPU polling was avoided because it would consume Core 1
-time while waiting; edge interrupts remain a better fit for slower software
-monitoring, while PIO capture provides timing work independent of interrupt
-latency.
+time while waiting. The software monitor instead uses a shared periodic GPIO
+sampler for bounded low-frequency monitoring, while PIO capture provides timing
+work independent of interrupt latency.

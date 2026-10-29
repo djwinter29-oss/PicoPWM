@@ -23,7 +23,6 @@
 #include "hardware/sync.h"
 
 #include "hardware/gpio.h"
-#include "hardware/irq.h"
 #include "hardware/pwm.h"
 
 #include <string.h>
@@ -206,11 +205,6 @@ static const pwm_driver_backend_t *pwm_driver_bank_backend(uint bank) {
     return &pwm_driver_backends[bank][pwm_driver_config_bank_roles[bank]];
 }
 
-/** @brief Dispatch the Pico SDK's single GPIO callback to the software monitor bank. */
-static void pwm_driver_monitor_gpio_irq(uint gpio, uint32_t events) {
-    sw_mon_handle_gpio_irq(gpio, events);
-}
-
 /**
  * @brief Submit one cross-core mailbox request while the public write lock is already held.
  * @param cmd Caller-owned mailbox request descriptor.
@@ -329,16 +323,9 @@ static void pwm_driver_core_main(void) {
     /* Required before Core 0 may call multicore_lockout_start_blocking() from config save. */
     multicore_lockout_victim_init();
 
-    /* Register the shared GPIO callback before backend initialization arms monitor pins. */
-    gpio_set_irq_callback(pwm_driver_monitor_gpio_irq);
-
     if (!pwm_driver_initialize_backends()) {
         pwm_lifecycle = PWM_DRIVER_LIFECYCLE_FAILED;
         return;
-    }
-
-    if (pwm_driver_config_bank_roles[PWM_BANK_C] == PWM_ROLE_MONITOR) {
-        irq_set_enabled(IO_IRQ_BANK0, true);
     }
 
     pwm_lifecycle = PWM_DRIVER_LIFECYCLE_READY;

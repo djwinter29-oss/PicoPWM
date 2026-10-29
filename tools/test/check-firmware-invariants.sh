@@ -10,6 +10,12 @@ CONFIG_FILE="$REPO_ROOT/firmware/src/platform/boot_config.c"
 SLAVE_FILE="$REPO_ROOT/firmware/src/driver/i2c/i2c_slave.c"
 SLAVE_HW_FILE="$REPO_ROOT/firmware/src/driver/i2c/i2c_slave_hw.c"
 SW_GEN_FILE="$REPO_ROOT/firmware/src/driver/pwm/software/software_generator.c"
+SW_MON_FILE="$REPO_ROOT/firmware/src/driver/pwm/software/software_monitor.c"
+if grep -q 'gpio_set_irq_enabled' "$SW_MON_FILE" ||
+   ! grep -q 'alarm_pool_create_with_unused_hardware_alarm' "$SW_MON_FILE"; then
+    echo "software_monitor.c: monitoring must use a private timer, not per-edge GPIO IRQs" >&2
+    exit 1
+fi
 PIO_MON_FILE="$REPO_ROOT/firmware/src/driver/pwm/pio/pio_monitor.pio"
 PIO_MON_C_FILE="$REPO_ROOT/firmware/src/driver/pwm/pio/pio_monitor.c"
 

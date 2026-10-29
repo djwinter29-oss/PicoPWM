@@ -68,7 +68,7 @@ int main(void) {
     assert(sw_gen_set(0u, 1000u, 250u));
     assert(published_duty == 100u);
     assert(!sw_gen_set(8u, 1000u, 50u));
-    assert(!sw_gen_set(0u, 1001u, 50u));
+    assert(!sw_gen_set(0u, 10001u, 50u));
     assert(sw_gen_set(0u, 0u, 0u));
     assert(published_channel == 16u && published_freq == 0u && published_duty == 0u);
 
@@ -88,6 +88,28 @@ int main(void) {
 
     assert(sw_gen_set(0u, 0u, 100u));
     assert(published_duty == 100u && sw_test_gpio_level[16] == 1);
+    assert(!sw_test_tick(NULL));
+
+    /* All eight outputs: ten nominal ticks per cycle, with integer duty quantization. */
+    for (uint channel = 0u; channel < 8u; ++channel) {
+        assert(sw_gen_set(channel, 10000u, 46u));
+        assert(published_freq == 10000u && published_duty == 50u);
+    }
+    for (uint cycle = 0u; cycle < 3u; ++cycle) {
+        unsigned highs[8] = {0};
+        for (uint tick = 0u; tick < 10u; ++tick) {
+            assert(sw_test_tick(NULL));
+            for (uint channel = 0u; channel < 8u; ++channel) {
+                highs[channel] += sw_test_gpio_level[software_pwm_config.channels[channel].gpio] != 0;
+            }
+        }
+        for (uint channel = 0u; channel < 8u; ++channel) {
+            assert(highs[channel] == 5u);
+        }
+    }
+    for (uint channel = 0u; channel < 8u; ++channel) {
+        assert(sw_gen_set(channel, 0u, 0u));
+    }
     assert(!sw_test_tick(NULL));
     puts("software_generator_test ok");
     return 0;

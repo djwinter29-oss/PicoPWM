@@ -10,6 +10,26 @@ CONFIG_FILE="$REPO_ROOT/firmware/src/platform/boot_config.c"
 SLAVE_FILE="$REPO_ROOT/firmware/src/driver/i2c/i2c_slave.c"
 SLAVE_HW_FILE="$REPO_ROOT/firmware/src/driver/i2c/i2c_slave_hw.c"
 SW_GEN_FILE="$REPO_ROOT/firmware/src/driver/pwm/software/software_generator.c"
+SW_MON_FILE="$REPO_ROOT/firmware/src/driver/pwm/software/software_monitor.c"
+if grep -q 'gpio_set_irq_enabled' "$SW_MON_FILE" ||
+   ! grep -q 'alarm_pool_create_with_unused_hardware_alarm' "$SW_MON_FILE"; then
+    echo "software_monitor.c: monitoring must use a private timer, not per-edge GPIO IRQs" >&2
+    exit 1
+fi
+PIO_MON_FILE="$REPO_ROOT/firmware/src/driver/pwm/pio/pio_monitor.pio"
+PIO_MON_C_FILE="$REPO_ROOT/firmware/src/driver/pwm/pio/pio_monitor.c"
+
+if ! grep -q 'sm_config_set_in_pins(&config, pin)' "$PIO_MON_FILE" ||
+   ! grep -q 'sm_config_set_jmp_pin(&config, pin)' "$PIO_MON_FILE"; then
+    echo "pio_monitor.pio: WAIT PIN and JMP PIN must both select the monitored GPIO" >&2
+    exit 1
+fi
+
+# SDK restart clears internal state, not the PC left in the terminal capture loop.
+if ! grep -q 'pio_sm_exec(ctx->pio, ctx->sm, pio_encode_jmp(pio_mon_program_offsets' "$PIO_MON_C_FILE"; then
+    echo "pio_monitor.c: each capture must jump back to its loaded program entry point" >&2
+    exit 1
+fi
 
 # The low path must not side-set. A side-set there makes every duty a one-tick pulse.
 awk '

@@ -77,8 +77,11 @@ bool pwm_driver_config_frequency_supported(uint channel, uint32_t frequency_hz) 
 
     if (channel / PWM_DRIVER_CONFIG_BANK_SIZE == PWM_BANK_A && role == PWM_ROLE_GENERATOR) {
         min_hz = 10u;
+        max_hz = 10000000u;
+    } else if (channel / PWM_DRIVER_CONFIG_BANK_SIZE == PWM_BANK_B && role == PWM_ROLE_GENERATOR) {
+        max_hz = 10000000u;
     } else if (channel / PWM_DRIVER_CONFIG_BANK_SIZE == PWM_BANK_C) {
-        max_hz = 1000u;
+        max_hz = role == PWM_ROLE_GENERATOR ? 10000u : 1000u;
     }
 
     return frequency_hz >= min_hz && frequency_hz <= max_hz;
@@ -205,11 +208,6 @@ static const pwm_driver_backend_t *pwm_driver_bank_backend(uint bank) {
     return &pwm_driver_backends[bank][pwm_driver_config_bank_roles[bank]];
 }
 
-/** @brief Dispatch the Pico SDK's single GPIO callback to the software monitor bank. */
-static void pwm_driver_monitor_gpio_irq(uint gpio, uint32_t events) {
-    sw_mon_handle_gpio_irq(gpio, events);
-}
-
 /**
  * @brief Submit one cross-core mailbox request while the public write lock is already held.
  * @param cmd Caller-owned mailbox request descriptor.
@@ -327,9 +325,6 @@ static bool pwm_driver_core1_heartbeat_ok(void) {
 static void pwm_driver_core_main(void) {
     /* Required before Core 0 may call multicore_lockout_start_blocking() from config save. */
     multicore_lockout_victim_init();
-
-    /* Register the shared GPIO callback before backend initialization arms monitor pins. */
-    gpio_set_irq_callback(pwm_driver_monitor_gpio_irq);
 
     if (!pwm_driver_initialize_backends()) {
         pwm_lifecycle = PWM_DRIVER_LIFECYCLE_FAILED;

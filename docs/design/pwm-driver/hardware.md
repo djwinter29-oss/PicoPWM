@@ -113,8 +113,13 @@ That gives the following hardware-generator envelope:
 | `200 MHz` | about `12 Hz` | `100 MHz` |
 | `150 MHz` | about `9 Hz` | `75 MHz` |
 | `125 MHz` | about `8 Hz` | `62.5 MHz` |
+| `250 MHz` | about `15 Hz` | `125 MHz` |
 
 These are hardware representability limits, not the recommended operating range.
+The maximum is a two-count waveform at divider 1, with only 0%, 50%, or 100%
+compare levels. Firmware accepts generator requests only up to **10 MHz**.
+There is no hardware-qualified absolute electrical maximum for this project:
+pin loading, wiring, system clock, and signal integrity must be checked separately.
 
 ### Target Working Range
 
@@ -135,25 +140,42 @@ At the top of the recommended range, with `clkdiv = 1`:
 
 Above that range the backend can still generate outputs, but duty granularity degrades quickly because the 16-bit counter is no longer the limiting factor; the number of available counts per period collapses as frequency rises.
 
-Examples with `clkdiv = 1`:
+### Frequency Versus Duty Resolution
 
-| Frequency | Counts per period at `150 MHz` | Approximate duty step |
-| ----------- | -------------------------------- | ----------------------- |
-| `1 MHz` | `150` | `0.67%` |
-| `5 MHz` | `30` | `3.3%` |
-| `10 MHz` | `15` | `6.7%` |
-| `20 MHz` | about `8` | `12.5%` |
+The following values come from the current timing search, not an assumption
+that divider 1 is always selected. `N = TOP + 1`; one compare-count increment
+changes duty by `100/N` percentage points. Default clocks are shown, not overclock profiles.
 
-For a `200 MHz` reference point with `clkdiv = 1`:
+| Requested frequency | Selected N at 125 MHz (Pico) | Duty step (percentage points) | Selected N at 150 MHz (Pico 2) | Duty step (percentage points) |
+| --- | ---: | ---: | ---: | ---: |
+| 1 kHz | 64516 | 0.00155 | 64865 | 0.00154 |
+| 10 kHz | 12500 | 0.008 | 15000 | 0.00667 |
+| 100 kHz | 1250 | 0.08 | 1500 | 0.0667 |
+| 1 MHz | 125 | 0.8 | 150 | 0.667 |
+| 2 MHz | 50 | 2 | 75 | 1.333 |
+| 5 MHz | 25 | 4 | 30 | 3.333 |
+| 10 MHz | 10 | 10 | 15 | 6.667 |
 
-| Frequency | Counts per period at `200 MHz` | Approximate duty step |
-| ----------- | -------------------------------- | ----------------------- |
-| `1 MHz` | `200` | `0.5%` |
-| `5 MHz` | `40` | `2.5%` |
-| `10 MHz` | `20` | `5%` |
-| `20 MHz` | `10` | `10%` |
+These example requests have exact rounded frequency readback at both clocks;
+arbitrary frequencies need not. Duty requests and readback use integer percent,
+so sub-1-percentage-point counter resolution does not provide sub-1% API control.
+For example, 50% at 10 MHz becomes 50% at 125 MHz (5/10 counts), but about
+53.3% at 150 MHz (8/15 counts; readback rounds to 53%). Resolution is not a
+measured accuracy guarantee.
 
-For that reason, frequencies above about `1 MHz` are better treated as possible-but-not-targeted outputs rather than as the normal operating range.
+The public generator request ceiling is **10 MHz**. Above 1 MHz is experimental,
+not part of the recommended precision range. Frequency and duty are quantized;
+the timing search prioritizes frequency error and may choose fewer counter
+counts than the divider-1 examples above. At 125 MHz, for example, the search
+selects an exact 10 MHz model with a ten-count period and divider 1.25, giving
+10 percentage-point duty steps. Do not assume the maximum possible counter
+resolution will be selected. Non-endpoint duty requests can quantize to static
+levels, and fractional dividers can introduce cycle-to-cycle variation.
+
+Readback reports the programmed timing model, not an electrical measurement.
+Verify frequency, duty, and signal integrity with an oscilloscope before using
+MHz-range output. This change does not extend monitor ranges. The current hardware
+monitor uses PWM input counters, not per-edge CPU interrupts; its limits are described below.
 
 ### Generator Workflow
 
@@ -209,3 +231,26 @@ across both measurement windows; a signal change between windows can produce a
 mixed sample.
 
 This design has not been validated on physical hardware.
+
+### Monitor Frequency and Duty Limits
+
+The generator's maximum does not specify the monitor's maximum. There is no
+qualified absolute monitor frequency ceiling. Input synchronization, pulse
+width, and timely wrap polling all constrain measurements.
+
+| Input frequency | Edges in a nominal 250 ms window | One-count frequency resolution | Interpretation |
+| --- | ---: | ---: | --- |
+| 20 Hz | 5 | 4 Hz (20% of input) | Low-end frequency measurement is coarse |
+| 100 Hz | 25 | 4 Hz (4%) | More useful frequency resolution |
+| 1 kHz | 250 | 4 Hz (0.4%) | Duty is measured in a separate window |
+| 100 kHz | 25000 | 4 Hz (0.004%) | Requires valid pulse widths and wrap servicing |
+| 1 MHz | 250000 | 4 Hz (0.0004%) | Multiple wraps; not a hardware accuracy claim |
+| 10 MHz | 2500000 | 4 Hz (0.00004%) | Experimental; not qualified by generator support |
+
+Duty counter resolution is nominally
+`100 * HW_MON_HIGH_DIV / (clk_sys * window_seconds)` percentage points,
+not the generator's `100/N`. At 125 MHz and a 250 ms window this is about
+0.0000128 percentage points, but integer-percent output, window timing, input
+synchronization, and missed wraps dominate practical accuracy. Frequency and
+duty windows are not simultaneous. The single wrap flag cannot count multiple
+wraps between polls; long Core 1 stalls can corrupt either measurement.

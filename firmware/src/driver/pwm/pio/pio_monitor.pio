@@ -41,6 +41,7 @@ static inline void monitor_program_init(PIO pio, uint sm, uint offset, uint pin)
     pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, false);
 
     pio_sm_config config = monitor_program_get_default_config(offset);
+    sm_config_set_in_pins(&config, pin);
     sm_config_set_jmp_pin(&config, pin);
     sm_config_set_fifo_join(&config, PIO_FIFO_JOIN_RX);
     sm_config_set_clkdiv(&config, 1.0f);

@@ -218,9 +218,10 @@ Owned by the Pico SDK and the MCU peripherals.
 Resources used:
 
 - PWM slices
-- GPIO edge IRQs for hardware and software monitor channels
+- GPIO edge IRQs for hardware monitor channels
 - PIO programs, state machines, and IRQs
-- one repeating timer on a private Core 1 alarm pool for software PWM, armed only while a channel is active
+- one repeating timer on a private Core 1 alarm pool for Bank C: armed only while a generator channel is active,
+  or continuously scanning all eight inputs in monitor mode
 - multicore event signaling
 
 ## Core Ownership Model

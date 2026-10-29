@@ -97,8 +97,10 @@ capture.
 The three monitor banks therefore use different mechanisms according to their
 hardware envelope:
 
-- The hardware and software banks use GPIO edge interrupts with software
-    timestamps. They are simple and suitable for their low-frequency ranges.
+- The hardware bank uses GPIO edge interrupts with software timestamps.
+- The software bank uses one private Core 1 timer to sample all eight GPIOs,
+    accumulating complete cycles over at least 20 ms. Work is independent of
+    input edge rate, but narrow pulses and out-of-range signals can alias.
 - The PIO bank captures one complete high/low period in PIO, reads the two FIFO
     words directly, and stops the state machine.
 

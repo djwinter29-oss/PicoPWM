@@ -178,6 +178,17 @@ target_include_directories(software_generator_test PRIVATE
 pico_pwm_test_warnings(software_generator_test)
 add_test(NAME software_generator COMMAND software_generator_test)
 
+add_executable(software_monitor_test
+    software_monitor_test.c
+    ${SOURCE_ROOT}/driver/pwm/software/software_monitor.c
+)
+target_include_directories(software_monitor_test PRIVATE
+    ${TEST_ROOT}/stubs_sw
+    ${SOURCE_ROOT}
+)
+pico_pwm_test_warnings(software_monitor_test)
+add_test(NAME software_monitor COMMAND software_monitor_test)
+
 add_executable(usb_cdc_test
     usb_cdc_test.c
     cdc_stub.c

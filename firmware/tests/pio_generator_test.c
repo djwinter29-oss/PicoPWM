@@ -9,6 +9,10 @@ PIO pio0;
 PIO pio1;
 bool pio_test_tx_fifo_full;
 unsigned pio_test_puts;
+bool pio_test_enabled[2][4];
+uint pio_test_pc[2][4];
+uint pio_test_fifo_count[2][4];
+unsigned pio_test_starts;
 int pio_test_gpio_level[32];
 
 static pio_hw_t pio0_hw = {0};
@@ -54,12 +58,27 @@ int main(void) {
     assert(!pio_gen_set(0u, 2000u, 40u));
     assert(published_freq == 0u && published_duty == 0u);
     assert(pio_test_gpio_level[0] == 0);
+    pio_test_tx_fifo_full = false;
+    assert(pio_gen_set(0u, 100000u, 50u));
+    assert(published_freq != 0u);
 
     assert(!pio_gen_set(8u, 1000u, 50u));
-    assert(!pio_gen_set(0u, 2000000u, 50u));
+    assert(!pio_gen_set(0u, 10000001u, 50u));
     assert(pio_gen_set(0u, 0u, 100u));
     assert(published_freq == 0u && published_duty == 100u);
     assert(pio_test_gpio_level[0] == 1);
+    pio_test_tx_fifo_full = false;
+    const uint32_t frequencies[] = {1000u, 100000u, 1000u, 1000000u, 2000000u, 10000000u, 100u};
+    for (uint channel = 0; channel < 8u; ++channel) {
+        for (uint i = 0; i < sizeof(frequencies) / sizeof(frequencies[0]); ++i) {
+            unsigned before = pio_test_starts;
+            assert(pio_gen_set(channel, frequencies[i], 50u));
+            assert(pio_test_starts == before + 1u);
+            assert(published_channel == channel + 8u && published_freq != 0u);
+        }
+        assert(pio_gen_set(channel, 0u, 0u));
+        assert(pio_gen_set(channel, 100000u, 50u));
+    }
     puts("pio_generator_test ok");
     return 0;
 }

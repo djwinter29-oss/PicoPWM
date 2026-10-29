@@ -1,7 +1,8 @@
 #ifndef TEST_SW_GPIO_H
 #define TEST_SW_GPIO_H
 
-enum { GPIO_OUT = 1 };
+enum { GPIO_IN = 0, GPIO_OUT = 1 };
+uint32_t gpio_get_all(void);
 
 void gpio_init(uint gpio);
 void gpio_set_dir(uint gpio, int direction);

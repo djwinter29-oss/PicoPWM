@@ -32,7 +32,7 @@
 #include "pio_math.h"
 
 /** @brief Intended upper frequency limit for the PIO generator backend. */
-#define PIO_GEN_MAX_FREQ_HZ 1000000u
+#define PIO_GEN_MAX_FREQ_HZ 10000000u
 /** @brief How long a TX FIFO push may block before the apply fails. Two words fit in a cleared FIFO. */
 #define PIO_GEN_FIFO_PUT_TIMEOUT_US 1000u
 
@@ -117,10 +117,12 @@ static bool gen_enable_channel(uint channel, uint16_t period_count, uint32_t clk
         pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
     }
 
-    pio_sm_set_clkdiv_int_frac(pio, sm, (uint16_t)(clkdiv_x256 >> 8), (uint8_t)(clkdiv_x256 & 0xffu));
     pio_sm_set_enabled(pio, sm, false);
+    pio_sm_set_clkdiv_int_frac(pio, sm, (uint16_t)(clkdiv_x256 >> 8), (uint8_t)(clkdiv_x256 & 0xffu));
     pio_sm_clear_fifos(pio, sm);
     pio_sm_restart(pio, sm);
+    /* SDK restart preserves the PC; every update must reload X and ISR through the initial pulls. */
+    pio_sm_exec(pio, sm, pio_encode_jmp(pio_program_offsets[pio == pio0 ? 0u : 1u]));
 
     if (!gen_fifo_put(pio, sm, program->match) || !gen_fifo_put(pio, sm, period_count)) {
         gen_drive_level(channel, false);

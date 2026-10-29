@@ -36,6 +36,7 @@ Changelog = "https://github.com/djwinter29-oss/PicoPWM/releases"
 test = ["pytest>=8"]
 
 [project.scripts]
+picopwm = "picopwm.app:main"
 picopwm-web = "picopwm.app:main"
 
 [tool.setuptools.packages.find]

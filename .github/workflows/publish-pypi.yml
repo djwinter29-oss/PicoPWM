@@ -163,16 +163,7 @@ jobs:
           set -eu
           python -m venv build/development-check
           build/development-check/bin/python -m pip install dist/*.whl
-          cd build
-          development-check/bin/python - <<'PY'
-          from importlib.metadata import version
-          import os
-          from picopwm.app import create_app
-          assert version('picopwm') == os.environ['VERSION']
-          client = create_app(object()).test_client()
-          for asset in ('/', '/css/webhid.css', '/js/view.mjs', '/js/device.mjs', '/js/client.mjs'):
-              assert client.get(asset).status_code == 200, asset
-          PY
+          build/development-check/bin/python tools/release/check_python_install.py --version "$VERSION"
 
       - name: Upload development wheel
         uses: actions/upload-artifact@v7

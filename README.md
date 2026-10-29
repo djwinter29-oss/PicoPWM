@@ -105,7 +105,7 @@ and start the dashboard:
 
 ```sh
 python -m pip install picopwm
-picopwm-web
+picopwm
 ```
 
 Open <http://127.0.0.1:5000/> and select your board. The Python server connects over USB HID.

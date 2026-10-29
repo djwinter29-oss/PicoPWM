@@ -52,8 +52,10 @@ Then install and start PicoPWM:
 
 ```sh
 python -m pip install picopwm
-picopwm-web
+picopwm
 ```
+
+The previous `picopwm-web` command remains available as a compatibility alias.
 
 Connect your board and open **<http://127.0.0.1:5000>**. Choose the board in the
 selector; use **Rescan** if it is not listed. Stop the application with `Ctrl+C`.
@@ -125,7 +127,7 @@ variables below select boards for the dashboard.
 
 ## Configuration
 
-Set environment variables before starting `picopwm-web`:
+Set environment variables before starting `picopwm`:
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
@@ -135,8 +137,8 @@ Set environment variables before starting `picopwm-web`:
 | `PICOPWM_PORT` | Listen port | `5000` |
 | `PICOPWM_TOKEN` | API access token | Unset |
 
-For another port, use `PICOPWM_PORT=5002 picopwm-web` on Linux/macOS, or set
-`$env:PICOPWM_PORT = "5002"` before running `picopwm-web` in PowerShell.
+For another port, use `PICOPWM_PORT=5002 picopwm` on Linux/macOS, or set
+`$env:PICOPWM_PORT = "5002"` before running `picopwm` in PowerShell.
 
 Keep loopback binding for local use. Listening beyond loopback requires a token;
 the built-in server has no TLS and should not be exposed directly to the internet.

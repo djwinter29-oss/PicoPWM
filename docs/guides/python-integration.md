@@ -27,7 +27,7 @@ and discovery. A missing or incorrect credential returns HTTP 401.
 The dashboard page remains accessible so it can prompt for a token.
 
 When embedding Flask with `create_app()`, pass `token=...` explicitly; the factory
-does not read `PICOPWM_TOKEN` itself. The `picopwm-web` entry point reads that
+does not read `PICOPWM_TOKEN` itself. The `picopwm` entry point reads that
 environment variable and passes it to the factory.
 
 ## HTTP API
@@ -171,7 +171,7 @@ Activation is optional; no execution-policy change is needed:
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install picopwm
-.\.venv\Scripts\picopwm-web.exe
+.\.venv\Scripts\picopwm.exe
 ```
 
 Open <http://127.0.0.1:5000> after starting the application.

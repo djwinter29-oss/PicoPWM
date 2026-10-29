@@ -131,16 +131,7 @@ jobs:
           set -eu
           python -m venv build/host-wheel-check
           build/host-wheel-check/bin/python -m pip install dist/*.whl
-          cd build
-          host-wheel-check/bin/python - <<'PY'
-          from importlib.metadata import version
-          import os
-          from picopwm.app import create_app
-          assert version('picopwm') == os.environ['VERSION']
-          client = create_app(object()).test_client()
-          for asset in ('/', '/css/webhid.css', '/js/view.mjs', '/js/device.mjs', '/js/client.mjs'):
-              assert client.get(asset).status_code == 200, asset
-          PY
+          build/host-wheel-check/bin/python tools/release/check_python_install.py --version "$VERSION"
 
       - name: Checksum Python wheel
         run: |

@@ -24,6 +24,14 @@ for the SDA and SCL pins.
 This is a byte-addressed register-selection protocol, not a memory window.
 Each register has its own read or command semantics.
 
+The generic I2C driver only frames bus transactions and transports response
+bytes. Register selection, frame-length validation, command status, and
+deferred PWM execution belong to the PWM protocol layer.
+For the implementation boundary and callback rules, see the
+[I2C Slave Driver Design](i2c-slave-driver-design.md).
+The realized-state snapshot read may briefly stretch SCL while it acquires a
+short cross-core lock.
+
 | Register | Address | Write length | Read length | Purpose |
 | --- | ---: | ---: | ---: | --- |
 | `REG_INFO` | `0x00` | 1 | 7 | Protocol signature, firmware major, channel count, and roles |

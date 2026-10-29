@@ -29,6 +29,7 @@ contracts for host implementers:
 - [Hardware PWM](design/pwm-driver/hardware.md) — generator and monitor
 - [PIO PWM](design/pwm-driver/pio.md) — generator and monitor
 - [Software PWM](design/pwm-driver/software.md) — generator and monitor
+- [I2C Slave Driver Design](design/i2c/i2c-slave-driver-design.md) — generic transport and protocol-layer ownership
 - [I2C Protocol Reference](design/i2c/i2c-protocol.md)
 - [USB Interface Overview](design/usb/usb-interface-overview.md) and
   [HID Report Reference](design/usb/hid-report-reference.md)

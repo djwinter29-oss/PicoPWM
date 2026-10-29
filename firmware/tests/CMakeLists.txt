@@ -91,14 +91,14 @@ target_include_directories(generator_math_test PRIVATE
 pico_pwm_test_warnings(generator_math_test)
 add_test(NAME generator_math COMMAND generator_math_test)
 
-add_executable(i2c_write_queue_test
-    i2c_write_queue_test.c
+add_executable(i2c_command_queue_test
+    i2c_command_queue_test.c
 )
-target_include_directories(i2c_write_queue_test PRIVATE
+target_include_directories(i2c_command_queue_test PRIVATE
     ${SOURCE_ROOT}
 )
-pico_pwm_test_warnings(i2c_write_queue_test)
-add_test(NAME i2c_write_queue COMMAND i2c_write_queue_test)
+pico_pwm_test_warnings(i2c_command_queue_test)
+add_test(NAME i2c_command_queue COMMAND i2c_command_queue_test)
 
 add_executable(i2c_slave_test
     i2c_slave_test.c

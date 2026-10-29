@@ -140,8 +140,8 @@ Core 0 owns the host-facing transports:
 - `app/cli/cli_*_commands.*` for human-readable command groups
 - `app/cli/cli_app.*` for CDC command-shell lifecycle and connection output
 - `app/cli/cli_syntax.h` for shared command syntax
-- `driver/i2c/i2c_slave.*` for the I2C slave ISR, read responses, and deferred write scheduling; `i2c_slave_hw.*` is its SDK-facing peripheral port
-- `app/i2c/i2c_control_map.*` for the I2C register map and payload translation
+- `driver/i2c/i2c_slave.*` for generic I2C transaction framing and response-byte transport; `i2c_slave_hw.*` is its SDK-facing peripheral port
+- `app/i2c/i2c_control_map.*` for register selection, frame validation, protocol status, response construction, and PWM command dispatch
 
 USB CDC uses bounded 128-byte receive and 2048-byte transmit queues. When the
 receive queue is full, firmware stops draining the USB FIFO until space becomes
@@ -249,9 +249,9 @@ sequenceDiagram
 Transport-specific details:
 
 - I2C reads can be served directly from the published snapshot or last command status.
-- I2C writes are captured in the ISR, queued, and executed from normal Core 0 polling through the shared `device` control path used by USB CDC and HID. I2C read responses are built in the ISR from non-blocking getters when a read starts, so SCL is never stretched.
+- The generic I2C driver captures opaque frames and sends response bytes. The PWM protocol layer validates and queues commands from the ISR; foreground polling executes them through the shared `device` control path used by USB CDC and HID. Read responses use bounded getters when a read starts; a short cross-core snapshot lock can briefly stretch SCL.
 - USB commands are parsed by `shell` and the CLI command handlers before they reach `device`.
-- I2C commands are decoded by `i2c_slave` and `i2c_control_map` before they reach `device`.
+- I2C register and payload semantics are decoded by `i2c_control_map` before they reach `device`.
 
 This keeps the ISR transport-focused and avoids running backend-affecting logic in interrupt context.
 
@@ -323,12 +323,12 @@ flowchart TD
     USB --> Launch[Initialize Core 1 with pwm_driver_init]
     Launch --> Ready{pwm_driver_is_ready?}
     Ready -- No --> Ready
-    Ready -- Yes --> I2C[Initialize I2C slave]
+    Ready -- Yes --> I2C[Initialize I2C protocol and slave]
     I2C --> Loop[Run Core 0 polling loop]
     Loop --> USBPoll[usb_cdc_poll]
     USBPoll --> CLIPoll[cli_app_poll]
     CLIPoll --> HIDPoll[usb_hid_poll]
-    HIDPoll --> I2CPoll[i2c_slave_poll]
+    HIDPoll --> I2CPoll[i2c_control_map_poll]
     I2CPoll --> Loop
 ```
 
@@ -339,8 +339,8 @@ In ordered form:
 3. Core 0 initializes TinyUSB CDC and the CLI transport binding.
 4. Core 0 initializes and launches Core 1 with `pwm_driver_init(roles)`.
 5. Core 0 waits for `pwm_driver_is_ready()`.
-6. Core 0 initializes the I2C slave transport.
-7. The main loop services `usb_cdc_poll()`, `cli_app_poll()`, `usb_hid_poll()`, and `i2c_slave_poll()`.
+6. Core 0 initializes the I2C protocol state and slave transport.
+7. The main loop services `usb_cdc_poll()`, `cli_app_poll()`, `usb_hid_poll()`, and `i2c_control_map_poll()`.
 
 When the USB CDC host opens the connection, the CLI prints help and a prompt.
 If the bounded transmit queue cannot accept the output, Core 0 retries it while

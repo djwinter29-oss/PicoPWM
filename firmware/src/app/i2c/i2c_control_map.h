@@ -12,6 +12,17 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/** @brief Result bytes used by PWM I2C command-status reads. */
+typedef enum {
+    I2C_STATUS_OK = 0u,          /**< The command completed successfully. */
+    I2C_STATUS_BUSY = 1u,        /**< The command is queued or still being applied. */
+    I2C_STATUS_INVALID = 2u,     /**< The command or its framing is invalid. */
+    I2C_STATUS_UNAVAILABLE = 3u, /**< The operation is unavailable or command queue is full. */
+    I2C_STATUS_TIMEOUT = 4u,     /**< The channel command was not claimed before its deadline. */
+    I2C_STATUS_APPLY_FAILED = 5u, /**< The backend rejected an admitted channel command. */
+    I2C_STATUS_NOT_RUN = 6u,     /**< No command attempt has been recorded since startup. */
+} i2c_status_t;
+
 /** @brief I2C register and command byte assignments for the PWM control map. */
 typedef enum {
     I2C_CONTROL_MAP_REG_INFO = 0x00u,     /**< Read-only protocol and device summary. */
@@ -23,42 +34,13 @@ typedef enum {
 /** @brief Fixed byte count returned by `REG_INFO`. */
 #define I2C_CONTROL_MAP_INFO_SIZE 7u
 
-/**
- * @brief Return whether one register represents a write-capable command.
- * @param reg I2C register or command byte.
- * @return `true` when the register can schedule a deferred write.
- */
-bool i2c_control_map_is_write_register(uint8_t reg);
+/** @brief Reset protocol selection, command queue, and command status for startup. */
+void i2c_control_map_init(void);
 
-/**
- * @brief Return the total write length, including register byte, for one I2C register command.
- * @param reg I2C register or command byte.
- * @return Expected total write length, or `0` when the register is unsupported.
- */
-uint8_t i2c_control_map_expected_write_length(uint8_t reg);
+/** @brief Execute at most one queued command; call from the Core 0 foreground loop. */
+void i2c_control_map_poll(void);
 
-/**
- * @brief Build the current I2C read response for one register.
- * @param reg I2C register or command byte.
- * @param last_status Last command status tracked by the transport.
- * @param response Caller-owned destination buffer.
- * @param response_capacity Capacity of @p response in bytes.
- * @param response_len Caller-owned destination for the response byte count.
- * @return `true` when the register is supported and the response was built. On `false` the response is untouched.
- */
-bool i2c_control_map_read_register(uint8_t reg, uint8_t last_status, uint8_t *response, uint8_t response_capacity,
-                                   uint8_t *response_len);
-
-/**
- * @brief Execute one I2C write command payload on Core 0.
- * @param reg I2C register or command byte.
- * @param payload Caller-owned payload bytes excluding @p reg.
- * @param payload_len Payload byte count excluding @p reg.
- * @return Result code from the shared PWM control plane.
- */
-pwm_driver_result_t i2c_control_map_execute_write(uint8_t reg, const uint8_t *payload, uint8_t payload_len);
-
-/** @brief This register map expressed as the callbacks `i2c_slave_init()` expects. */
+/** @brief PWM register protocol callbacks for the generic I2C transport. */
 extern const i2c_slave_ops_t i2c_control_map_ops;
 
 #endif

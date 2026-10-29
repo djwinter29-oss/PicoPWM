@@ -63,6 +63,7 @@ int main(void) {
     }
 
     // Core 0: start communication interfaces.
+    i2c_control_map_init();
     i2c_slave_init(boot_config_get_i2c_address(), &i2c_control_map_ops);
 
     // Core 0 main loop: service USB CDC, USB HID, and I2C.
@@ -73,7 +74,7 @@ int main(void) {
         usb_cdc_poll();
         cli_app_poll(&cli_app);
         usb_hid_poll();
-        i2c_slave_poll();
+        i2c_control_map_poll();
         system_record_service((uint32_t)absolute_time_diff_us(service_start, get_absolute_time()));
         sleep_us(100);
     }

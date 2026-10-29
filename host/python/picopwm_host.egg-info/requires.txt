@@ -1,5 +1,0 @@
-Flask<4,>=3.0
-hidapi>=0.14
-
-[test]
-pytest>=8

@@ -17,7 +17,7 @@ else:
 
 def enumerate_devices() -> list[dict[str, Any]]:
     if hid is None:
-        raise RuntimeError("missing dependency: install picopwm-host with its runtime dependencies") from _IMPORT_ERROR
+        raise RuntimeError("missing dependency: install picopwm with its runtime dependencies") from _IMPORT_ERROR
     # Match PicoUart's constrained fallback for hidapi backends without usage metadata.
     return [info for info in hid.enumerate(VENDOR_ID, PRODUCT_ID)
             if (info.get("usage_page") == USAGE_PAGE and info.get("usage") == USAGE)

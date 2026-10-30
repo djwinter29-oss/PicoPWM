@@ -26,7 +26,7 @@ bool board_commands_get(shell_t *shell, const char *item);
 bool board_commands_set(shell_t *shell, const char *item, const char *value);
 
 /**
- * @brief Read or update startup configuration.
+ * @brief Read effective running settings or update startup configuration.
  * @param context Shell session.
  * @param argc Argument count including the `config` group.
  * @param argv Command tokens.

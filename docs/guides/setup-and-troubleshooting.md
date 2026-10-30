@@ -21,7 +21,7 @@ The default roles are monitor-only, so the board does not drive PWM outputs
 until a bank is configured as a generator. Role changes are applied at startup
 and do not switch a bank while the firmware is running.
 
-On the CDC shell, run `config get` to inspect running and target settings. To
+On the CDC shell, run `config get` to inspect effective running settings. To
 change one or more settings, use `config set`, for example:
 
 ```text
@@ -115,8 +115,10 @@ grant the browser access to a local USB device.
 
 ### A configuration change does not take effect
 
-- Compare the running and target values with `config get`. The running role
-  changes only after reboot.
+- After reconnecting, compare the actual values from `config get` with your
+  request. It reports running settings only; bank roles change only after reboot.
+- If the configured clock could not be applied, the CDC shell prints a warning
+  on connection. Run `board get clock` to check the actual clock in Hz.
 - CDC `config set` saves and reboots automatically. HID configuration changes
   have their own save and reboot workflow; consult the
   [HID Report Reference](../design/usb/hid-report-reference.md).

@@ -10,8 +10,9 @@
 
 /** @brief CDC command session and connection-output retry state. */
 typedef struct {
-    shell_t shell;               /**< Generic CLI editor and transport state. */
-    bool connection_help_queued; /**< Help is queued; only the prompt remains pending after a transient failure. */
+    shell_t shell;                 /**< Generic CLI editor and transport state. */
+    bool connection_clock_checked; /**< Clock status checked and any warning queued for this connection. */
+    bool connection_help_queued;   /**< Help is queued; only the prompt remains pending after a transient failure. */
 } pwm_commands_t;
 
 /**
@@ -23,7 +24,7 @@ typedef struct {
 bool pwm_commands_init(pwm_commands_t *commands, const shell_transport_t *transport);
 
 /**
- * @brief Print initial command help and prompt, retrying failed output on the next call.
+ * @brief Print any clock warning, initial help and prompt, retrying failed output on the next call.
  * @param commands Initialized CLI command session.
  * @return `true` when all connection output was accepted by the transport.
  */

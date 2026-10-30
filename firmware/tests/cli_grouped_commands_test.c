@@ -25,6 +25,7 @@ static uint8_t target_address = 0x40u;
 static uint8_t running_address = 0x40u;
 static bool save_succeeds = true;
 static bool reboot_scheduled;
+static bool clock_at_target = true;
 static bool led_state;
 static uint32_t set_calls;
 static uint32_t restore_defaults_calls;
@@ -165,7 +166,7 @@ void control_api_schedule_reboot(uint32_t delay_ms) {
 }
 
 bool system_clock_is_at_target(void) {
-    return true;
+    return clock_at_target;
 }
 
 pwm_role_t boot_config_get_bank(pwm_bank_t bank) {
@@ -264,7 +265,8 @@ static void test_grouped_commands(void) {
     restore_defaults_result = PWM_DRIVER_RESULT_OK;
 
     run_command(&commands, &transport, "board get clock\r");
-    assert(strstr(transport.output, "clock=125000000 Hz target=met") != NULL);
+    assert(strstr(transport.output, "clock=125000000 Hz\r\n") != NULL);
+    assert(strstr(transport.output, "target=") == NULL);
     run_command(&commands, &transport, "board get version\r");
     assert(strstr(transport.output, "test-version") != NULL);
     run_command(&commands, &transport, "board get led\r");
@@ -278,17 +280,36 @@ static void test_grouped_commands(void) {
     target_address = 0x40u;
     save_succeeds = true;
     reboot_scheduled = false;
-    run_command(&commands, &transport, "config set banka=generator, clock=150, address=64\r");
+    run_command(&commands, &transport, "config set banka=generator, clock=150, address=65\r");
     assert(target_roles[0] == PWM_ROLE_GENERATOR);
     assert(target_clock == BOOT_CONFIG_SYSCLK_150MHZ);
-    assert(target_address == 64u);
+    assert(target_address == 65u);
     assert(reboot_scheduled);
     assert(strstr(transport.output, "OK config saved; rebooting") != NULL);
 
     run_command(&commands, &transport, "config get banka\r");
-    assert(strstr(transport.output, "banka running=monitor target=generator") != NULL);
+    assert(strstr(transport.output, "banka=monitor\r\n") != NULL);
+    assert(strstr(transport.output, "target=") == NULL);
+    run_command(&commands, &transport, "config get address\r");
+    assert(strstr(transport.output, "address=64\r\n") != NULL);
+    assert(strstr(transport.output, "target=") == NULL);
+    clock_at_target = false;
+    run_command(&commands, &transport, "board get clock\r");
+    assert(strstr(transport.output, "clock=125000000 Hz\r\n") != NULL);
+    assert(strstr(transport.output, "target=") == NULL);
+    run_command(&commands, &transport, "config get clock\r");
+    assert(strstr(transport.output, "clock=125000000 Hz\r\n") != NULL);
+    assert(strstr(transport.output, "target=") == NULL);
+    clock_at_target = true;
+    target_roles[PWM_BANK_B] = PWM_ROLE_GENERATOR;
+    running_roles[PWM_BANK_C] = PWM_ROLE_GENERATOR;
     run_command(&commands, &transport, "config get\r");
-    assert(strstr(transport.output, "clock running=125000000 Hz target=150 MHz") != NULL);
+    assert(strstr(transport.output, "banka=monitor\r\nbankb=monitor\r\nbankc=generator\r\n"
+                                    "clock=125000000 Hz\r\naddress=64\r\n") != NULL);
+    assert(strstr(transport.output, "running=") == NULL);
+    assert(strstr(transport.output, "target=") == NULL);
+    target_roles[PWM_BANK_B] = PWM_ROLE_MONITOR;
+    running_roles[PWM_BANK_C] = PWM_ROLE_MONITOR;
 
     pwm_role_t previous_role = target_roles[0];
     boot_config_sysclk_t previous_clock = target_clock;
@@ -358,6 +379,44 @@ static void test_connection_output_retries(void) {
     assert(pwm_commands_on_connected(&commands));
     assert(strstr(transport.output, "Groups: pwm, board, config") != NULL);
     assert(strstr(transport.output, "pico> ") != NULL);
+    assert(strstr(transport.output, "WARN") == NULL);
+}
+
+static void test_clock_warning_retries(void) {
+    static const char warning[] = "WARN configured clock not applied; use 'board get clock'\r\n";
+    static const char help[] = "Groups: pwm, board, config\r\n"
+                               "Use 'help <group>' or '<group> ?' for command syntax.\r\n";
+    test_transport_t transport = {0};
+    shell_transport_t binding = {.read = test_read, .write = test_write, .context = &transport};
+    pwm_commands_t commands;
+
+    clock_at_target = false;
+    assert(pwm_commands_init(&commands, &binding));
+
+    transport.output_limit = sizeof(warning) - 2u;
+    assert(!pwm_commands_on_connected(&commands));
+    assert(transport.output_length == 0u);
+
+    transport.output_limit = sizeof(warning) - 1u;
+    assert(!pwm_commands_on_connected(&commands));
+    assert(strcmp(transport.output, warning) == 0);
+
+    reset_output(&transport, "");
+    transport.output_limit = sizeof(help) - 1u;
+    assert(!pwm_commands_on_connected(&commands));
+    assert(strcmp(transport.output, help) == 0);
+
+    reset_output(&transport, "");
+    transport.output_limit = 0u;
+    assert(pwm_commands_on_connected(&commands));
+    assert(strcmp(transport.output, "pico> ") == 0);
+
+    assert(pwm_commands_on_disconnected(&commands));
+    reset_output(&transport, "");
+    assert(pwm_commands_on_connected(&commands));
+    assert(strstr(transport.output, warning) == transport.output);
+    assert(strstr(transport.output, "pico> ") != NULL);
+    clock_at_target = true;
 }
 
 static void test_disconnect_resets_incomplete_command(void) {
@@ -420,6 +479,7 @@ int main(void) {
     test_grouped_commands();
     test_help_commands();
     test_connection_output_retries();
+    test_clock_warning_retries();
     test_disconnect_resets_incomplete_command();
     test_disconnect_transition_resets_shell_before_reconnect_input();
     puts("cli_grouped_commands_test ok");

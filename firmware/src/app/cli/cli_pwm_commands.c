@@ -8,6 +8,7 @@
 #include "app/cli/cli_board_commands.h"
 #include "app/cli/cli_channel_commands.h"
 #include "app/cli/cli_syntax.h"
+#include "platform/system.h"
 
 #include <string.h>
 
@@ -178,6 +179,13 @@ bool pwm_commands_on_connected(pwm_commands_t *commands) {
         return false;
     }
 
+    if (!commands->connection_clock_checked) {
+        if (!system_clock_is_at_target() &&
+            !shell_write_line(&commands->shell, "WARN configured clock not applied; use 'board get clock'")) {
+            return false;
+        }
+        commands->connection_clock_checked = true;
+    }
     if (!commands->connection_help_queued) {
         if (!pwm_commands_write_group_help(&commands->shell, NULL)) {
             return false;
@@ -188,6 +196,7 @@ bool pwm_commands_on_connected(pwm_commands_t *commands) {
         return false;
     }
 
+    commands->connection_clock_checked = false;
     commands->connection_help_queued = false;
     return true;
 }

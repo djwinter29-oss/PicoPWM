@@ -8,7 +8,6 @@
 #include "app/cli/cli_syntax.h"
 #include "control_api.h"
 #include "platform/boot_config.h"
-#include "platform/system.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -53,33 +52,20 @@ static bool board_commands_parse_decimal(const char *text, unsigned long *value_
     return true;
 }
 
-/** @brief Print one setting's active and saved-target values. */
+/** @brief Print one setting's effective running value. */
 static bool board_commands_config_item(shell_t *shell, const char *item) {
     char line[96];
-    unsigned long running_clock = (unsigned long)control_api_system_clock_hz();
-    uint16_t target_clock = boot_config_get_sysclk_mhz();
 
     if (strcmp(item, "banka") == 0) {
-        snprintf(line, sizeof(line), "banka running=%s target=%s",
-                 board_commands_role_name(control_api_bank_role(PWM_BANK_A)),
-                 board_commands_role_name(boot_config_get_bank(PWM_BANK_A)));
+        snprintf(line, sizeof(line), "banka=%s", board_commands_role_name(control_api_bank_role(PWM_BANK_A)));
     } else if (strcmp(item, "bankb") == 0) {
-        snprintf(line, sizeof(line), "bankb running=%s target=%s",
-                 board_commands_role_name(control_api_bank_role(PWM_BANK_B)),
-                 board_commands_role_name(boot_config_get_bank(PWM_BANK_B)));
+        snprintf(line, sizeof(line), "bankb=%s", board_commands_role_name(control_api_bank_role(PWM_BANK_B)));
     } else if (strcmp(item, "bankc") == 0) {
-        snprintf(line, sizeof(line), "bankc running=%s target=%s",
-                 board_commands_role_name(control_api_bank_role(PWM_BANK_C)),
-                 board_commands_role_name(boot_config_get_bank(PWM_BANK_C)));
+        snprintf(line, sizeof(line), "bankc=%s", board_commands_role_name(control_api_bank_role(PWM_BANK_C)));
     } else if (strcmp(item, "clock") == 0) {
-        if (target_clock == 0u) {
-            snprintf(line, sizeof(line), "clock running=%lu Hz target=default", running_clock);
-        } else {
-            snprintf(line, sizeof(line), "clock running=%lu Hz target=%u MHz", running_clock, (unsigned)target_clock);
-        }
+        return board_commands_get(shell, item);
     } else if (strcmp(item, "address") == 0) {
-        snprintf(line, sizeof(line), "address running=%u target=%u", (unsigned)control_api_i2c_address(),
-                 (unsigned)boot_config_get_i2c_address());
+        snprintf(line, sizeof(line), "address=%u", (unsigned)control_api_i2c_address());
     } else {
         return shell_write_line(shell, "ERR config item must be banka, bankb, bankc, clock or address");
     }
@@ -255,8 +241,7 @@ bool board_commands_get(shell_t *shell, const char *item) {
     char line[64];
 
     if (strcmp(item, "clock") == 0) {
-        snprintf(line, sizeof(line), "clock=%lu Hz target=%s", (unsigned long)control_api_system_clock_hz(),
-                 system_clock_is_at_target() ? "met" : "fallback");
+        snprintf(line, sizeof(line), "clock=%lu Hz", (unsigned long)control_api_system_clock_hz());
         return shell_write_line(shell, line);
     }
     if (strcmp(item, "led") == 0) {

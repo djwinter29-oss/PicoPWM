@@ -8,7 +8,9 @@ and simple host scripts.
 Connect the board over a USB data cable and open its CDC serial device. The
 terminal's baud-rate setting does not affect USB packet timing; this shell does
 not configure a physical UART. The firmware prints command help when a host
-connection is opened and displays the `pico> ` prompt.
+connection is opened and displays the `pico> ` prompt. If the configured clock
+could not be applied at boot, it also prints a warning on connection; use
+`board get clock` to inspect the actual running clock.
 
 Disconnecting discards any incomplete command and pending response bytes in
 both the application and USB transmit queues. The application resets the line
@@ -71,7 +73,7 @@ check the bank role and GPIO before applying one.
 
 | Command | Description | Example |
 | --- | --- | --- |
-| `board get clock` | Read the running system clock and whether its target was met. | `board get clock` |
+| `board get clock` | Read the actual running system clock in Hz. | `board get clock` |
 | `board get led` | Read the LED state. | `board get led` |
 | `board get version` | Read the build-time firmware version. | `board get version` |
 | `board set led <on\|off>` | Set the board LED state. | `board set led on` |
@@ -81,8 +83,8 @@ check the bank role and GPIO before applying one.
 
 | Command | Description | Example |
 | --- | --- | --- |
-| `config get` | Show all running and target settings. | `config get` |
-| `config get <item>` | Show one setting's running and target values. Valid items: `banka`, `bankb`, `bankc`, `clock`, `address`. | `config get clock` |
+| `config get` | Show all effective running settings. | `config get` |
+| `config get <item>` | Show one setting's effective running value. Valid items: `banka`, `bankb`, `bankc`, `clock`, `address`. | `config get clock` |
 | `config set <key=value>[, <key=value>...]` | Validate and apply all assignments together, save them, and reboot to apply. | `config set banka=generator, clock=150, address=64` |
 
 The setting names are `banka`, `bankb`, `bankc`, `clock`, and `address`.
@@ -92,7 +94,27 @@ Banks accept `generator` or `monitor`; the system clock accepts `default`,
 assignments. The complete set is validated before any setting is changed; a
 rejected assignment does not partially apply the request. A successful command
 saves the new target configuration and reboots the board; no separate save or
-reboot command is needed.
+reboot command is needed. It acknowledges a successful save with
+`OK config saved; rebooting`; this confirms persistence, not that the
+requested clock has already been applied.
+
+All `get` responses report actual running values, not saved targets. For example:
+
+```text
+pico> board get clock
+clock=125000000 Hz
+pico> config get address
+address=64
+pico> config get
+banka=monitor
+bankb=monitor
+bankc=monitor
+clock=125000000 Hz
+address=64
+```
+
+These are illustrative values; the running roles, clock, and address depend
+on the board and its applied configuration.
 
 The `150` MHz profile is an overclock on RP2040, and the `200` and `250` MHz
 profiles are not qualified for every board. CDC does not require a separate

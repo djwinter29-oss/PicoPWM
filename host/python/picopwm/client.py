@@ -225,10 +225,10 @@ class PicoPwmHid:
 
     def reboot(self) -> dict[str, Any]:
         with self._lock:
-            self._run_reboot(p.OP_REBOOT)
+            self._run_reboot(p.OP_REBOOT, p.FLAG_CONFIRM_SAVE)
             return {"rebooting": True}
 
-    def _run_reboot(self, operation: int, flags: int = 0) -> None:
+    def _run_reboot(self, operation: int, flags: int) -> None:
         try:
             self._perform(operation, flags=flags)
         except (OSError, p.ProtocolError, RuntimeError) as error:

@@ -225,6 +225,7 @@ def test_save_stops_at_first_failure_and_reboot_never_saves():
     device, client = modern()
     client.reboot()
     assert [data[3] for data in device.sent] == [9]
+    assert device.sent[0][10] == p.FLAG_CONFIRM_SAVE
 
 
 def test_board_registry_and_routes_keep_selection_pinned():

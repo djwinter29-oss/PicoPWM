@@ -169,7 +169,26 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
             throw new ArgumentException("freq_hz must be an unsigned 32-bit integer");
         if (duty is < 0 or > 100)
             throw new ArgumentException("duty must be between 0 and 100");
-        return Run(false, OpSetChannel, (byte)channel, (uint)freqHz, (byte)duty);
+        try
+        {
+            return Run(false, OpSetChannel, (byte)channel, (uint)freqHz, (byte)duty);
+        }
+        catch (DeviceException error) when (error.Message == "command failed: INVALID")
+        {
+            var actual = new ChannelState(channel, null, null);
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                var state = Status();
+                actual = state.Channels[channel];
+                if (actual.FreqHz == (uint)freqHz && actual.Duty == duty)
+                    return state;
+                if (attempt < 2)
+                    sleep(TimeSpan.FromMilliseconds(50));
+            }
+            var readback = actual.FreqHz is uint hz ? $"{hz} Hz / {actual.Duty}%" : "unavailable";
+            throw new DeviceException(
+                $"command failed: INVALID (requested {freqHz} Hz / {duty}%, readback {readback})");
+        }
     }
 
     public DashboardStatus Stop() => Run(false, OpStop);
@@ -178,10 +197,10 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
 
     public void Reboot()
     {
-        lock (gate) RunReboot(OpReboot);
+        lock (gate) RunReboot(OpReboot, FlagConfirmSave);
     }
 
-    private void RunReboot(byte operation, byte flags = 0)
+    private void RunReboot(byte operation, byte flags)
     {
         try { Perform(operation, flags: flags); }
         catch (Exception error) when (error is IOException or InvalidOperationException or InvalidDataException

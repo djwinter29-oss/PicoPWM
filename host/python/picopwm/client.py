@@ -93,34 +93,34 @@ class PicoPwmHid:
                         if self._pins is None:
                             self._pins = p.decode_pins(self._read(p.PINS_REPORT, p.PINS_SIZE))
                         state["pins"] = self._pins
-                    except p.ProtocolError:
-                        state["pins_error"] = "Device status unavailable"
+                    except p.ProtocolError as error:
+                        state["pins_error"] = str(error)
                 self._configuration = None
                 try:
                     self._configuration = p.decode_configuration(
                         self._read(p.CONFIGURATION_REPORT, p.CONFIGURATION_SIZE))
-                except p.ProtocolError:
-                    state["configuration_error"] = "Device status unavailable"
+                except p.ProtocolError as error:
+                    state["configuration_error"] = str(error)
                 state["configuration"] = self._configuration
                 if self._identity["can_read_runtime"]:
                     try:
                         state["runtime"] = p.decode_runtime(self._read(p.RUNTIME_REPORT, p.RUNTIME_SIZE))
-                    except p.ProtocolError:
-                        state["runtime_error"] = "Device status unavailable"
+                    except p.ProtocolError as error:
+                        state["runtime_error"] = str(error)
                 for bank in range(p.BANK_COUNT):
                     try:
                         entries = p.decode_bank_status(
                             self._read(p.BANK_STATUS_REPORT + bank, p.BANK_STATUS_SIZE), bank)
                         state["channels"][bank * p.BANK_SIZE:(bank + 1) * p.BANK_SIZE] = entries
-                    except p.ProtocolError:
-                        state["bank_errors"][bank] = "Device status unavailable"
-            except p.ProtocolError:
+                    except p.ProtocolError as error:
+                        state["bank_errors"][bank] = str(error)
+            except p.ProtocolError as error:
                 self.close()
                 state.update(connected=False, identity=None, pins=None,
-                             identity_error="Device status unavailable", error="Device status unavailable")
-            except (OSError, RuntimeError):
+                             identity_error=str(error), error=str(error))
+            except (OSError, RuntimeError) as error:
                 self.close()
-                state.update(connected=False, identity=None, pins=None, error="Device status unavailable")
+                state.update(connected=False, identity=None, pins=None, error=str(error))
             return state
 
     def _perform(self, operation: int, **fields: int) -> None:

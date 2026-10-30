@@ -17,4 +17,8 @@ include technical details until one is provided.
   operating-system access to the device nodes to trusted users and keep the I2C bus private.
 - Saving a configuration writes flash and can select an overclocked system clock. A saved profile that prevents boot
   is recovered by holding BOOTSEL while connecting USB and reflashing.
-- The host dashboards are local tools, not network services. Do not expose them on untrusted networks.
+- The host dashboards are local tools, not network services. They bind to loopback unless
+  `PICOPWM_TOKEN` is set. HTTP error bodies use fixed sentences; the server log keeps the
+  underlying detail. `GET /api/boards` includes the local `device_path` so a dashboard can
+  reopen the HID node, and an authenticated client on a non-loopback bind can read that path.
+  Do not expose the dashboards on untrusted networks.

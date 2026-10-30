@@ -149,8 +149,10 @@ bool sw_mon_init(void) {
     }
     sw_mon_levels = gpio_get_all();
     /* ponytail: completion-relative scans avoid catch-up IRQ storms under load; actual timestamps
-     * account for variable spacing, but narrow pulses and out-of-range inputs can alias. Use PIO
-     * if sampled low-frequency monitoring is insufficient. */
+     * account for variable spacing, but narrow pulses and out-of-range inputs can alias. The alarm
+     * IRQ preempts the Core 1 mailbox loop for one scan; do not lengthen this delay to avoid that,
+     * because the experimental 10 kHz budget needs gaps on the order of 5 us. Use PIO if sampled
+     * low-frequency monitoring is insufficient. */
     if (!alarm_pool_add_repeating_timer_us(sw_mon_pool, SW_MON_SCAN_US, sw_mon_scan, NULL, &sw_mon_timer)) {
         return false;
     }

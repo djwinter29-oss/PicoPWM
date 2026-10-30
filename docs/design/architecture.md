@@ -344,6 +344,8 @@ In ordered form:
 6. Core 0 initializes the I2C protocol state and slave transport.
 7. The main loop services `usb_cdc_poll()`, `cli_app_poll()`, `usb_hid_poll()`, and `i2c_control_map_poll()`.
 
+While Core 0 waits for a PWM apply, it holds the control lock and the wait hook runs only `usb_cdc_poll()`. CLI parsing, HID action execution, and I2C command execution stay in the main loop, because running them from the hook would submit another mailbox command under that lock. CDC bytes keep moving. HID and I2C wait until the apply returns. `pwm_driver_restore_defaults()` is one apply per generator channel, so a stop-all can hold the lock across several applies. The I2C command queue holds four writes; further writes report `UNAVAILABLE` until the main loop drains it. Host timeouts have to cover that stall. A timeout does not cancel a command Core 1 has already claimed.
+
 When the USB CDC host opens the connection, the CLI prints help and a prompt.
 If the bounded transmit queue cannot accept the output, Core 0 retries it while
 the connection remains open. If CLI initialization fails, the host receives an

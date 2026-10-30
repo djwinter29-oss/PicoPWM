@@ -131,7 +131,8 @@ payload:
 | 0 | 4 | `freq_hz` | Unsigned 32-bit Hz, little-endian |
 | 4 | 1 | `duty` | Unsigned percent |
 
-Duty values above `100` are clamped to `100`. For generator banks, frequency
+Duty values above `100` are rejected as `INVALID`, matching HID and the CDC shell.
+For generator banks, frequency
 `0` requests a static output: duty `100` sets it high and any lower duty sets
 it low. At nonzero frequency, duty `0` and `100` also request static low and
 high outputs. Readback reports the realized static level as `0 Hz / 0%` for
@@ -220,8 +221,12 @@ status.
 
 Each command register's status starts as `NOT_RUN`. When a
 command is rejected because the shared write queue is full, its register
-reports `UNAVAILABLE`. Wait before retrying so the host can avoid sustained
-queue pressure.
+reports `UNAVAILABLE`. The queue is four deep and is drained only from the Core 0
+main loop. While Core 0 is inside a PWM apply it keeps USB CDC moving and does
+not run HID, CLI, or I2C command execution, so a burst of writes during that
+stall fills the queue and further writes report `UNAVAILABLE`. Wait before
+retrying so the host can avoid sustained queue pressure. A host timeout does
+not cancel a command Core 1 has already claimed.
 
 The 1-second apply deadline starts when Core 0 begins processing a channel
 update, not when the I2C transaction is received. Queue wait time is additional

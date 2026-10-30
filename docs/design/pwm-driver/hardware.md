@@ -118,6 +118,12 @@ That gives the following hardware-generator envelope:
 These are hardware representability limits, not the recommended operating range.
 The maximum is a two-count waveform at divider 1, with only 0%, 50%, or 100%
 compare levels. Firmware accepts generator requests only up to **10 MHz**.
+A running PWM below the counter-limited minimum for the clock actually running
+is rejected as `INVALID` before the backend runs, so it is not reported as
+`APPLY_FAILED`. Static outputs (`0 Hz`, or duty `0%` or `100%`) do not need a
+divider and stay valid. At `250 MHz`, `10 Hz` at `50%` is therefore `INVALID`
+even though the shared request floor is `10 Hz`. At the default `125 MHz` and
+`150 MHz` clocks, `10 Hz` remains representable.
 There is no hardware-qualified absolute electrical maximum for this project:
 pin loading, wiring, system clock, and signal integrity must be checked separately.
 

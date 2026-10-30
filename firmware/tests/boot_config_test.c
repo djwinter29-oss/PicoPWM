@@ -13,6 +13,8 @@ i2c_inst_t i2c1_inst;
 int test_multicore_lockout_victim_ready;
 
 void system_watchdog_kick(void) {}
+void system_watchdog_pause(void) {}
+void system_watchdog_resume(void) {}
 
 int main(void) {
     test_flash_reset();

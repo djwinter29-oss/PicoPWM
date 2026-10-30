@@ -114,6 +114,9 @@ static pwm_driver_result_t execute_command(uint8_t reg, const uint8_t *payload, 
         channel = (uint)(reg - I2C_CONTROL_MAP_REG_SET_BASE);
         frequency = (uint32_t)payload[0] | ((uint32_t)payload[1] << 8u) | ((uint32_t)payload[2] << 16u) |
                     ((uint32_t)payload[3] << 24u);
+        if (payload[4] > 100u) {
+            return PWM_DRIVER_RESULT_INVALID;
+        }
         return control_api_set_channel(channel, frequency, payload[4]);
     }
     return PWM_DRIVER_RESULT_INVALID;

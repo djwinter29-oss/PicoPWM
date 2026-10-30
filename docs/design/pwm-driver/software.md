@@ -113,7 +113,14 @@ The generator's separate experimental ceiling is also 10 kHz. Use hardware or PI
 higher-frequency or higher-accuracy measurements.
 
 The 2 us delay is not an accuracy guarantee: callback execution and interrupt
-latency increase scan spacing. Narrow high or low pulses may be missed even at
+latency increase scan spacing. The callback runs in the Core 1 alarm IRQ, so it
+preempts the mailbox loop for the length of one scan. That preemption is the
+accepted CPU ceiling. Command handling continues when the scan returns, and a
+Core 1 heartbeat that stops advancing still reboots the board at the one-second
+apply timeout. Do not lengthen the 2 us delay to make mailbox work "fairer":
+the experimental 10 kHz budget needs scan gaps on the order of 5 us, and a
+slower scan would miss the narrow pulses that budget is trying to observe.
+Narrow high or low pulses may be missed even at
 an otherwise supported frequency. Out-of-range inputs can alias to false lower
 frequencies or static levels; the sampler cannot reliably identify all such
 inputs. High-frequency input no longer causes per-edge interrupt starvation,

@@ -33,14 +33,11 @@ if ! git show-ref --verify --quiet refs/heads/main; then
     exit 1
 fi
 
-branches=$(git for-each-ref --format='%(refname:short)' refs/heads)
-other_branches=
-for branch in $branches; do
+other_branches=$(git for-each-ref --format='%(refname:short)' refs/heads | while IFS= read -r branch; do
     if [ "$branch" != main ]; then
-        other_branches="${other_branches}${branch}
-"
+        printf '%s\n' "$branch"
     fi
-done
+done)
 
 if [ -z "$other_branches" ]; then
     git switch main
@@ -58,5 +55,5 @@ fi
 
 git switch main
 printf '%s' "$other_branches" | while IFS= read -r branch; do
-    [ -n "$branch" ] && git branch -D "$branch"
+    [ -n "$branch" ] && git branch -D -- "$branch"
 done

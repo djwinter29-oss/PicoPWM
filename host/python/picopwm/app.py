@@ -117,6 +117,29 @@ def create_app(client: PicoPwmHid | None = None, registry: BoardRegistry | None 
     def selected():
         return client if client is not None else boards.client(request.args.get("board"))
 
+    def device_response(state):
+        """Serialize a client result without copying exception text into the HTTP response."""
+        if "rebooting" in state:
+            return jsonify({"rebooting": state["rebooting"] is True})
+        unavailable = "Device status unavailable"
+        response = {"connected": state.get("connected"), "identity": state.get("identity"),
+                    "configuration": state.get("configuration"), "runtime": state.get("runtime"),
+                    "pins": state.get("pins"), "channels": state.get("channels")}
+        for field in ("error", "identity_error", "configuration_error", "runtime_error", "pins_error"):
+            failed = state.get(field) is not None
+            if failed:
+                app.logger.warning("Device status %s: %s", field, state[field])
+            response[field] = unavailable if failed else None
+        bank_errors = state.get("bank_errors")
+        if bank_errors is not None:
+            for bank, error in enumerate(bank_errors):
+                if error is not None:
+                    app.logger.warning("Device status bank %s: %s", bank, error)
+            response["bank_errors"] = [unavailable if error is not None else None for error in bank_errors]
+        else:
+            response["bank_errors"] = None
+        return jsonify(response)
+
     # Source checkouts and packaged wheels serve the same canonical WebHID presentation assets.
     shared_root = web_root if (web_root / "css/webhid.css").is_file() else web_root.parent / "webhid"
     for asset in ("css/webhid.css", "js/view.mjs", "js/device.mjs"):
@@ -133,16 +156,7 @@ def create_app(client: PicoPwmHid | None = None, registry: BoardRegistry | None 
             return jsonify({"connected": False, "identity": None, "configuration": None,
                             "runtime": None, "channels": [], "bank_errors": [None] * 3, "error": None})
         try:
-            state = selected().status()
-            for field in ("error", "identity_error", "configuration_error", "runtime_error", "pins_error"):
-                if state.get(field) is not None:
-                    state[field] = "Device status unavailable"
-            if state.get("bank_errors") is not None:
-                state["bank_errors"] = [
-                    "Device status unavailable" if error is not None else None
-                    for error in state["bank_errors"]
-                ]
-            return jsonify(state)
+            return device_response(selected().status())
         except DeviceError as error:
             app.logger.warning("Status request failed: %s", error)
             return jsonify({"error": "Device request failed"}), 409
@@ -164,7 +178,7 @@ def create_app(client: PicoPwmHid | None = None, registry: BoardRegistry | None 
         if not isinstance(payload, dict):
             return jsonify({"error": "JSON object required"}), 400
         try:
-            return jsonify(call(selected(), payload))
+            return device_response(call(selected(), payload))
         except ProtocolError as error:
             app.logger.warning("Device returned an invalid response: %s", error)
             return jsonify({"error": "Invalid response from device"}), 409

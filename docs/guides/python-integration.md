@@ -159,6 +159,9 @@ internal exception details are kept out of HTTP responses. Invalid request field
 return HTTP 400. A HID connection failure handled by `status()` can instead return
 HTTP 200 with `connected: false` and a generic status error.
 Likewise, an action may be confirmed before its refreshed status loses connection.
+Both status reads and action snapshots replace exception messages in `error`,
+per-section error fields, and non-null `bank_errors` entries with
+`"Device status unavailable"`; diagnostic details are logged only on the server.
 Do not treat HTTP success as proof that every response section is valid.
 
 Do not blindly retry mutations after timeouts, disconnects, or unconfirmed

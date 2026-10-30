@@ -5,9 +5,10 @@
 [![License: BSD 3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
 ![Targets: RP2040 and RP2350](https://img.shields.io/badge/Targets-RP2040%20%7C%20RP2350-2674b8)
 
-**24 PWM channels. One Pico. Three ways to control it.** PicoPWM turns a Raspberry Pi Pico or Pico 2 into a PWM
-generator and frequency monitor, controlled through a USB serial CLI, I2C, or USB HID clients and dashboards.
-The firmware exposes three fixed 8-channel banks. Configure each bank as a generator or monitor; channel IDs stay the same across control interfaces.
+**24 PWM channels. One Pico. Three control interfaces.** PicoPWM turns a Raspberry Pi Pico or Pico 2 into a PWM
+generator and frequency monitor. Control it through the USB CDC serial CLI, I2C, or USB HID; the browser dashboard
+uses WebHID, while the Python and .NET host apps use USB HID. The firmware exposes three fixed 8-channel banks.
+Configure each bank as a generator or monitor; channel IDs stay the same across control interfaces.
 
 **Quick links:** [Download firmware](https://github.com/djwinter29-oss/PicoPWM/releases) ·
 [Hardware setup](docs/guides/hardware-setup.md) ·
@@ -41,11 +42,23 @@ Before wiring:
 
 1. **Flash firmware.** Download your board's UF2 from [Releases](https://github.com/djwinter29-oss/PicoPWM/releases).
    Hold **BOOTSEL** while connecting USB, then copy the UF2 to the boot drive.
-2. **Connect.** Follow the [wiring guide](docs/guides/hardware-setup.md), then open the board's
-   [USB CDC shell](docs/guides/usb-cdc-shell.md) in a serial terminal.
-3. **Verify.** Run `board get version` and `config get`.
+2. **Choose a control interface.** Follow the [wiring guide](docs/guides/hardware-setup.md), then use either:
+   - **Browser:** open the [Browser Dashboard](#browser-dashboard) in desktop Chrome or Edge; no application
+     installation is needed. Connect and check the firmware version and running bank roles.
+   - **Serial CLI:** open the [USB CDC shell](docs/guides/usb-cdc-shell.md) in a serial terminal, then follow
+     the example below.
 
-To try 1 kHz / 50% output, connect a 3.3 V-safe oscilloscope or logic analyzer to **GPIO 1 and GND**, then run:
+### Serial CLI Example
+
+Verify the firmware version and running configuration:
+
+```text
+board get version
+config get
+```
+
+To try 1 kHz / 50% output, connect a 3.3 V-safe oscilloscope or logic analyzer to
+**GPIO 1 (physical pin 2 on Pico/Pico 2) and GND**, then run:
 
 ```text
 config set banka=generator
@@ -81,32 +94,50 @@ Conservative starting points, **not hardware-qualified accuracy specifications**
 
 | Backend | Generation | Measurement |
 | --- | --- | --- |
-| [Hardware PWM](docs/design/pwm-driver/hardware.md) (Bank A) | 15 Hz-1 MHz | 100 Hz-1 MHz |
+| [Hardware PWM](docs/design/pwm-driver/hardware.md) (Bank A) | 10 Hz-1 MHz | 100 Hz-1 MHz |
 | [PIO PWM](docs/design/pwm-driver/pio.md) (Bank B) | 1 Hz-100 kHz | 10 Hz-100 kHz |
 | [Software PWM](docs/design/pwm-driver/software.md) (Bank C) | 1 Hz-1 kHz | 10 Hz-1 kHz |
 
-Use moderate duty cycles; narrow pulses and timing quantization reduce usable ranges.
-Generation accepts integer 0%-100% duty; `0 Hz` selects static low (`0%`) or high (`100%`).
+Generation accepts integer 0%-100% duty. At `0 Hz`, duties `0%-99%` drive static low and `100%` drives static high;
+readback reports `0 Hz` with `0%` or `100%` respectively. Use moderate duty cycles for PWM;
+narrow pulses and timing quantization reduce usable ranges.
 **PIO duty readback can differ from the physical signal**, especially at high frequencies;
 see the [timing caveats](docs/design/pwm-driver/pio.md#frequency-versus-duty-resolution).
-PIO/software measurement below 10 Hz is experimental; see the [reported low-frequency issue](docs/design/pwm-driver/software.md#low-frequency-loopback-observation).
+Start PIO and software measurement at 10 Hz; below that, results are experimental rather than a verified accuracy
+floor. See the [PIO monitor limitations](docs/design/pwm-driver/pio.md#monitor-design) and the
+[reported low-frequency PIO-to-software loopback observation](docs/design/pwm-driver/software.md#low-frequency-loopback-observation).
+Backend links above cover extended ranges and limitations.
 
-Manually tested on a Pico HIL fixture: each bank in turn generated on all eight channels at 100, 500 and
-1000 Hz with 25%, 50% and 75% duty, and monitor readback was within ±5% frequency and ±5 points duty
-([record](docs/tests/records/30-10-2026-manual-pico-bank-rotation.md)). This establishes functional operation in the tested
-setup, not accuracy across all boards and ranges. Verify frequency and duty with an independent instrument;
-host tests and loopback readback do not establish accuracy. Backend links above cover extended ranges and limitations.
+Operator-reported Pico loopback checks covered all eight channels of each bank as generator at 100, 500 and
+1000 Hz with 25%, 50% and 75% duty; monitor readback met ±5% frequency and ±5 percentage points duty
+([record](docs/tests/records/30-10-2026-manual-pico-bank-rotation.md)). Firmware identity, numerical readings and
+captured logs were not recorded. These checks are not independent accuracy qualification; verify electrical
+output with an independent instrument.
 
 ## Dashboards
 
+For browser and desktop dashboards, Linux may require
+[HID permissions setup](docs/guides/setup-and-troubleshooting.md#linux-hid-access).
+
+### Browser Dashboard
+
+Open [WebHID](https://djwinter29-oss.github.io/PicoPWM/), click **Connect**, select your board, and grant
+browser permission when prompted. No application installation is needed.
+
+> [!IMPORTANT]
+> **WebHID requires desktop Google Chrome or Microsoft Edge.** Safari and Firefox are not supported.
+> Connect the board to the computer running the browser.
+
+See the [WebHID guide](host/webhid/README.md) for controls and connection troubleshooting.
+
+### Desktop Dashboards
+
 | Option | Start here |
 | --- | --- |
-| Browser (WebHID) | [Open dashboard](https://djwinter29-oss.github.io/PicoPWM/) in desktop Chrome or Edge; select **Connect**. [Guide](host/webhid/README.md). |
 | Python 3.10+ | [Install and run `picopwm`](host/python/README.md#quick-start) from PyPI. |
 | Standalone .NET | [Download and run](host/dotnet/README.md#standalone-application) a release package; no separate .NET installation needed. |
 
-Connect the board to the computer running the browser or host application and grant browser permission when prompted.
-Linux may require [HID permission setup](docs/guides/setup-and-troubleshooting.md#linux-hid-access).
+Connect the board to the computer running the host application.
 
 ## Documentation
 
@@ -118,7 +149,7 @@ See the [documentation index](docs/README.md) for the full map.
 | Control it | [USB CDC shell](docs/guides/usb-cdc-shell.md), [I2C protocol](docs/design/i2c/i2c-protocol.md), [USB interface overview](docs/design/usb/usb-interface-overview.md) |
 | Understand the design | [Architecture](docs/design/architecture.md), [PWM driver design](docs/design/pwm-driver/driver-design.md) |
 | Write a HID host | [HID report reference](docs/design/usb/hid-report-reference.md) |
-| Build, test and release | [Contributing](CONTRIBUTING.md), [Builds and publishing](docs/deployment/releases.md) |
+| Build, test and release | [Builds and publishing](docs/deployment/releases.md) |
 | Contribute | [Contributing](CONTRIBUTING.md), [Code of Conduct](CODE_OF_CONDUCT.md), [Security](SECURITY.md) |
 
 The USB identity `0xCAFE:0x4012` is for development and lab use, not commercial derivatives. The CDC, HID and I2C

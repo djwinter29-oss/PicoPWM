@@ -140,11 +140,38 @@ def test_api():
     http = create_app(client).test_client()
     assert http.get("/api/status").json["connected"]
     assert http.post("/api/channels/2", json={"freq_hz": 500, "duty": 10}).status_code == 200
-    assert http.post("/api/channels/2", json={"freq_hz": 500, "duty": 101}).status_code == 400
+    invalid_duty = http.post("/api/channels/2", json={"freq_hz": 500, "duty": 101})
+    assert invalid_duty.status_code == 400
+    assert invalid_duty.json == {"error": "Invalid request fields"}
     assert http.post("/api/channels/2", json={"freq_hz": "x", "duty": 1}).status_code == 400
     assert http.post("/api/stop", json={}).status_code == 200
     _, dropping = make("drop")
     assert create_app(dropping).test_client().post("/api/stop", json={}).status_code == 409
+
+
+def test_api_does_not_expose_device_exception_details():
+    private_detail = "private device path /secret/device"
+
+    class FailedClient:
+        def status(self):
+            return {"connected": False, "error": private_detail, "identity_error": private_detail,
+                    "configuration_error": None, "runtime_error": None, "pins_error": None,
+                    "bank_errors": [private_detail, None, None]}
+
+        def stop(self):
+            raise OSError(private_detail)
+
+    http = create_app(FailedClient()).test_client()
+    status = http.get("/api/status")
+    assert status.json["error"] == "Device status unavailable"
+    assert status.json["identity_error"] == "Device status unavailable"
+    assert status.json["bank_errors"] == ["Device status unavailable", None, None]
+    assert private_detail not in status.get_data(as_text=True)
+
+    action = http.post("/api/stop", json={})
+    assert action.status_code == 503
+    assert action.json == {"error": "Device operation failed"}
+    assert private_detail not in action.get_data(as_text=True)
 
 
 def modern():
@@ -270,12 +297,15 @@ def test_board_registry_and_routes_keep_selection_pinned():
     assert devices["A"][0].closed
 
 
-def test_scan_errors_and_duplicate_serials_are_explicit():
+def test_scan_errors_are_generic_and_logged(caplog):
     from picopwm.boards import BoardRegistry
 
     registry = BoardRegistry(discover=lambda: [{"path": b"a", "serial_number": "same"},
                                               {"path": b"b", "serial_number": "same"}])
-    assert "duplicate" in create_app(registry=registry).test_client().get("/api/boards").json["error"]
+    response = create_app(registry=registry).test_client().get("/api/boards")
+    assert response.status_code == 503
+    assert response.json == {"error": "Board discovery failed"}
+    assert "duplicate PicoPWM board identity" in caplog.text
 
 
 def test_bind_and_dashboard_reject_remote_and_foreign_callers():

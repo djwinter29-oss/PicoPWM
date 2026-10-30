@@ -154,8 +154,10 @@ does not mean USB reconnection has finished.
 | `409` | Unknown board selection, rejected command, protocol error, or unconfirmed outcome |
 | `503` | Discovery or unhandled transport/runtime failure |
 
-Route-level errors return `{"error": "description"}`. A HID connection failure
-handled by `status()` can instead return HTTP 200 with `connected: false`.
+Route-level errors return a stable, user-safe `{"error": "description"}` message;
+internal exception details are kept out of HTTP responses. Invalid request fields
+return HTTP 400. A HID connection failure handled by `status()` can instead return
+HTTP 200 with `connected: false` and a generic status error.
 Likewise, an action may be confirmed before its refreshed status loses connection.
 Do not treat HTTP success as proof that every response section is valid.
 

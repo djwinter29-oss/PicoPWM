@@ -116,7 +116,8 @@ class PicoPwmHid:
                         state["bank_errors"][bank] = str(error)
             except p.ProtocolError as error:
                 self.close()
-                state.update(connected=False, identity=None, pins=None, identity_error=str(error), error=str(error))
+                state.update(connected=False, identity=None, pins=None,
+                             identity_error=str(error), error=str(error))
             except (OSError, RuntimeError) as error:
                 self.close()
                 state.update(connected=False, identity=None, pins=None, error=str(error))

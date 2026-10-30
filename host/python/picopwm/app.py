@@ -133,16 +133,27 @@ def create_app(client: PicoPwmHid | None = None, registry: BoardRegistry | None 
             return jsonify({"connected": False, "identity": None, "configuration": None,
                             "runtime": None, "channels": [], "bank_errors": [None] * 3, "error": None})
         try:
-            return jsonify(selected().status())
+            state = selected().status()
+            for field in ("error", "identity_error", "configuration_error", "runtime_error", "pins_error"):
+                if state.get(field) is not None:
+                    state[field] = "Device status unavailable"
+            if state.get("bank_errors") is not None:
+                state["bank_errors"] = [
+                    "Device status unavailable" if error is not None else None
+                    for error in state["bank_errors"]
+                ]
+            return jsonify(state)
         except DeviceError as error:
-            return jsonify({"error": str(error)}), 409
+            app.logger.warning("Status request failed: %s", error)
+            return jsonify({"error": "Device request failed"}), 409
 
     @app.get("/api/boards")
     def scan():
         try:
             return jsonify(boards.boards())
         except (OSError, RuntimeError) as error:
-            return jsonify({"error": str(error)}), 503
+            app.logger.warning("Board discovery failed: %s", error)
+            return jsonify({"error": "Board discovery failed"}), 503
 
     @app.get("/api/host")
     def host():
@@ -155,13 +166,16 @@ def create_app(client: PicoPwmHid | None = None, registry: BoardRegistry | None 
         try:
             return jsonify(call(selected(), payload))
         except ProtocolError as error:
-            return jsonify({"error": str(error)}), 409
-        except ValueError as error:
-            return jsonify({"error": str(error)}), 400
+            app.logger.warning("Device returned an invalid response: %s", error)
+            return jsonify({"error": "Invalid response from device"}), 409
+        except ValueError:
+            return jsonify({"error": "Invalid request fields"}), 400
         except DeviceError as error:
-            return jsonify({"error": str(error)}), 409
+            app.logger.warning("Device request failed: %s", error)
+            return jsonify({"error": "Device request failed"}), 409
         except (OSError, RuntimeError) as error:
-            return jsonify({"error": str(error)}), 503
+            app.logger.warning("Device operation failed: %s", error)
+            return jsonify({"error": "Device operation failed"}), 503
 
     @app.post("/api/channels/<int:channel>")
     def set_channel(channel: int):

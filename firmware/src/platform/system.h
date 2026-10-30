@@ -27,12 +27,6 @@ void system_watchdog_start(void);
 /** @brief Pet the runtime watchdog from Core 0 service paths. */
 void system_watchdog_kick(void);
 
-/** @brief Stop the runtime watchdog for one bounded flash program. */
-void system_watchdog_pause(void);
-
-/** @brief Start a fresh runtime watchdog period after system_watchdog_pause(). */
-void system_watchdog_resume(void);
-
 /** @brief Reboot the board through the watchdog reset path. */
 void system_reboot(void);
 

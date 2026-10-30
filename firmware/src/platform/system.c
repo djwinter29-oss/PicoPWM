@@ -12,7 +12,6 @@
 
 #include "hardware/clocks.h"
 #include "hardware/watchdog.h"
-#include "hardware/structs/watchdog.h"
 #include "hardware/adc.h"
 #include "pico/time.h"
 
@@ -95,16 +94,6 @@ void system_watchdog_kick(void) {
         system_reboot();
     }
     watchdog_update();
-}
-
-/** @copydoc system_watchdog_pause */
-void system_watchdog_pause(void) {
-    hw_clear_bits(&watchdog_hw->ctrl, WATCHDOG_CTRL_ENABLE_BITS);
-}
-
-/** @copydoc system_watchdog_resume */
-void system_watchdog_resume(void) {
-    watchdog_enable(SYSTEM_WATCHDOG_TIMEOUT_MS, true);
 }
 
 void system_schedule_reboot(uint32_t delay_ms) {

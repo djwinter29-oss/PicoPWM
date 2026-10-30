@@ -176,6 +176,65 @@ def test_api_does_not_expose_device_exception_details():
     assert private_detail not in action.get_data(as_text=True)
 
 
+@pytest.mark.parametrize("route", ["/api/status", "/api/stop"])
+def test_api_redacts_all_returned_status_errors(route):
+    private_detail = "private device path /secret/device"
+
+    class FailedClient:
+        def status(self):
+            return {"connected": True, "error": private_detail, "identity_error": private_detail,
+                    "configuration_error": private_detail, "runtime_error": private_detail,
+                    "pins_error": private_detail, "bank_errors": [private_detail, None, private_detail],
+                    "channels": [{"channel": 0, "freq_hz": 1000, "duty": 50}]}
+
+        stop = status
+
+    http = create_app(FailedClient()).test_client()
+    response = http.get(route) if route == "/api/status" else http.post(route, json={})
+    assert response.status_code == 200
+    for field in ("error", "identity_error", "configuration_error", "runtime_error", "pins_error"):
+        assert response.json[field] == "Device status unavailable"
+    assert response.json["bank_errors"] == ["Device status unavailable", None, "Device status unavailable"]
+    assert response.json["connected"]
+    assert response.json["channels"] == [{"channel": 0, "freq_hz": 1000, "duty": 50}]
+    assert private_detail not in response.get_data(as_text=True)
+
+
+@pytest.mark.parametrize("report_id", [
+    p.CONFIGURATION_REPORT, p.RUNTIME_REPORT, p.PINS_REPORT, p.BANK_STATUS_REPORT,
+])
+@pytest.mark.parametrize("failure_type", [p.ProtocolError, OSError, RuntimeError, None])
+def test_api_action_redacts_readback_errors(monkeypatch, report_id, failure_type):
+    private_detail = "private readback detail /secret/device"
+    device, client = make()
+    identity = bytearray(device.identity)
+    identity[16] |= 64 | 128
+    device.identity = bytes(identity)
+    read = device.get_feature_report
+
+    def failed_readback(requested_id, length):
+        if device.sent and requested_id == report_id:
+            if failure_type is None:
+                return bytes([requested_id])
+            raise failure_type(private_detail)
+        return read(requested_id, length)
+
+    monkeypatch.setattr(device, "get_feature_report", failed_readback)
+    response = create_app(client).test_client().post("/api/stop", json={})
+    assert device.sent[0][3] == p.OP_STOP
+    assert response.status_code == 200
+    assert private_detail not in response.get_data(as_text=True)
+    if failure_type in (p.ProtocolError, None):
+        field = {p.CONFIGURATION_REPORT: "configuration_error", p.RUNTIME_REPORT: "runtime_error",
+                 p.PINS_REPORT: "pins_error", p.BANK_STATUS_REPORT: "bank_errors"}[report_id]
+        error = response.json[field]
+        assert (error[0] if field == "bank_errors" else error) == "Device status unavailable"
+        assert response.json["connected"]
+    else:
+        assert response.json["error"] == "Device status unavailable"
+        assert not response.json["connected"]
+
+
 @pytest.mark.parametrize(("failure", "status_code", "message"), [
     (p.ProtocolError("private protocol detail"), 409, "Invalid response from device"),
     (DeviceError("private device detail"), 409, "Device request failed"),

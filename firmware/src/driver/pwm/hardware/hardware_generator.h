@@ -1,9 +1,9 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file generator.h
  * @brief Core 1 hardware PWM generator backend for the logical `pwm` layer.
- *
- * SPDX-License-Identifier: BSD-3-Clause
- * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #ifndef PWMDRIVER_HW_GENERATOR_H

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file monitor.c
  * @brief Standalone Core 1 PIO PWM monitor backend prototype for the logical `pwm` layer.
@@ -19,9 +22,6 @@
  *   fixed setup and branch overhead around each measured high/low segment.
  * - Inputs slower than 1 Hz are intentionally treated as permanent high or low levels
  *   rather than as in-spec PWM measurements.
- *
- * SPDX-License-Identifier: BSD-3-Clause
- * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #include "pio_monitor.h"

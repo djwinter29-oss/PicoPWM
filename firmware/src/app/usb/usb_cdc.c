@@ -1,9 +1,9 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file usb_cdc.c
  * @brief TinyUSB CDC transport helpers for the PicoPWM CLI.
- *
- * SPDX-License-Identifier: BSD-3-Clause
- * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #include "app/usb/usb_cdc.h"

@@ -1,9 +1,9 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file usb_descriptors.c
  * @brief TinyUSB descriptor tables and callbacks for PicoPWM USB CDC and HID.
- *
- * SPDX-License-Identifier: BSD-3-Clause
- * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #include "bsp/board_api.h"

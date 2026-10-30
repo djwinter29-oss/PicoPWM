@@ -1,9 +1,9 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file cli_syntax.h
  * @brief Shared user-facing CLI command syntax.
- *
- * SPDX-License-Identifier: BSD-3-Clause
- * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #ifndef CLI_SYNTAX_H

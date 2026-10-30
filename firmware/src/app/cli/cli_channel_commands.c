@@ -1,9 +1,9 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file cli_channel_commands.c
  * @brief PWM channel validation, operation, and response formatting for the CDC CLI.
- *
- * SPDX-License-Identifier: BSD-3-Clause
- * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #include "app/cli/cli_channel_commands.h"

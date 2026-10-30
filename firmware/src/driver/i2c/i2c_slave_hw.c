@@ -1,9 +1,9 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file i2c_slave_hw.c
  * @brief RP2040/RP2350 I2C slave peripheral port used by `i2c_slave.c`.
- *
- * SPDX-License-Identifier: BSD-3-Clause
- * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #include "driver/i2c/i2c_slave_hw.h"

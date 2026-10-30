@@ -1,8 +1,5 @@
-/**
- * @file i2c_command_queue_test.c
- * SPDX-License-Identifier: BSD-3-Clause
- * @copyright Copyright (c) 2026 Ji Dong
- */
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
 
 #include "app/i2c/i2c_command_queue.h"
 

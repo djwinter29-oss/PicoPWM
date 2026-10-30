@@ -1,12 +1,12 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file hid_protocol.h
  * @brief PicoPWM HID feature-report contract; see docs/design/usb/hid-report-reference.md.
  *
  * This layer owns report layouts and the report 20 transaction. It has no TinyUSB dependency and reaches the
  * PWM runtime only through `control_api`.
- *
- * SPDX-License-Identifier: BSD-3-Clause
- * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #ifndef HID_PROTOCOL_H

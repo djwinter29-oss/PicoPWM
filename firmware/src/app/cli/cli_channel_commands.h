@@ -1,8 +1,5 @@
-/**
- * @file cli_channel_commands.h
- * SPDX-License-Identifier: BSD-3-Clause
- * @copyright Copyright (c) 2026 Ji Dong
- */
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
 
 #ifndef CLI_CHANNEL_COMMANDS_H
 #define CLI_CHANNEL_COMMANDS_H

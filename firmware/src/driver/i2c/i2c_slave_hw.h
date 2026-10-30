@@ -1,12 +1,12 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file i2c_slave_hw.h
  * @brief SDK-facing port of the I2C slave peripheral.
  *
  * `i2c_slave.c` holds the protocol and ISR logic and reaches the peripheral only
  * through these calls, so host tests can replace them with a fake FIFO.
- *
- * SPDX-License-Identifier: BSD-3-Clause
- * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #ifndef I2C_SLAVE_HW_H

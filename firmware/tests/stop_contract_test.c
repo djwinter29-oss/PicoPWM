@@ -1,8 +1,5 @@
-/**
- * @file stop_contract_test.c
- * SPDX-License-Identifier: BSD-3-Clause
- * @copyright Copyright (c) 2026 Ji Dong
- */
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
 
 #include "driver/pwm/pwm_driver_internal.h"
 

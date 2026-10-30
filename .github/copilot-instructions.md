@@ -16,22 +16,16 @@ Key repo constraints:
 ## Licensing
 
 - First-party source code uses [BSD 3-Clause](../LICENSE). Every new source file, including tests, stubs, build
-  scripts, host tools, and web assets, must carry the SPDX identifier and copyright notice.
-- In C and header files, put them at the end of the Doxygen `@file` block (add the block if missing):
+  scripts, host tools, and web assets, must carry the SPDX identifier and copyright notice as the first lines,
+  followed by a blank line and then any Doxygen `@file` block:
 
   ```c
-  /**
-   * @file example.c
-   * @brief One-line purpose.
-   *
-   * SPDX-License-Identifier: BSD-3-Clause
-   * @copyright Copyright (c) 2026 Ji Dong
-   */
+  // SPDX-License-Identifier: BSD-3-Clause
+  // Copyright (c) 2026 Ji Dong
   ```
 
-- In other files, put the two lines at the top using the file's comment syntax: `//` for C# and JavaScript;
-  `#` for Python, shell, CMake, TOML, and YAML; `;` for PIO assembly; `/* ... */` for CSS; `<!-- ... -->` for
-  HTML, SVG, and XML.
+- Use the file's comment syntax: `//` for C, headers, C#, and JavaScript; `#` for Python, shell, CMake, TOML,
+  and YAML; `;` for PIO assembly; `/* ... */` for CSS; `<!-- ... -->` for HTML, SVG, and XML.
 - Keep shebangs, Python encoding declarations, HTML doctypes, and XML declarations in their required positions.
 - Preserve existing copyright and license notices. Third-party dependencies and copied upstream code retain
   their applicable licenses; do not relabel them as first-party BSD-3-Clause code.

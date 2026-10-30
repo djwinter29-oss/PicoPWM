@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file hardware_monitor.c
  * @brief Hardware PWM-slice input monitor for the logical `pwm` layer.
@@ -8,9 +11,6 @@
  * 2. high window: `PWM_DIV_B_HIGH` counts divided sys-clock ticks while the input is high,
  *    giving duty against the measured window time.
  * Counter wraps are accumulated by polling the slice wrap flag on every `hw_mon_get()` call.
- *
- * SPDX-License-Identifier: BSD-3-Clause
- * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #include "hardware_monitor.h"

@@ -1,8 +1,5 @@
-/**
- * @file generator_math_test.c
- * SPDX-License-Identifier: BSD-3-Clause
- * @copyright Copyright (c) 2026 Ji Dong
- */
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
 
 #include "driver/pwm/hardware/hardware_math.h"
 #include "driver/pwm/pio/pio_math.h"

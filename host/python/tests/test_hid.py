@@ -403,8 +403,9 @@ def test_board_registry_and_routes_keep_selection_pinned():
     assert devices["A"][0].sent == []
     assert devices["B"][0].sent[-1][3] == 8
     assert http.post(f"/api/led?board={b}", json={"on": 1}).status_code == 400
-    assert http.post(f"/api/save-reboot?board={b}", json={
-        "profile": 0, "address": 64, "roles": [0, 1, 1]}).status_code == 200
+    save_reboot = http.post(f"/api/save-reboot?board={b}", json={
+        "profile": 0, "address": 64, "roles": [0, 1, 1]})
+    assert save_reboot.status_code == 200 and save_reboot.json == {"rebooting": True}
     assert http.post("/api/reboot", json={}).status_code == 409
     assert http.get("/api/host").json["dashboard_type"] == "Python"
     for path in ["/", "/css/webhid.css", "/js/view.mjs", "/js/device.mjs", "/js/client.mjs"]:

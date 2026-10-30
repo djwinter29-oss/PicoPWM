@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file i2c_slave.h
  * @brief Generic I2C byte transport: frame capture and response transmission.

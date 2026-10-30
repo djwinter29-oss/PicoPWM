@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file board.c
  * @brief Board-level pin allocation and peripheral settings for the standard Pico board.

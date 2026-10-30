@@ -1,4 +1,7 @@
 #!/usr/bin/env sh
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Ji Dong
+
 # Run every host-side test: Python, web assets, WebHID and .NET.
 # Tools come from PYTHON, NODE and DOTNET (defaults python3, node, dotnet).
 set -eu

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file hid_protocol.h
  * @brief PicoPWM HID feature-report contract; see docs/design/usb/hid-report-reference.md.

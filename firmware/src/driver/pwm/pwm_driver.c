@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file pwm_driver.c
  * @brief Core 0/Core 1 PWM wrapper, mailbox, and realized-state publication layer.

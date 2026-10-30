@@ -1,3 +1,6 @@
+; SPDX-License-Identifier: BSD-3-Clause
+; Copyright (c) 2026 Ji Dong
+
 ; Side-set pin 0 is the PWM output.
 ; FIFO word 0 is the match threshold (X). FIFO word 1 is the period (ISR).
 ; Y counts down from the period through 0. The pin is forced low at the start

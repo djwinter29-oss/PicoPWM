@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file pio_monitor_decode.h
  * @brief Pure PIO monitor high/low pair decoding helper.

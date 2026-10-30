@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 #include "driver/i2c/i2c_slave.h"
 #include "driver/i2c/i2c_slave_hw.h"
 

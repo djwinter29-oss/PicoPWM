@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Ji Dong
+
 """HID discovery and opening for the PicoPWM vendor interface."""
 
 from __future__ import annotations

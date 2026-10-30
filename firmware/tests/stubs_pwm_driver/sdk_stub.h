@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file sdk_stub.h
  * @brief Host stand-in for the Pico SDK calls used by `pwm_driver.c`, with Core 1 simulated by a thread.

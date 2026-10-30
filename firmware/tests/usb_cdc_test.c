@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 #include "app/usb/usb_cdc.h"
 #include "app/cli/cli_shell.h"
 #include "tusb.h"

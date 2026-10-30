@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Ji Dong
+
 # Reserve the final flash sector for persistent configuration. The SDK-resolved flash region
 # (board header and default overrides included) gives the physical capacity; the linker script
 # override shrinks the program region so the image can never overlap the sector.

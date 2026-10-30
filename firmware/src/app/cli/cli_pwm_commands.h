@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file cli_pwm_commands.h
  * @brief PicoPWM device commands layered on top of the CLI editor.

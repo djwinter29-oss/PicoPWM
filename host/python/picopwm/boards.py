@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Ji Dong
+
 """Page-local board selection with shared, serialized HID clients."""
 
 import hashlib

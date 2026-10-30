@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file monitor.h
  * @brief Standalone Core 1 software-PWM pin monitor backend for the logical `pwm` layer.

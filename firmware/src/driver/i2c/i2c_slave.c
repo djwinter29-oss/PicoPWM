@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file i2c_slave.c
  * @brief Generic I2C transaction framing and ISR logic.

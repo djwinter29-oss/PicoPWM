@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file i2c_control_map.h
  * @brief I2C register map and protocol helpers layered on the shared control interface.

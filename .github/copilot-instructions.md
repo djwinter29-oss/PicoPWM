@@ -13,6 +13,25 @@ Key repo constraints:
 - Treat `pwm_driver_set_freq()` as a command-ingress API and `pwm_driver_get()` as the source of realized channel state.
 - `stop` disables generator output.
 
+## Licensing
+
+- First-party source code uses [BSD 3-Clause](../LICENSE). Every new source file, including tests, stubs, build
+  scripts, host tools, and web assets, must carry the SPDX identifier and copyright notice as the first lines,
+  followed by a blank line and then any Doxygen `@file` block:
+
+  ```c
+  // SPDX-License-Identifier: BSD-3-Clause
+  // Copyright (c) 2026 Ji Dong
+  ```
+
+- Use the file's comment syntax: `//` for C, headers, C#, and JavaScript; `#` for Python, shell, CMake, TOML,
+  and YAML; `;` for PIO assembly; `/* ... */` for CSS; `<!-- ... -->` for HTML, SVG, and XML.
+- Keep shebangs, Python encoding declarations, HTML doctypes, and XML declarations in their required positions.
+- Preserve existing copyright and license notices. Third-party dependencies and copied upstream code retain
+  their applicable licenses; do not relabel them as first-party BSD-3-Clause code.
+- Do not edit vendored submodules or generated outputs to add headers. Do not insert comments into formats
+  that forbid them, such as JSON.
+
 ## HIL Validation
 
 - For changes affecting PWM generation/monitoring, CDC commands or HIL tooling, run

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Ji Dong
+
 """Hardware-free launcher checks: python3 tools/test/test_run_python.py."""
 
 import os

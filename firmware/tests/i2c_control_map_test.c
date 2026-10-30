@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 #include "app/i2c/i2c_control_map.h"
 #include "app/i2c/i2c_command_queue.h"
 

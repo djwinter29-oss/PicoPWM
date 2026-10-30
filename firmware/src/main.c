@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file main.c
  * @brief Core 0 startup and top-level service loop for PicoPWM.

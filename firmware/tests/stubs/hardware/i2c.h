@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 #ifndef TEST_STUB_HARDWARE_I2C_H
 #define TEST_STUB_HARDWARE_I2C_H
 

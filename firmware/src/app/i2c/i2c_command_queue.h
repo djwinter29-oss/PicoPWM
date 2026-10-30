@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file i2c_command_queue.h
  * @brief Fixed-depth queue for deferred commands in the PWM I2C protocol.

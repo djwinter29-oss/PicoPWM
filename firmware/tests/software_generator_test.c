@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 #include "driver/pwm/software/software_generator.h"
 #include "hardware/gpio.h"
 #include "pico/time.h"

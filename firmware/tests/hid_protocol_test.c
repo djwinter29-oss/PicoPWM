@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 #include "app/usb/hid_protocol.h"
 
 #include "platform/boot_config.h"

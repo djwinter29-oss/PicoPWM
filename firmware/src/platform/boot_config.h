@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file boot_config.h
  * @brief Persisted boot settings: system clock, bank roles and I2C address.

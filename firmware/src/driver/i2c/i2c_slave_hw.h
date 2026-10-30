@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 /**
  * @file i2c_slave_hw.h
  * @brief SDK-facing port of the I2C slave peripheral.

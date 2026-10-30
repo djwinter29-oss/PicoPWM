@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Ji Dong
+
 # Validates PICO_PWM_FIRMWARE_VERSION and computes PICO_PWM_BCD_DEVICE.
 # Release builds receive MAJOR.MINOR.PATCH from the tag (tools/release/resolve-release-version.sh);
 # local builds default to 0.0.0-dev. Runs standalone with `cmake -DPICO_PWM_FIRMWARE_VERSION=1.2.3 -P`.

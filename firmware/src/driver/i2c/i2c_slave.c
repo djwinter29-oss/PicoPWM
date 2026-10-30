@@ -4,6 +4,9 @@
  *
  * The protocol callbacks own frame interpretation and response contents. This
  * module only captures transaction bytes and streams the callback's response.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #include "driver/i2c/i2c_slave.h"

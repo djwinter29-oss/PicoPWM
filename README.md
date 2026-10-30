@@ -133,4 +133,5 @@ Third-party software: the CDC shell uses [embedded-cli](https://github.com/funbi
 
 ## License
 
-[BSD 3-Clause](LICENSE).
+First-party code: [BSD 3-Clause](LICENSE), copyright (c) 2026 Ji Dong.
+Third-party dependencies retain their own licenses.

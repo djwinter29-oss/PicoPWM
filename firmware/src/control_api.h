@@ -1,6 +1,9 @@
 /**
  * @file control_api.h
  * @brief Shared Core 0 control and device-information API for host interfaces.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #ifndef CONTROL_API_H

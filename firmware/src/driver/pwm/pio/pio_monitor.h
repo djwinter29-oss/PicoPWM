@@ -5,6 +5,9 @@
  * This module provides a PIO-based monitor implementation that measures the configured
  * PIO monitor channel bank and reports approximate frequency and duty cycle using the
  * existing `pwm_state_t` shape.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #ifndef PWMDRIVER_PIO_MONITOR_H

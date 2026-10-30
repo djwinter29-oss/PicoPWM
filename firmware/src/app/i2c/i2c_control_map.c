@@ -5,6 +5,9 @@
  * The transport invokes frame/read callbacks from the I2C ISR. Frame handling
  * is bounded to validation and queue insertion; PWM commands execute in the
  * Core 0 foreground poll.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #include "app/i2c/i2c_control_map.h"

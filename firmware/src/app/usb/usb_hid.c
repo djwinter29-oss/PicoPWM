@@ -1,6 +1,9 @@
 /**
  * @file usb_hid.c
  * @brief TinyUSB glue for the PicoPWM HID vendor interface; report logic lives in hid_protocol.c.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #include "app/usb/usb_hid.h"

@@ -1,3 +1,9 @@
+/**
+ * @file tusb_config.h
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
+ */
+
 #ifndef PICO_PWM_TUSB_CONFIG_H
 #define PICO_PWM_TUSB_CONFIG_H
 

@@ -1,3 +1,9 @@
+/**
+ * @file pio_generator_test.c
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
+ */
+
 #include "driver/pwm/pio/pio_generator.h"
 #include "hardware/gpio.h"
 #include "hardware/pio.h"

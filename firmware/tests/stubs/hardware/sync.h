@@ -1,3 +1,9 @@
+/**
+ * @file sync.h
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
+ */
+
 #ifndef TEST_HARDWARE_SYNC_H
 #define TEST_HARDWARE_SYNC_H
 

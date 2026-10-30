@@ -1,3 +1,9 @@
+/**
+ * @file gpio.h
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
+ */
+
 #ifndef TEST_PIO_GPIO_H
 #define TEST_PIO_GPIO_H
 

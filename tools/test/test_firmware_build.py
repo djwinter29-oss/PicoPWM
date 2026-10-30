@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Ji Dong
+
 """Check firmware build generator selection without downloading or compiling."""
 
 import os

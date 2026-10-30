@@ -1,3 +1,9 @@
+/**
+ * @file cli_channel_commands_test.c
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
+ */
+
 #include "app/cli/cli_channel_commands.h"
 
 #include "driver/pwm/pwm_driver.h"

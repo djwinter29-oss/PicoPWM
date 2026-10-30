@@ -1,6 +1,9 @@
 /**
  * @file software_monitor.c
  * @brief Core 1 timer-sampled, low-frequency GPIO monitor with bounded work per scan.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #include "software_monitor.h"

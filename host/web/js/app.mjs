@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 import { CLOCK_PROFILES, ROLES } from "./device.mjs?v=8";
 import {
   convertFrequencyValue, frequencyEditorValue, frequencyMax, frequencyToHertz,

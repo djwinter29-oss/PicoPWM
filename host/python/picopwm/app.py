@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Ji Dong
+
 """Flask management interface for PicoPWM, backed by the HID vendor interface."""
 
 from __future__ import annotations

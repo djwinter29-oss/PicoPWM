@@ -1,6 +1,9 @@
 /**
  * @file cli_shell.h
  * @brief embedded-cli-backed interactive command shell for PicoPWM CLI transports.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #ifndef CLI_SHELL_H

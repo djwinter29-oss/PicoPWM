@@ -1,6 +1,9 @@
 /**
  * @file board.c
  * @brief Board-level pin allocation and peripheral settings for the standard Pico board.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #include "driver/i2c/i2c_slave_hw.h"

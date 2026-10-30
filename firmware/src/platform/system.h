@@ -1,6 +1,9 @@
 /**
  * @file system.h
  * @brief Board-level clock and reboot helpers used by the PicoPWM firmware.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #ifndef SYSTEM_H

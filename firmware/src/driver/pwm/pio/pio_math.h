@@ -1,6 +1,9 @@
 /**
  * @file pio_math.h
  * @brief Pure duty and timing helpers for the PIO PWM generator.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #ifndef PWMDRIVER_PIO_MATH_H

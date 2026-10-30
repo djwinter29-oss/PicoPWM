@@ -1,6 +1,9 @@
 /**
  * @file hid_protocol.c
  * @brief PicoPWM HID report layouts and the report 20 transaction, over `control_api`.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #include "app/usb/hid_protocol.h"

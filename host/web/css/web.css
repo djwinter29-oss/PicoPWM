@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
+/* Copyright (c) 2026 Ji Dong */
+
 #board-select {
   min-width: 0; max-width: 360px; min-height: 36px; padding: 6px 10px;
   border: 1px solid var(--line); border-radius: 7px; background: var(--paper);

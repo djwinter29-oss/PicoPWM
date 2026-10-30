@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2026 Ji Dong
+
 function emptyDashboard() {
   return { connected: false, identity: null, configuration: null, runtime: null,
     channels: [], bank_errors: [null, null, null], updated_at: null };

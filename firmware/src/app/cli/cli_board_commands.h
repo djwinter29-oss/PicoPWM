@@ -1,6 +1,9 @@
 /**
  * @file cli_board_commands.h
  * @brief Board and startup-configuration command handlers for the CDC shell.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #ifndef CLI_BOARD_COMMANDS_H

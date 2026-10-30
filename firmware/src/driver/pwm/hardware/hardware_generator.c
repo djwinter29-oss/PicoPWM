@@ -1,6 +1,9 @@
 /**
  * @file generator.c
  * @brief Hardware PWM generator backend implementation for the logical `pwm` layer.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #include "hardware_generator.h"

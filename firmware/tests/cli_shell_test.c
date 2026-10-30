@@ -1,3 +1,9 @@
+/**
+ * @file cli_shell_test.c
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
+ */
+
 #include "app/cli/cli_shell.h"
 
 #include <assert.h>

@@ -15,6 +15,9 @@
  * This module reuses the same GPIO bank as the software PWM generator backend and is intended
  * as a standalone monitor prototype. It must not be assumed safe to run alongside the
  * generator without an explicit integration design that resolves shared GPIO ownership.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #ifndef PWMDRIVER_SW_MONITOR_H

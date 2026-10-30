@@ -1,6 +1,9 @@
 /**
  * @file pwm_driver_internal.h
  * @brief Internal backend-facing helpers shared within `pwm`.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #ifndef PWMDRIVER_PWM_DRIVER_INTERNAL_H

@@ -4,6 +4,9 @@
  *
  * One RAM copy is loaded from flash at boot. Setters edit it, `boot_config_save()` persists it, and the new values
  * apply at the next boot; the running values come from the live modules. Core 0 only.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #ifndef BOOT_CONFIG_H

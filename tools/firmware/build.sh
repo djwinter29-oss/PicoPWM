@@ -1,4 +1,7 @@
 #!/usr/bin/env sh
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Ji Dong
+
 # Usage: tools/firmware/build.sh [--board pico|pico2] [--firmware-version VERSION]
 # Builds into build/<board>. Fresh builds prefer Ninja; CMAKE_GENERATOR overrides the default.
 set -eu

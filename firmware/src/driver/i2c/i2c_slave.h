@@ -5,6 +5,9 @@
  * The application supplies callbacks to interpret completed write frames and build read
  * responses. Both callbacks run in the I2C ISR and must be bounded. A callback may perform
  * a short cross-core synchronization; this can briefly stretch SCL.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #ifndef I2C_SLAVE_H

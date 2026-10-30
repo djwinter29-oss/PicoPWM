@@ -1,6 +1,9 @@
 /**
  * @file pwm_math.h
  * @brief Pure static-output rule shared by every PWM generator backend.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #ifndef PWMDRIVER_PWM_MATH_H

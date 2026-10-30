@@ -1,6 +1,9 @@
 /**
  * @file cli_pwm_commands.c
  * @brief PicoPWM command groups and shell integration.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #include "app/cli/cli_pwm_commands.h"

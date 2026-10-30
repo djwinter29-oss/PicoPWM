@@ -4,6 +4,9 @@
  *
  * Measures the bank-A slice-B pins with the PWM slice counters in input mode and reports
  * frequency and duty using the existing `pwm_state_t` shape.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #ifndef PWMDRIVER_HW_MONITOR_H

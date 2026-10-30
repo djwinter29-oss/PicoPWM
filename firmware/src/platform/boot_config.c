@@ -1,6 +1,9 @@
 /**
  * @file boot_config.c
  * @brief Boot settings storage: one CRC-protected flash record plus a RAM copy.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #include "boot_config.h"

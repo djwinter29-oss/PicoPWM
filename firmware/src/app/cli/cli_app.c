@@ -1,6 +1,9 @@
 /**
  * @file cli_app.c
  * @brief CDC command-line application lifecycle.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #include "app/cli/cli_app.h"

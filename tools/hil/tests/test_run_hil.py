@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Ji Dong
+
 """Hardware-free regression tests for CDC HIL safety gates, measurements and reporting."""
 
 import argparse

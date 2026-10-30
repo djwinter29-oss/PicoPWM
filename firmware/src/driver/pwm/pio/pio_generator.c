@@ -17,6 +17,9 @@
  *   so the applied frequency may differ slightly from the requested frequency.
  * - The backend implements continuous generation only; finite pulse bursts are not
  *   supported by this one-state-machine design.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #include "pio_generator.h"

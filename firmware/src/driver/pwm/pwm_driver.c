@@ -1,6 +1,9 @@
 /**
  * @file pwm_driver.c
  * @brief Core 0/Core 1 PWM wrapper, mailbox, and realized-state publication layer.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #include "pwm_driver.h"

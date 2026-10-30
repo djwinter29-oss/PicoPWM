@@ -1,6 +1,9 @@
 /**
  * @file pwm_driver.h
  * @brief Public logical-channel and multicore PWM control interfaces.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ * @copyright Copyright (c) 2026 Ji Dong
  */
 
 #ifndef PWMDRIVER_PWM_DRIVER_H

@@ -174,6 +174,52 @@ def test_api_does_not_expose_device_exception_details():
     assert private_detail not in action.get_data(as_text=True)
 
 
+@pytest.mark.parametrize(("failure", "status_code", "message"), [
+    (p.ProtocolError("private protocol detail"), 409, "Invalid response from device"),
+    (DeviceError("private device detail"), 409, "Device request failed"),
+    (OSError("private operating system detail"), 503, "Device operation failed"),
+    (RuntimeError("private runtime detail"), 503, "Device operation failed"),
+])
+def test_api_action_exceptions_are_not_returned(failure, status_code, message):
+    class FailedClient:
+        def stop(self):
+            raise failure
+
+    response = create_app(FailedClient()).test_client().post("/api/stop", json={})
+    assert response.status_code == status_code
+    assert response.json == {"error": message}
+    assert str(failure) not in response.get_data(as_text=True)
+
+
+@pytest.mark.parametrize("failure", [
+    OSError("private operating system detail"),
+    RuntimeError("private runtime detail"),
+])
+def test_board_discovery_exceptions_are_not_returned(failure):
+    from picopwm.boards import BoardRegistry
+
+    def discover():
+        raise failure
+
+    response = create_app(registry=BoardRegistry(discover=discover)).test_client().get("/api/boards")
+    assert response.status_code == 503
+    assert response.json == {"error": "Board discovery failed"}
+    assert str(failure) not in response.get_data(as_text=True)
+
+
+def test_status_exception_is_not_returned():
+    private_detail = "private device path /secret/device"
+
+    class FailedClient:
+        def status(self):
+            raise DeviceError(private_detail)
+
+    response = create_app(FailedClient()).test_client().get("/api/status")
+    assert response.status_code == 409
+    assert response.json == {"error": "Device request failed"}
+    assert private_detail not in response.get_data(as_text=True)
+
+
 def modern():
     device, client = make()
     identity = bytearray(IDENTITY)

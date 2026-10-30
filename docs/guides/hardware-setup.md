@@ -22,6 +22,17 @@ GPIO23 and GPIO24 are optional software-only profile pins. They are not part
 of the normal Pico channel map and cannot be assigned to hardware PWM or PIO
 profiles.
 
+## Board Compatibility
+
+The `pico` and `pico2` profiles use the standard Pico and Pico 2 GPIO assignments.
+A third-party RP2040/RP2350 board is not automatically compatible: verify it
+exposes channel GPIOs `0-22` and `28`; I2C additionally requires GPIOs `26` and
+`27`. The standard profile assumes the LED is on GPIO 25. Verify SWD access
+only if programming with a Debug Probe.
+
+Pico W and Pico 2 W are not supported; build helpers and releases cover only
+the `pico` and `pico2` boards.
+
 ## Fixed PWM Banks
 
 | Bank | Logical channels | GPIOs | Allowed backend families |
@@ -100,3 +111,6 @@ Connect GND first to establish a common reference. Power the target board separa
 power it. The Debug Probe uses 3.3 V I/O. For a third-party board, identify SWCLK, SWDIO, and GND from its schematic
 rather than assuming the standard Pico connector placement. See the [Raspberry Pi Debug Probe guide](https://www.raspberrypi.com/documentation/microcontrollers/debug-probe.html)
 for probe details.
+
+The loader's `--flash-size <bytes>` option overrides OpenOCD's flash-size
+assumption only; it does not change the firmware's GPIO mapping or board profile.

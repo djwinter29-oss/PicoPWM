@@ -133,6 +133,14 @@ specification. At 10 kHz a 10% pulse lasts only 10 us; approximately 5 us or
 better actual scan spacing is a timing budget to investigate, not proof of
 accuracy. Multi-cycle averaging cannot recover missed pulses.
 
+### Low-Frequency Loopback Observation
+
+An operator reported unstable software-monitor readings in a 2 Hz
+PIO-to-software loopback. The cause remains unresolved. The README therefore
+recommends starting PIO and software measurement at 10 Hz as a precaution,
+not as a verified accuracy floor. Measurement below 10 Hz remains experimental
+and needs independent instrument verification.
+
 ### Operator-Reported Functional Check
 
 On 2026-10-29, the operator reported that the updated software monitor was

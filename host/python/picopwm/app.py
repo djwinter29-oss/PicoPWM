@@ -176,6 +176,9 @@ def create_app(client: PicoPwmHid | None = None, registry: BoardRegistry | None 
         except (OSError, RuntimeError) as error:
             app.logger.warning("Device operation failed: %s", error)
             return jsonify({"error": "Device operation failed"}), 503
+        except Exception:
+            app.logger.exception("Unexpected device operation failure")
+            return jsonify({"error": "Internal server error"}), 500
 
     @app.post("/api/channels/<int:channel>")
     def set_channel(channel: int):

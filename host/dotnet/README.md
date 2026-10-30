@@ -5,7 +5,17 @@ the USB HID vendor interface (VID `0xCAFE`, PID `0x4012`) described in
 [hid-report-reference.md](../../docs/design/usb/hid-report-reference.md). The firmware
 implements it in `firmware/src/usb`.
 
-## Requirements
+## Standalone Application
+
+Download and extract the `picopwm-host-v<VERSION>-<RID>` archive for your
+platform from [Releases](https://github.com/djwinter29-oss/PicoPWM/releases).
+Run `./PicoPwm` on Linux/macOS or `.\PicoPwm.exe` in Windows PowerShell from
+the extracted directory, then open <http://127.0.0.1:5000/>.
+The application includes its .NET runtime and connects to the board over USB HID.
+Linux still requires the [HID access setup](../../docs/guides/setup-and-troubleshooting.md#linux-hid-access).
+See [Builds and publishing](../../docs/deployment/releases.md) for release platforms and packages.
+
+## Development Requirements
 
 - .NET 10 SDK, or a newer SDK with the .NET 10 ASP.NET Core runtime
 - HID access to the board. On Linux, configure it with the

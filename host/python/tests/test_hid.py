@@ -193,6 +193,19 @@ def test_api_action_exceptions_are_not_returned(failure, status_code, message):
     assert str(failure) not in response.get_data(as_text=True)
 
 
+def test_api_action_unexpected_exception_returns_generic_error():
+    private_detail = "private internal state"
+
+    class FailedClient:
+        def stop(self):
+            raise Exception(private_detail)
+
+    response = create_app(FailedClient()).test_client().post("/api/stop", json={})
+    assert response.status_code == 500
+    assert response.json == {"error": "Internal server error"}
+    assert private_detail not in response.get_data(as_text=True)
+
+
 @pytest.mark.parametrize("failure", [
     OSError("private operating system detail"),
     RuntimeError("private runtime detail"),

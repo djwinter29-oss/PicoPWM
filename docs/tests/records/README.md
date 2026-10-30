@@ -1,8 +1,12 @@
 # HIL Test Records
 
-Store completed hardware test reports and supporting captures here. No hardware test results are recorded yet.
+Store completed hardware test reports and supporting captures here.
 
-Use a descriptive name such as `2026-10-27-pico2-pwm-loopback.md`. Include the artifact identity, fixture wiring,
+| Record | Scope |
+| --- | --- |
+| [Manual Pico bank-rotation loopback](30-10-2026-manual-pico-bank-rotation.md) | Operator-reported loopback, each bank as generator, 100-1000 Hz, 25-75% duty |
+
+Use a descriptive name such as `27-10-2026-pico2-pwm-loopback.md`. Include the artifact identity, fixture wiring,
 conditions, acceptance limits, results and skipped checks listed in the [HIL connection guide](../hil-test-connections.md).
 Do not include credentials or unrelated personal information in logs and captures.
 Reference case IDs from the [HIL test plan](../hil-test-plan.md), including failed, skipped and blocked cases.

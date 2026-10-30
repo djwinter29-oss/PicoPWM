@@ -6,8 +6,8 @@
 ![Targets: RP2040 and RP2350](https://img.shields.io/badge/Targets-RP2040%20%7C%20RP2350-2674b8)
 
 **24 PWM channels. One Pico. Three ways to control it.** PicoPWM turns a Raspberry Pi Pico or Pico 2 into a PWM
-generator and frequency monitor, controlled through USB CDC, I2C or USB HID. The firmware exposes three fixed
-8-channel banks. Configure each bank as a generator or monitor; channel IDs stay the same across control interfaces.
+generator and frequency monitor, controlled through a USB serial CLI, I2C, or USB HID clients and dashboards.
+The firmware exposes three fixed 8-channel banks. Configure each bank as a generator or monitor; channel IDs stay the same across control interfaces.
 
 **Quick links:** [Download firmware](https://github.com/djwinter29-oss/PicoPWM/releases) ·
 [Hardware setup](docs/guides/hardware-setup.md) ·
@@ -18,7 +18,7 @@ generator and frequency monitor, controlled through USB CDC, I2C or USB HID. The
 
 - **Simple serial CLI:** control outputs and read channel state from a USB serial terminal.
 - **Easy test automation:** integrate PWM generation and monitoring into test scripts using the CLI, Python HID
-  client, or I2C.
+  client, or I2C. Start with the [Python scripting example](host/python/README.md#use-from-python).
 - **Ready-to-use dashboards:** control and monitor channels through a browser, Python, or standalone .NET application.
 - **24 flexible channels:** three eight-channel banks using hardware, PIO, and software PWM, each configurable as
   generator or monitor.
@@ -56,10 +56,23 @@ This saves the setting and reboots automatically. Reconnect, then run:
 ```text
 pwm set 0 1000 50
 pwm get 0
+```
+
+Illustrative readback (realized values can vary with timing quantization):
+
+```text
+CH0: freq=1000 Hz, duty=50%, enabled=yes
+```
+
+This is firmware readback, not an independent electrical measurement.
+**When finished**, stop all generator outputs:
+
+```text
 pwm stop all
 ```
 
-The last command stops all generator outputs without changing saved bank roles.
+Stopping does not change saved bank roles; Bank A remains configured as a generator after reboot. To restore
+monitor-only operation, see [Configure bank roles](docs/guides/setup-and-troubleshooting.md#configure-bank-roles).
 For configuration and connection issues, see [Setup and troubleshooting](docs/guides/setup-and-troubleshooting.md).
 
 ## Recommended Frequency Ranges
@@ -78,7 +91,9 @@ Generation accepts integer 0%-100% duty; `0 Hz` selects static low (`0%`) or hig
 see the [timing caveats](docs/design/pwm-driver/pio.md#frequency-versus-duty-resolution).
 PIO/software measurement below 10 Hz is experimental; see the [reported low-frequency issue](docs/design/pwm-driver/software.md#low-frequency-loopback-observation).
 
-Manual testing on a hardware fixture has been reported successful. This confirms functional operation in the tested
+Manually tested on a Pico HIL fixture: each bank in turn generated on all eight channels at 100, 500 and
+1000 Hz with 25%, 50% and 75% duty, and monitor readback was within ±5% frequency and ±5 points duty
+([record](docs/tests/records/30-10-2026-manual-pico-bank-rotation.md)). This establishes functional operation in the tested
 setup, not accuracy across all boards and ranges. Verify frequency and duty with an independent instrument;
 host tests and loopback readback do not establish accuracy. Backend links above cover extended ranges and limitations.
 
@@ -89,6 +104,9 @@ host tests and loopback readback do not establish accuracy. Backend links above 
 | Browser (WebHID) | [Open dashboard](https://djwinter29-oss.github.io/PicoPWM/) in desktop Chrome or Edge; select **Connect**. [Guide](host/webhid/README.md). |
 | Python 3.10+ | [Install and run `picopwm`](host/python/README.md#quick-start) from PyPI. |
 | Standalone .NET | [Download and run](host/dotnet/README.md#standalone-application) a release package; no separate .NET installation needed. |
+
+Connect the board to the computer running the browser or host application and grant browser permission when prompted.
+Linux may require [HID permission setup](docs/guides/setup-and-troubleshooting.md#linux-hid-access).
 
 ## Documentation
 

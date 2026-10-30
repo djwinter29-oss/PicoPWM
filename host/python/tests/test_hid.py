@@ -94,6 +94,8 @@ def test_status_without_device():
 
     state = PicoPwmHid(opener).status()
     assert not state["connected"] and "not found" in state["error"]
+    response = create_app(PicoPwmHid(opener)).test_client().get("/api/status")
+    assert response.json["error"] == "Device status unavailable"
 
 
 def test_set_channel_completes():
@@ -282,6 +284,8 @@ def test_pin_report_errors_are_explicit_and_disconnect_clears_the_map():
     state = client.status()
     assert state["connected"] and state["pins"] is None
     assert "invalid pin" in state["pins_error"]
+    response = create_app(client).test_client().get("/api/status")
+    assert response.json["pins_error"] == "Device status unavailable"
     device.get_feature_report = original
     assert client.status()["pins"]["channels"][23] == 23
 

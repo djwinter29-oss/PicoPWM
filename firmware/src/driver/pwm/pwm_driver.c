@@ -25,8 +25,8 @@
 
 #include "hardware/sync.h"
 
-#include "hardware/gpio.h"
-#include "hardware/pwm.h"
+#include "hardware/hardware_math.h"
+#include "pwm_math.h"
 
 #include <string.h>
 
@@ -488,6 +488,21 @@ pwm_driver_result_t pwm_driver_set(uint channel, uint32_t freq_hz, uint8_t duty)
     }
     if (duty > 100u) {
         duty = 100u;
+    }
+    if (channel / PWM_DRIVER_CONFIG_BANK_SIZE == PWM_BANK_A && role == PWM_ROLE_GENERATOR) {
+        bool static_high = false;
+        uint8_t static_duty = 0u;
+        uint32_t top;
+        uint16_t div_x16;
+        bool is_static = pwm_generator_resolve_static(freq_hz, duty, &static_high, &static_duty);
+
+        /* Static levels do not need a divider. A running PWM below the clock's counter floor is
+         * INVALID here, matching the search hw_gen_set() would otherwise fail as APPLY_FAILED. */
+        (void)static_high;
+        (void)static_duty;
+        if (!is_static && !pwm_hw_find_timing(system_clock_hz(), freq_hz, &top, &div_x16)) {
+            return PWM_DRIVER_RESULT_INVALID;
+        }
     }
 
     if (pwm_lifecycle != PWM_DRIVER_LIFECYCLE_READY) {

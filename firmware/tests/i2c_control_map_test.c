@@ -230,6 +230,18 @@ static void test_stale_command_completion_does_not_replace_malformed_attempt(voi
     assert(response[0] == I2C_STATUS_INVALID);
 }
 
+static void test_channel_duty_above_100_is_rejected(void) {
+    uint8_t response[1];
+    const uint8_t command[] = {I2C_CONTROL_MAP_REG_SET_BASE, 0xE8u, 0x03u, 0x00u, 0x00u, 101u};
+
+    reset();
+    write_frame(command, sizeof(command), false);
+    i2c_control_map_poll();
+    assert(set_calls == 0u);
+    assert(read_response(response, sizeof(response)) == 1u);
+    assert(response[0] == I2C_STATUS_INVALID);
+}
+
 int main(void) {
     test_info_register();
     test_channel_read_encoding_and_unknown_register();
@@ -239,5 +251,6 @@ int main(void) {
     test_stop_all_and_queue_full();
     test_stale_command_completion_does_not_replace_new_attempt();
     test_stale_command_completion_does_not_replace_malformed_attempt();
+    test_channel_duty_above_100_is_rejected();
     return 0;
 }

@@ -116,6 +116,13 @@ void system_reboot(void) {
     assert(!"core 1 stalled");
 }
 
+/** @brief Clock used by the Bank A timing check. Default matches a Pico. */
+static uint32_t test_sys_clk_hz = 125000000u;
+
+uint32_t system_clock_hz(void) {
+    return test_sys_clk_hz;
+}
+
 static void expect_state(uint channel, uint32_t freq_hz, uint8_t duty) {
     pwm_state_t state;
 
@@ -221,6 +228,19 @@ int main(void) {
     expect_state(0u, 0u, 0u);
     expect_state(9u, 0u, 0u);
     expect_state(16u, 0u, 0u);
+
+    /* 10 Hz is inside the API floor, but 250 MHz cannot represent a running 10 Hz waveform. */
+    test_sys_clk_hz = 250000000u;
+    assert(pwm_driver_set(0u, 10u, 50u) == PWM_DRIVER_RESULT_INVALID);
+    expect_state(0u, 0u, 0u);
+    assert(pwm_driver_set(0u, 10u, 0u) == PWM_DRIVER_RESULT_OK);
+    expect_state(0u, 10u, 0u);
+    assert(pwm_driver_set(0u, 20u, 50u) == PWM_DRIVER_RESULT_OK);
+    expect_state(0u, 20u, 50u);
+    assert(pwm_driver_set(8u, 10u, 50u) == PWM_DRIVER_RESULT_OK);
+    test_sys_clk_hz = 125000000u;
+    assert(pwm_driver_set(0u, 10u, 50u) == PWM_DRIVER_RESULT_OK);
+    expect_state(0u, 10u, 50u);
 
     assert(pwm_driver_config_channel_role(16u, &role) && role == PWM_ROLE_MONITOR);
     assert(!pwm_driver_config_channel_role(24u, &role));

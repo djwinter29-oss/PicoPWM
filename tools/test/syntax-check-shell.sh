@@ -5,6 +5,7 @@
 set -eu
 
 for script in \
+    tools/host/remove-local-branches.sh \
     tools/host/run-dotnet.sh \
     tools/host/run-hil.sh \
     tools/host/run-python.sh \

@@ -4,6 +4,8 @@
 #ifndef TEST_HARDWARE_FLASH_H
 #define TEST_HARDWARE_FLASH_H
 
+#include "test_save_trace.h"
+
 #include <stddef.h>
 #include <stdint.h>
 

@@ -75,47 +75,58 @@ if ! grep -q "multicore_lockout_start_blocking" "$CONFIG_FILE"; then
 fi
 
 # Flash helpers in SDK 2.3.0 do not mask IRQs. Interrupts must be off around erase and program.
+# The watchdog stays enabled: one reload immediately before that window, and one after interrupts return.
 awk '
-    /save_and_disable_interrupts/ { disabled = 1 }
+    function fail(message) {
+        print message > "/dev/stderr"
+        failed = 1
+        exit 1
+    }
+    /system_watchdog_kick\(/ {
+        if (disabled)
+            fail("boot_config.c: reload the watchdog outside the interrupt-disabled flash window")
+        if (restored)
+            kicked_after++
+        else
+            kicked_before++
+    }
+    /save_and_disable_interrupts/ {
+        if (kicked_before != 1)
+            fail("boot_config.c: reload the watchdog once immediately before disabling interrupts")
+        disabled = 1
+    }
     /multicore_lockout_start_blocking/ {
-        if (!disabled) {
-            print "boot_config.c: lock out Core 1 only while interrupts are disabled" > "/dev/stderr"
-            exit 1
-        }
+        if (!disabled)
+            fail("boot_config.c: lock out Core 1 only while interrupts are disabled")
         locked = 1
     }
     /flash_range_erase/ {
-        if (!disabled || !locked) {
-            print "boot_config.c: erase flash only with interrupts disabled and Core 1 locked out" > "/dev/stderr"
-            exit 1
-        }
+        if (!disabled || !locked)
+            fail("boot_config.c: erase flash only with interrupts disabled and Core 1 locked out")
         erased = 1
     }
     /flash_range_program/ {
-        if (!erased) {
-            print "boot_config.c: program flash only after erase, with interrupts still disabled" > "/dev/stderr"
-            exit 1
-        }
+        if (!erased)
+            fail("boot_config.c: program flash only after erase, with interrupts still disabled")
         programmed = 1
     }
     /multicore_lockout_end_blocking/ {
-        if (!programmed) {
-            print "boot_config.c: end the Core 1 lockout after flash programming" > "/dev/stderr"
-            exit 1
-        }
+        if (!programmed)
+            fail("boot_config.c: end the Core 1 lockout after flash programming")
     }
     /restore_interrupts/ {
-        if (!programmed) {
-            print "boot_config.c: restore interrupts after flash programming" > "/dev/stderr"
-            exit 1
-        }
+        if (!programmed)
+            fail("boot_config.c: restore interrupts after flash programming")
         restored = 1
+        disabled = 0
     }
     END {
-        if (!restored) {
-            print "boot_config.c: config save must disable interrupts around flash programming" > "/dev/stderr"
+        if (failed)
             exit 1
-        }
+        if (!restored)
+            fail("boot_config.c: config save must disable interrupts around flash programming")
+        if (kicked_after != 1)
+            fail("boot_config.c: reload the watchdog once after interrupts return")
     }
 ' "$CONFIG_FILE"
 

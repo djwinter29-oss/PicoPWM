@@ -157,9 +157,18 @@ def create_app(client: PicoPwmHid | None = None, registry: BoardRegistry | None 
                             "runtime": None, "channels": [], "bank_errors": [None] * 3, "error": None})
         try:
             return device_response(selected().status())
+        except ProtocolError as error:
+            app.logger.warning("Device returned an invalid response: %s", error)
+            return jsonify({"error": "Invalid response from device"}), 409
         except DeviceError as error:
             app.logger.warning("Status request failed: %s", error)
             return jsonify({"error": "Device request failed"}), 409
+        except (OSError, RuntimeError) as error:
+            app.logger.warning("Status request failed: %s", error)
+            return jsonify({"error": "Device operation failed"}), 503
+        except Exception:
+            app.logger.exception("Unexpected status failure")
+            return jsonify({"error": "Internal server error"}), 500
 
     @app.get("/api/boards")
     def scan():

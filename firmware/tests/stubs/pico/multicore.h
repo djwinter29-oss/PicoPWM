@@ -4,6 +4,8 @@
 #ifndef TEST_PICO_MULTICORE_H
 #define TEST_PICO_MULTICORE_H
 
+#include "test_save_trace.h"
+
 #include <assert.h>
 #include <stdbool.h>
 
@@ -20,8 +22,11 @@ static inline bool multicore_lockout_victim_is_initialized(unsigned core_num) {
 
 static inline void multicore_lockout_start_blocking(void) {
     assert(test_multicore_lockout_victim_ready);
+    test_save_trace(TEST_SAVE_LOCK);
 }
 
-static inline void multicore_lockout_end_blocking(void) {}
+static inline void multicore_lockout_end_blocking(void) {
+    test_save_trace(TEST_SAVE_UNLOCK);
+}
 
 #endif

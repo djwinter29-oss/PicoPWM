@@ -141,6 +141,9 @@ bool boot_config_save(void) {
      * The vector table and IRQ handlers live in flash, so Core 0 interrupts stay off and
      * Core 1 stays locked out for the whole erase and program. Lockout is not recursive.
      * Core 1 must already have called multicore_lockout_victim_init().
+     * The watchdog stays enabled. Reloading it here starts a full 5 s period, which
+     * covers one sector erase and program. A wedge longer than that still resets the
+     * board; clearing the enable bit would leave that wedge hung until power is cycled.
      */
     system_watchdog_kick();
     uint32_t irq_state = save_and_disable_interrupts();
@@ -149,6 +152,7 @@ bool boot_config_save(void) {
     flash_range_program(BOOT_CONFIG_FLASH_OFFSET, sector, FLASH_SECTOR_SIZE);
     multicore_lockout_end_blocking();
     restore_interrupts(irq_state);
+    system_watchdog_kick();
     return memcmp(boot_config_stored(), &record, sizeof(record)) == 0;
 }
 

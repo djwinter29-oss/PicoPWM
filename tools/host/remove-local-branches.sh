@@ -33,14 +33,22 @@ if ! git show-ref --verify --quiet refs/heads/main; then
     exit 1
 fi
 
-branches=$(git for-each-ref --format='%(refname:short)' refs/heads)
+branch_list=$(git for-each-ref --format='%(refname:short)' refs/heads) || exit 1
 other_branches=
-for branch in $branches; do
-    if [ "$branch" != main ]; then
+# Newline-only splitting keeps spaces in branch names. Globbing stays off so a name
+# containing * or ? is not expanded. git's failure above is not hidden by a pipeline.
+set -f
+old_ifs=$IFS
+IFS='
+'
+for branch in $branch_list; do
+    if [ -n "$branch" ] && [ "$branch" != main ]; then
         other_branches="${other_branches}${branch}
 "
     fi
 done
+IFS=$old_ifs
+set +f
 
 if [ -z "$other_branches" ]; then
     git switch main
@@ -57,6 +65,14 @@ if [ "$confirmation" != yes ]; then
 fi
 
 git switch main
-printf '%s' "$other_branches" | while IFS= read -r branch; do
-    [ -n "$branch" ] && git branch -D "$branch"
+set -f
+old_ifs=$IFS
+IFS='
+'
+for branch in $other_branches; do
+    if [ -n "$branch" ]; then
+        git branch -D -- "$branch"
+    fi
 done
+IFS=$old_ifs
+set +f

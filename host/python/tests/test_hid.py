@@ -252,6 +252,24 @@ def test_api_action_exceptions_are_not_returned(failure, status_code, message):
     assert str(failure) not in response.get_data(as_text=True)
 
 
+@pytest.mark.parametrize(("failure", "status_code", "message"), [
+    (p.ProtocolError("private protocol detail"), 409, "Invalid response from device"),
+    (DeviceError("private device detail"), 409, "Device request failed"),
+    (OSError("private operating system detail"), 503, "Device operation failed"),
+    (RuntimeError("private runtime detail"), 503, "Device operation failed"),
+    (Exception("private internal state"), 500, "Internal server error"),
+])
+def test_api_status_exceptions_are_not_returned(failure, status_code, message):
+    class FailedClient:
+        def status(self):
+            raise failure
+
+    response = create_app(FailedClient()).test_client().get("/api/status?board=1")
+    assert response.status_code == status_code
+    assert response.json == {"error": message}
+    assert str(failure) not in response.get_data(as_text=True)
+
+
 def test_api_action_unexpected_exception_returns_generic_error():
     private_detail = "private internal state"
 

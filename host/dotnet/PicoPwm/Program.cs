@@ -70,20 +70,14 @@ IResult Act(Func<object> call)
 {
     try
     {
-        return Results.Ok(call());
+        return Results.Ok(DashboardHttp.ForWire(call(), detail =>
+            app.Logger.LogWarning("Device status detail withheld from HTTP: {Detail}", detail)));
     }
-    catch (ArgumentException error)
+    catch (Exception error)
     {
-        return Results.BadRequest(new { error = error.Message });
-    }
-    catch (DeviceException error)
-    {
-        return Results.Conflict(new { error = error.Message });
-    }
-    catch (Exception error) when (error is IOException or InvalidOperationException or UnauthorizedAccessException
-        or NotSupportedException or TimeoutException)
-    {
-        return Results.Problem(error.Message, statusCode: 503);
+        app.Logger.LogWarning(error, "HTTP handler failed");
+        var failure = DashboardHttp.FromException(error);
+        return Results.Json(new { error = failure.Error }, statusCode: failure.StatusCode);
     }
 }
 

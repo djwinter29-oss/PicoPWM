@@ -3,7 +3,7 @@
 This ASP.NET Core application serves the PicoPWM dashboard and controls the board over
 the USB HID vendor interface (VID `0xCAFE`, PID `0x4012`) described in
 [hid-report-reference.md](../../docs/design/usb/hid-report-reference.md). The firmware
-implements it in `firmware/src/usb`.
+implements it in `firmware/src/app/usb`.
 
 ## Standalone Application
 
@@ -67,7 +67,12 @@ reuse `host/webhid/js/view.mjs`, `js/device.mjs`, and `css/webhid.css` directly.
 project links both sets into `wwwroot` during build/publish. No browser WebHID is
 required. Edit canonical source files, not generated output.
 
-The API is the same as the Python host (snake_case, as in the HID report layouts):
+The route shape matches the Python host (snake_case, as in the HID report layouts).
+HTTP error bodies use the same fixed sentences and do not include exception text:
+`400` `Invalid request fields`, `409` `Device request failed`, `503` `Device operation failed`,
+and `500` `Internal server error`. A status snapshot replaces section errors with
+`Device status unavailable`. `GET /api/boards` includes `device_path` so the dashboard can
+reopen the HID node.
 
 - `GET /api/boards` lists board IDs, products, serials, paths and `default_board_id`
 - `GET /api/host` identifies the .NET dashboard

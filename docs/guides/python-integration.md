@@ -152,6 +152,7 @@ does not mean USB reconnection has finished.
 | `401` | Missing or incorrect authentication when a token is configured |
 | `403` | Disallowed request host or cross-origin request |
 | `409` | Unknown board selection, rejected command, protocol error, or unconfirmed outcome |
+| `500` | Unexpected server failure; the body is `Internal server error` |
 | `503` | Discovery or unhandled transport/runtime failure |
 
 Route-level errors return a stable, user-safe `{"error": "description"}` message;
@@ -167,6 +168,11 @@ Do not treat HTTP success as proof that every response section is valid.
 Do not blindly retry mutations after timeouts, disconnects, or unconfirmed
 outcomes. Reconnect and inspect realized state or configuration first. An HTTP
 client timeout does not cancel a command already submitted to the board.
+Stop-all and other multi-channel updates apply one channel at a time while
+firmware holds its control lock, and during that wait the board services USB
+CDC only. Allow several seconds for those calls. `GET /api/boards` includes
+each board's local `device_path` so the dashboard can reopen the HID node; an
+authenticated client can see that path.
 
 ## Windows Installation Without Activation
 

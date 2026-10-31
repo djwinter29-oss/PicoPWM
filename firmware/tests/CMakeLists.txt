@@ -73,7 +73,7 @@ target_include_directories(boot_config_test PRIVATE
     ${SOURCE_ROOT}
 )
 pico_pwm_test_warnings(boot_config_test)
-target_compile_definitions(boot_config_test PRIVATE PICO_PWM_CONFIG_FLASH_OFFSET=0)
+target_compile_definitions(boot_config_test PRIVATE PICO_PWM_CONFIG_FLASH_OFFSET=0 BOOT_CONFIG_SAVE_TRACE)
 add_test(NAME boot_config COMMAND boot_config_test)
 
 add_executable(pio_monitor_decode_test

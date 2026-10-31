@@ -5,6 +5,7 @@
 #include "hardware/flash.h"
 #include "hardware/i2c.h"
 #include "pico/multicore.h"
+#include "test_save_trace.h"
 
 #include <assert.h>
 #include <string.h>
@@ -12,7 +13,27 @@
 i2c_inst_t i2c1_inst;
 int test_multicore_lockout_victim_ready;
 
-void system_watchdog_kick(void) {}
+static int save_trace[8];
+static unsigned save_trace_len;
+
+void test_save_trace(int event) {
+    assert(save_trace_len < sizeof(save_trace) / sizeof(save_trace[0]));
+    save_trace[save_trace_len++] = event;
+}
+
+void system_watchdog_kick(void) {
+    test_save_trace(TEST_SAVE_KICK);
+}
+
+static void assert_programming_save_trace(void) {
+    static const int expect[] = {
+        TEST_SAVE_KICK,    TEST_SAVE_IRQ_OFF, TEST_SAVE_LOCK,   TEST_SAVE_ERASE,
+        TEST_SAVE_PROGRAM, TEST_SAVE_UNLOCK,  TEST_SAVE_IRQ_ON, TEST_SAVE_KICK,
+    };
+
+    assert(save_trace_len == sizeof(expect) / sizeof(expect[0]));
+    assert(memcmp(save_trace, expect, sizeof(expect)) == 0);
+}
 
 int main(void) {
     test_flash_reset();
@@ -38,8 +59,13 @@ int main(void) {
 
     /* Flash erase stays refused until Core 1 has armed the lockout victim. */
     assert(!boot_config_save());
+    assert(save_trace_len == 0u);
     multicore_lockout_victim_init();
     assert(boot_config_save());
+    /* Kick, then the interrupt-off window, then kick again. A repeated save matches flash and does neither. */
+    assert_programming_save_trace();
+    assert(boot_config_save());
+    assert_programming_save_trace();
 
     /* A reload from flash returns the saved values. */
     boot_config_set_i2c_address(0x50u);

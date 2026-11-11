@@ -63,16 +63,51 @@ From the repository root, serve locally and run tests in separate terminals:
 
 ```sh
 tools/host/run-direct.sh
-node --test host/direct/tests/*.test.mjs
+node --test host/direct/tests/*.test.mjs host/direct/tests/js/*.test.mjs
 ```
 
 The launcher needs Python 3.10+, with no extra packages, and serves `http://127.0.0.1:8000/` (`--port` to override).
 It serves a temporary staged copy of `src/`, cleaned up when stopped. Restart after editing source to rebuild
 the copy. Canonical `src/` remains unchanged and also supplies shared assets to Python/.NET hosts.
 `tests/` contains hardware-free checks, not physical PWM qualification.
+Tests mirror the source layout and names:
+
+| Source | Test |
+|---|---|
+| `src/index.html` and its asset references | `tests/index.test.mjs` |
+| `src/js/app.mjs` | `tests/js/app.test.mjs` (browser flow) |
+| `src/js/device.mjs` | `tests/js/device.test.mjs` |
+| `src/js/view.mjs` | `tests/js/view.test.mjs` |
+
+Shared fake devices and browser setup live in `tests/fixtures/`. The command includes both page and
+JavaScript tests; pass one test file to run only its corresponding source checks.
 Asset/selector assertions intentionally follow current HTML and module structure; shared hosted-dashboard
 tests also extract Direct event-handler source into a VM. Update these checks with markup/module refactors.
 They supplement device/view behavior tests, but do not execute a full browser or qualify WebHID.
+
+The browser regression additionally runs the actual HTML/modules in headless Chromium with a fake HID
+device. It covers connection, channel editing and readback, dialog focus, save acknowledgement/confirmation/cancellation,
+and timeout/disconnect/reconnect. It uses a temporary local-file copy with file-module access enabled;
+it does not qualify HTTPS/Pages delivery, the native device chooser, or physical USB/PWM behavior.
+No npm dependencies are required. The same Node test command discovers it automatically:
+
+```sh
+CHROMIUM=/usr/bin/chromium node --test host/direct/tests/*.test.mjs host/direct/tests/js/*.test.mjs
+```
+
+Without `CHROMIUM`, it tries `chromium` and explicitly skips if absent. Setting `CHROMIUM` makes a missing
+executable a failure; Linux host CI requires the runner's installed Google Chrome. Native sandboxing stays
+enabled unless an isolated test environment explicitly sets `CHROMIUM_NO_SANDBOX=1`.
+
+Commands reserve the client through all writes and readback, including the complete Save & Reboot
+sequence and INVALID reconciliation. A concurrent command is rejected; background refresh waits for
+the next poll instead of interleaving. Save & Reboot snapshots roles before validating the draft.
+Firmware failures expose numeric `DeviceError.status`; wrapped failures retain their `cause`.
+The selected HID collection must match both vendor usage page `0xff00` and usage `0x01`.
+
+A HID transfer timeout leaves the connection blocked with a visible reconnect-required error. Commands
+stay disabled, while Disconnect remains available. Disconnect and reconnect before retrying: WebHID
+cannot cancel the outstanding transfer, and a timed-out write may have taken effect.
 
 ### Dashboard version and cache identity
 

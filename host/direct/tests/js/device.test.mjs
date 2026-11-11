@@ -4,21 +4,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  DEVICE_FILTER, OPERATION, PicoPwmWebHid, decodeActionResult, decodeBankStatus, decodeConfiguration,
+  DEVICE_FILTER, OPERATION, DeviceError, PicoPwmWebHid, decodeActionResult, decodeBankStatus, decodeConfiguration,
   decodeIdentity, decodePins, decodeRuntime, encodeActionRequest, matchesPicoPwm,
-} from "../src/js/device.mjs";
+} from "../../src/js/device.mjs";
 
-const view = bytes => new DataView(Uint8Array.from(bytes).buffer);
-
-const identityBytes = (overrides = {}) => {
-  const bytes = [1, 3, 0, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 2, 24, 3, 0x1f];
-  Object.entries(overrides).forEach(([index, value]) => { bytes[index] = value; });
-  return bytes;
-};
-
-const configurationBytes = () => [
-  1, 0, 1, 2, 0, 0, 1, 0x20, 0, 1, 2, 0, 0, 1, 0x20, 1, 1, 0x80, 0xd1, 0xf0, 0x08,
-];
+import { view, identityBytes, configurationBytes, fakeDevice } from "../fixtures/device.mjs";
 
 test("identity decodes and rejects bad contracts", () => {
   const identity = decodeIdentity(view(identityBytes()));
@@ -68,61 +58,18 @@ test("action request and result match the report 20 layout", () => {
   assert.throws(() => decodeActionResult(view([2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])), /Invalid/);
 });
 
-test("device filter requires the allocated USB identity and vendor usage page", () => {
+test("device filter requires the allocated USB identity, usage page, and usage", () => {
   assert.equal(DEVICE_FILTER.vendorId, 0x2e8a);
   assert.equal(DEVICE_FILTER.productId, 0x116c);
-  assert.ok(matchesPicoPwm({ vendorId: 0x2e8a, productId: 0x116c, collections: [{ usagePage: 0xff00 }] }));
+  assert.ok(matchesPicoPwm({ vendorId: 0x2e8a, productId: 0x116c, collections: [{ usagePage: 0xff00, usage: 1 }] }));
+  for (const collections of [undefined, [], [{ usagePage: 0xff00 }], [{ usagePage: 0xff00, usage: 2 }]]) {
+    assert.ok(!matchesPicoPwm({ vendorId: 0x2e8a, productId: 0x116c, collections }));
+  }
   assert.ok(!matchesPicoPwm({ vendorId: 0xcafe, productId: 0x4012, collections: [{ usagePage: 0xff00 }] }));
   assert.ok(!matchesPicoPwm({ vendorId: 0xcafe, productId: 0x116c, collections: [{ usagePage: 0xff00 }] }));
   assert.ok(!matchesPicoPwm({ vendorId: 0x2e8a, productId: 0x4012, collections: [{ usagePage: 0xff00 }] }));
   assert.ok(!matchesPicoPwm({ vendorId: 0x2e8a, productId: 0x116c, collections: [{ usagePage: 1 }] }));
 });
-
-function fakeDevice({ acceptSet = true, pendingPolls = 1, capabilities = 3, actionStatus = 0,
-  applyChannelReadback = false } = {}) {
-  const device = {
-    vendorId: 0x2e8a, productId: 0x116c, collections: [{ usagePage: 0xff00 }], opened: false,
-    sent: [], result: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], pending: 0,
-    appliedChannels: new Map(),
-    async open() { this.opened = true; },
-    async close() { this.opened = false; },
-    async receiveFeatureReport(id) {
-      if (id === 1) return view(identityBytes({ 16: capabilities }));
-      if (id === 3) return view([1, 0, 0x80, 0, 0, 0, 0x20, 4, 0]);
-      if (id === 4) return view([1, 123, 0, 0, 0, 0x78, 0xEC, 0xFF, 0xFF, 100, 0, 0xC4, 9]);
-      if (id === 5) return view([1, ...Array.from({ length: 24 }, (_, channel) => 47 - channel), 2, 3, 255]);
-      if (id === 2) return view(configurationBytes());
-      if (id === 20) {
-        const result = [...this.result];
-        if (this.pending > 0) { this.pending--; result[3] = 6; }
-        return view(result);
-      }
-      const bytes = [1];
-      const bank = id - 10;
-      for (let index = 0; index < 8; index++) {
-        const applied = this.appliedChannels.get(bank * 8 + index);
-        const frequency = applied?.freq_hz ?? 100 * index;
-        const duty = applied?.duty ?? index;
-        bytes.push(frequency & 0xff, frequency >>> 8 & 0xff, frequency >>> 16 & 0xff,
-          frequency >>> 24 & 0xff, duty);
-      }
-      return view(bytes);
-    },
-    async sendFeatureReport(id, data) {
-      assert.equal(id, 20);
-      this.sent.push([...data]);
-      if (acceptSet) {
-        this.result = [1, data[1], data[2], actionStatus, 0, 0, 0, 0, 0, 0, 0, 0];
-        if (applyChannelReadback && data[2] === OPERATION.SET_CHANNEL) {
-          const freqHz = data[4] + (data[5] << 8) + (data[6] << 16) + (data[7] << 24);
-          this.appliedChannels.set(data[3], { freq_hz: freqHz >>> 0, duty: data[8] });
-        }
-        this.pending = pendingPolls;
-      }
-    },
-  };
-  return device;
-}
 
 test("save and reboot submits all edited fields before one confirmed save", async () => {
   const device = fakeDevice({ capabilities: 7, pendingPolls: 0 });
@@ -300,4 +247,123 @@ test("save and overclock rules shape the request flags", async () => {
   await client.saveConfiguration(false);
   assert.equal(device.sent[1][2], OPERATION.SAVE_CONFIG);
   assert.equal(device.sent[1][9], 1);
+});
+
+test("save owns all writes and snapshots the caller's roles", async () => {
+  const device = fakeDevice({ capabilities: 31, pendingPolls: 0 });
+  const client = await connected(device);
+  const roles = [0, 1, 1];
+  let contention;
+  const phases = [];
+  client.onChange = state => {
+    phases.push(state.phase);
+    if (device.sent.length && !contention) {
+      roles[0] = 99;
+      contention = assert.rejects(client.setLed(true), /not ready/);
+      client.refresh();
+    }
+  };
+  await client.saveAndReboot({ clockProfile: 0, i2cAddress: 64, roles }, false);
+  await contention;
+  assert.deepEqual(device.sent.map(request => request[2]), [6, 4, 3, 3, 3, 7]);
+  assert.deepEqual(device.sent.slice(2, 5).map(request => request[5]), [0, 1, 1]);
+  assert.ok(!phases.includes("connected"));
+  assert.equal(client.busy, false);
+});
+
+test("INVALID reconciliation retains ownership and structured firmware errors", async () => {
+  const device = fakeDevice({ capabilities: 31, actionStatus: 2, pendingPolls: 0 });
+  const client = await connected(device);
+  let contention;
+  client.onChange = state => {
+    if (state.dashboard.action_result && !contention) {
+      contention = assert.rejects(client.stop(), /not ready/);
+    }
+  };
+  await assert.rejects(client.setChannel(0, 1000, 50), error =>
+    error instanceof DeviceError && error.status === 2 && error.cause.status === 2);
+  await contention;
+  assert.equal(device.sent.length, 1);
+  assert.equal(client.busy, false);
+  client.onChange = () => {};
+  await assert.rejects(client.saveAndReboot({ clockProfile: 0, i2cAddress: 64, roles: [0, 1, 1] }, false),
+    error => error instanceof DeviceError && error.status === 2 && error.cause.status === 2);
+});
+
+test("refresh timeout remains blocked until disconnect and reconnect", async t => {
+  const device = fakeDevice({ pendingPolls: 0 });
+  const client = await connected(device);
+  const receive = device.receiveFeatureReport.bind(device);
+  const started = Promise.withResolvers();
+  device.receiveFeatureReport = id => {
+    if (id !== 2) return receive(id);
+    started.resolve();
+    return new Promise(() => {});
+  };
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const reading = client.refresh();
+  await started.promise;
+  t.mock.timers.tick(3001);
+  await reading;
+  assert.equal(client.state.phase, "blocked");
+  assert.equal(client.ioBlocked, true);
+  assert.match(client.state.error, /timed out/i);
+  assert.doesNotMatch(client.state.message, /status received/);
+  await assert.rejects(client.stop(), /not ready/);
+  await client.refresh();
+  assert.equal(device.sent.length, 0);
+  await client.disconnect();
+  device.receiveFeatureReport = receive;
+  await client.connect();
+  assert.equal(client.ioBlocked, false);
+  assert.equal(client.state.phase, "connected");
+  await client.stop();
+});
+
+test("an old report failure cannot overwrite the reconnected dashboard", async () => {
+  const device = fakeDevice({ pendingPolls: 0 });
+  const client = await connected(device);
+  const receive = device.receiveFeatureReport.bind(device);
+  const started = Promise.withResolvers();
+  const pending = Promise.withResolvers();
+  device.receiveFeatureReport = id => {
+    if (id !== 2) return receive(id);
+    started.resolve();
+    return pending.promise;
+  };
+  const reading = client.refresh();
+  await started.promise;
+  await client.disconnect();
+  device.receiveFeatureReport = receive;
+  await client.connect();
+  pending.reject(new Error("old transfer failed"));
+  await reading;
+  assert.equal(client.state.dashboard.configuration_error, null);
+  assert.ok(client.state.dashboard.configuration);
+  assert.equal(client.state.error, null);
+});
+
+test("configuration readback remains inside the logical command", async () => {
+  const device = fakeDevice({ capabilities: 31, pendingPolls: 0 });
+  const client = await connected(device);
+  const receive = device.receiveFeatureReport.bind(device);
+  const started = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  device.receiveFeatureReport = async id => {
+    if (id === 2) {
+      started.resolve();
+      await release.promise;
+    }
+    return receive(id);
+  };
+  const changing = client.setClockProfile(0, false);
+  await started.promise;
+  assert.equal(client.state.phase, "writing");
+  await assert.rejects(client.stop(), /not ready/);
+  await client.refresh();
+  assert.equal(device.sent.length, 1);
+  release.resolve();
+  await changing;
+  assert.equal(client.state.phase, "connected");
+  assert.equal(client.busy, false);
 });

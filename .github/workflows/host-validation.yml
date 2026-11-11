@@ -36,6 +36,13 @@ jobs:
         with:
           node-version: "22.x"
 
+      - name: Require Linux browser regression
+        if: runner.os == 'Linux' && matrix.python == '3.12'
+        shell: bash
+        run: |
+          chrome=$(command -v google-chrome)
+          echo "CHROMIUM=$chrome" >> "$GITHUB_ENV"
+
       - name: Setup .NET
         if: matrix.python == '3.12'
         uses: actions/setup-dotnet@v6

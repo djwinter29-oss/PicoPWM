@@ -31,7 +31,8 @@ printf '%s\n' '=== HIL runner unit tests (no hardware) ==='
 "$PYTHON" -m unittest discover -s "$REPO_ROOT/tools/hil/tests" -p 'test_*.py'
 
 printf '%s\n' '=== Web and Direct Dashboard tests ==='
-"$NODE" --test "$REPO_ROOT"/host/web/tests/*.test.mjs "$REPO_ROOT"/host/direct/tests/*.test.mjs
+"$NODE" --test "$REPO_ROOT"/host/web/tests/*.test.mjs \
+    "$REPO_ROOT"/host/direct/tests/*.test.mjs "$REPO_ROOT"/host/direct/tests/js/*.test.mjs
 
 printf '%s\n' '=== .NET host tests ==='
 "$DOTNET" test "$REPO_ROOT/host/dotnet/PicoPwm.sln" --configuration Release --nologo

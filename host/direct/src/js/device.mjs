@@ -31,6 +31,15 @@ export const ROLES = ["Generator", "Monitor"];
 const STATUS_NAMES = ["OK", "BUSY", "INVALID", "UNAVAILABLE", "TIMEOUT", "APPLY_FAILED", "PENDING",
   "UNSUPPORTED", "STORAGE_FAILED"];
 const PENDING = 6;
+const INVALID = 2;
+
+export class DeviceError extends Error {
+  constructor(message, status = null, cause) {
+    super(message, { cause });
+    this.name = "DeviceError";
+    this.status = status;
+  }
+}
 
 function payload(report, expectedLength, reportName, reportId = null) {
   if (report instanceof DataView && reportId !== null && report.byteLength === expectedLength + 1
@@ -194,8 +203,8 @@ function emptyDashboard() {
 
 export function matchesPicoPwm(device) {
   return device?.vendorId === DEVICE_FILTER.vendorId && device?.productId === DEVICE_FILTER.productId
-    && (!device.collections?.length
-      || device.collections.some(collection => collection.usagePage === DEVICE_FILTER.usagePage));
+    && Boolean(device.collections?.some(collection => collection.usagePage === DEVICE_FILTER.usagePage
+      && collection.usage === DEVICE_FILTER.usage));
 }
 
 export class PicoPwmWebHid {
@@ -237,14 +246,18 @@ export class PicoPwmWebHid {
 
   async withTimeout(operation, timeout) {
     let timer;
+    const generation = this.generation;
+    const timeoutError = new Error("HID operation timed out; outcome is unconfirmed. Disconnect before continuing.");
     try {
       return await Promise.race([Promise.resolve().then(operation), new Promise((_, reject) => {
-        timer = globalThis.setTimeout(() => reject(new Error("timeout")), timeout);
+        timer = globalThis.setTimeout(() => reject(timeoutError), timeout);
       })]);
     } catch (error) {
-      if (error.message !== "timeout") throw error;
-      this.ioBlocked = true;
-      throw new Error("HID operation timed out; outcome is unconfirmed. Disconnect before continuing.");
+      if (error === timeoutError && this.isCurrent(generation)) {
+        this.ioBlocked = true;
+        this.update({ phase: "blocked", error: error.message, message: "Disconnect and reconnect required" });
+      }
+      throw error;
     } finally {
       globalThis.clearTimeout(timer);
     }
@@ -260,6 +273,7 @@ export class PicoPwmWebHid {
   }
 
   async readIdentity() {
+    const generation = this.generation;
     try {
       const identity = decodeIdentity(await this.readFeature(1));
       if (identity.can_read_memory) {
@@ -272,39 +286,43 @@ export class PicoPwmWebHid {
       }
       this.patch({ identity, identity_error: null });
     } catch (error) {
-      if (this.device) this.patch({ identity: null, identity_error: error.message });
+      if (this.isCurrent(generation)) this.patch({ identity: null, identity_error: error.message });
       throw error;
     }
   }
 
   async readConfiguration() {
+    const generation = this.generation;
     try {
       this.patch({ configuration: decodeConfiguration(await this.readFeature(2)), configuration_error: null });
     } catch (error) {
-      if (this.device) this.patch({ configuration: null, configuration_error: error.message });
+      if (this.isCurrent(generation)) this.patch({ configuration: null, configuration_error: error.message });
     }
   }
 
   async readRuntime() {
+    const generation = this.generation;
     if (!this.state.dashboard.identity?.can_read_runtime) return;
     try {
       const runtime = decodeRuntime(await this.readFeature(4));
       this.patch({ runtime, runtime_error: runtime.temperature_c === null ? "Temperature ADC reading is invalid" : null });
     } catch (error) {
-      if (this.device) this.patch({ runtime: null, runtime_error: error.message });
+      if (this.isCurrent(generation)) this.patch({ runtime: null, runtime_error: error.message });
     }
   }
 
   async readPins() {
+    const generation = this.generation;
     if (!this.state.dashboard.identity?.can_read_pins) return;
     try {
       this.patch({ pins: decodePins(await this.readFeature(5)), pins_error: null });
     } catch (error) {
-      if (this.device) this.patch({ pins: null, pins_error: error.message });
+      if (this.isCurrent(generation)) this.patch({ pins: null, pins_error: error.message });
     }
   }
 
   async readBanks() {
+    const generation = this.generation;
     for (let bank = 0; bank < BANK_COUNT; bank++) {
       const reportId = 10 + bank;
       try {
@@ -315,7 +333,7 @@ export class PicoPwmWebHid {
         bankErrors[bank] = null;
         this.patch({ channels, bank_errors: bankErrors, updated_at: new Date().toISOString() });
       } catch (error) {
-        if (!this.device) return;
+        if (!this.isCurrent(generation)) return;
         const channels = [...this.state.dashboard.channels];
         const blank = emptyChannels();
         for (let index = bank * BANK_SIZE; index < (bank + 1) * BANK_SIZE; index++) channels[index] = blank[index];
@@ -327,19 +345,37 @@ export class PicoPwmWebHid {
     }
   }
 
-  async refresh(initial = false) {
+  async #readDashboard(generation) {
+    const current = () => {
+      if (!this.isCurrent(generation)) throw new Error("HID connection changed during operation");
+      if (this.ioBlocked) throw new Error(this.state.error || "HID connection unavailable; disconnect and reconnect.");
+    };
+    current();
+    if (!this.state.dashboard.identity) await this.readIdentity();
+    current();
+    if (!this.state.dashboard.pins) await this.readPins();
+    current();
+    await this.readConfiguration();
+    current();
+    await this.readRuntime();
+    current();
+    await this.readBanks();
+    current();
+    const data = this.state.dashboard;
+    const errors = [data.identity_error, data.configuration_error, data.pins_error,
+      data.runtime_error, ...data.bank_errors].filter(Boolean);
+    this.update({ message: errors.length ? "Some HID reports are unavailable" : "HID status received",
+      error: errors.length ? errors.join("; ") : null });
+  }
+
+  async refresh() {
     const generation = this.generation;
     if (!this.device || this.busy || this.ioBlocked || this.state.phase !== "connected") return;
     this.busy = true;
     try {
-      if (!this.state.dashboard.identity) await this.readIdentity();
-      if (!this.state.dashboard.pins) await this.readPins();
-      await this.readConfiguration();
-      await this.readRuntime();
-      await this.readBanks();
-      if (this.isCurrent(generation)) this.update({ message: "HID status received", error: null });
+      await this.#readDashboard(generation);
     } catch (error) {
-      if (this.isCurrent(generation)) this.update({ error: error.message });
+      if (this.isCurrent(generation) && !this.ioBlocked) this.update({ error: error.message });
     } finally {
       if (generation === this.generation) this.busy = false;
     }
@@ -350,11 +386,33 @@ export class PicoPwmWebHid {
     return this.transactionId;
   }
 
-  async performAction(operation, fields = {}) {
+  /** Own the complete logical command, including all writes and readback. */
+  async #command(action) {
+    const generation = this.generation;
+    if (!this.device || !this.state.dashboard.identity || this.busy || this.ioBlocked
+      || this.state.phase !== "connected") throw new Error("Device is not ready for a command.");
+    this.busy = true;
+    this.update({ phase: "writing", message: "Sending command", error: null });
+    const perform = (operation, fields) => {
+      if (!this.isCurrent(generation)) throw new Error("HID connection changed; outcome is unconfirmed.");
+      return this.#performAction(operation, fields);
+    };
+    try {
+      return await action(perform, () => this.#readDashboard(generation));
+    } catch (error) {
+      if (this.isCurrent(generation)) this.update({ error: error.message });
+      throw error;
+    } finally {
+      if (generation === this.generation) this.busy = false;
+      if (this.isCurrent(generation)) this.update({ phase: this.ioBlocked ? "blocked" : "connected" });
+    }
+  }
+
+  async #performAction(operation, fields = {}) {
     const device = this.device;
     const generation = this.generation;
     const identity = this.state.dashboard.identity;
-    if (!device || !identity || this.busy || this.ioBlocked || this.state.phase !== "connected") {
+    if (!device || !identity || this.ioBlocked) {
       throw new Error("Device is not ready for a command.");
     }
     if (operation === OPERATION.SAVE_CONFIG && !identity.can_save
@@ -364,12 +422,12 @@ export class PicoPwmWebHid {
       || operation === OPERATION.SET_CLOCK_PROFILE && !identity.can_set_clock) {
       throw new Error("The firmware does not advertise this capability.");
     }
-    this.busy = true;
     const saving = operation === OPERATION.SAVE_CONFIG || operation === OPERATION.SAVE_REBOOT;
     this.update({ phase: "writing", message: saving ? "Saving configuration" : "Sending command", error: null });
     try {
       const before = decodeActionResult(await this.readFeature(20));
       if (before.status === PENDING) throw new Error("A previous command is still pending.");
+      if (!this.isCurrent(generation)) throw new Error("HID connection changed; outcome is unconfirmed.");
       const id = this.nextTransactionId();
       const timeout = saving ? SAVE_TIMEOUT_MS : TRANSFER_TIMEOUT_MS;
       await this.withTimeout(() => device.sendFeatureReport(20, encodeActionRequest(id, operation, fields)), timeout);
@@ -385,7 +443,7 @@ export class PicoPwmWebHid {
         }
         first = false;
         if (result.status !== PENDING) {
-          if (result.status !== 0) throw new Error(`Command failed: ${result.status_name}.`);
+          if (result.status !== 0) throw new DeviceError(`Command failed: ${result.status_name}.`, result.status);
           return result;
         }
         if (Date.now() >= deadline) throw new Error("Timed out awaiting result; outcome is unconfirmed.");
@@ -394,14 +452,7 @@ export class PicoPwmWebHid {
     } catch (error) {
       if (this.isCurrent(generation)) this.update({ error: error.message });
       throw error;
-    } finally {
-      if (generation === this.generation) this.busy = false;
-      if (this.isCurrent(generation)) this.update({ phase: "connected" });
     }
-  }
-
-  async afterChange(configuration) {
-    await this.refresh(configuration);
   }
 
   async setChannel(channel, freqHz, duty) {
@@ -410,44 +461,50 @@ export class PicoPwmWebHid {
       || !Number.isInteger(duty) || duty < 0 || duty > 100) {
       throw new Error("Channel, frequency, or duty is out of range.");
     }
-    try {
-      await this.performAction(OPERATION.SET_CHANNEL, { channel, arg0: freqHz, arg1: duty });
-    } catch (error) {
-      if (error.message !== "Command failed: INVALID.") throw error;
-      let actual;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        await this.refresh();
-        actual = this.state.dashboard.channels[channel];
-        if (actual?.freq_hz === freqHz && actual.duty === duty) return;
-        if (attempt < 2) await new Promise(resolve => globalThis.setTimeout(resolve, ACTION_POLL_MS));
+    return this.#command(async (perform, refresh) => {
+      try {
+        await perform(OPERATION.SET_CHANNEL, { channel, arg0: freqHz, arg1: duty });
+      } catch (error) {
+        if (!(error instanceof DeviceError) || error.status !== INVALID) throw error;
+        let actual;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          await refresh();
+          actual = this.state.dashboard.channels[channel];
+          if (actual?.freq_hz === freqHz && actual.duty === duty) return;
+          if (attempt < 2) await new Promise(resolve => globalThis.setTimeout(resolve, ACTION_POLL_MS));
+        }
+        const readback = actual?.freq_hz === null || actual?.freq_hz === undefined
+          ? "unavailable" : `${actual.freq_hz} Hz / ${actual.duty}%`;
+        throw new DeviceError(
+          `Command failed: INVALID (requested ${freqHz} Hz / ${duty}%, readback ${readback}).`, error.status, error);
       }
-      const readback = actual?.freq_hz === null || actual?.freq_hz === undefined
-        ? "unavailable" : `${actual.freq_hz} Hz / ${actual.duty}%`;
-      const diagnostic = new Error(
-        `Command failed: INVALID (requested ${freqHz} Hz / ${duty}%, readback ${readback}).`);
-      this.update({ error: diagnostic.message });
-      throw diagnostic;
-    }
-    await this.afterChange(false);
+      await refresh();
+    });
   }
 
   async stop() {
-    await this.performAction(OPERATION.STOP);
-    await this.afterChange(false);
+    return this.#command(async (perform, refresh) => {
+      await perform(OPERATION.STOP);
+      await refresh();
+    });
   }
 
   async setBank(bank, backend, role) {
     if (![0, 1, 2].includes(bank) || ![0, 1, 2].includes(backend) || ![0, 1].includes(role)) {
       throw new Error("Bank, backend, or role is out of range.");
     }
-    await this.performAction(OPERATION.SET_BANK, { channel: bank, arg0: backend | role << 8 });
-    await this.afterChange(true);
+    return this.#command(async (perform, refresh) => {
+      await perform(OPERATION.SET_BANK, { channel: bank, arg0: backend | role << 8 });
+      await refresh();
+    });
   }
 
   async setI2cAddress(address) {
     if (!Number.isInteger(address) || address < 0 || address > 127) throw new Error("I2C address must be 0-127.");
-    await this.performAction(OPERATION.SET_I2C_ADDRESS, { arg0: address });
-    await this.afterChange(true);
+    return this.#command(async (perform, refresh) => {
+      await perform(OPERATION.SET_I2C_ADDRESS, { arg0: address });
+      await refresh();
+    });
   }
 
   async setClockProfile(profile, acknowledgeOverclock) {
@@ -456,19 +513,24 @@ export class PicoPwmWebHid {
       throw new Error("Choose a profile the firmware advertises.");
     }
     if (profile > 1 && !acknowledgeOverclock) throw new Error("Acknowledge the overclock first.");
-    await this.performAction(OPERATION.SET_CLOCK_PROFILE, { arg0: profile, flags: profile > 1 ? 2 : 0 });
-    await this.afterChange(true);
+    return this.#command(async (perform, refresh) => {
+      await perform(OPERATION.SET_CLOCK_PROFILE, { arg0: profile, flags: profile > 1 ? 2 : 0 });
+      await refresh();
+    });
   }
 
   async saveConfiguration(acknowledgeOverclock) {
     const profile = this.state.dashboard.configuration?.clock_profile;
     if (profile === undefined) throw new Error("Read the configuration first.");
     if (profile > 1 && !acknowledgeOverclock) throw new Error("Acknowledge the overclock first.");
-    await this.performAction(OPERATION.SAVE_CONFIG, { flags: 1 | (profile > 1 ? 2 : 0) });
-    await this.afterChange(true);
+    return this.#command(async (perform, refresh) => {
+      await perform(OPERATION.SAVE_CONFIG, { flags: 1 | (profile > 1 ? 2 : 0) });
+      await refresh();
+    });
   }
 
   async saveAndReboot({ clockProfile, i2cAddress, roles }, acknowledgeOverclock) {
+    roles = Array.isArray(roles) ? [...roles] : roles;
     const identity = this.state.dashboard.identity;
     if (!identity?.can_save_reboot) {
       throw new Error("Update the board firmware to enable Save and reboot.");
@@ -480,31 +542,38 @@ export class PicoPwmWebHid {
       throw new Error("Choose a supported clock, I2C address (8-119), and a role for each bank.");
     }
     if (clockProfile > 1 && !acknowledgeOverclock) throw new Error("Acknowledge the overclock first.");
-    try {
-      await this.performAction(OPERATION.SET_CLOCK_PROFILE,
-        { arg0: clockProfile, flags: clockProfile > 1 ? 2 : 0 });
-      await this.performAction(OPERATION.SET_I2C_ADDRESS, { arg0: i2cAddress });
-      for (let bank = 0; bank < 3; bank++) {
-        await this.performAction(OPERATION.SET_BANK, { channel: bank, arg0: bank | roles[bank] << 8 });
+    return this.#command(async perform => {
+      try {
+        await perform(OPERATION.SET_CLOCK_PROFILE,
+          { arg0: clockProfile, flags: clockProfile > 1 ? 2 : 0 });
+        await perform(OPERATION.SET_I2C_ADDRESS, { arg0: i2cAddress });
+        for (let bank = 0; bank < 3; bank++) {
+          await perform(OPERATION.SET_BANK, { channel: bank, arg0: bank | roles[bank] << 8 });
+        }
+        await perform(OPERATION.SAVE_REBOOT, { flags: 1 | (clockProfile > 1 ? 2 : 0) });
+      } catch (error) {
+        throw new DeviceError(`${error.message} Save and reboot was not confirmed; target settings may be partially updated. Reconnect and verify before retrying.`,
+          error.status ?? null, error);
       }
-      await this.performAction(OPERATION.SAVE_REBOOT, { flags: 1 | (clockProfile > 1 ? 2 : 0) });
-    } catch (error) {
-      throw new Error(`${error.message} Save and reboot was not confirmed; target settings may be partially updated. Reconnect and verify before retrying.`);
-    }
-    await this.disconnect();
-    this.update({ message: "Configuration saved. Board is rebooting; reconnect to read the applied settings." });
+      await this.disconnect();
+      this.update({ message: "Configuration saved. Board is rebooting; reconnect to read the applied settings." });
+    });
   }
 
   async setLed(on) {
     if (typeof on !== "boolean") throw new Error("LED state must be on or off.");
-    await this.performAction(OPERATION.SET_LED, { arg0: on ? 1 : 0 });
-    await this.afterChange(true);
+    return this.#command(async (perform, refresh) => {
+      await perform(OPERATION.SET_LED, { arg0: on ? 1 : 0 });
+      await refresh();
+    });
   }
 
   async reboot() {
-    await this.performAction(OPERATION.REBOOT, { flags: 1 });
-    await this.disconnect();
-    this.update({ message: "Board is rebooting without saving. Reconnect after restart." });
+    return this.#command(async perform => {
+      await perform(OPERATION.REBOOT, { flags: 1 });
+      await this.disconnect();
+      this.update({ message: "Board is rebooting without saving. Reconnect after restart." });
+    });
   }
 
   async connect() {
@@ -534,7 +603,7 @@ export class PicoPwmWebHid {
       this.busy = false;
       this.update({ phase: "connected", message: "Device connected",
         dashboard: { ...emptyDashboard(), connected: true } });
-      await this.refresh(true);
+      await this.refresh();
       if (!this.state.dashboard.identity) {
         throw new Error(this.state.dashboard.identity_error ?? "Identity unavailable");
       }

@@ -6,7 +6,7 @@ import test from "node:test";
 import {
   convertFrequencyValue, formatFrequency, formatUptime, frequencyEditorValue, frequencyMax, frequencyToHertz,
   renderBootEdits, renderDashboard,
-} from "../src/js/view.mjs";
+} from "../../src/js/view.mjs";
 
 test("runtime uptime formatting handles second, minute, and day boundaries", () => {
   assert.equal(formatUptime(0), "0h 0m 0s");

@@ -87,7 +87,7 @@ jobs:
         run: |
           node --check host/direct/src/js/view.mjs
           node --check host/direct/src/js/app.mjs
-          node --test host/direct/tests/*.test.mjs
+          node --test host/direct/tests/*.test.mjs host/direct/tests/js/*.test.mjs
 
       - name: Stage and verify Direct Dashboard
         env:

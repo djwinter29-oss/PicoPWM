@@ -25,7 +25,7 @@ const controls = ["#hw-role", "#pio-role", "#sw-role", "#i2c-input"].map($);
 
 function updateSaveButton(state, bootConfigurationChanged) {
   const dashboard = state.dashboard;
-  const connected = ["connected", "writing"].includes(state.phase);
+  const connected = ["connected", "writing", "blocked"].includes(state.phase);
   const ready = state.phase === "connected" && dashboard.identity && dashboard.configuration;
   const settingsHelp = !connected
     ? "Connect to read boot settings and enable Save & Reboot."
@@ -33,7 +33,8 @@ function updateSaveButton(state, bootConfigurationChanged) {
       ? "Read device identity and configuration successfully to enable Save & Reboot."
       : !dashboard.identity.can_save_reboot
         ? "Connected firmware does not support Save & Reboot. Flash the latest firmware for your board, then disconnect and reconnect this page."
-        : state.phase === "writing" ? "A command is in progress. Wait before saving."
+        : state.phase === "blocked" ? "Disconnect and reconnect before saving."
+          : state.phase === "writing" ? "A command is in progress. Wait before saving."
           : !bootConfigurationChanged ? "Boot configuration is unchanged."
             : "Save changed boot settings and reboot to apply them.";
   saveButton.disabled = !ready || !dashboard.identity.can_save_reboot || !bootConfigurationChanged;
@@ -43,7 +44,7 @@ function updateSaveButton(state, bootConfigurationChanged) {
 
 function render(state) {
   const dashboard = state.dashboard;
-  const connected = ["connected", "writing"].includes(state.phase);
+  const connected = ["connected", "writing", "blocked"].includes(state.phase);
   const ready = state.phase === "connected" && dashboard.identity && dashboard.configuration;
   const bootConfigurationChanged = renderDashboard(dashboard, Boolean(ready));
   $("#apply-channel").disabled = !ready || channelApplying;
@@ -54,11 +55,12 @@ function render(state) {
   if (!connected && channelDialog.open) channelDialog.close();
   connection.dataset.state = connected ? "connected" : "disconnected";
   $("#connection-label").textContent = state.phase === "unsupported" ? "Unavailable"
-    : connected ? "Connected" : state.phase === "connecting" ? "Connecting" : "Disconnected";
+    : state.phase === "blocked" ? "Reconnect required"
+      : connected ? "Connected" : state.phase === "connecting" ? "Connecting" : "Disconnected";
   connectButton.textContent = state.phase === "connecting" ? "Connecting..."
     : state.phase === "disconnecting" ? "Disconnecting..." : connected ? "Disconnect" : "Connect";
   connectButton.className = `button ${connected ? "button-danger" : "button-secondary"}`;
-  connectButton.disabled = !["disconnected", "connected"].includes(state.phase);
+  connectButton.disabled = !["disconnected", "connected", "blocked"].includes(state.phase);
   for (const control of controls) control.disabled = !ready;
   const clockReady = ready && dashboard.identity.can_set_clock;
   $("#clock-profile-select").disabled = !clockReady;

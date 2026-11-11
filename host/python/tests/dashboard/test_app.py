@@ -12,6 +12,14 @@ from picopwm.hid import protocol as p
 from ..fakes import make, modern
 
 
+def test_host_identity_reports_package_version():
+    from picopwm import __version__
+
+    response = create_app().test_client().get("/api/host")
+    assert response.status_code == 200
+    assert response.json == {"dashboard_type": "Python", "version": __version__}
+
+
 def test_disconnected_clock_command_returns_device_error_not_internal_error():
     def missing():
         raise RuntimeError("interface not found")

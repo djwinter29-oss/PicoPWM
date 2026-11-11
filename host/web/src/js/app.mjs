@@ -215,7 +215,7 @@ $("#save-configuration").addEventListener("click", () => {
     `I2C: 0x${pendingSettings.i2cAddress.toString(16).padStart(2, "0")}`,
     ...["HW", "PIO", "SW"].map((backend, bank) => `${backend}: ${ROLES[pendingSettings.roles[bank]]}`),
   ].join(" / ");
-  const overclock = pendingSettings.clockProfile > 1;
+  const overclock = pendingSettings.clockProfile !== 0;
   $("#save-overclock").hidden = !overclock;
   saveAcknowledgement.checked = false;
   saveAcknowledgement.disabled = !overclock;
@@ -227,6 +227,7 @@ $("#cancel-save").addEventListener("click", () => { pendingSettings = null; save
 $("#confirm-save").addEventListener("click", () => {
   const settings = pendingSettings;
   if (!settings || client.state.phase !== "connected") return;
+  if (settings.clockProfile !== 0 && !saveAcknowledgement.checked) return;
   pendingSettings = null;
   saveDialog.close();
   run(() => client.saveAndReboot(settings, saveAcknowledgement.checked));
@@ -235,6 +236,7 @@ $("#confirm-save").addEventListener("click", () => {
 render(client.state);
 request("/api/host").then(host => {
   $("#dashboard-type").textContent = host.dashboard_type;
+  if (host.version) $("#host-version").textContent = host.version;
   document.title = `PicoPWM Dashboard | ${host.dashboard_type}`;
 }).catch(error => client.update({ error: `Host identity unavailable: ${error.message}` }));
 rescan();

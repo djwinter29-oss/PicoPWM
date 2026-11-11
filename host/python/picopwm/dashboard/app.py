@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 
 from flask import Flask, jsonify, request, send_from_directory
 
+from .. import __version__
 from ..device.client import DeviceError, PicoPwmHid
 from ..device.boards import BoardRegistry
 from ..hid.protocol import ProtocolError
@@ -182,7 +183,7 @@ def create_app(client: PicoPwmHid | None = None, registry: BoardRegistry | None 
 
     @app.get("/api/host")
     def host():
-        return jsonify({"dashboard_type": "Python"})
+        return jsonify({"dashboard_type": "Python", "version": __version__})
 
     def action(call):
         payload = request.get_json(silent=True)

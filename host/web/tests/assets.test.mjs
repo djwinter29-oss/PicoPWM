@@ -44,14 +44,79 @@ test("tab title identifies the Python or .NET host", async () => {
   for (const dashboard_type of ["Python", ".NET"]) {
     const document = { title: "PicoPWM Dashboard" };
     const label = { textContent: "Web" };
+    const versionLabel = { textContent: "0.0.0-debug" };
+    const version = dashboard_type === "Python" ? "0.4.3.dev13+g71a7e60" : undefined;
     await runInNewContext(identity, {
       document,
-      $: () => label,
-      request: async () => ({ dashboard_type }),
+      $: selector => selector === "#host-version" ? versionLabel : label,
+      request: async () => ({ dashboard_type, version }),
       client: { update: state => assert.fail(state.error) },
     });
     assert.equal(document.title, `PicoPWM Dashboard | ${dashboard_type}`);
     assert.equal(label.textContent, dashboard_type);
+    assert.equal(versionLabel.textContent, version ?? "0.0.0-debug");
+  }
+});
+
+test("all dashboards require fresh acknowledgement for every explicit clock profile", () => {
+  for (const appPath of [join(root, "js/app.mjs"), resolve(root, "../../direct/src/js/app.mjs")]) {
+    const source = readFileSync(appPath, "utf8");
+    const start = source.search(/(?:saveButton|\$\("#save-configuration"\)).addEventListener\("click"/);
+    const end = source.indexOf("\n});", source.indexOf("saveAndReboot(settings", start)) + 4;
+    assert.ok(start >= 0 && end > start);
+    const elements = new Map();
+    const $ = selector => {
+      if (!elements.has(selector)) elements.set(selector, {
+        checked: false, disabled: false, hidden: true, textContent: "",
+        handlers: {}, addEventListener(event, handler) { this.handlers[event] = handler; },
+        reportValidity: () => true,
+        showModal() { this.open = true; }, close() { this.open = false; },
+      });
+      return elements.get(selector);
+    };
+    let profile = 0;
+    const calls = [];
+    runInNewContext(source.slice(start, end), {
+      $, saveButton: $("#save-configuration"), saveDialog: $("#save-dialog"),
+      saveAcknowledgement: $("#save-unsafe-ack"), confirmSave: $("#confirm-save"),
+      pendingSettings: null, CLOCK_PROFILES: ["default", "150", "200", "250", "280"],
+      ROLES: ["Monitor", "Generator"],
+      integer: selector => selector === "#clock-profile-select" ? profile : selector === "#i2c-input" ? 64 : 0,
+      run: action => action(),
+      client: { state: { phase: "connected" },
+        saveAndReboot: (settings, acknowledged) => calls.push({ profile: settings.clockProfile, acknowledged }) },
+    });
+    const open = () => $("#save-configuration").handlers.click();
+    const confirm = () => $("#confirm-save").handlers.click();
+    const acknowledge = value => {
+      $("#save-unsafe-ack").checked = value;
+      $("#save-unsafe-ack").handlers.change();
+    };
+    for (profile = 0; profile <= 4; profile++) {
+      open();
+      assert.equal($("#save-overclock").hidden, profile === 0);
+      assert.equal($("#save-unsafe-ack").disabled, profile === 0);
+      assert.equal($("#save-unsafe-ack").checked, false);
+      assert.equal($("#confirm-save").disabled, profile !== 0);
+      const before = calls.length;
+      confirm();
+      if (profile !== 0) {
+        assert.equal(calls.length, before);
+        acknowledge(true);
+        assert.equal($("#confirm-save").disabled, false);
+        acknowledge(false);
+        assert.equal($("#confirm-save").disabled, true);
+        acknowledge(true);
+        confirm();
+      }
+      assert.equal(calls.length, before + 1);
+      assert.deepEqual(calls.at(-1), { profile, acknowledged: profile !== 0 });
+      open();
+      assert.equal($("#save-unsafe-ack").checked, false);
+      $("#cancel-save").handlers.click();
+      confirm();
+      assert.equal(calls.length, before + 1);
+    }
   }
 });
 

@@ -194,7 +194,7 @@ saveButton.addEventListener("click", () => {
     `I2C: 0x${pendingSettings.i2cAddress.toString(16).padStart(2, "0")}`,
     ...["HW", "PIO", "SW"].map((backend, bank) => `${backend}: ${ROLES[pendingSettings.roles[bank]]}`),
   ].join(" / ");
-  const overclock = pendingSettings.clockProfile > 1;
+  const overclock = pendingSettings.clockProfile !== 0;
   $("#save-overclock").hidden = !overclock;
   saveAcknowledgement.checked = false;
   saveAcknowledgement.disabled = !overclock;
@@ -209,6 +209,7 @@ $("#cancel-save").addEventListener("click", () => {
 confirmSave.addEventListener("click", () => {
   const settings = pendingSettings;
   if (!settings || client.state.phase !== "connected") return;
+  if (settings.clockProfile !== 0 && !saveAcknowledgement.checked) return;
   const acknowledged = saveAcknowledgement.checked;
   pendingSettings = null;
   saveDialog.close();

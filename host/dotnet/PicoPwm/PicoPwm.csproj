@@ -8,11 +8,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+    <MinVerAutoIncrement>patch</MinVerAutoIncrement>
+    <MinVerDefaultPreReleaseIdentifiers>dev</MinVerDefaultPreReleaseIdentifiers>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="PicoPwm.Tests" />
     <PackageReference Include="HidSharp" Version="2.6.4" />
+    <PackageReference Include="MinVer" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
 
   <ItemGroup>

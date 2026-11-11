@@ -33,3 +33,4 @@ printf '%s\n' '=== Web and Direct Dashboard tests ==='
 
 printf '%s\n' '=== .NET host tests ==='
 "$DOTNET" test "$REPO_ROOT/host/dotnet/PicoPwm.sln" --configuration Release --nologo
+"$PYTHON" "$REPO_ROOT/tools/test/test_dotnet_version.py"

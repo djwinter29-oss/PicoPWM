@@ -95,6 +95,31 @@ With a newer SDK, install the .NET 10 ASP.NET Core runtime. Explicit major-versi
 unverified compatibility option, not a substitute for testing against the targeted runtime.
 Edit canonical assets in `host/web/src/` and `host/direct/src/`, not generated `wwwroot` output.
 
+### Git-derived versions
+
+[MinVer](https://github.com/adamralph/minver) runs during builds as a private build dependency.
+There is no manually maintained application version:
+
+- A commit tagged `v1.2.3` builds as `1.2.3`.
+- One commit after that release builds as `1.2.4-dev.1`; subsequent commits increase the height.
+- Assembly/file/package versions are supplied by MinVer. The dashboard reads assembly informational
+  version, which the .NET SDK also enriches with the source commit hash when available.
+- Unlike Python's `hatch-vcs`, MinVer does not append a dirty-worktree marker; uncommitted changes
+  do not advance the version. A history without version tags falls back to `0.0.0-dev`
+  with commit height appended when nonzero.
+
+Use a full Git checkout with tags. CI fetches complete history for validation and packaging.
+For an explicit manual version, including a source archive without Git metadata, use MinVer's override:
+
+```sh
+dotnet publish host/dotnet/PicoPwm -c Release -p:MinVerVersionOverride=1.2.3-test.1
+```
+
+Do not use `-p:Version` alone with MinVer: override through `MinVerVersionOverride` so package,
+assembly and dashboard metadata stay consistent. Tag releases derive their version from Git;
+manual packaging supplies the same override and retains its existing test/release naming policy.
+The isolated versioning regression check is `python3 tools/test/test_dotnet_version.py`.
+
 Source files under `PicoPwm/` are grouped by responsibility:
 
 - `Dashboard/`: binding, authentication checks, and HTTP response handling.

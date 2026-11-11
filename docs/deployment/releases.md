@@ -71,6 +71,11 @@ workflow artifacts for all three platforms; this does not create a GitHub Releas
 The application is named **PicoPWM**; archive filenames retain `picopwm-host-v<VERSION>-<RID>`
 with `.zip` for Windows and `.tar.gz` for Linux and macOS.
 
+.NET builds use MinVer with the repository's `v`-prefixed tags. Tag-triggered packaging derives the
+version from Git; manual runs use `MinVerVersionOverride` for their requested release/test version.
+Local commits after a release get the next patch's `-dev.<height>` version. Full Git history and
+tags are required to derive the intended version; see [.NET versioning](../../host/dotnet/README.md#git-derived-versions).
+
 ## One-Time Repository Setup
 
 Workflow files alone cannot configure external publishing services:

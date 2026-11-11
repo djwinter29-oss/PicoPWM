@@ -64,4 +64,5 @@ intentional overclocking are operational risks, not security vulnerabilities by 
 [hardware setup guide](docs/guides/hardware-setup.md).
 
 Saving a configuration writes flash and can select an overclocked system clock. A saved profile that prevents boot
-can be recovered by holding BOOTSEL while connecting USB and reflashing.
+may require clearing saved settings. See [Recover an unbootable configuration or reset flash](docs/guides/setup-and-troubleshooting.md#recover-an-unbootable-configuration-or-reset-flash)
+for BOOTSEL recovery and full-flash reset instructions.

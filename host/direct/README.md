@@ -44,7 +44,8 @@ for interpretation and the [frequency guidance](../../README.md#recommended-freq
 
 - Stop software generators before saving: flash writes briefly pause HID, CDC, and I2C and disturb software output.
 - Profiles above 150 MHz require overclock acknowledgement; 150 MHz also overclocks RP2040.
-  Saving does not establish stability. Recover an unbootable profile through BOOTSEL and reflashing.
+  Saving does not establish stability. For an unbootable profile, follow the
+  [BOOTSEL and flash-reset recovery guide](../../docs/guides/setup-and-troubleshooting.md#recover-an-unbootable-configuration-or-reset-flash).
 - A failed settings command prevents the final save but may leave partial target changes.
   After a failed or unconfirmed operation, reconnect and inspect target settings before retrying.
 

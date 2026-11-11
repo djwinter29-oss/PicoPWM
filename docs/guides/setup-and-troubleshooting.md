@@ -138,6 +138,25 @@ The helper intentionally refuses to overwrite a differing existing rule.
 - If a setting is rejected, check that the bank role, clock profile, or I2C
   address is supported. A rejected request is not partially applied.
 
+### Recover an unbootable configuration or reset flash
+
+If a saved clock profile prevents normal startup, use BOOTSEL to recover the board.
+Reinstalling firmware alone may preserve saved configuration; a full flash reset clears it.
+
+**A full flash reset erases all firmware, saved configuration, and other data on the board.**
+Disconnect power and attached loads before recovery, and reconnect only USB for the steps below.
+
+1. Download Raspberry Pi's official
+   [universal flash-nuke UF2](https://github.com/raspberrypi/pico-sdk-prebuilts/releases/latest/download/nuke_universal.uf2),
+   which supports both Pico and Pico 2. See the official
+   [resetting flash memory instructions](https://www.raspberrypi.com/documentation/microcontrollers/pico-series.html#resetting-flash-memory).
+2. Hold **BOOTSEL** while connecting the board with a USB data cable, then release it when the boot drive appears.
+3. Copy the flash-nuke UF2 to that drive and wait for erasure to finish. The board returns to BOOTSEL mode.
+4. Copy the correct board-specific PicoPWM UF2 from
+   [Releases](https://github.com/djwinter29-oss/PicoPWM/releases) to the boot drive.
+5. Reconnect through the CDC shell or a dashboard and verify the firmware version and running configuration.
+   Reconfigure bank roles, I2C address, and clock settings as needed before reconnecting loads.
+
 ### A monitor reports no signal or an unexpected reading
 
 - Confirm the bank is configured as a monitor and the signal is connected to

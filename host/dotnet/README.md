@@ -92,6 +92,16 @@ With a newer SDK, install the .NET 10 ASP.NET Core runtime. Explicit major-versi
 unverified compatibility option, not a substitute for testing against the targeted runtime.
 Edit canonical assets in `host/web/src/` and `host/direct/src/`, not generated `wwwroot` output.
 
+Source files under `PicoPwm/` are grouped by responsibility:
+
+- `Dashboard/`: binding, authentication checks, and HTTP response handling.
+- `Device/`: thread-safe device client and board registry.
+- `Hid/`: USB discovery, feature-report transport, and protocol codecs.
+
+`Program.cs` remains the application entry point. Tests mirror these folders under `PicoPwm.Tests/`,
+with shared device doubles in `Fakes.cs`. Existing namespaces and CLI behavior are unchanged;
+no compatibility wrappers or extra `src/` layer are needed.
+
 ## Help and License
 
 See [setup and troubleshooting](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/setup-and-troubleshooting.md).

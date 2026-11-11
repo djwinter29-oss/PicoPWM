@@ -1,22 +1,19 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2026 Ji Dong
 
-import pytest
-import struct
 import logging
 from unittest.mock import Mock
 
-from picopwm import protocol as p
-from picopwm.app import create_app
-from picopwm.client import DeviceError, PicoPwmHid
+import pytest
 
-IDENTITY = bytes([1, 3, 0, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 2, 24, 3, 0x1F])
-CONFIGURATION = bytes([1, 0, 1, 2, 0, 0, 1, 0x20, 0, 1, 2, 0, 0, 1, 0x20, 1, 1, 0x80, 0xD1, 0xF0, 0x08])
-BANK = bytes([1] + [0xE8, 0x03, 0, 0, 50] * 8)
+from picopwm.dashboard.app import create_app
+from picopwm.device.client import DeviceError, PicoPwmHid
+from picopwm.hid import protocol as p
+from ..fakes import make, modern
 
 
 def test_server_suppresses_request_logs_but_keeps_warnings_and_errors(monkeypatch, caplog):
-    from picopwm import app as app_module
+    from picopwm.dashboard import app as app_module
 
     caplog.set_level(logging.INFO, logger="werkzeug")
     monkeypatch.setenv("PICOPWM_HOST", "127.0.0.1")
@@ -40,80 +37,6 @@ def test_server_suppresses_request_logs_but_keeps_warnings_and_errors(monkeypatc
     boards.close.assert_called_once()
 
 
-class FakeDevice:
-    """Serves reports; mode 'ok' completes the SET, 'drop' ignores it, 'pending' never finishes."""
-
-    def __init__(self, mode="ok"):
-        self.mode = mode
-        self.result = bytes([1, 0, 0, 0] + [0] * 8)
-        self.sent = []
-        self.channels = [{"freq_hz": 1000, "duty": 50} for _ in range(p.CHANNEL_COUNT)]
-        self.identity = IDENTITY
-        self.closed = False
-
-    def get_feature_report(self, report_id, length):
-        if p.BANK_STATUS_REPORT <= report_id < p.BANK_STATUS_REPORT + p.BANK_COUNT:
-            start = (report_id - p.BANK_STATUS_REPORT) * p.BANK_SIZE
-            payload = bytes([1]) + b"".join(
-                struct.pack("<IB", entry["freq_hz"], entry["duty"])
-                for entry in self.channels[start:start + p.BANK_SIZE])
-        else:
-            payload = {1: self.identity, 2: CONFIGURATION, 3: struct.pack("<BII", 1, 120000, 532480),
-                       4: struct.pack("<BIiHH", 1, 123, 22900, 1170, 6720),
-                       5: bytes([1, *range(24), 26, 27, 255]), 20: self.result}.get(report_id, BANK)
-        return bytes([report_id]) + payload
-
-    def send_feature_report(self, data):
-        self.sent.append(bytes(data))
-        if self.mode == "drop":
-            return len(data)
-        status = 6 if self.mode == "pending" else 2 if self.mode == "fail-bank" and data[3] == 3 else 0
-        if self.mode == "invalid-channel" and data[3] == p.OP_SET_CHANNEL:
-            status = 2
-        if self.mode == "invalid-applied" and data[3] == p.OP_SET_CHANNEL:
-            channel = data[4]
-            self.channels[channel] = {"freq_hz": struct.unpack_from("<I", data, 5)[0], "duty": data[9]}
-            status = 2
-        self.result = bytes([1, data[2], data[3], status] + [0] * 8)
-        return len(data)
-
-    def close(self):
-        self.closed = True
-
-
-def make(mode="ok"):
-    device = FakeDevice(mode)
-    clock = iter(range(0, 1000))
-    return device, PicoPwmHid(lambda: device, sleep=lambda s: None, monotonic=lambda: next(clock))
-
-
-def test_decoders():
-    identity = p.decode_identity(IDENTITY)
-    assert identity["mcu"] == "RP2350" and identity["serial_number"] == "0102030405060708"
-    config = p.decode_configuration(CONFIGURATION)
-    assert config["system_clock_hz"] == 150_000_000
-    assert p.decode_bank_status(BANK, 1)[0] == {"channel": 8, "freq_hz": 1000, "duty": 50}
-    reboot_identity = bytearray(IDENTITY)
-    reboot_identity[16] = 127
-    assert p.decode_identity(bytes(reboot_identity))["can_save"]
-
-
-def test_decoder_rejects_bad_layout():
-    with pytest.raises(p.ProtocolError):
-        p.decode_identity(IDENTITY[:-1])
-    with pytest.raises(p.ProtocolError):
-        p.decode_action_result(bytes([1, 1, 1, 9] + [0] * 8))
-
-
-def test_encode_set_channel():
-    assert p.encode_action_request(7, p.OP_SET_CHANNEL, 9, 1000, 50) == bytes([1, 7, 1, 9, 0xE8, 3, 0, 0, 50, 0, 0, 0])
-
-
-def test_status_reads_all_banks():
-    _, client = make()
-    state = client.status()
-    assert state["connected"] and len(state["channels"]) == 24 and state["channels"][23]["freq_hz"] == 1000
-
 
 def test_status_without_device():
     def opener():
@@ -124,44 +47,6 @@ def test_status_without_device():
     response = create_app(PicoPwmHid(opener)).test_client().get("/api/status")
     assert response.json["error"] == "Device status unavailable"
 
-
-def test_set_channel_completes():
-    device, client = make()
-    client.set_channel(3, 2000, 25)
-    assert device.sent[0][:5] == bytes([20, 1, 1, 1, 3])
-
-
-def test_invalid_result_is_reconciled_when_readback_matches_requested_channel():
-    device, client = make("invalid-applied")
-    state = client.set_channel(0, 2000, 25)
-    assert state["channels"][0] == {"channel": 0, "freq_hz": 2000, "duty": 25}
-
-
-def test_invalid_result_remains_an_error_when_readback_does_not_match():
-    _, client = make("invalid-channel")
-    with pytest.raises(DeviceError, match=r"command failed: INVALID .*readback 1000 Hz / 50%"):
-        client.set_channel(0, 2000, 25)
-
-
-def test_dropped_set_is_reported():
-    _, client = make("drop")
-    with pytest.raises(DeviceError, match="no change was made"):
-        client.set_channel(0, 1, 1)
-
-
-def test_pending_times_out_as_unconfirmed():
-    _, client = make("pending")
-    with pytest.raises(DeviceError, match="unconfirmed"):
-        client.set_channel(0, 1, 1)
-
-
-def test_validation_and_overclock_ack():
-    _, client = make()
-    with pytest.raises(ValueError):
-        client.set_channel(24, 1, 1)
-    with pytest.raises(ValueError):
-        client.set_clock_profile(3, False)
-    client.set_clock_profile(3, True)
 
 
 def test_api():
@@ -176,6 +61,7 @@ def test_api():
     assert http.post("/api/stop", json={}).status_code == 200
     _, dropping = make("drop")
     assert create_app(dropping).test_client().post("/api/stop", json={}).status_code == 409
+
 
 
 def test_api_does_not_expose_device_exception_details():
@@ -203,6 +89,7 @@ def test_api_does_not_expose_device_exception_details():
     assert private_detail not in action.get_data(as_text=True)
 
 
+
 @pytest.mark.parametrize("route", ["/api/status", "/api/stop"])
 def test_api_redacts_all_returned_status_errors(route):
     private_detail = "private device path /secret/device"
@@ -225,6 +112,7 @@ def test_api_redacts_all_returned_status_errors(route):
     assert response.json["connected"]
     assert response.json["channels"] == [{"channel": 0, "freq_hz": 1000, "duty": 50}]
     assert private_detail not in response.get_data(as_text=True)
+
 
 
 @pytest.mark.parametrize("report_id", [
@@ -262,6 +150,7 @@ def test_api_action_redacts_readback_errors(monkeypatch, report_id, failure_type
         assert not response.json["connected"]
 
 
+
 @pytest.mark.parametrize(("failure", "status_code", "message"), [
     (p.ProtocolError("private protocol detail"), 409, "Invalid response from device"),
     (DeviceError("private device detail"), 409, "Device request failed"),
@@ -277,6 +166,7 @@ def test_api_action_exceptions_are_not_returned(failure, status_code, message):
     assert response.status_code == status_code
     assert response.json == {"error": message}
     assert str(failure) not in response.get_data(as_text=True)
+
 
 
 @pytest.mark.parametrize(("failure", "status_code", "message"), [
@@ -297,6 +187,7 @@ def test_api_status_exceptions_are_not_returned(failure, status_code, message):
     assert str(failure) not in response.get_data(as_text=True)
 
 
+
 def test_api_action_unexpected_exception_returns_generic_error():
     private_detail = "private internal state"
 
@@ -310,12 +201,13 @@ def test_api_action_unexpected_exception_returns_generic_error():
     assert private_detail not in response.get_data(as_text=True)
 
 
+
 @pytest.mark.parametrize("failure", [
     OSError("private operating system detail"),
     RuntimeError("private runtime detail"),
 ])
 def test_board_discovery_exceptions_are_not_returned(failure):
-    from picopwm.boards import BoardRegistry
+    from picopwm.device.boards import BoardRegistry
 
     def discover():
         raise failure
@@ -324,6 +216,7 @@ def test_board_discovery_exceptions_are_not_returned(failure):
     assert response.status_code == 503
     assert response.json == {"error": "Board discovery failed"}
     assert str(failure) not in response.get_data(as_text=True)
+
 
 
 def test_status_exception_is_not_returned():
@@ -338,54 +231,6 @@ def test_status_exception_is_not_returned():
     assert response.json == {"error": "Device request failed"}
     assert private_detail not in response.get_data(as_text=True)
 
-
-def modern():
-    device, client = make()
-    identity = bytearray(IDENTITY)
-    identity[16] = 255
-    device.identity = bytes(identity)
-    return device, client
-
-
-def test_telemetry_and_optional_report_validation():
-    _, client = modern()
-    state = client.status()
-    assert state["identity"]["board_model"] == "Pico 2"
-    assert state["identity"]["ram_total_bytes"] == 532480
-    assert state["runtime"] == {"uptime_seconds": 123, "temperature_c": 22.9,
-                                "core0_load": 11.7, "core1_load": 67.2}
-    assert state["configuration"]["led_on"]
-    assert state["pins"] == {"channels": list(range(24)), "i2c_sda": 26, "i2c_scl": 27, "led": None}
-    assert p.decode_identity(bytes([*IDENTITY[:16], 255, IDENTITY[17]]))["can_read_pins"]
-    with pytest.raises(p.ProtocolError):
-        p.decode_pins(bytes([1, 48, *range(23), 26, 27, 25]))
-    with pytest.raises(p.ProtocolError):
-        p.decode_pins(bytes(27))
-    assert p.decode_runtime(struct.pack("<BIiHH", 1, 1, -2147483648, 0, 10000))["temperature_c"] is None
-    with pytest.raises(p.ProtocolError):
-        p.decode_runtime(struct.pack("<BIiHH", 1, 1, 0, 0, 10001))
-    with pytest.raises(p.ProtocolError):
-        p.decode_memory(struct.pack("<BII", 1, 100, 99))
-    _, legacy = make()
-    assert legacy.status()["runtime"] is None
-    assert legacy.status()["pins"] is None
-    with pytest.raises(DeviceError, match="capability"):
-        legacy.set_led(True)
-
-
-def test_save_and_reboot_validates_before_writes_and_orders_commands():
-    device, client = modern()
-    with pytest.raises(ValueError):
-        client.save_and_reboot(2, 64, [0, 1, 1], False)
-    with pytest.raises(ValueError):
-        client.save_and_reboot(0, 120, [0, 1, 1], False)
-    with pytest.raises(ValueError):
-        client.save_and_reboot(0, 64, [0, True, 1], False)
-    assert not device.sent
-    assert client.save_and_reboot(2, 64, [0, 1, 1], True) == {"rebooting": True}
-    assert [data[3] for data in device.sent] == [6, 4, 3, 3, 3, 7]
-    assert device.sent[-1][10] == 3
-    assert device.closed
 
 
 def test_pin_report_errors_are_explicit_and_disconnect_clears_the_map():
@@ -413,20 +258,10 @@ def test_pin_report_errors_are_explicit_and_disconnect_clears_the_map():
     state = client.status()
     assert not state["connected"] and state["pins"] is None
 
-def test_save_stops_at_first_failure_and_reboot_never_saves():
-    device, client = modern()
-    device.mode = "fail-bank"
-    with pytest.raises(DeviceError, match="target settings may have changed"):
-        client.save_and_reboot(0, 64, [0, 1, 1], False)
-    assert [data[3] for data in device.sent] == [6, 4, 3]
-    device, client = modern()
-    client.reboot()
-    assert [data[3] for data in device.sent] == [9]
-    assert device.sent[0][10] == p.FLAG_CONFIRM_SAVE
 
 
-def test_board_registry_and_routes_keep_selection_pinned():
-    from picopwm.boards import BoardRegistry
+def test_routes_keep_board_selection_pinned():
+    from picopwm.device.boards import BoardRegistry
 
     discovered = [{"path": b"/dev/a", "serial_number": "A", "product_string": "PicoPWM"},
                   {"path": b"/dev/b", "serial_number": "B", "product_string": "PicoPWM"}]
@@ -455,18 +290,12 @@ def test_board_registry_and_routes_keep_selection_pinned():
     assert http.get("/api/host").json["dashboard_type"] == "Python"
     for path in ["/", "/css/direct.css", "/js/view.mjs", "/js/device.mjs", "/js/client.mjs"]:
         assert http.get(path).status_code == 200
-    discovered[0]["path"] = b"/dev/new"
-    assert registry.boards()["boards"][0]["id"] == a
-    assert registry.client(a) is devices["A"][1]
-    discovered[:] = []
-    assert not registry.boards()["boards"]
-    assert registry.client(a) is devices["A"][1]
     registry.close()
-    assert devices["A"][0].closed
+
 
 
 def test_scan_errors_are_generic_and_logged(caplog):
-    from picopwm.boards import BoardRegistry
+    from picopwm.device.boards import BoardRegistry
 
     registry = BoardRegistry(discover=lambda: [{"path": b"a", "serial_number": "same"},
                                               {"path": b"b", "serial_number": "same"}])
@@ -476,8 +305,9 @@ def test_scan_errors_are_generic_and_logged(caplog):
     assert "duplicate PicoPWM board identity" in caplog.text
 
 
+
 def test_bind_and_dashboard_reject_remote_and_foreign_callers():
-    from picopwm.app import bind_host
+    from picopwm.dashboard.app import bind_host
 
     assert bind_host(None, None) == "127.0.0.1"
     assert bind_host("localhost", "") == "localhost"
@@ -506,6 +336,7 @@ def test_bind_and_dashboard_reject_remote_and_foreign_callers():
     assert create_app(client).test_client().post("/api/login", json={"token": "x"}).status_code == 404
 
 
+
 def test_python_login_cookie_is_independent_of_dotnet_and_legacy_cookies():
     import hashlib
 
@@ -517,19 +348,3 @@ def test_python_login_cookie_is_independent_of_dotnet_and_legacy_cookies():
     assert http.post("/api/login", json={"token": "secret"}).status_code == 200
     http.set_cookie("picopwm_dotnet_auth", "other")
     assert http.get("/api/host").status_code == 200
-
-
-def test_discovery_matches_vendor_usage_or_constrained_picouart_style_fallback(monkeypatch):
-    from picopwm import transport
-    from types import SimpleNamespace
-
-    devices = [
-        {"path": b"usage", "usage_page": p.USAGE_PAGE, "usage": p.USAGE},
-        {"path": b"fallback", "product_string": "PicoPWM USB CDC HID", "interface_number": 2},
-        {"path": b"interface", "interface_number": 2},
-        {"path": b"wrong-usage", "usage_page": 1, "usage": 1, "interface_number": 2},
-        {"path": b"wrong-interface", "product_string": "PicoPWM USB CDC HID", "interface_number": 0},
-        {"path": b"unknown", "product_string": "other", "interface_number": 2},
-    ]
-    monkeypatch.setattr(transport, "hid", SimpleNamespace(enumerate=lambda vid, pid: devices))
-    assert [info["path"] for info in transport.enumerate_devices()] == [b"usage", b"fallback", b"interface"]

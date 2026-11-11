@@ -8,7 +8,7 @@ import os
 import threading
 
 from .client import DeviceError, PicoPwmHid
-from .transport import enumerate_devices, open_device
+from ..hid.transport import enumerate_devices, open_device
 
 
 class BoardRegistry:

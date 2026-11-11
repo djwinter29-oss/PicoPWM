@@ -208,7 +208,9 @@ another index. If `ensurepip` is unavailable, it can use the base interpreter's
 pip with `--python`; otherwise install pip or the OS Python venv package.
 
 Applications and tests can inject a client with `create_app(client)` from
-`picopwm.app`.
+`picopwm.dashboard.app`.
+Package internals are grouped into `dashboard/` (HTTP), `device/` (client and registry),
+and `hid/` (transport and report codecs). Import from these subpackages instead of the former flat modules.
 
 Release wheels bundle the dashboard assets. Source checkouts serve the shared
 assets from `host/web/src/` and `host/direct/src/`; edit those canonical files rather than

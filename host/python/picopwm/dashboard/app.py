@@ -14,9 +14,9 @@ from urllib.parse import urlparse
 
 from flask import Flask, jsonify, request, send_from_directory
 
-from .client import DeviceError, PicoPwmHid
-from .boards import BoardRegistry
-from .protocol import ProtocolError
+from ..device.client import DeviceError, PicoPwmHid
+from ..device.boards import BoardRegistry
+from ..hid.protocol import ProtocolError
 
 
 def _int(payload: dict, name: str) -> int:
@@ -80,9 +80,9 @@ def _credential_accepted(token: str, authorization: str | None, cookie: str | No
 def create_app(client: PicoPwmHid | None = None, registry: BoardRegistry | None = None,
                token: str | None = None) -> Flask:
     # Wheels bundle the dashboard as picopwm/web; source checkouts use host/web/src.
-    web_root = Path(__file__).resolve().parent / "web"
+    web_root = Path(__file__).resolve().parent.parent / "web"
     if not (web_root / "index.html").is_file():
-        web_root = Path(__file__).resolve().parents[2] / "web" / "src"
+        web_root = Path(__file__).resolve().parents[3] / "web" / "src"
     app = Flask(__name__, static_folder=web_root, static_url_path="")
     app.config["PICOPWM_TOKEN"] = token or ""
     boards = registry or BoardRegistry(serial=os.environ.get("PICOPWM_SERIAL"),

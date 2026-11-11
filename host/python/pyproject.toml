@@ -2,12 +2,12 @@
 # Copyright (c) 2026 Ji Dong
 
 [build-system]
-requires = ["setuptools>=77"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.27", "hatch-vcs>=0.5"]
+build-backend = "hatchling.build"
 
 [project]
 name = "picopwm"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Python host tools and Flask management interface for PicoPWM"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -39,15 +39,22 @@ Changelog = "https://github.com/djwinter29-oss/PicoPWM/releases"
 test = ["pytest>=8"]
 
 [project.scripts]
-picopwm = "picopwm.app:main"
-picopwm-web = "picopwm.app:main"
+picopwm = "picopwm.dashboard.app:main"
+picopwm-web = "picopwm.dashboard.app:main"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["picopwm*"]
+[tool.hatch.version]
+source = "vcs"
+tag-pattern = '^v(?P<version>\d+\.\d+\.\d+)$'
 
-[tool.setuptools.package-data]
-picopwm = ["web/**/*"]
+[tool.hatch.version.raw-options]
+root = "../.."
+git_describe_command = "git describe --dirty --tags --long --match v[0-9]*.[0-9]*.[0-9]*"
+
+[tool.hatch.build]
+artifacts = ["picopwm/web/**"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["picopwm"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

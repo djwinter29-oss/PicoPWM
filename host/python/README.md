@@ -51,6 +51,11 @@ Select the board; use **Rescan** if needed. Stop the service with `Ctrl+C`.
 The older `picopwm-web` command remains an alias.
 Routine Werkzeug request logs are suppressed; warnings and errors remain visible.
 
+Hatchling and hatch-vcs derive package versions from Git: a clean `v1.2.3` tag builds `1.2.3`;
+later commits get development versions, and dirty checkouts include a local version marker.
+Clone with Git history and tags available. Editable-install metadata updates when reinstalled.
+Manual CI builds use `SETUPTOOLS_SCM_PRETEND_VERSION` to select an explicit version.
+
 **Before driving outputs:** GPIO signals are 3.3 V only. Banks default to monitor-only.
 Configure the intended bank as a generator and reboot before setting output.
 Follow the [wiring guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/hardware-setup.md).
@@ -60,7 +65,7 @@ Follow the [wiring guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/do
 Read status without changing outputs:
 
 ```python
-from picopwm.client import PicoPwmHid
+from picopwm.device.client import PicoPwmHid
 
 client = PicoPwmHid()
 try:
@@ -77,7 +82,7 @@ finally:
 For multiple boards, replace the client initialization, retaining the `try/finally` block:
 
 ```python
-from picopwm.transport import open_device
+from picopwm.hid.transport import open_device
 
 client = PicoPwmHid(lambda: open_device(serial="YOUR_BOARD_SERIAL"))
 ```
@@ -117,6 +122,21 @@ No minimum hardware-verified firmware release has been established.
 
 See [setup and troubleshooting](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/setup-and-troubleshooting.md).
 For bug reports, include package/firmware versions, OS, and the exact error message.
+
+## Source Organization
+
+The package stays under `host/python/picopwm/`, with functional subpackages:
+
+- `dashboard/`: Flask HTTP interface and server entry point.
+- `device/`: thread-safe device client and board registry.
+- `hid/`: USB discovery, transport, and report codecs.
+
+Import directly from these subpackages; the former flat module paths have been removed.
+CLI commands `picopwm` and `picopwm-web` are unchanged. No extra `src/` layer is needed.
+
+Tests mirror these subpackages under `tests/dashboard/`, `tests/device/`, and `tests/hid/`;
+shared device doubles live in `tests/fakes.py`. Run them with `python -m pytest -q host/python/tests`
+from the repository root.
 
 ## License
 

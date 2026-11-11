@@ -9,8 +9,8 @@ import threading
 import time
 from typing import Any, Callable
 
-from . import protocol as p
-from .transport import open_device
+from ..hid import protocol as p
+from ..hid.transport import open_device
 
 ACTION_TIMEOUT_S = 3.0
 SAVE_TIMEOUT_S = 15.0

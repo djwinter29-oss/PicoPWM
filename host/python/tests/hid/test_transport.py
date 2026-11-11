@@ -16,13 +16,17 @@ def test_discovery_matches_vendor_usage_or_constrained_picouart_style_fallback(m
     devices = [
         {"path": b"usage", "usage_page": p.USAGE_PAGE, "usage": p.USAGE},
         {"path": b"fallback", "product_string": "PicoPWM USB CDC HID", "interface_number": 2},
+        {"path": b"current", "product_string": "PicoPWM", "interface_number": 2},
         {"path": b"interface", "interface_number": 2},
         {"path": b"wrong-usage", "usage_page": 1, "usage": 1, "interface_number": 2},
         {"path": b"wrong-interface", "product_string": "PicoPWM USB CDC HID", "interface_number": 0},
+        {"path": b"current-wrong-interface", "product_string": "PicoPWM", "interface_number": 0},
         {"path": b"unknown", "product_string": "other", "interface_number": 2},
     ]
     monkeypatch.setattr(transport, "hid", SimpleNamespace(enumerate=lambda vid, pid: devices))
-    assert [info["path"] for info in transport.enumerate_devices()] == [b"usage", b"fallback", b"interface"]
+    assert [info["path"] for info in transport.enumerate_devices()] == [
+        b"usage", b"fallback", b"current", b"interface",
+    ]
 
 
 @pytest.mark.parametrize(("serial", "path", "expected"), [

@@ -20,9 +20,9 @@
 #define USB_BCD 0x0200
 
 /** @brief Manufacturer string exposed in the USB string table. */
-#define USB_STR_MANUFACTURER "PicoPWM"
+#define USB_STR_MANUFACTURER "djwinter"
 /** @brief Product string exposed in the USB string table. */
-#define USB_STR_PRODUCT "PicoPWM USB CDC HID"
+#define USB_STR_PRODUCT "PicoPWM"
 /** @brief Interface string for the CDC command interface. */
 #define USB_STR_CDC "CDC Command"
 /** @brief Prefix for the board-specific HID interface name shown to hosts. */

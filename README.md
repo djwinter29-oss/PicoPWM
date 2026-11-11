@@ -155,6 +155,8 @@ See the [documentation index](docs/README.md) for the full map.
 
 PicoPWM uses USB VID `0x2E8A` and PID `0x116C`, allocated by Raspberry Pi through its
 [USB PID program](https://github.com/raspberrypi/usb-pid).
+The USB manufacturer string is `djwinter` and the product string is `PicoPWM`; CDC and HID remain
+separate interfaces of the same composite device.
 
 The CDC, HID, and I2C interfaces are intended for trusted local access and have no firmware-level authentication.
 See [SECURITY.md](SECURITY.md) for the trust model and vulnerability reporting.

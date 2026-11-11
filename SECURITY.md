@@ -1,24 +1,67 @@
 # Security
 
+To report a suspected vulnerability, see [Report a Vulnerability](#report-a-vulnerability).
+
+## Trust Model
+
+PicoPWM is a locally controlled hardware tool, not a locked-down appliance. It trusts users with physical access
+to the board and applications authorized to access its interfaces.
+Trust in a physical operator does not extend to every website or application on their computer.
+
+- The USB CDC shell, USB HID interface, and I2C slave intentionally have no firmware-level authentication.
+  PWM control and configuration changes through these interfaces are intended functionality.
+- Physical access permits reflashing through BOOTSEL. Protection against a physical operator replacing the firmware
+  is outside the project's security model.
+- Access is controlled through operating-system device permissions, browser device grants, dashboard authentication
+  where configured, and physical control of the I2C bus. Grant access only to trusted users and applications.
+
+## Vulnerability Reporting Scope
+
+Report defects that violate the trust model, including:
+
+- Device control by an untrusted website or remote client without authorization.
+- Bypasses of configured dashboard authentication or other access controls.
+- Memory corruption caused by malformed input.
+
+These are examples of reportable defects, not a list of known vulnerabilities. Authorized shell and dashboard
+access, device selection, and configuration changes are not vulnerabilities by themselves.
+
+For host setup and deployment guidance, see the [Python host guide](host/python/README.md),
+[.NET host guide](host/dotnet/README.md), and [WebHID guide](host/webhid/README.md).
+
+## Supported Versions
+
+Security fixes target only the firmware and Python, .NET, and WebHID host applications associated with the
+[latest stable PicoPWM release](https://github.com/djwinter29-oss/PicoPWM/releases/latest).
+Older releases and development or prerelease builds are not supported for security fixes.
+Users of those versions should upgrade to the latest stable release.
+
 ## Report a Vulnerability
 
-Please report suspected vulnerabilities privately through the repository's **Security** tab using **Report a
+Report suspected vulnerabilities privately through the repository's **Security** tab using **Report a
 vulnerability**. Do not publish exploit details in an issue or pull request.
+
+Include the following in your private report:
+
+- Affected firmware or host application version, board model, and relevant environment details.
+- Steps to reproduce the issue, with a minimal example where possible.
+- Expected and observed behavior, security impact, and any access required to reproduce it.
+
+Do not include credentials, tokens, or other sensitive information.
 
 If private reporting is unavailable, open a minimal issue asking maintainers for a private reporting channel; do not
 include technical details until one is provided.
 
-## Device Security Notes
+Maintainers triage reports privately and may request additional information to reproduce and assess the issue.
+For confirmed vulnerabilities, maintainers coordinate fixes and public disclosure with the reporter.
+Response and resolution times depend on maintainer availability and the issue's complexity; no fixed timeline
+is guaranteed. Please coordinate disclosure before publishing exploit details.
 
-- The USB identity `0x2E8A:0x116C` is allocated to PicoPWM by Raspberry Pi. USB identifiers are not
-  authentication and do not establish that a connected device is trusted.
-- The USB CDC shell, USB HID interface and I2C slave have no authentication. Any local process that can open the CDC
-  or HID device, and any device on the I2C bus, can change PWM outputs and the startup configuration. Restrict
-  operating-system access to the device nodes to trusted users and keep the I2C bus private.
-- Saving a configuration writes flash and can select an overclocked system clock. A saved profile that prevents boot
-  is recovered by holding BOOTSEL while connecting USB and reflashing.
-- The host dashboards are local tools, not network services. They bind to loopback unless
-  `PICOPWM_TOKEN` is set. HTTP error bodies use fixed sentences; the server log keeps the
-  underlying detail. `GET /api/boards` includes the local `device_path` so a dashboard can
-  reopen the HID node, and an authenticated client on a non-loopback bind can read that path.
-  Do not expose the dashboards on untrusted networks.
+## Operational Safety
+
+Authorized control can still produce unsafe outputs or settings. Wiring mistakes, unsuitable PWM settings, and
+intentional overclocking are operational risks, not security vulnerabilities by themselves. Follow the
+[hardware setup guide](docs/guides/hardware-setup.md).
+
+Saving a configuration writes flash and can select an overclocked system clock. A saved profile that prevents boot
+can be recovered by holding BOOTSEL while connecting USB and reflashing.

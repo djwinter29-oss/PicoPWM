@@ -33,6 +33,9 @@ const STATUS_NAMES = ["OK", "BUSY", "INVALID", "UNAVAILABLE", "TIMEOUT", "APPLY_
 const PENDING = 6;
 const INVALID = 2;
 
+/** A host-side deadline expired; the native operation may still complete. */
+class HidTimeoutError extends Error {}
+
 export class DeviceError extends Error {
   constructor(message, status = null, cause) {
     super(message, { cause });
@@ -208,6 +211,8 @@ export function matchesPicoPwm(device) {
 }
 
 export class PicoPwmWebHid {
+  #refreshing = null;
+
   constructor(hid, onChange = () => {}) {
     this.hid = hid;
     this.onChange = onChange;
@@ -227,6 +232,7 @@ export class PicoPwmWebHid {
       this.generation++;
       this.device = null;
       this.busy = false;
+      this.#refreshing = null;
       this.update({ phase: "disconnected", message: "Device unplugged", error: null, dashboard: emptyDashboard() });
     });
   }
@@ -244,18 +250,24 @@ export class PicoPwmWebHid {
     return generation === this.generation && this.device !== null;
   }
 
-  async withTimeout(operation, timeout) {
+  #requireRecovery(error) {
+    this.ioBlocked = true;
+    this.update({ phase: "blocked", error: error.message, message: "Disconnect and reconnect required" });
+    return error;
+  }
+
+  async withTimeout(operation, timeout,
+    message = "HID operation timed out; outcome is unconfirmed. Disconnect before continuing.") {
     let timer;
     const generation = this.generation;
-    const timeoutError = new Error("HID operation timed out; outcome is unconfirmed. Disconnect before continuing.");
+    const timeoutError = new HidTimeoutError(message);
     try {
       return await Promise.race([Promise.resolve().then(operation), new Promise((_, reject) => {
         timer = globalThis.setTimeout(() => reject(timeoutError), timeout);
       })]);
     } catch (error) {
       if (error === timeoutError && this.isCurrent(generation)) {
-        this.ioBlocked = true;
-        this.update({ phase: "blocked", error: error.message, message: "Disconnect and reconnect required" });
+        this.#requireRecovery(error);
       }
       throw error;
     } finally {
@@ -368,17 +380,24 @@ export class PicoPwmWebHid {
       error: errors.length ? errors.join("; ") : null });
   }
 
-  async refresh() {
+  refresh() {
     const generation = this.generation;
+    if (this.#refreshing) return this.#refreshing;
     if (!this.device || this.busy || this.ioBlocked || this.state.phase !== "connected") return;
     this.busy = true;
-    try {
-      await this.#readDashboard(generation);
-    } catch (error) {
-      if (this.isCurrent(generation) && !this.ioBlocked) this.update({ error: error.message });
-    } finally {
-      if (generation === this.generation) this.busy = false;
-    }
+    this.#refreshing = (async () => {
+      try {
+        await this.#readDashboard(generation);
+      } catch (error) {
+        if (this.isCurrent(generation) && !this.ioBlocked) this.update({ error: error.message });
+      } finally {
+        if (generation === this.generation) {
+          this.busy = false;
+          this.#refreshing = null;
+        }
+      }
+    })();
+    return this.#refreshing;
   }
 
   nextTransactionId() {
@@ -389,7 +408,8 @@ export class PicoPwmWebHid {
   /** Own the complete logical command, including all writes and readback. */
   async #command(action) {
     const generation = this.generation;
-    if (!this.device || !this.state.dashboard.identity || this.busy || this.ioBlocked
+    if (this.#refreshing) await this.#refreshing;
+    if (!this.isCurrent(generation) || !this.state.dashboard.identity || this.busy || this.ioBlocked
       || this.state.phase !== "connected") throw new Error("Device is not ready for a command.");
     this.busy = true;
     this.update({ phase: "writing", message: "Sending command", error: null });
@@ -446,7 +466,10 @@ export class PicoPwmWebHid {
           if (result.status !== 0) throw new DeviceError(`Command failed: ${result.status_name}.`, result.status);
           return result;
         }
-        if (Date.now() >= deadline) throw new Error("Timed out awaiting result; outcome is unconfirmed.");
+        if (Date.now() >= deadline) {
+          throw this.#requireRecovery(new HidTimeoutError(
+            "Timed out awaiting result; outcome is unconfirmed. Disconnect before continuing."));
+        }
         await new Promise(resolve => globalThis.setTimeout(resolve, ACTION_POLL_MS));
       }
     } catch (error) {
@@ -520,10 +543,10 @@ export class PicoPwmWebHid {
   }
 
   async saveConfiguration(acknowledgeOverclock) {
-    const profile = this.state.dashboard.configuration?.clock_profile;
-    if (profile === undefined) throw new Error("Read the configuration first.");
-    if (profile > 1 && !acknowledgeOverclock) throw new Error("Acknowledge the overclock first.");
     return this.#command(async (perform, refresh) => {
+      const profile = this.state.dashboard.configuration?.clock_profile;
+      if (profile === undefined) throw new Error("Read the configuration first.");
+      if (profile > 1 && !acknowledgeOverclock) throw new Error("Acknowledge the overclock first.");
       await perform(OPERATION.SAVE_CONFIG, { flags: 1 | (profile > 1 ? 2 : 0) });
       await refresh();
     });
@@ -582,6 +605,7 @@ export class PicoPwmWebHid {
     this.update({ phase: "connecting", message: "Selecting PicoPWM HID interface", error: null,
       dashboard: emptyDashboard() });
     let selected;
+    let opening;
     try {
       const devices = await this.hid.requestDevice({ filters: [{ ...DEVICE_FILTER }] });
       if (generation !== this.generation) return;
@@ -593,9 +617,13 @@ export class PicoPwmWebHid {
         throw new Error("Select one PicoPWM vendor HID interface.");
       }
       selected = devices[0];
-      if (!selected.opened) await selected.open();
+      if (!selected.opened) {
+        opening = selected.open();
+        await this.withTimeout(() => opening, TRANSFER_TIMEOUT_MS, "Opening HID interface timed out.");
+        opening = null;
+      }
       if (generation !== this.generation) {
-        if (selected.opened) await selected.close();
+        if (selected.opened) await this.#closeDevice(selected);
         return;
       }
       this.device = selected;
@@ -608,28 +636,57 @@ export class PicoPwmWebHid {
         throw new Error(this.state.dashboard.identity_error ?? "Identity unavailable");
       }
     } catch (error) {
-      if (selected?.opened) await selected.close().catch(() => {});
       if (generation !== this.generation) return;
+      const cleanupGeneration = ++this.generation;
       this.device = null;
-      this.update({ phase: "disconnected", message: "Connection failed", error: error.message,
+      this.#refreshing = null;
+      this.busy = false;
+      let cleanupError;
+      if (opening && error instanceof HidTimeoutError) {
+        // Native open cannot be canceled; close it if it eventually succeeds.
+        opening.then(() => selected.opened && this.#closeDevice(selected)).catch(closeError => {
+          console.error("Late HID open cleanup failed:", closeError);
+        });
+      } else if (selected?.opened) {
+        try {
+          await this.#closeDevice(selected);
+        } catch (closeError) {
+          cleanupError = closeError;
+        }
+      }
+      const recovery = Boolean(opening && error instanceof HidTimeoutError || cleanupError);
+      if (cleanupGeneration !== this.generation) return;
+      this.update({ phase: recovery ? "recovery" : "disconnected",
+        message: recovery ? "Unplug the board and reload this page before reconnecting" : "Connection failed",
+        error: `${error.message}${cleanupError ? ` Cleanup failed: ${cleanupError.message}` : ""}${
+          recovery ? " Unplug the board and reload this page before reconnecting." : ""}`,
         dashboard: emptyDashboard() });
     }
   }
 
+  async #closeDevice(device) {
+    await this.withTimeout(() => device.close(), TRANSFER_TIMEOUT_MS, "Closing HID interface timed out.");
+  }
+
   async disconnect() {
-    if (!this.hid) return;
+    if (!this.hid || this.state.phase === "recovery") return;
     const device = this.device;
-    this.generation++;
+    const generation = ++this.generation;
     this.device = null;
     this.busy = false;
+    this.#refreshing = null;
     this.update({ phase: "disconnecting", message: "Closing HID interface" });
     let error = null;
     try {
-      if (device?.opened) await device.close();
+      if (device?.opened) await this.#closeDevice(device);
     } catch (closeError) {
       error = closeError.message;
     }
-    this.ioBlocked = false;
-    this.update({ phase: "disconnected", message: "Device disconnected", error, dashboard: emptyDashboard() });
+    if (generation !== this.generation) return;
+    this.ioBlocked = Boolean(error);
+    this.update({ phase: error ? "recovery" : "disconnected",
+      message: error ? "Unplug the board and reload this page before reconnecting" : "Device disconnected",
+      error: error ? `${error} Unplug the board and reload this page before reconnecting.` : null,
+      dashboard: emptyDashboard() });
   }
 }

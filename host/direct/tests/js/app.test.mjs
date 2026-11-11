@@ -13,7 +13,7 @@ import { promisify } from "node:util";
 const execute = promisify(execFile);
 const root = fileURLToPath(new URL("../../", import.meta.url));
 
-test("browser: connect, edit, save acknowledgement, timeout recovery, disconnect", { timeout: 45000 }, async t => {
+test("browser: connect, edit, save acknowledgement, timeout recovery, disconnect", { timeout: 75000 }, async t => {
   const chromium = process.env.CHROMIUM || "chromium";
   try {
     await execute(chromium, ["--version"]);
@@ -31,8 +31,9 @@ test("browser: connect, edit, save acknowledgement, timeout recovery, disconnect
   await writeFile(index, html.replace(/src="js\/app\.mjs[^"]*"/, 'src="../tests/fixtures/browser.mjs"'));
   const args = ["--headless", "--disable-gpu", "--no-first-run", "--enable-logging=stderr",
     `--user-data-dir=${join(profile, "profile")}`, "--allow-file-access-from-files",
-    "--dump-dom", "--timeout=20000", "--virtual-time-budget=12000", pathToFileURL(index).href];
+    "--dump-dom", "--timeout=30000", "--virtual-time-budget=30000", pathToFileURL(index).href];
   if (process.env.CHROMIUM_NO_SANDBOX === "1") args.unshift("--no-sandbox");
-  const { stdout, stderr } = await execute(chromium, args, { timeout: 35000, maxBuffer: 1024 * 1024 });
-  assert.match(stdout, /data-browser-result="PASS"/, `${stdout.slice(-2500)}\n${stderr.slice(-2500)}`);
+  const { stdout, stderr } = await execute(chromium, args, { timeout: 65000, maxBuffer: 1024 * 1024 });
+  assert.match(stdout, /data-browser-result="PASS"/,
+    `${stdout.match(/<body[^>]*>/)?.[0] ?? "No page output"}\n${stdout.slice(-2500)}\n${stderr.slice(-2500)}`);
 });

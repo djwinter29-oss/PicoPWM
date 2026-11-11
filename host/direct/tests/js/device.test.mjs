@@ -303,8 +303,10 @@ test("refresh timeout remains blocked until disconnect and reconnect", async t =
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const reading = client.refresh();
   await started.promise;
+  const queued = assert.rejects(client.stop(), /not ready/);
   t.mock.timers.tick(3001);
   await reading;
+  await queued;
   assert.equal(client.state.phase, "blocked");
   assert.equal(client.ioBlocked, true);
   assert.match(client.state.error, /timed out/i);
@@ -366,4 +368,124 @@ test("configuration readback remains inside the logical command", async () => {
   await changing;
   assert.equal(client.state.phase, "connected");
   assert.equal(client.busy, false);
+});
+
+test("a command waits for polling, but a second command cannot interleave", async () => {
+  const device = fakeDevice({ capabilities: 31, pendingPolls: 0 });
+  const client = await connected(device);
+  const receive = device.receiveFeatureReport.bind(device);
+  const started = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  device.receiveFeatureReport = async id => {
+    if (id === 2) {
+      started.resolve();
+      await release.promise;
+    }
+    return receive(id);
+  };
+  const polling = client.refresh();
+  await started.promise;
+  const command = client.setLed(true);
+  const contender = assert.rejects(client.stop(), /not ready/);
+  assert.equal(device.sent.length, 0);
+  release.resolve();
+  await Promise.all([polling, command, contender]);
+  assert.deepEqual(device.sent.map(request => request[2]), [OPERATION.SET_LED]);
+  assert.equal(client.state.phase, "connected");
+});
+
+test("a queued command cannot cross a disconnect and reconnect", async () => {
+  const device = fakeDevice({ capabilities: 31, pendingPolls: 0 });
+  const client = await connected(device);
+  const receive = device.receiveFeatureReport.bind(device);
+  const started = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  device.receiveFeatureReport = async id => {
+    if (id === 2) {
+      started.resolve();
+      await release.promise;
+    }
+    return receive(id);
+  };
+  const polling = client.refresh();
+  await started.promise;
+  const queued = assert.rejects(client.setLed(true), /not ready/);
+  await client.disconnect();
+  device.receiveFeatureReport = receive;
+  await client.connect();
+  release.resolve();
+  await Promise.all([polling, queued]);
+  assert.equal(device.sent.length, 0);
+  assert.equal(client.state.phase, "connected");
+});
+
+test("matching PENDING results past the deadline require reconnect", async t => {
+  const device = fakeDevice({ capabilities: 31, pendingPolls: 1000 });
+  const client = await connected(device);
+  let now = 0;
+  t.mock.method(Date, "now", () => { now += 4000; return now; });
+  await assert.rejects(client.setLed(true), /Timed out awaiting result/);
+  assert.equal(client.state.phase, "blocked");
+  assert.equal(client.ioBlocked, true);
+  assert.match(client.state.error, /Disconnect before continuing/);
+  await assert.rejects(client.stop(), /not ready/);
+  assert.equal(device.sent.length, 1);
+});
+
+test("open timeout gives recovery guidance and closes a late native open", async t => {
+  const device = fakeDevice({ pendingPolls: 0 });
+  const started = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const closed = Promise.withResolvers();
+  device.open = async () => {
+    started.resolve();
+    await release.promise;
+    device.opened = true;
+  };
+  device.close = async () => { device.opened = false; closed.resolve(); };
+  const client = new PicoPwmWebHid({ addEventListener() {}, requestDevice: async () => [device] });
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const connecting = client.connect();
+  await started.promise;
+  t.mock.timers.tick(3001);
+  await connecting;
+  assert.equal(client.state.phase, "recovery");
+  assert.match(client.state.error, /Opening HID interface timed out.*reload/);
+  await client.connect();
+  release.resolve();
+  await closed.promise;
+  assert.equal(device.opened, false);
+  assert.equal(client.state.phase, "recovery");
+  assert.equal(client.device, null);
+});
+
+test("close timeout leaves actionable recovery instead of an indefinite closing phase", async t => {
+  const device = fakeDevice({ pendingPolls: 0 });
+  const client = await connected(device);
+  const started = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  device.close = async () => { started.resolve(); await release.promise; device.opened = false; };
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const closing = client.disconnect();
+  await started.promise;
+  t.mock.timers.tick(3001);
+  await closing;
+  assert.equal(client.state.phase, "recovery");
+  assert.match(client.state.error, /Closing HID interface timed out.*reload/);
+  await assert.rejects(client.stop(), /not ready/);
+  await client.disconnect();
+  await client.connect();
+  assert.equal(client.state.phase, "recovery");
+  release.resolve();
+  await Promise.resolve();
+  assert.equal(client.state.phase, "recovery");
+});
+
+test("failed connection cleanup reports both the original and close errors", async () => {
+  const device = fakeDevice();
+  device.receiveFeatureReport = async () => { throw new Error("Identity read failed"); };
+  device.close = async () => { throw new Error("USB close failed"); };
+  const client = await connected(device);
+  assert.equal(client.state.phase, "recovery");
+  assert.match(client.state.error, /Identity read failed.*Cleanup failed: USB close failed/);
 });

@@ -55,6 +55,7 @@ function render(state) {
   if (!connected && channelDialog.open) channelDialog.close();
   connection.dataset.state = connected ? "connected" : "disconnected";
   $("#connection-label").textContent = state.phase === "unsupported" ? "Unavailable"
+    : state.phase === "recovery" ? "Recovery required"
     : state.phase === "blocked" ? "Reconnect required"
       : connected ? "Connected" : state.phase === "connecting" ? "Connecting" : "Disconnected";
   connectButton.textContent = state.phase === "connecting" ? "Connecting..."

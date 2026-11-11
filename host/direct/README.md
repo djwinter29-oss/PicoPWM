@@ -100,14 +100,21 @@ executable a failure; Linux host CI requires the runner's installed Google Chrom
 enabled unless an isolated test environment explicitly sets `CHROMIUM_NO_SANDBOX=1`.
 
 Commands reserve the client through all writes and readback, including the complete Save & Reboot
-sequence and INVALID reconciliation. A concurrent command is rejected; background refresh waits for
-the next poll instead of interleaving. Save & Reboot snapshots roles before validating the draft.
+sequence and INVALID reconciliation. A user command waits for an active background refresh, then
+rechecks the connection before writing; competing commands are rejected. Background refresh never
+interleaves with a command. Save & Reboot snapshots roles before validating the draft.
 Firmware failures expose numeric `DeviceError.status`; wrapped failures retain their `cause`.
 The selected HID collection must match both vendor usage page `0xff00` and usage `0x01`.
 
-A HID transfer timeout leaves the connection blocked with a visible reconnect-required error. Commands
+A HID transfer or command-result deadline leaves the connection blocked with a visible reconnect-required error. Commands
 stay disabled, while Disconnect remains available. Disconnect and reconnect before retrying: WebHID
 cannot cancel the outstanding transfer, and a timed-out write may have taken effect.
+
+Native device open/close waits are bounded to three seconds (the device chooser is not timed out).
+If opening times out or closing fails, the page displays **Recovery required** with instructions to unplug
+the board and reload before reconnecting. Native work is not canceled: a late successful open is closed,
+and late completion cannot restore the timed-out connection. Cleanup failures are reported rather than
+silently ignored.
 
 ### Dashboard version and cache identity
 

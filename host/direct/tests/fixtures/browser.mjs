@@ -6,6 +6,7 @@ import { fakeDevice } from "./device.mjs";
 const $ = selector => document.querySelector(selector);
 const check = (condition, message) => { if (!condition) throw new Error(message); };
 const waitFor = async (condition, message) => {
+  document.body.dataset.browserStage = message;
   for (let attempt = 0; attempt < 500; attempt++) {
     if (condition()) return;
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -67,8 +68,11 @@ async function run() {
     device.receiveFeatureReport = receive;
     $("#connect").click();
     await waitFor(() => !$("#toggle-led").disabled, "Reconnect did not restore commands");
+    device.close = () => new Promise(() => {});
     $("#connect").click();
-    await waitFor(() => $("#connect").textContent === "Connect", "Final disconnect did not complete");
+    await waitFor(() => $("#connection-label").textContent === "Recovery required", "Close timeout did not show recovery");
+    check($("#connect").disabled && $("#toggle-led").disabled, "Recovery allowed another open or command");
+    check(/Closing HID interface timed out.*reload/.test($("#status-message").textContent), "Close recovery guidance was hidden");
     document.body.dataset.browserResult = "PASS";
   } catch (error) {
     document.body.dataset.browserResult = "FAIL";

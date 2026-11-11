@@ -1,130 +1,69 @@
 # PicoPWM Direct Dashboard
 
-**Control and monitor 24 PWM channels directly from your browser.** The page reads PicoPWM identity, configuration,
-and realized channel state over a vendor HID interface, and sends channel, bank, I2C address, clock profile, and save
-commands. It follows the
-[HID report reference](../../docs/design/usb/hid-report-reference.md); there is no application backend.
+Control and monitor 24 PWM channels directly from your browser over USB HID. No Python or .NET host service is needed.
 
-Direct Dashboard connects to the board through the browser's WebHID API, without a Python or .NET host service.
-Its source and launcher are `host/direct/src/` and `tools/host/run-direct.sh`.
-The published dashboard URL is unchanged.
-
-This directory contains `src/` for the published site and shared assets, `tests/` for hardware-free checks,
-and this README. Only `src/` is served or deployed.
+[Open Direct Dashboard](https://djwinter29-oss.github.io/PicoPWM/) ·
+[Firmware and wiring](../../README.md) · [HID reference](../../docs/design/usb/hid-report-reference.md)
 
 ## Requirements
 
-- Desktop Google Chrome or Microsoft Edge with browser USB HID access enabled; Firefox, Safari, and most mobile browsers are not
-  supported
-- A Raspberry Pi Pico or Pico 2 running PicoPWM firmware that implements the HID interface (`0x2E8A:0x116C`, HID
-  `product_id` `0x0003`), connected to the computer running the browser
-- Browser permission and OS access to the board's HID interface; Linux needs a udev rule for the device
+- Desktop Chrome or Edge, using HTTPS or a loopback address. Firefox, Safari, and mobile browsers are not supported.
+- A Pico or Pico 2 running compatible PicoPWM firmware, connected to the browser's computer by a USB data cable.
+- Browser device permission and OS access; Linux needs [HID permissions setup](../../docs/guides/setup-and-troubleshooting.md#linux-hid-access).
 
 ## Quick Start
 
-1. Connect the board over a USB data cable and open the page over HTTPS or `localhost`.
-2. Click **Connect** and choose the PicoPWM vendor HID interface.
-3. Read identity, bank roles, and per-channel frequency and duty. Status refreshes every second.
-4. Click a generator's frequency or duty in **PWM control and monitoring** to edit
-   both values in a channel dialog, then click **Apply**. Monitor values are read-only.
-   Edit boot settings in **Boot configuration**.
-5. Click **Save & Reboot**, review the settings in the confirmation dialog, and confirm.
-   The page writes the target settings, saves once, and the board reboots. Reconnect to verify the applied settings.
+1. Connect the board, open the dashboard, and click **Connect**.
+2. Select the PicoPWM HID interface and grant permission.
+3. Check device identity and running bank roles. Banks default to monitor-only.
+4. If the intended bank is currently a monitor, select Generator under **Boot configuration**, then review and
+   confirm **Save & Reboot**. Reconnect and verify the applied settings. Skip this step if it is already a generator.
+5. Click a generator's underlined frequency or duty, edit the values, and click **Apply**.
+   **This changes live output immediately; verify the GPIO and wiring first.**
 
-Boot configuration groups controls in order: clock profile, I2C address, hardware
-PWM role (channels 0-7), PIO PWM role (channels 8-15), and software PWM role (channels 16-23).
-Each bank's backend is fixed; select only Monitor or Generator. Controls initialize
-from the device target on connection without overwriting in-progress edits during
-status polling. Edits stay local until confirmation; Cancel writes nothing.
-I2C input is decimal (8-119); the confirmation also shows hexadecimal.
-Firmware must advertise save-and-reboot capability; older firmware shows an update
-notice and cannot use the button.
+Use one controlling host per board. Status refreshes every second; reconnection is manual.
 
-Use one controlling host per board. The page never reopens a device automatically.
+## Controls and Readings
 
-**PWM control and monitoring** shows three side-by-side, eight-row tables:
-Hardware PWM (channels 0-7), PIO PWM (8-15), and Software PWM (16-23).
-Each title shows the running role, not the unsaved boot selection. Columns show
-the logical channel and GPIO number together (for example `0 (GPIO 1)`), frequency, and duty. GPIO values are not
-physical header-pin numbers.
-Tables stack on narrow screens.
-Generator values have a dotted underline and are keyboard-accessible buttons.
-The dialog identifies the backend, logical channel, and GPIO, and starts from the
-latest realized output (not necessarily the originally requested frequency).
-Frequency is shown in Hz, kHz, or MHz based on its value; changing units preserves
-the frequency. **Use 1 kHz / 50%** fills the fields only and does not change output.
-Apply changes the live output immediately and refreshes readback; Cancel writes
-nothing. Disconnected devices and channels with failed readings cannot be edited.
-An editing hint identifies the interactive generator readings. Boot controls mark
-local changes with an amber border and **Unsaved edits**. A separate **Target differs
-from running** notice appears for target bank roles or I2C addresses that differ
-from the live configuration; it does not claim that the target is saved. The
-protocol does not report the running clock profile, so that notice does not infer
-clock-profile differences from measured clock speed.
+| Control | Behavior |
+| --- | --- |
+| PWM tables | Hardware channels 0-7, PIO 8-15, software 16-23. Backends are fixed; roles apply to whole banks. Monitors are read-only. |
+| Channel editor | Starts from realized output. Hz/kHz/MHz conversion preserves frequency. The 1 kHz / 50% preset only fills fields; Cancel writes nothing. |
+| Boot configuration | Clock profile, decimal I2C address (8-119), and bank roles. Edits remain local until confirmed. |
+| Pin assignment | Expand for GPIO IDs, not physical header-pin numbers. |
+| Board LED / Reboot Board | Toggle the LED or confirm a restart without saving edits. |
 
-Expand **Pin assignment** below the boot settings to see the connected board's
-channel-to-GPIO mapping, I2C signals, and board LED pin, read over HID report 5.
-It is collapsed by default. The monitoring GPIO column and generator dialog use
-the same reported map. Numbers are GPIO IDs, not physical header pin numbers;
-unavailable pins show `--`. No map is assumed while disconnected or on older
-firmware without the capability; update firmware to enable readback. Invalid
-reports show an explicit error. The map is cached only for the current connection.
+**Unsaved edits** marks local changes. **Target differs from running** does not prove settings are saved or
+identify clock-profile differences. Missing readings show explicit errors; unsupported features require newer firmware.
 
-**Board LED** beside Connect toggles the identification LED and shows its readback
-state. **Reboot Board** beside Save & Reboot opens a confirmation dialog and
-restarts without saving any edits. Both controls require advertised firmware
-capabilities and remain disabled on older firmware. LED state is refreshed with
-configuration readback once per second, including changes made through CDC.
+Readback is not an independent electrical measurement. RAM is static reservation, temperature is an uncalibrated
+internal estimate, and service load is not CPU utilization. See the [HID reference](../../docs/design/usb/hid-report-reference.md)
+for interpretation and the [frequency guidance](../../README.md#recommended-frequency-ranges) for output limitations.
 
-Serve the page locally with `tools/host/run-direct.sh` (default `http://127.0.0.1:8000/`, `--port` to change).
+## Saving Safely
 
-## Behavior Notes
-
-- **Runtime status**, between boot settings and channels, follows PicoUart:
-  uptime, board temperature, and Core 0 / Core 1 service load, refreshed every
-  second. Flash current firmware to enable these readings.
-  Temperature is an uncalibrated internal die estimate using a nominal 3.3 V ADC
-  reference, not ambient temperature. Service load is service-pass wall time
-  divided by its measurement window, excluding idle waits; it is not CPU
-  utilization and does not include IRQ work outside measured service passes.
-- **Device identity** matches PicoUart's field order: Product, Board model,
-  Serial / UID, System clock, Firmware RAM reserved / total, and Firmware version.
-  RAM reservation is static SRAM plus reserved core stacks, not live memory
-  utilization. RAM readback requires firmware with memory-report capability;
-  older firmware shows an explicit update notice instead of an estimated value.
-- Frequency `0` means a static level, not a missing reading. Monitors keep their last values for about one second
-  after the input stops.
-- A save erases flash, so HID, CDC, and I2C all pause briefly and software generators are disturbed. Stop software
-  generators first. If the result is unconfirmed, disconnect, reconnect, and check the target settings in report 2 before retrying.
-- Clock profiles above 150 MHz are overclocks and require an explicit acknowledgement; only profiles the firmware
-  advertises are offered. A save is not a stability qualification. Recover from a profile that prevents boot with
-  BOOTSEL.
-- Missing or invalid reports show `--` with an explicit read error; no alternate layouts are supported.
-- Settings are written as separate target commands before the final save. If any command
-  fails, the page stops without sending the save, reports the error, and asks you to
-  reconnect and verify potentially partial target changes before retrying.
-
-## Test
-
-```bash
-node --test host/direct/tests/*.test.mjs
-```
+- Stop software generators before saving: flash writes briefly pause HID, CDC, and I2C and disturb software output.
+- Profiles above 150 MHz require overclock acknowledgement; 150 MHz also overclocks RP2040.
+  Saving does not establish stability. Recover an unbootable profile through BOOTSEL and reflashing.
+- A failed settings command prevents the final save but may leave partial target changes.
+  After a failed or unconfirmed operation, reconnect and inspect target settings before retrying.
 
 ## Troubleshooting
 
-- **Save & Reboot disabled:** hover over the button to read the explanation. It is disabled when the boot
-  configuration has no unsaved or unapplied changes.
-  If the connected firmware lacks the capability, flash the latest firmware for
-  your board, then disconnect and reconnect the page. Building firmware alone does
-  not update the connected board.
-- **Connect disabled:** use desktop Chrome/Edge in a secure context and check whether browser policy blocks USB HID access.
-- **Board not found:** check the firmware, the USB data cable, and browser site permissions.
-- **Access denied:** browser permission does not replace OS permissions; close competing HID clients.
-- **Remote workspace:** Chrome lists USB devices of the computer running Chrome; a forwarded page does not forward
-  USB devices.
+- **Cannot connect:** check the browser, secure context, USB data cable, firmware, and device permissions.
+  Close competing HID clients. USB access is local to the browser's computer, even with a remote workspace.
+- **Save & Reboot disabled:** check the button's explanation. There may be no pending changes, or firmware may
+  lack the capability. Flashing firmware updates the board; building alone does not.
 
-## Documentation
+## Development
 
-- [Project, firmware, and wiring](../../README.md)
-- [HID report reference](../../docs/design/usb/hid-report-reference.md)
-- [USB interface overview](../../docs/design/usb/usb-interface-overview.md)
+From the repository root, serve locally and run tests in separate terminals:
+
+```sh
+tools/host/run-direct.sh
+node --test host/direct/tests/*.test.mjs
+```
+
+The launcher needs Python 3, with no extra packages, and serves `http://127.0.0.1:8000/` (`--port` to override).
+Only `src/` is served or deployed; it also supplies shared assets to Python/.NET hosts.
+`tests/` contains hardware-free checks, not physical PWM qualification.

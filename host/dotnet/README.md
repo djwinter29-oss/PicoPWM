@@ -1,104 +1,99 @@
 # PicoPWM (.NET)
 
-This ASP.NET Core application serves the PicoPWM dashboard and controls the board over
-the USB HID vendor interface (VID `0x2E8A`, PID `0x116C`) described in
-[hid-report-reference.md](../../docs/design/usb/hid-report-reference.md). The firmware
-implements it in `firmware/src/app/usb`.
+**Control and monitor 24 PWM channels through a local web dashboard.**
+The ASP.NET Core application communicates with PicoPWM boards over USB HID; your browser connects to the
+.NET service rather than directly to USB.
+
+[Downloads](https://github.com/djwinter29-oss/PicoPWM/releases) ·
+[Source](https://github.com/djwinter29-oss/PicoPWM) ·
+[Firmware](https://github.com/djwinter29-oss/PicoPWM/releases) ·
+[Report an issue](https://github.com/djwinter29-oss/PicoPWM/issues)
+
+## Requirements
+
+- A Raspberry Pi Pico or Pico 2 running compatible
+  [PicoPWM firmware](https://github.com/djwinter29-oss/PicoPWM/releases), connected to the service's computer
+  by a USB data cable.
+- OS access to the HID interface. Linux users should follow the
+  [HID permissions guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/setup-and-troubleshooting.md#linux-hid-access).
 
 ## Standalone Application
 
-Download and extract the `picopwm-host-v<VERSION>-<RID>` archive for your
-platform from [Releases](https://github.com/djwinter29-oss/PicoPWM/releases).
-Run `./PicoPwm` on Linux/macOS or `.\PicoPwm.exe` in Windows PowerShell from
-the extracted directory, then open <http://127.0.0.1:5000/>.
-The application includes its .NET runtime and connects to the board over USB HID.
-Linux still requires the [HID access setup](../../docs/guides/setup-and-troubleshooting.md#linux-hid-access).
-See [Builds and publishing](../../docs/deployment/releases.md) for release platforms and packages.
+Release archives support **Linux x64, Windows x64, and macOS ARM64** and include the .NET runtime.
+Current distribution is through GitHub Releases, not NuGet.
 
-## Development Requirements
+1. Download and extract `picopwm-host-v<VERSION>-<RID>` for your platform.
+2. Connect your board to the computer running the application with a USB data cable.
+3. Run `./PicoPwm` on Linux/macOS or `.\PicoPwm.exe` in Windows PowerShell.
+4. Open <http://127.0.0.1:5000/>, select your board, and use **Rescan** if needed.
 
-- .NET 10 SDK, or a newer SDK with the .NET 10 ASP.NET Core runtime
-- HID access to the board. On Linux, configure it with the
-  [setup and troubleshooting guide](../../docs/guides/setup-and-troubleshooting.md#linux-hid-access).
+Each browser page keeps its own board selection; an absent board is not silently replaced.
+Stop the service with `Ctrl+C`.
 
-From the repository root, `tools/host/run-dotnet.sh` runs PicoPWM. Set `PICOPWM_SERIAL`
-or `PICOPWM_DEVICE_PATH` to preselect a board when desired.
-The launcher restores NuGet dependencies and builds before starting. Set
-`PICOPWM_PORT` / `PICOPWM_HOST` (default `127.0.0.1:5000`), `ASPNETCORE_URLS`, or
-pass `--urls` to choose another listening address. `dotnet run` without those
-settings listens on `http://127.0.0.1:5000`. A non-loopback URL is refused unless
-`PICOPWM_TOKEN` is set. With that token, `/api/*` requires
-`Authorization: Bearer <token>` or the `picopwm_dotnet_auth` cookie from
-`POST /api/login` with `{"token": "..."}`. The page itself stays open so the
-browser can prompt once. A request whose `Origin` names a different host is
-rejected. Without a token, a request whose `Host` is not loopback is rejected as well,
-including a page reached by DNS rebinding. Keep board controls on loopback when the token is unset.
-The .NET cookie is separate from Python's `picopwm_python_auth`: cookies are not isolated by port.
-The old shared `picopwm_auth` cookie is no longer accepted; log in again after upgrading.
-If only a newer runtime is installed, explicitly opt in to major-version
-roll-forward with `DOTNET_ROLL_FORWARD=Major` or install the .NET 10 ASP.NET Core
-runtime instead.
+**Before driving outputs:** GPIO signals are 3.3 V only. Banks default to monitor-only.
+Configure the intended bank as a generator and reboot before setting output.
+Follow the [wiring guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/hardware-setup.md).
 
-```sh
-PICOPWM_PORT=5002 tools/host/run-dotnet.sh
-```
+## Dashboard
 
-```sh
-cd host/dotnet
-dotnet run --project PicoPwm
-```
+- Click a generator's frequency or duty to edit it. **Apply changes live output immediately**;
+  the 1 kHz / 50% preset only fills fields. Monitors are read-only.
+- Edit startup settings through **Boot configuration**, then review and confirm **Save & Reboot**.
+  Reconnect and verify settings afterward. Failed operations may leave partial target changes; inspect before retrying.
+- Pin assignments come from the connected board and use GPIO IDs, not physical header-pin numbers.
+  Unsupported firmware features show disabled controls or update guidance.
+- Readings are not independent electrical measurements. Temperature is an internal estimate, RAM is static
+  reservation, and service load is not CPU utilization.
 
-Open <http://127.0.0.1:5000>. The dashboard matches Direct Dashboard: identity and RAM, boot
-configuration with confirmed **Save and Reboot**, compact pin assignment, uptime,
-temperature and per-core service load, LED/reboot controls, and three eight-channel
-tables. Generator frequency/duty values open an editing dialog; monitors are read-only.
-Frequency uses Hz, kHz, or MHz units, and the optional 1 kHz / 50% preset only fills
-the dialog until Apply is clicked.
-Unsupported firmware features are disabled with update guidance.
-Pin assignment, monitoring GPIOs and dialog GPIOs use the connected board's
-capability-gated HID pin report, never a hard-coded host map. Unavailable pins show
-`--`; older firmware shows update guidance and invalid reports show an error.
+See the [dashboard control guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/host/direct/README.md#controls-and-readings)
+for shared controls and safety notes; browser pairing applies only to Direct Dashboard.
 
-The PicoUart-style board selector scans boards attached to this server and offers
-**Rescan**. Each page keeps its own selection. Reconnects stay pinned to the selected
-board's serial (or path if no serial); an absent board is marked **not found** after
-rescanning and never replaced silently by another.
+## Configuration and Authentication
 
-Host HTML/HTTP code lives in `host/web/src/`; rendering, display constants and PWM styling
-reuse `host/direct/src/js/view.mjs`, `js/device.mjs`, and `css/direct.css` directly. This
-project links both sets into `wwwroot` during build/publish. Unlike Direct Dashboard, the browser connects to the
-.NET host service rather than directly to USB. Edit canonical source files, not generated output.
+Set environment variables before starting the application:
 
-The route shape matches the Python host (snake_case, as in the HID report layouts).
-HTTP error bodies use the same fixed sentences and do not include exception text:
-`400` `Invalid request fields`, `409` `Device request failed`, `503` `Device operation failed`,
-and `500` `Internal server error`. A status snapshot replaces section errors with
-`Device status unavailable`. `GET /api/boards` includes `device_path` so the dashboard can
-reopen the HID node.
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `PICOPWM_SERIAL` / `PICOPWM_DEVICE_PATH` | Preferred board | Automatic selection |
+| `PICOPWM_HOST` | Listen address | `127.0.0.1` |
+| `PICOPWM_PORT` | Listen port | `5000` |
+| `PICOPWM_TOKEN` | API access token | Unset |
 
-- `GET /api/boards` lists board IDs, products, serials, paths and `default_board_id`
-- `GET /api/host` identifies the .NET dashboard
-- `GET /api/status?board={id}` returns identity, configuration, runtime, `pins`
-  (`channels`, `i2c_sda`, `i2c_scl`, `led`), `pins_error`, and all 24 channels, or
-  `connected: false` with an `error`
-- All actions require `?board={id}` from the scan. Status without a selection does
-  not open a device; missing/unknown selections are rejected for commands.
-- `POST /api/channels/{channel}?board={id}` with `{"freq_hz": 1000, "duty": 50}`
-- `POST /api/led` with `{"on": true}`; `POST /api/reboot` with `{}`
-- `POST /api/save-reboot` with `{"profile": 0, "address": 64, "roles": [0,1,1],
-  "acknowledge_overclock": false}` validates the complete draft before writing,
-  stops on the first failure, and confirms one save/reboot command.
-  Already submitted targets are not rolled back on failure.
-- Reboot actions return `{"rebooting": true}` after confirmation.
-- `POST /api/stop`, `/api/bank`, `/api/i2c-address`, `/api/clock-profile`, `/api/save`
+`--urls` takes precedence over `ASPNETCORE_URLS`, then the host/port settings above.
+Keep loopback binding for local use. Listening beyond loopback requires a token; do not expose the service
+directly to the internet.
 
-Errors return 400 for invalid input and 409 when the device rejects a command or its
-outcome is unconfirmed; discovery/transport availability errors return 503.
-Temperature is an internal die estimate; service load is not CPU utilization.
+When a token is configured, the dashboard prompts for it. API clients use a Bearer authorization header
+or `POST /api/login` with `{"token": "..."}`. The resulting `picopwm_dotnet_auth` cookie is separate from
+Python's `picopwm_python_auth`; the old shared cookie is no longer accepted, so existing sessions must log in again.
+Cross-origin requests are rejected; without a token, non-loopback request hosts are also rejected.
 
-Build and test the complete solution with:
+The HTTP API uses the same snake_case route and payload conventions as the
+[Python host API](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/python-integration.md).
+Actions require a board ID from `GET /api/boards`. An unconfirmed command returns an error, not success.
+
+## Development
+
+Install the **.NET 10 SDK**. From the repository root, run:
 
 ```sh
-dotnet build PicoPwm.sln
-dotnet test PicoPwm.sln
+dotnet run --project host/dotnet/PicoPwm
 ```
+
+In another terminal:
+
+```sh
+dotnet test host/dotnet/PicoPwm.sln --configuration Release --nologo
+```
+
+The POSIX launcher `tools/host/run-dotnet.sh` also restores, builds, and starts the application.
+With a newer SDK, install the .NET 10 ASP.NET Core runtime. Explicit major-version roll-forward is an
+unverified compatibility option, not a substitute for testing against the targeted runtime.
+Edit canonical assets in `host/web/src/` and `host/direct/src/`, not generated `wwwroot` output.
+
+## Help and License
+
+See [setup and troubleshooting](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/setup-and-troubleshooting.md).
+Include application/firmware versions, OS, and the exact error in bug reports.
+
+[BSD 3-Clause](https://github.com/djwinter29-oss/PicoPWM/blob/main/LICENSE).

@@ -6,27 +6,46 @@
 import hashlib
 import os
 import threading
+from typing import Any, Callable, TypedDict
 
 from .client import DeviceError, PicoPwmHid
 from ..hid.transport import enumerate_devices, open_device
 
 
+class BoardInfo(TypedDict):
+    """Discovered board identity and the path used when no serial is available."""
+
+    id: str
+    product_name: str
+    serial_number: str | None
+    device_path: str
+
+
+class BoardScan(TypedDict):
+    """Current discovery results and the preferred page selection."""
+
+    boards: list[BoardInfo]
+    default_board_id: str | None
+
+
 class BoardRegistry:
     """Keep requests pinned to a discovered board, including across USB reconnects."""
 
-    def __init__(self, discover=enumerate_devices, factory=None, serial=None, path=None):
+    def __init__(self, discover: Callable[[], list[dict[str, Any]]] = enumerate_devices,
+                 factory: Callable[[BoardInfo], PicoPwmHid] | None = None,
+                 serial: str | None = None, path: str | None = None):
         self._discover = discover
         self._factory = factory or (lambda board: PicoPwmHid(lambda: open_device(
             serial=board["serial_number"], path=None if board["serial_number"] else board["device_path"])))
         self._serial = serial
         self._path = path
-        self._known = {}
-        self._clients = {}
+        self._known: dict[str, BoardInfo] = {}
+        self._clients: dict[str, PicoPwmHid] = {}
         self._lock = threading.RLock()
 
-    def boards(self):
+    def boards(self) -> BoardScan:
         with self._lock:
-            boards = []
+            boards: list[BoardInfo] = []
             seen = set()
             for device in self._discover():
                 serial = device.get("serial_number") or None
@@ -45,7 +64,7 @@ class BoardRegistry:
             return {"boards": boards, "default_board_id": preferred or (
                 None if self._serial or self._path else boards[0]["id"] if boards else None)}
 
-    def client(self, identifier):
+    def client(self, identifier: str | None) -> PicoPwmHid:
         with self._lock:
             if not identifier or identifier not in self._known:
                 raise DeviceError("unknown board; rescan and select a listed board")
@@ -53,7 +72,7 @@ class BoardRegistry:
                 self._clients[identifier] = self._factory(self._known[identifier])
             return self._clients[identifier]
 
-    def close(self):
+    def close(self) -> None:
         with self._lock:
             for client in self._clients.values():
                 client.close()

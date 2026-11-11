@@ -2,6 +2,7 @@
 # Copyright (c) 2026 Ji Dong
 
 import pytest
+import struct
 
 from picopwm.hid import protocol as p
 from ..fakes import BANK, CONFIGURATION, IDENTITY
@@ -30,3 +31,15 @@ def test_decoder_rejects_bad_layout():
 def test_encode_set_channel():
     assert p.encode_action_request(7, p.OP_SET_CHANNEL, 9, 1000, 50) == bytes([1, 7, 1, 9, 0xE8, 3, 0, 0, 50, 0, 0, 0])
 
+
+def test_optional_telemetry_reports_validate_layout_and_bounds():
+    assert p.decode_identity(bytes([*IDENTITY[:16], 255, IDENTITY[17]]))["can_read_pins"]
+    with pytest.raises(p.ProtocolError):
+        p.decode_pins(bytes([1, 48, *range(23), 26, 27, 25]))
+    with pytest.raises(p.ProtocolError):
+        p.decode_pins(bytes(27))
+    assert p.decode_runtime(struct.pack("<BIiHH", 1, 1, -2147483648, 0, 10000))["temperature_c"] is None
+    with pytest.raises(p.ProtocolError):
+        p.decode_runtime(struct.pack("<BIiHH", 1, 1, 0, 0, 10001))
+    with pytest.raises(p.ProtocolError):
+        p.decode_memory(struct.pack("<BII", 1, 100, 99))

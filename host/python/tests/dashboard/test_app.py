@@ -12,6 +12,16 @@ from picopwm.hid import protocol as p
 from ..fakes import make, modern
 
 
+def test_disconnected_clock_command_returns_device_error_not_internal_error():
+    def missing():
+        raise RuntimeError("interface not found")
+
+    response = create_app(PicoPwmHid(missing)).test_client().post(
+        "/api/clock-profile", json={"profile": 0})
+    assert response.status_code == 409
+    assert response.json == {"error": "Device request failed"}
+
+
 def test_server_suppresses_request_logs_but_keeps_warnings_and_errors(monkeypatch, caplog):
     from picopwm.dashboard import app as app_module
 

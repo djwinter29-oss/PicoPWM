@@ -91,6 +91,16 @@ After checking roles and wiring, use `client.set_channel(0, 1000, 50)` inside th
 1 kHz / 50% duty, or `client.stop()` to stop all generators. Read back realized state; it is not an independent
 electrical measurement. `status()` returns connection errors in its result; commands can raise `DeviceError`
 on rejection or an unconfirmed outcome. Inspect state before retrying an unconfirmed command.
+Integer arguments reject booleans and non-integers; LED and overclock acknowledgements require booleans.
+Invalid arguments raise `ValueError` before device I/O. `DeviceError.status` contains the firmware result
+code when a command was rejected, or `None` for errors without a firmware result.
+Save & Reboot preserves that status when wrapping failures with a partial-settings warning.
+Returned status snapshots can be modified without changing the client's cached identity or pin map.
+
+The 3-second command and 15-second save deadlines bound result polling, not blocking hidapi transfers.
+A stalled OS/USB transfer can delay other calls on the same board, including stop. If output state is
+uncertain, disconnect board power. Cross-platform transfer-stall behavior has not been hardware-qualified;
+do not rely on the host as an emergency-stop mechanism.
 
 ## Dashboard Configuration
 

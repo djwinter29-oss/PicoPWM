@@ -5,10 +5,56 @@ import pytest
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import Mock
+from typing import get_type_hints
 
-from picopwm.device.client import DeviceError, PicoPwmHid
+from picopwm.device.client import DeviceError, DeviceStatus, PicoPwmHid, RebootResult
 from picopwm.hid import protocol as p
 from ..fakes import make, modern
+
+
+def test_context_manager_opens_lazily_and_closes_without_commands():
+    opener = Mock()
+    with PicoPwmHid(opener) as unopened:
+        assert isinstance(unopened, PicoPwmHid)
+    opener.assert_not_called()
+    device, client = make()
+    with client as entered:
+        assert entered is client
+        assert entered.status()["connected"]
+    assert device.closed
+    assert not device.sent
+
+
+def test_context_manager_closes_without_suppressing_body_exception():
+    device, client = make()
+    failure = RuntimeError("script failed")
+    with pytest.raises(RuntimeError) as error:
+        with client:
+            client.status()
+            raise failure
+    assert error.value is failure
+    assert device.closed
+    assert not device.sent
+
+
+def test_context_manager_logs_close_failure_without_masking_body_exception(caplog):
+    device, client = make()
+    device.close = Mock(side_effect=OSError("close failed"))
+    failure = RuntimeError("script failed")
+    with pytest.raises(RuntimeError) as error:
+        with client:
+            client.status()
+            raise failure
+    assert error.value is failure
+    assert "Failed to close HID device" in caplog.text
+
+
+def test_public_return_annotations_distinguish_snapshots_and_reboots():
+    for name in ("status", "set_channel", "stop", "set_bank", "set_i2c_address",
+                 "set_clock_profile", "save_configuration", "set_led"):
+        assert get_type_hints(getattr(PicoPwmHid, name))["return"] is DeviceStatus
+    for name in ("reboot", "save_and_reboot"):
+        assert get_type_hints(getattr(PicoPwmHid, name))["return"] is RebootResult
 
 
 def test_status_reads_all_banks():

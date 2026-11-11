@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import struct
-from typing import Any
+from typing import TypedDict
 
 VENDOR_ID = 0x2E8A
 PRODUCT_ID = 0x116C
@@ -58,6 +58,93 @@ class ProtocolError(ValueError):
     """A report that violates the documented layout."""
 
 
+class Memory(TypedDict):
+    """Firmware RAM reservation and total memory, in bytes."""
+
+    ram_reserved_bytes: int
+    ram_total_bytes: int
+
+
+class _OptionalMemory(TypedDict, total=False):
+    """Optional memory extension on identity reports."""
+
+    ram_reserved_bytes: int
+    ram_total_bytes: int
+
+
+class Identity(_OptionalMemory):
+    """Identity fields; memory fields are present only when advertised."""
+
+    product_id: int
+    serial_number: str
+    firmware_version: str
+    mcu: str
+    channel_count: int
+    can_save: bool
+    can_save_reboot: bool
+    can_set_led: bool
+    can_reboot: bool
+    can_read_memory: bool
+    can_read_runtime: bool
+    can_read_pins: bool
+    board_model: str
+    can_set_clock: bool
+    clock_profile_mask: int
+
+
+class BankConfiguration(TypedDict):
+    """Fixed backend mapping, bank roles, and I2C address."""
+
+    backends: list[int]
+    roles: list[int]
+    i2c_address: int
+
+
+class Configuration(TypedDict):
+    """Running and target configuration reported by firmware."""
+
+    running: BankConfiguration
+    target: BankConfiguration
+    clock_profile: int
+    system_clock_hz: int
+    led_on: bool
+
+
+class Runtime(TypedDict):
+    """Runtime telemetry; unavailable temperature is None."""
+
+    uptime_seconds: int
+    temperature_c: float | None
+    core0_load: float
+    core1_load: float
+
+
+class Pins(TypedDict):
+    """GPIO assignments; unavailable pins are None."""
+
+    channels: list[int | None]
+    i2c_sda: int | None
+    i2c_scl: int | None
+    led: int | None
+
+
+class ChannelState(TypedDict):
+    """Channel readings; unavailable frequency and duty are None."""
+
+    channel: int
+    freq_hz: int | None
+    duty: int | None
+
+
+class ActionResult(TypedDict):
+    """Firmware acknowledgement for a numbered command."""
+
+    transaction_id: int
+    operation: int
+    status: int
+    status_name: str
+
+
 def _check(payload: bytes, size: int, name: str) -> None:
     if len(payload) != size:
         raise ProtocolError(f"{name} must contain exactly {size} payload bytes (received {len(payload)})")
@@ -65,7 +152,7 @@ def _check(payload: bytes, size: int, name: str) -> None:
         raise ProtocolError(f"unsupported {name} layout version {payload[0]}")
 
 
-def decode_identity(payload: bytes) -> dict[str, Any]:
+def decode_identity(payload: bytes) -> Identity:
     _check(payload, IDENTITY_SIZE, "identity report")
     product_id = struct.unpack_from("<H", payload, 1)[0]
     if product_id != HID_PRODUCT_ID:
@@ -93,7 +180,7 @@ def decode_identity(payload: bytes) -> dict[str, Any]:
     }
 
 
-def _bank_configuration(payload: bytes, offset: int) -> dict[str, Any]:
+def _bank_configuration(payload: bytes, offset: int) -> BankConfiguration:
     backends = list(payload[offset:offset + 3])
     roles = list(payload[offset + 3:offset + 6])
     address = payload[offset + 6]
@@ -102,7 +189,7 @@ def _bank_configuration(payload: bytes, offset: int) -> dict[str, Any]:
     return {"backends": backends, "roles": roles, "i2c_address": address}
 
 
-def decode_configuration(payload: bytes) -> dict[str, Any]:
+def decode_configuration(payload: bytes) -> Configuration:
     _check(payload, CONFIGURATION_SIZE, "configuration report")
     profile = payload[16]
     clock = struct.unpack_from("<I", payload, 17)[0]
@@ -117,7 +204,7 @@ def decode_configuration(payload: bytes) -> dict[str, Any]:
     }
 
 
-def decode_memory(payload: bytes) -> dict[str, int]:
+def decode_memory(payload: bytes) -> Memory:
     _check(payload, MEMORY_SIZE, "memory report")
     reserved, total = struct.unpack_from("<II", payload, 1)
     if not total or reserved > total:
@@ -125,7 +212,7 @@ def decode_memory(payload: bytes) -> dict[str, int]:
     return {"ram_reserved_bytes": reserved, "ram_total_bytes": total}
 
 
-def decode_runtime(payload: bytes) -> dict[str, Any]:
+def decode_runtime(payload: bytes) -> Runtime:
     _check(payload, RUNTIME_SIZE, "runtime report")
     uptime, temperature, core0, core1 = struct.unpack_from("<IiHH", payload, 1)
     if core0 > 10000 or core1 > 10000:
@@ -134,7 +221,7 @@ def decode_runtime(payload: bytes) -> dict[str, Any]:
             "core0_load": core0 / 100, "core1_load": core1 / 100}
 
 
-def decode_pins(payload: bytes) -> dict[str, Any]:
+def decode_pins(payload: bytes) -> Pins:
     _check(payload, PINS_SIZE, "pin assignment report")
     if any(pin > 47 and pin != 255 for pin in payload[1:]):
         raise ProtocolError("invalid pin assignment report")
@@ -142,9 +229,9 @@ def decode_pins(payload: bytes) -> dict[str, Any]:
     return {"channels": pins[:24], "i2c_sda": pins[24], "i2c_scl": pins[25], "led": pins[26]}
 
 
-def decode_bank_status(payload: bytes, bank: int) -> list[dict[str, int]]:
+def decode_bank_status(payload: bytes, bank: int) -> list[ChannelState]:
     _check(payload, BANK_STATUS_SIZE, f"bank status report {BANK_STATUS_REPORT + bank}")
-    channels = []
+    channels: list[ChannelState] = []
     for index in range(BANK_SIZE):
         freq_hz, duty = struct.unpack_from("<IB", payload, 1 + index * 5)
         if duty > 100:
@@ -153,7 +240,7 @@ def decode_bank_status(payload: bytes, bank: int) -> list[dict[str, int]]:
     return channels
 
 
-def decode_action_result(payload: bytes) -> dict[str, Any]:
+def decode_action_result(payload: bytes) -> ActionResult:
     _check(payload, ACTION_SIZE, "action result report")
     status = payload[3]
     if status >= len(STATUS_NAMES) or any(payload[4:]):

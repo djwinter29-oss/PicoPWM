@@ -3,9 +3,19 @@
 
 import pytest
 import struct
+from typing import get_type_hints
 
 from picopwm.hid import protocol as p
 from ..fakes import BANK, CONFIGURATION, IDENTITY
+
+
+def test_identity_memory_fields_are_optional_and_core_fields_are_required():
+    assert {"ram_reserved_bytes", "ram_total_bytes"} == p.Identity.__optional_keys__
+    assert "clock_profile_mask" in p.Identity.__required_keys__
+    assert get_type_hints(p.decode_identity)["return"] is p.Identity
+    assert get_type_hints(p.decode_configuration)["return"] is p.Configuration
+    assert get_type_hints(p.decode_pins)["return"] is p.Pins
+    assert get_type_hints(p.decode_runtime)["return"] is p.Runtime
 
 
 def test_decoders():

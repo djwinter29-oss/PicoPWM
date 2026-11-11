@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from types import TracebackType
 import threading
 import time
 import logging
@@ -23,16 +24,16 @@ class DeviceStatus(TypedDict):
     """Device snapshot; unavailable reports carry explicit per-report errors."""
 
     connected: bool
-    identity: dict[str, Any] | None
+    identity: p.Identity | None
     identity_error: str | None
-    configuration: dict[str, Any] | None
+    configuration: p.Configuration | None
     configuration_error: str | None
-    channels: list[dict[str, Any]]
+    channels: list[p.ChannelState]
     bank_errors: list[str | None]
     error: str | None
-    runtime: dict[str, Any] | None
+    runtime: p.Runtime | None
     runtime_error: str | None
-    pins: dict[str, Any] | None
+    pins: p.Pins | None
     pins_error: str | None
 
 
@@ -42,6 +43,12 @@ class DeviceError(RuntimeError):
     def __init__(self, message: str, *, status: int | None = None):
         super().__init__(message)
         self.status = status
+
+
+class RebootResult(TypedDict):
+    """Confirmed reboot command acknowledgement, not reconnection verification."""
+
+    rebooting: bool
 
 
 def _integer(value: int, name: str, minimum: int, maximum: int) -> None:
@@ -54,7 +61,7 @@ def _boolean(value: bool, name: str) -> None:
         raise ValueError(f"{name} must be a boolean")
 
 
-def _blank_channels() -> list[dict[str, Any]]:
+def _blank_channels() -> list[p.ChannelState]:
     return [{"channel": channel, "freq_hz": None, "duty": None} for channel in range(p.CHANNEL_COUNT)]
 
 
@@ -68,10 +75,19 @@ class PicoPwmHid:
         self._monotonic = monotonic
         self._lock = threading.RLock()
         self._device: Any = None
-        self._identity: dict[str, Any] | None = None
-        self._configuration: dict[str, Any] | None = None
-        self._pins: dict[str, Any] | None = None
+        self._identity: p.Identity | None = None
+        self._configuration: p.Configuration | None = None
+        self._pins: p.Pins | None = None
         self._transaction_id = 0
+
+    def __enter__(self) -> PicoPwmHid:
+        """Return this client without opening hardware until the first operation."""
+        return self
+
+    def __exit__(self, exc_type: type[BaseException] | None, exc: BaseException | None,
+                 traceback: TracebackType | None) -> None:
+        """Close the handle without suppressing exceptions or stopping outputs."""
+        self.close()
 
     def close(self) -> None:
         with self._lock:
@@ -100,7 +116,7 @@ class PicoPwmHid:
         if self._open().send_feature_report(bytes([report_id]) + payload) < 0:
             raise OSError("send_feature_report failed")
 
-    def _ensure_identity(self) -> dict[str, Any]:
+    def _ensure_identity(self) -> p.Identity:
         if self._identity is None:
             identity = p.decode_identity(self._read(p.IDENTITY_REPORT, p.IDENTITY_SIZE))
             if identity["can_read_memory"]:
@@ -108,7 +124,7 @@ class PicoPwmHid:
             self._identity = identity
         return self._identity
 
-    def _command_identity(self) -> dict[str, Any]:
+    def _command_identity(self) -> p.Identity:
         """Read command prerequisites without leaking transport or parser exceptions."""
         try:
             return self._ensure_identity()
@@ -127,9 +143,10 @@ class PicoPwmHid:
                 "pins": None, "pins_error": None,
             }
             try:
-                state["identity"] = self._ensure_identity()
+                identity = self._ensure_identity()
+                state["identity"] = identity
                 state["connected"] = True
-                if self._identity["can_read_pins"]:
+                if identity["can_read_pins"]:
                     try:
                         if self._pins is None:
                             self._pins = p.decode_pins(self._read(p.PINS_REPORT, p.PINS_SIZE))
@@ -143,7 +160,7 @@ class PicoPwmHid:
                 except p.ProtocolError as error:
                     state["configuration_error"] = str(error)
                 state["configuration"] = self._configuration
-                if self._identity["can_read_runtime"]:
+                if identity["can_read_runtime"]:
                     try:
                         state["runtime"] = p.decode_runtime(self._read(p.RUNTIME_REPORT, p.RUNTIME_SIZE))
                     except p.ProtocolError as error:
@@ -193,7 +210,7 @@ class PicoPwmHid:
                 raise DeviceError("timed out awaiting the result; outcome is unconfirmed")
             self._sleep(POLL_S)
 
-    def _run(self, operation: int, configuration: bool, **fields: int) -> dict[str, Any]:
+    def _run(self, operation: int, configuration: bool, **fields: int) -> DeviceStatus:
         with self._lock:
             try:
                 self._perform(operation, **fields)
@@ -206,7 +223,7 @@ class PicoPwmHid:
                 self._configuration = None
             return self.status()
 
-    def set_channel(self, channel: int, freq_hz: int, duty: int) -> dict[str, Any]:
+    def set_channel(self, channel: int, freq_hz: int, duty: int) -> DeviceStatus:
         _integer(channel, "channel", 0, p.CHANNEL_COUNT - 1)
         _integer(freq_hz, "freq_hz", 0, 0xFFFFFFFF)
         _integer(duty, "duty", 0, 100)
@@ -229,20 +246,20 @@ class PicoPwmHid:
                     f"command failed: INVALID (requested {freq_hz} Hz / {duty}%, readback {readback})",
                     status=error.status) from error
 
-    def stop(self) -> dict[str, Any]:
+    def stop(self) -> DeviceStatus:
         return self._run(p.OP_STOP, False)
 
-    def set_bank(self, bank: int, backend: int, role: int) -> dict[str, Any]:
+    def set_bank(self, bank: int, backend: int, role: int) -> DeviceStatus:
         _integer(bank, "bank", 0, 2)
         _integer(backend, "backend", 0, 2)
         _integer(role, "role", 0, 1)
         return self._run(p.OP_SET_BANK, True, channel=bank, arg0=backend | role << 8)
 
-    def set_i2c_address(self, address: int) -> dict[str, Any]:
+    def set_i2c_address(self, address: int) -> DeviceStatus:
         _integer(address, "address", 0, 127)
         return self._run(p.OP_SET_I2C_ADDRESS, True, arg0=address)
 
-    def set_clock_profile(self, profile: int, acknowledge_overclock: bool) -> dict[str, Any]:
+    def set_clock_profile(self, profile: int, acknowledge_overclock: bool) -> DeviceStatus:
         _integer(profile, "profile", 0, 4)
         _boolean(acknowledge_overclock, "acknowledge_overclock")
         if profile > 1 and not acknowledge_overclock:
@@ -253,7 +270,7 @@ class PicoPwmHid:
             return self._run(p.OP_SET_CLOCK_PROFILE, True, arg0=profile,
                              flags=p.FLAG_ACK_OVERCLOCK if profile > 1 else 0)
 
-    def save_configuration(self, acknowledge_overclock: bool) -> dict[str, Any]:
+    def save_configuration(self, acknowledge_overclock: bool) -> DeviceStatus:
         _boolean(acknowledge_overclock, "acknowledge_overclock")
         with self._lock:
             state = self.status()
@@ -265,11 +282,11 @@ class PicoPwmHid:
             return self._run(p.OP_SAVE_CONFIG, True,
                              flags=p.FLAG_CONFIRM_SAVE | (p.FLAG_ACK_OVERCLOCK if overclock else 0))
 
-    def set_led(self, on: bool) -> dict[str, Any]:
+    def set_led(self, on: bool) -> DeviceStatus:
         _boolean(on, "on")
         return self._run(p.OP_SET_LED, False, arg0=int(on))
 
-    def reboot(self) -> dict[str, Any]:
+    def reboot(self) -> RebootResult:
         with self._lock:
             self._run_reboot(p.OP_REBOOT, p.FLAG_CONFIRM_SAVE)
             return {"rebooting": True}
@@ -285,7 +302,7 @@ class PicoPwmHid:
             self.close()
 
     def save_and_reboot(self, profile: int, address: int, roles: list[int],
-                        acknowledge_overclock: bool) -> dict[str, Any]:
+                        acknowledge_overclock: bool) -> RebootResult:
         """Validate the entire draft before submitting targets and one confirmed save/reboot."""
         _integer(profile, "profile", 0, 4)
         _integer(address, "address", 8, 119)

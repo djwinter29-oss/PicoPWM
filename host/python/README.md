@@ -79,6 +79,10 @@ finally:
     client.close()
 ```
 
+Alternatively, use `with PicoPwmHid() as client:` for automatic handle cleanup on normal
+or exceptional exit. Entering the block does not open USB until the first operation.
+Closing a client releases its handle; it does **not** stop generator outputs.
+
 For multiple boards, replace the client initialization, retaining the `try/finally` block:
 
 ```python
@@ -96,6 +100,8 @@ Invalid arguments raise `ValueError` before device I/O. `DeviceError.status` con
 code when a command was rejected, or `None` for errors without a firmware result.
 Save & Reboot preserves that status when wrapping failures with a partial-settings warning.
 Returned status snapshots can be modified without changing the client's cached identity or pin map.
+Status-returning methods use the `DeviceStatus` dictionary contract; reboot methods return
+`RebootResult`. Nested report types are defined in `picopwm.hid.protocol`, without changing JSON shapes.
 
 The 3-second command and 15-second save deadlines bound result polling, not blocking hidapi transfers.
 A stalled OS/USB transfer can delay other calls on the same board, including stop. If output state is

@@ -28,7 +28,7 @@ def main() -> None:
     assets = [file for file in package.files or ()
               if str(file).startswith("picopwm/web/")]
     required = {
-        "index.html", "favicon.svg", "css/dashboard.css", "css/web.css", "css/webhid.css",
+        "index.html", "favicon.svg", "css/dashboard.css", "css/web.css", "css/direct.css",
         "js/app.mjs", "js/client.mjs", "js/device.mjs", "js/view.mjs",
     }
     missing = required - {str(file).removeprefix("picopwm/web/") for file in assets}

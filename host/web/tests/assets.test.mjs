@@ -9,23 +9,23 @@ import test from "node:test";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const html = readFileSync(join(root, "index.html"), "utf8");
-const shared = new Set(["css/webhid.css", "js/view.mjs", "js/device.mjs"]);
+const shared = new Set(["css/direct.css", "js/view.mjs", "js/device.mjs"]);
 const asset = path => {
   const key = posix.normalize(path.replaceAll("\\", "/"));
-  return join(shared.has(key) ? resolve(root, "../webhid") : root, key);
+  return join(shared.has(key) ? resolve(root, "../direct/src") : root, key);
 };
 
 test("shared asset lookup handles Windows separators and relative import segments", () => {
   for (const path of shared) {
     const windowsPath = win32.join(win32.dirname(path), `./${win32.basename(path)}`);
-    const expected = join(resolve(root, "../webhid"), path);
+    const expected = join(resolve(root, "../direct/src"), path);
     assert.equal(asset(windowsPath), expected);
     assert.equal(asset(`${posix.dirname(path)}/./${posix.basename(path)}`), expected);
     assert.ok(existsSync(expected), path);
   }
 });
 
-test("HTML references only host assets or canonical WebHID presentation assets", () => {
+test("HTML references only host assets or canonical Direct Dashboard presentation assets", () => {
   for (const match of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
     if (match[1] === "./") continue;
     assert.ok(!match[1].startsWith(".."), match[1]);
@@ -43,7 +43,7 @@ test("every element the scripts query exists in the page", () => {
   }
 });
 
-test("module imports resolve to served host or WebHID assets", () => {
+test("module imports resolve to served host or Direct Dashboard assets", () => {
   for (const name of ["app.mjs", "client.mjs", "view.mjs"]) {
     const file = asset(`js/${name}`);
     for (const match of readFileSync(file, "utf8").matchAll(/from "([^"]+)"/g)) {
@@ -54,9 +54,9 @@ test("module imports resolve to served host or WebHID assets", () => {
   }
 });
 
-test("host dashboard matches WebHID sections and controls except browser pairing", () => {
-  const hid = readFileSync(resolve(root, "../webhid/index.html"), "utf8");
-  const stylesheets = source => [...source.matchAll(/href="(css\/webhid\.css\?v=\d+)"/g)]
+test("host dashboard matches Direct Dashboard sections and controls except browser pairing", () => {
+  const hid = readFileSync(resolve(root, "../direct/src/index.html"), "utf8");
+  const stylesheets = source => [...source.matchAll(/href="(css\/direct\.css\?v=\d+)"/g)]
     .map(match => match[1]);
   assert.equal(stylesheets(html).length, 1);
   assert.deepEqual(stylesheets(html), stylesheets(hid));

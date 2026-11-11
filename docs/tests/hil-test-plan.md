@@ -80,7 +80,7 @@ Disconnect loopbacks before changing roles that could make both ends outputs.
 | Backend | Hardware, PIO and software, each as generator and monitor |
 | Channels | Every channel in each bank; single-channel and eight-channel operation |
 | Transport | CDC, HID and I2C; compare realized channel state across interfaces |
-| Host | Record Windows/macOS/Linux checks for the supported host applications; WebHID requires desktop Chrome/Edge |
+| Host | Record Windows/macOS/Linux checks for the supported host applications; Direct Dashboard requires desktop Chrome/Edge |
 | Clock | SDK default baseline; saved 150/200/250 MHz profiles are separate, explicitly identified runs |
 | I2C speed | 100 kHz baseline and 400 kHz |
 

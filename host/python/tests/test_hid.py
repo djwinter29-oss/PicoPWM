@@ -426,7 +426,7 @@ def test_board_registry_and_routes_keep_selection_pinned():
     assert save_reboot.status_code == 200 and save_reboot.json == {"rebooting": True}
     assert http.post("/api/reboot", json={}).status_code == 409
     assert http.get("/api/host").json["dashboard_type"] == "Python"
-    for path in ["/", "/css/webhid.css", "/js/view.mjs", "/js/device.mjs", "/js/client.mjs"]:
+    for path in ["/", "/css/direct.css", "/js/view.mjs", "/js/device.mjs", "/js/client.mjs"]:
         assert http.get(path).status_code == 200
     discovered[0]["path"] = b"/dev/new"
     assert registry.boards()["boards"][0]["id"] == a

@@ -61,7 +61,7 @@ The setup helper uses `sudo` to install a udev rule for PicoPWM USB and
 `uaccess`; it does not change group membership or overwrite a customized
 rule. Reconnect the board after setup if it remains inaccessible.
 
-WebHID also requires browser permission. Run the udev setup on the computer
+Direct Dashboard also requires browser permission to access the board. Run the udev setup on the computer
 physically connected to the board; permission on a remote server does not
 grant the browser access to a local USB device.
 
@@ -100,9 +100,9 @@ The helper intentionally refuses to overwrite a differing existing rule.
 - Confirm the board is connected to the same computer that runs the host
   application.
 
-### WebHID cannot find or open the board
+### Direct Dashboard cannot find or open the board
 
-- Use a desktop browser that supports WebHID, such as Chrome or Edge.
+- Use desktop Chrome or Edge, the supported browsers for Direct Dashboard.
 - Connect the board directly to the computer running the browser, then grant
   the site access when prompted.
 - On Linux, also configure OS access as described in

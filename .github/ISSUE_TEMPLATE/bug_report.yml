@@ -20,7 +20,7 @@ body:
         - USB HID
         - Host Python
         - Host .NET
-        - WebHID
+        - Direct Dashboard (WebHID)
         - Build/CI/release tooling
         - Documentation
     validations:

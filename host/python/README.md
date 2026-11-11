@@ -22,11 +22,11 @@ provides 24 logical channels across three generator or monitor banks.
   selected board rather than silently switching to another.
 
 This package communicates over **USB HID**, not the CDC serial shell or I2C.
-The browser talks to Python, so it does not need WebHID support.
+Unlike Direct Dashboard, the browser talks to the Python host service rather than directly to USB.
 
 ![PicoPWM dashboard showing device information, bank configuration, telemetry, and channel controls](https://raw.githubusercontent.com/djwinter29-oss/PicoPWM/main/docs/assets/pico-pwm-dashboard.png)
 
-*Illustrative WebHID screenshot with simulated data, not a live hardware result.
+*Illustrative Direct Dashboard screenshot with simulated data, not a live hardware result.
 The Python dashboard shares this layout; labels and columns may differ.*
 
 ## Quick start

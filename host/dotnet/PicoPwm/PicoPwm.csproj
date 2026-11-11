@@ -15,10 +15,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="../../webhid/css/webhid.css" Link="wwwroot/css/webhid.css"
+    <Content Include="../../direct/src/css/direct.css" Link="wwwroot/css/direct.css"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="../../webhid/js/view.mjs;../../webhid/js/device.mjs" Link="wwwroot/js/%(Filename)%(Extension)"
+    <Content Include="../../direct/src/js/view.mjs;../../direct/src/js/device.mjs" Link="wwwroot/js/%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../../web/**/*" Exclude="../../web/tests/**"

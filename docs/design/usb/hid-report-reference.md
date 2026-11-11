@@ -31,7 +31,7 @@ Raspberry Pi has allocated USB PID `0x116C` under its VID `0x2E8A` to PicoPWM th
 | USB VID | `0x2E8A` | Raspberry Pi vendor ID. |
 | USB PID | `0x116C` | Allocated to PicoPWM by Raspberry Pi. |
 | HID `product_id` | `0x0003` | Follows PicoUart's registry: `0x0001` PicoUart, `0x0002` PicoForge. Register `0x0003` there. |
-| HID usage | page `0xFF00`, usage `0x01` | Vendor-defined, same as siblings; WebHID must filter on VID, PID, and usage page. |
+| HID usage | page `0xFF00`, usage `0x01` | Vendor-defined, same as siblings; Direct Dashboard must filter on VID, PID, and usage page. |
 
 The USB descriptors, `tools/release/check-usb-identity.py`, and the USB
 identity documentation must all carry `0x2E8A:0x116C`. Hosts must still
@@ -94,7 +94,7 @@ bytes 5-8 are little-endian `ram_total_bytes`.
 Reserved bytes include the main SRAM image through `__bss_end__`, scratch X/Y data,
 and both core stacks reserved by the linker. Total bytes are physical SRAM (264 KiB
 on Pico, 520 KiB on Pico 2). These are not live heap/stack usage or free-memory values.
-The WebHID identity panel uses these values and names the supported standard board
+The Direct Dashboard identity panel uses these values and names the supported standard board
 from its MCU (RP2040 = Pico, RP2350 = Pico 2).
 
 ## Report ID 4: Runtime Status
@@ -136,7 +136,7 @@ These are GPIO numbers, not physical header pins. The report is built through
 from the compiled board configuration, I2C from its board configuration, and LED
 from the SDK board definition. It does not change pins or access Core 1 runtime state.
 
-WebHID, Python and .NET read this report only when advertised, cache it for the
+Direct Dashboard, Python and .NET read this report only when advertised, cache it for the
 connection, and clear it on disconnect/board switch. The collapsed pin map,
 monitoring GPIO column, and generator dialog all use the same reported values.
 Invalid reports produce an explicit pin-map error without inventing a fallback.
@@ -436,7 +436,7 @@ identity and configuration.
 
 ## Design Validation
 
-Descriptor, firmware, Python, .NET, WebHID, and tests must agree on this contract. Writes to read-only reports must
+Descriptor, firmware, Python, .NET, Direct Dashboard, and tests must agree on this contract. Writes to read-only reports must
 not execute actions or change state. The examples above are part of the shared host/firmware vectors, which cover at
 least one request per operation and per status.
 

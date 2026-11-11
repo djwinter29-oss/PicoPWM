@@ -1,13 +1,20 @@
-# PicoPWM WebHID Control
+# PicoPWM Direct Dashboard
 
 **Control and monitor 24 PWM channels directly from your browser.** The page reads PicoPWM identity, configuration,
 and realized channel state over a vendor HID interface, and sends channel, bank, I2C address, clock profile, and save
 commands. It follows the
 [HID report reference](../../docs/design/usb/hid-report-reference.md); there is no application backend.
 
+Direct Dashboard connects to the board through the browser's WebHID API, without a Python or .NET host service.
+Its source and launcher are `host/direct/src/` and `tools/host/run-direct.sh`.
+The published dashboard URL is unchanged.
+
+This directory contains `src/` for the published site and shared assets, `tests/` for hardware-free checks,
+and this README. Only `src/` is served or deployed.
+
 ## Requirements
 
-- Desktop Google Chrome or Microsoft Edge with WebHID enabled; Firefox, Safari, and most mobile browsers are not
+- Desktop Google Chrome or Microsoft Edge with browser USB HID access enabled; Firefox, Safari, and most mobile browsers are not
   supported
 - A Raspberry Pi Pico or Pico 2 running PicoPWM firmware that implements the HID interface (`0x2E8A:0x116C`, HID
   `product_id` `0x0003`), connected to the computer running the browser
@@ -69,7 +76,7 @@ restarts without saving any edits. Both controls require advertised firmware
 capabilities and remain disabled on older firmware. LED state is refreshed with
 configuration readback once per second, including changes made through CDC.
 
-Serve the page locally with `tools/host/run-webhid.sh` (default `http://127.0.0.1:8000/`, `--port` to change).
+Serve the page locally with `tools/host/run-direct.sh` (default `http://127.0.0.1:8000/`, `--port` to change).
 
 ## Behavior Notes
 
@@ -100,7 +107,7 @@ Serve the page locally with `tools/host/run-webhid.sh` (default `http://127.0.0.
 ## Test
 
 ```bash
-node --test host/webhid/tests/*.test.mjs
+node --test host/direct/tests/*.test.mjs
 ```
 
 ## Troubleshooting
@@ -110,7 +117,7 @@ node --test host/webhid/tests/*.test.mjs
   If the connected firmware lacks the capability, flash the latest firmware for
   your board, then disconnect and reconnect the page. Building firmware alone does
   not update the connected board.
-- **Connect disabled:** use desktop Chrome/Edge in a secure context and check whether browser policy disables WebHID.
+- **Connect disabled:** use desktop Chrome/Edge in a secure context and check whether browser policy blocks USB HID access.
 - **Board not found:** check the firmware, the USB data cable, and browser site permissions.
 - **Access denied:** browser permission does not replace OS permissions; close competing HID clients.
 - **Remote workspace:** Chrome lists USB devices of the computer running Chrome; a forwarded page does not forward

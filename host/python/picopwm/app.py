@@ -140,9 +140,9 @@ def create_app(client: PicoPwmHid | None = None, registry: BoardRegistry | None 
             response["bank_errors"] = None
         return jsonify(response)
 
-    # Source checkouts and packaged wheels serve the same canonical WebHID presentation assets.
-    shared_root = web_root if (web_root / "css/webhid.css").is_file() else web_root.parent / "webhid"
-    for asset in ("css/webhid.css", "js/view.mjs", "js/device.mjs"):
+    # Source checkouts and packaged wheels serve the same canonical Direct Dashboard presentation assets.
+    shared_root = web_root if (web_root / "css/direct.css").is_file() else web_root.parent / "direct" / "src"
+    for asset in ("css/direct.css", "js/view.mjs", "js/device.mjs"):
         app.add_url_rule(f"/{asset}", endpoint=asset,
                          view_func=lambda asset=asset: send_from_directory(shared_root, asset))
 

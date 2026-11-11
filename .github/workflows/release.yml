@@ -123,8 +123,8 @@ jobs:
           sed -i "s/^version = \".*\"/version = \"$VERSION\"/" host/python/pyproject.toml
           mkdir -p host/python/picopwm/web
           cp -R host/web/. host/python/picopwm/web/
-          cp host/webhid/css/webhid.css host/python/picopwm/web/css/
-          cp host/webhid/js/view.mjs host/webhid/js/device.mjs host/python/picopwm/web/js/
+          cp host/direct/src/css/direct.css host/python/picopwm/web/css/
+          cp host/direct/src/js/view.mjs host/direct/src/js/device.mjs host/python/picopwm/web/js/
           python -m pip wheel --no-deps host/python --wheel-dir dist
 
       - name: Verify installed Python release

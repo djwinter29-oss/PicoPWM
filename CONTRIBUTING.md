@@ -28,7 +28,7 @@ Host tests also run on macOS and Windows; shell commands require a POSIX shell s
 Python and .NET commands can also run directly in PowerShell.
 
 Install only the toolchain needed for your change. Host-only work does not require the ARM firmware toolchain;
-see the [Python](host/python/README.md), [.NET](host/dotnet/README.md), and [WebHID](host/webhid/README.md) setup guides.
+see the [Python](host/python/README.md), [.NET](host/dotnet/README.md), and [Direct Dashboard](host/direct/README.md) setup guides.
 
 ### Firmware Builds
 
@@ -98,7 +98,7 @@ The script checks changed line ranges, not whole files or uncommitted edits. Wit
   `python -m pip install --editable "host/python[test]"`, then run `python -m pytest -q host/python/tests`.
   CI also installs `libhidapi-dev` on Linux or `hidapi` via Homebrew on macOS.
 - **Browser:** use Node.js 22, matching CI, and run
-  `node --test host/web/tests/*.test.mjs host/webhid/tests/*.test.mjs` in a POSIX shell.
+  `node --test host/web/tests/*.test.mjs host/direct/tests/*.test.mjs` in a POSIX shell.
 - **.NET:** install the .NET 10 SDK and run
   `dotnet test host/dotnet/PicoPwm.sln --configuration Release --nologo`.
 - **Host launchers:** run `python tools/test/test_run_python.py` and

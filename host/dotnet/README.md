@@ -46,7 +46,7 @@ cd host/dotnet
 dotnet run --project PicoPwm
 ```
 
-Open <http://127.0.0.1:5000>. The dashboard matches WebHID: identity and RAM, boot
+Open <http://127.0.0.1:5000>. The dashboard matches Direct Dashboard: identity and RAM, boot
 configuration with confirmed **Save and Reboot**, compact pin assignment, uptime,
 temperature and per-core service load, LED/reboot controls, and three eight-channel
 tables. Generator frequency/duty values open an editing dialog; monitors are read-only.
@@ -63,9 +63,9 @@ board's serial (or path if no serial); an absent board is marked **not found** a
 rescanning and never replaced silently by another.
 
 Host HTML/HTTP code lives in `host/web/`; rendering, display constants and PWM styling
-reuse `host/webhid/js/view.mjs`, `js/device.mjs`, and `css/webhid.css` directly. This
-project links both sets into `wwwroot` during build/publish. No browser WebHID is
-required. Edit canonical source files, not generated output.
+reuse `host/direct/src/js/view.mjs`, `js/device.mjs`, and `css/direct.css` directly. This
+project links both sets into `wwwroot` during build/publish. Unlike Direct Dashboard, the browser connects to the
+.NET host service rather than directly to USB. Edit canonical source files, not generated output.
 
 The route shape matches the Python host (snake_case, as in the HID report layouts).
 HTTP error bodies use the same fixed sentences and do not include exception text:

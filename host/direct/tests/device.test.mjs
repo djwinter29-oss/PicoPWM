@@ -6,7 +6,7 @@ import test from "node:test";
 import {
   DEVICE_FILTER, OPERATION, PicoPwmWebHid, decodeActionResult, decodeBankStatus, decodeConfiguration,
   decodeIdentity, decodePins, decodeRuntime, encodeActionRequest, matchesPicoPwm,
-} from "../js/device.mjs";
+} from "../src/js/device.mjs";
 
 const view = bytes => new DataView(Uint8Array.from(bytes).buffer);
 

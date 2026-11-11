@@ -27,11 +27,11 @@ These are examples of reportable defects, not a list of known vulnerabilities. A
 access, device selection, and configuration changes are not vulnerabilities by themselves.
 
 For host setup and deployment guidance, see the [Python host guide](host/python/README.md),
-[.NET host guide](host/dotnet/README.md), and [WebHID guide](host/webhid/README.md).
+[.NET host guide](host/dotnet/README.md), and [Direct Dashboard guide](host/direct/README.md).
 
 ## Supported Versions
 
-Security fixes target only the firmware and Python, .NET, and WebHID host applications associated with the
+Security fixes target only the firmware and Python, .NET, and Direct Dashboard host applications associated with the
 [latest stable PicoPWM release](https://github.com/djwinter29-oss/PicoPWM/releases/latest).
 Older releases and development or prerelease builds are not supported for security fixes.
 Users of those versions should upgrade to the latest stable release.

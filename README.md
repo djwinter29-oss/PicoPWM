@@ -6,8 +6,8 @@
 ![Targets: RP2040 and RP2350](https://img.shields.io/badge/Targets-RP2040%20%7C%20RP2350-2674b8)
 
 **24 PWM channels. One Pico. Three control interfaces.** PicoPWM turns a Raspberry Pi Pico or Pico 2 into a PWM
-generator and frequency monitor. Control it through the USB CDC serial CLI, I2C, or USB HID; the browser dashboard
-uses WebHID, while the Python and .NET host apps use USB HID. The firmware exposes three fixed 8-channel banks.
+generator and frequency monitor. Control it through the USB CDC serial CLI, I2C, or USB HID; Direct Dashboard
+uses the browser's WebHID API, while the Python and .NET host apps use USB HID. The firmware exposes three fixed 8-channel banks.
 Bank A uses hardware PWM, Bank B uses PIO, and Bank C uses software PWM. Generator/monitor roles apply to an
 entire bank; channel IDs stay the same across control interfaces.
 
@@ -26,7 +26,7 @@ entire bank; channel IDs stay the same across control interfaces.
 - **24 channels in three banks:** each eight-channel bank is configurable as a generator or monitor, with a fixed
   hardware, PIO, or software PWM backend.
 
-![WebHID dashboard with simulated device identity, boot configuration, runtime status, and 24 PWM generator and monitor channels.](docs/assets/pico-pwm-dashboard.png)
+![Direct Dashboard with simulated device identity, boot configuration, runtime status, and 24 PWM generator and monitor channels.](docs/assets/pico-pwm-dashboard.png)
 
 _Illustrative dashboard with simulated readings, not a live hardware result. Python and .NET share this layout._
 
@@ -45,7 +45,7 @@ Before wiring:
 1. **Flash firmware.** Download your board's UF2 from [Releases](https://github.com/djwinter29-oss/PicoPWM/releases).
    Hold **BOOTSEL** while connecting the board with a **USB data cable**, then copy the UF2 to the boot drive.
 2. **Choose a control interface.** Follow the [wiring guide](docs/guides/hardware-setup.md), then use either:
-   - **Browser:** open the [Browser Dashboard](#browser-dashboard) in desktop Chrome or Edge; no application
+   - **Browser:** open [Direct Dashboard](#direct-dashboard) in desktop Chrome or Edge; no application
      installation is needed. Connect and check the firmware version and running bank roles.
    - **Serial CLI:** open the [USB CDC shell](docs/guides/usb-cdc-shell.md) in a serial terminal, then follow
      the example below.
@@ -95,16 +95,16 @@ For configuration and connection issues, see [Setup and troubleshooting](docs/gu
 For browser and desktop dashboards, Linux may require
 [HID permissions setup](docs/guides/setup-and-troubleshooting.md#linux-hid-access).
 
-### Browser Dashboard
+### Direct Dashboard
 
-Open [WebHID](https://djwinter29-oss.github.io/PicoPWM/), click **Connect**, select your board, and grant
+Open [Direct Dashboard](https://djwinter29-oss.github.io/PicoPWM/), click **Connect**, select your board, and grant
 browser permission when prompted. No application installation is needed.
 
 > [!IMPORTANT]
-> **WebHID requires desktop Google Chrome or Microsoft Edge.** Safari and Firefox are not supported.
+> **Direct Dashboard requires desktop Google Chrome or Microsoft Edge.** Safari and Firefox are not supported.
 > Connect the board to the computer running the browser.
 
-See the [WebHID guide](host/webhid/README.md) for controls and connection troubleshooting.
+See the [Direct Dashboard guide](host/direct/README.md) for controls and connection troubleshooting.
 
 ### Desktop Dashboards
 

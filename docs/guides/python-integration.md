@@ -207,5 +207,5 @@ Applications and tests can inject a client with `create_app(client)` from
 `picopwm.app`.
 
 Release wheels bundle the dashboard assets. Source checkouts serve the shared
-assets from `host/web/` and `host/webhid/`; edit those canonical files rather than
+assets from `host/web/` and `host/direct/src/`; edit those canonical files rather than
 generated or bundled copies.

@@ -98,6 +98,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Resolve host version
         id: version
@@ -120,11 +122,13 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -eu
-          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" host/python/pyproject.toml
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            export SETUPTOOLS_SCM_PRETEND_VERSION="$VERSION"
+          fi
           mkdir -p host/python/picopwm/web
-          cp -R host/web/. host/python/picopwm/web/
-          cp host/webhid/css/webhid.css host/python/picopwm/web/css/
-          cp host/webhid/js/view.mjs host/webhid/js/device.mjs host/python/picopwm/web/js/
+          cp -R host/web/src/. host/python/picopwm/web/
+          cp host/direct/src/css/direct.css host/python/picopwm/web/css/
+          cp host/direct/src/js/view.mjs host/direct/src/js/device.mjs host/python/picopwm/web/js/
           python -m pip wheel --no-deps host/python --wheel-dir dist
 
       - name: Verify installed Python release

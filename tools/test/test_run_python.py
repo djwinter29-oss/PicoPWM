@@ -53,7 +53,7 @@ class RunPythonTests(unittest.TestCase):
                         for path in root_paths),
                     log,
                 )
-                self.assertIn("-m picopwm.app", log)
+                self.assertIn("-m picopwm.dashboard.app", log)
                 if pip_available == "1":
                     expected_interpreter = str(interpreter).replace("\\", "/")
                     self.assertIn(f"base -m pip --python {expected_interpreter}", normalized_log)

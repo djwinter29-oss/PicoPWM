@@ -62,4 +62,4 @@ else
 fi
 
 echo "Starting PicoPWM Python dashboard at http://${PICOPWM_HOST:-127.0.0.1}:${PICOPWM_PORT:-5000}/"
-PYTHONPATH="$REPO_ROOT/host/python${PYTHONPATH:+:$PYTHONPATH}" exec "$PYTHON_EXE" -m picopwm.app
+PYTHONPATH="$REPO_ROOT/host/python${PYTHONPATH:+:$PYTHONPATH}" exec "$PYTHON_EXE" -m picopwm.dashboard.app

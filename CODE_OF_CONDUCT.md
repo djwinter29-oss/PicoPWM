@@ -1,30 +1,30 @@
 # Contributor Covenant Code of Conduct
 
+To report a concern, see [Reporting](#reporting).
+
 ## Our Pledge
 
-We as members, contributors, and leaders pledge to make participation in our community a harassment-free experience
-for everyone, regardless of age, body size, visible or invisible disability, ethnicity, sex characteristics, gender
-identity and expression, level of experience, education, socio-economic status, nationality, personal appearance,
-race, religion, or sexual identity and orientation.
+We pledge a welcoming, harassment-free community for everyone, regardless of age, body size, disability, ethnicity,
+sex characteristics, gender identity or expression, experience, education, socio-economic status, nationality,
+appearance, race, religion, or sexual identity and orientation.
 
 ## Our Standards
 
 Be kind, respect differing viewpoints and experiences, give and accept constructive feedback, and take responsibility
 for mistakes.
 
-Examples of unacceptable behavior include:
+Unacceptable behavior includes:
 
-- The use of sexualized language or imagery, and sexual attention or advances of any kind
+- Sexualized language or imagery, or sexual attention or advances
 - Trolling, insulting or derogatory comments, and personal or political attacks
 - Public or private harassment
 - Publishing others' private information without explicit permission
-- Retaliation against anyone who reports a concern or participates in a review in good faith
+- Retaliation against good-faith reporters or review participants
 
 ## Scope
 
-This Code of Conduct applies within all project spaces (issues, pull requests, discussions), in project-related
-private communications, and when an individual is officially representing the project in public spaces. It does not
-govern unrelated personal activity.
+This code applies in project spaces, project-related private communications, and public representation of the
+project, not unrelated personal activity.
 
 ## Reporting
 
@@ -34,34 +34,39 @@ Use GitHub's reporting tools rather than opening a public issue or a security vu
 - For suspected GitHub policy violations, including those involving maintainers, use
   [GitHub's abuse reporting form](https://support.github.com/contact/report-abuse).
 
-Include relevant links and context; do not post sensitive details publicly. See
+Include relevant links and context privately. See
 [GitHub's reporting instructions](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam).
 
-GitHub Support enforces GitHub's policies, not this code, and does not automatically forward reports to maintainers.
-The project uses GitHub reporting only; there is no separate private project inbox or external reviewer. If admin
-reporting is unavailable or all available admins are involved in the concern, there is no private project escalation
-route. GitHub's abuse reporting form remains available for suspected GitHub policy violations, but is not a
-replacement for project-level review.
+For off-platform incidents, use an available private project reporting or reply channel. Do not publish private
+communications or sensitive evidence to create a reportable GitHub item.
 
-## Enforcement And Privacy
+There is no separate project inbox or external reviewer. If no private channel or uninvolved admin is available,
+the project cannot provide private reporting or escalation. GitHub Support handles GitHub policy violations, not
+general off-platform complaints, enforcement of this code, or appeals of project decisions; it does not
+automatically forward reports to maintainers.
 
-Maintainers review concerns fairly and must not handle complaints about their own conduct. An uninvolved maintainer
-should handle those where available. If no uninvolved maintainer is available, the project cannot offer an independent
-review or project-level resolution of that complaint; the reporting limitations above apply.
+## Review and Enforcement
 
-Sensitive information is shared only as needed for review and enforcement; absolute confidentiality cannot be
-guaranteed. GitHub handles reports sent to its Support team under its own policies.
+An uninvolved maintainer reviews concerns fairly; maintainers must not review complaints about themselves.
+Without an uninvolved maintainer, the project cannot offer independent review or resolution.
 
-Maintainers consider the conduct's severity, impact, context, prior conduct, and corrective action. They may request a
-correction, issue a warning, remove content, temporarily restrict participation, or permanently exclude a participant.
-Serious incidents may warrant immediate exclusion.
+Actions depend on severity, impact, context, prior conduct, and corrective action. They may include corrections,
+warnings, content removal, temporary restrictions, or permanent exclusion. Serious incidents may warrant immediate
+exclusion.
 
-Response times depend on maintainer availability. Where a private reply channel exists, maintainers should communicate
-decisions and restriction terms. Participants may request reconsideration with new context through the original
-private reporting channel or a private reply channel provided with the decision, where that channel supports replies.
-If neither supports replies, the project has no dedicated private reconsideration route; do not post sensitive details
-publicly to request one. The same conflict-of-interest rules apply to reconsideration. GitHub Support is not an appeal
-body for project decisions.
+Response times depend on availability. Where private replies are possible, maintainers should communicate decisions
+and restriction terms.
+
+## Privacy
+
+Sensitive information is shared only as needed for review and enforcement; absolute confidentiality is not guaranteed.
+GitHub handles Support reports under its own policies.
+
+## Reconsideration
+
+Request reconsideration with new context through the original private channel or one provided with the decision,
+if replies are supported. Otherwise, no dedicated private reconsideration route exists. Do not post sensitive details
+publicly. The same conflict-of-interest rules apply.
 
 ## Attribution
 

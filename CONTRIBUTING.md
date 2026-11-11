@@ -1,32 +1,38 @@
 # Contributing
 
-Contributions to firmware, host tools, tests, and documentation are welcome. You do not need a board for many changes;
-validating PWM output, timing and monitor accuracy requires hardware.
+Contributions to firmware, host tools, tests, and documentation are welcome. Most changes can be tested without
+a board; validating electrical output, timing, and monitor accuracy requires hardware.
 
 ## Before You Start
 
-- Read [README.md](README.md) for project scope and the [documentation index](docs/README.md).
-- Check open issues and pull requests to avoid duplicate work.
-- For new features, design changes, or substantial fixes, open an issue to agree on scope before starting.
-- When reporting a bug, include reproduction steps, expected and actual behavior, and relevant versions and logs.
-  For hardware issues, also include the board, firmware version, backend and bank configuration, and wiring.
+- Read [README.md](README.md) and check existing issues and pull requests. Agree on scope in an issue before
+  starting new features, design changes, or substantial fixes.
+- For bugs, include reproduction steps, expected and actual behavior, versions, and relevant logs. For hardware
+  issues, include the board, firmware, bank/backend configuration, and wiring.
+- Follow the [Code of Conduct](CODE_OF_CONDUCT.md). Report suspected vulnerabilities privately through
+  [SECURITY.md](SECURITY.md), not a public issue.
 
 ## Development Setup
 
-- Firmware build and test instructions are below; CI and release workflows are described in
-  [Builds and Publishing](docs/deployment/releases.md).
-- Architecture and driver internals: [docs/design/architecture.md](docs/design/architecture.md) and
-  [docs/design/pwm-driver/driver-design.md](docs/design/pwm-driver/driver-design.md).
-- Host tools: [host/python](host/python/README.md), [host/dotnet](host/dotnet/README.md) and
-  [host/webhid](host/webhid/README.md).
+Fork the repository on GitHub, then clone your fork and create a topic branch:
 
-Use Linux or WSL2 Ubuntu for firmware development. Host tests also run on macOS and Windows in CI.
-Run the commands below from the repository root. Shell scripts require a POSIX shell; on Windows, use Git Bash
-for the aggregate host runner or run the focused Python and .NET commands directly in PowerShell.
+```sh
+git clone https://github.com/YOUR-USERNAME/PicoPWM.git
+cd PicoPWM
+git remote add upstream https://github.com/djwinter29-oss/PicoPWM.git
+git switch -c your-change
+```
+
+Run commands from the repository root. Use Linux or WSL2 Ubuntu for firmware development.
+Host tests also run on macOS and Windows; shell commands require a POSIX shell such as Git Bash.
+Python and .NET commands can also run directly in PowerShell.
+
+Install only the toolchain needed for your change. Host-only work does not require the ARM firmware toolchain;
+see the [Python](host/python/README.md), [.NET](host/dotnet/README.md), and [Direct Dashboard](host/direct/README.md) setup guides.
 
 ### Firmware Builds
 
-On Ubuntu 24.04, install the native build tools, Python, ARM cross-toolchain and libraries, and formatting tools:
+On Ubuntu 24.04:
 
 ```sh
 sudo apt-get update
@@ -36,33 +42,19 @@ sudo apt-get install --no-install-recommends \
     libstdc++-arm-none-eabi-dev libstdc++-arm-none-eabi-newlib
 ```
 
-The ARM packages match CI's firmware dependencies; native compilers are needed for host-side C tests and SDK tools.
-Then build both supported boards:
+Build both supported boards:
 
 ```sh
 ./tools/firmware/build.sh --board pico
 ./tools/firmware/build.sh --board pico2
 ```
 
-The helper initializes the `firmware/third_party` submodules, including the pinned Pico SDK, and writes outputs to
-`build/<board>/`. Fresh builds prefer Ninja when it is available; otherwise CMake uses its platform default. Existing
-build directories keep their cached generator. Set `CMAKE_GENERATOR` to choose one explicitly; switching an existing
-directory to another generator requires a fresh build directory. The helper does not delete build state.
+The helper initializes firmware submodules and writes `pico_pwm.uf2` and `pico_pwm.elf` to `build/<board>/`.
+Fresh builds prefer Ninja; existing builds retain their cached generator. Set `CMAKE_GENERATOR` to override it,
+using a fresh build directory when switching generators.
 
-The UF2 for USB flashing is `build/<board>/pico_pwm.uf2`; `pico_pwm.elf` is available for debug tools. Local firmware
-builds use version `0.0.0-dev`; pass `--firmware-version x.y.z` with an optional `-dev` or `-rcN` suffix to override
-it. Release versions and packaging are covered in [Builds and Publishing](docs/deployment/releases.md).
-
-## Documentation
-
-- Put user task guidance in `docs/guides/`, implementation details and protocol
-  contracts in `docs/design/`, release workflows in `docs/deployment/`, and
-  validation material in `docs/tests/`.
-- Use kebab-case for documentation filenames.
-- Link to authoritative pages instead of duplicating detailed instructions or
-  tables.
-- Update the [documentation index](docs/README.md) and affected links when
-  adding, moving, or renaming a page.
+Local firmware defaults to `0.0.0-dev`; override with `--firmware-version x.y.z` (optional `-dev` or `-rcN`).
+See [Builds and Publishing](docs/deployment/releases.md) for CI and release packaging.
 
 ## Validate Your Change
 
@@ -72,6 +64,7 @@ Run the smallest relevant checks first, then broaden validation for shared behav
 | --- | --- |
 | Firmware | `tools/test/test-firmware-c.sh`, `tools/test/check-firmware-invariants.sh`, the formatting checks below, and builds for both `pico` and `pico2` with `tools/firmware/build.sh`. |
 | Python, .NET, or browser tools | Use the focused commands below; run `tools/test/test-host.sh` for shared host changes. |
+| Scripts and tooling | Run the relevant `tools/test/syntax-check-python.sh` or `tools/test/syntax-check-shell.sh`; for firmware build/load helper changes, run `python3 -m unittest discover -s tools/test -p 'test_firmware_*.py'`. |
 | Documentation only | Check links, examples, and rendered formatting; run `git diff --check`. |
 
 Before running native C tests without a firmware build, initialize their source dependency:
@@ -83,77 +76,73 @@ tools/test/test-firmware-c.sh
 
 ### C Formatting
 
-For edited files before committing, check each affected file explicitly, for example:
+Check each edited C file, for example:
 
 ```sh
 clang-format --dry-run --Werror --style=file firmware/src/control_api.c
 ```
 
-Use `clang-format -i --style=file <file>` to format a file, and inspect the resulting diff.
-For committed PR changes, fetch the target branch and select the PR's merge base:
+To format, use `clang-format -i --style=file <file>` and inspect the diff.
+For committed PR changes, compare against the target branch:
 
 ```sh
-git fetch origin main
-tools/test/check-clang-format.sh --base "$(git merge-base origin/main HEAD)" --head HEAD
+git fetch upstream main
+tools/test/check-clang-format.sh --base "$(git merge-base upstream/main HEAD)" --head HEAD
 ```
 
-The script checks changed line ranges, not whole files. Without arguments it selects the last commit's ranges;
-it does not select uncommitted changes or the entire PR automatically.
+The script checks changed line ranges, not whole files or uncommitted edits. Without arguments, it checks the last commit.
 
 ### Focused Host Tests
 
-- **Python:** use Python 3.10+ and an activated virtual environment (see the
-  [Python guide](host/python/README.md#quick-start)). Install test dependencies with
+- **Python:** use Python 3.10+ and an [activated virtual environment](host/python/README.md#quick-start). Install with
   `python -m pip install --editable "host/python[test]"`, then run `python -m pytest -q host/python/tests`.
   CI also installs `libhidapi-dev` on Linux or `hidapi` via Homebrew on macOS.
 - **Browser:** use Node.js 22, matching CI, and run
-  `node --test host/web/tests/*.test.mjs host/webhid/tests/*.test.mjs` in a POSIX shell.
+  `node --test host/web/tests/*.test.mjs host/direct/tests/*.test.mjs host/direct/tests/js/*.test.mjs`
+  in a POSIX shell.
 - **.NET:** install the .NET 10 SDK and run
   `dotnet test host/dotnet/PicoPwm.sln --configuration Release --nologo`.
 - **Host launchers:** run `python tools/test/test_run_python.py` and
   `python tools/test/test_run_dotnet.py`.
 
-The aggregate runner requires all three toolchains, the Python test dependencies, and a POSIX shell.
-Activate the Python environment first; use `PYTHON=python tools/test/test-host.sh` to select its interpreter.
-CI's exact versions and platform setup are in [Host Validation](.github/workflows/host-validation.yml).
+The aggregate runner requires Python test dependencies, Node.js, .NET, and a POSIX shell.
+With the Python environment active, run `PYTHON=python tools/test/test-host.sh`.
+See [Host Validation](.github/workflows/host-validation.yml) for CI's platform setup.
 
 ### Hardware Validation
 
-For PWM generation/monitoring, CDC commands, or HIL tooling changes, also run the hardware-free runner regressions:
+For PWM, CDC, or HIL tooling changes, also run the hardware-free regressions:
 
 ```sh
 python -m unittest discover -s tools/hil/tests -p 'test_*.py'
 ```
 
-Physical testing requires the [HIL connection guide](docs/tests/hil-test-connections.md) and
-[test plan](docs/tests/hil-test-plan.md). Before running the CDC subset, the operator must confirm the port, board,
-actual flashed artifact, fixture, and permission to drive outputs. Require exactly one running generator bank and
-two monitor banks; do not automatically change roles, save configuration, reboot, or rewire to make a run possible.
-The test plan documents the launcher and its required `--confirm-fixture` option.
+Follow the [HIL connection guide](docs/tests/hil-test-connections.md) and [test plan](docs/tests/hil-test-plan.md).
+The CDC subset requires operator confirmation of the port, board, flashed artifact, fixture, and permission to drive
+outputs (`--confirm-fixture`). Require one running generator bank and two monitor banks; never automatically change
+roles, save configuration, reboot, or rewire to enable a run.
 
-The runner replaces `docs/tests/records/latest.md`; preserve an existing record under a dated filename first if
-needed. See the [record guidance](docs/tests/records/README.md). Inspect failures, unexecuted checks, and cleanup
-status. A nonzero exit is a failure.
-The CDC subset does not qualify instrument accuracy, other transports, or the remaining generator-bank passes.
-If hardware or operator confirmation is unavailable, report HIL as not run and explain why; host tests are not
-hardware qualification.
+The runner replaces `docs/tests/records/latest.md`; [preserve records](docs/tests/records/README.md) when needed.
+Inspect failures, unexecuted checks, and cleanup; a nonzero exit is a failure. Without hardware or confirmation,
+report HIL as not run and explain why. Host tests and CDC loopback are not full hardware qualification:
+instrument accuracy, other transports, and remaining generator-bank passes require separate validation.
+
+## Documentation
+
+- Use kebab-case filenames: user tasks in `docs/guides/`, design/protocols in `docs/design/`,
+  releases in `docs/deployment/`, and validation in `docs/tests/`.
+- Link to authoritative pages rather than duplicating details. Update the [index](docs/README.md) and affected
+  links when adding, moving, or renaming pages.
 
 ## Pull Requests
 
-- Keep changes small and focused; follow the [coding conventions](.github/copilot-instructions.md), including the
-  Doxygen requirements for C.
+- Push your topic branch to your fork and open a pull request against `djwinter29-oss/PicoPWM`'s `main` branch.
+- Keep changes focused; follow the [coding conventions](.github/copilot-instructions.md), including C Doxygen rules
+  and [source-file licensing requirements](.github/copilot-instructions.md#licensing). New first-party source files
+  need the prescribed SPDX/copyright notices; preserve third-party licenses.
 - Respect the core split: Core 0 owns CDC, I2C and HID; Core 1 owns PWM backends, and
   `firmware/src/driver/pwm/pwm_driver.c` is the multicore boundary.
-- Add a focused regression test for non-trivial fixes or new behavior.
-- Update matching docs when behavior changes.
-- Explain the problem, the change, and any compatibility impact (for example I2C, HID or flash layout changes); link
-  the related issue when applicable.
-- List checks run and their results, and identify skipped checks and why they were skipped.
-
-## Reporting Security Issues
-
-Do not open a public issue for suspected vulnerabilities. Follow [SECURITY.md](SECURITY.md) instead.
-
-## Code of Conduct
-
-This project follows the [Code of Conduct](CODE_OF_CONDUCT.md).
+- Add regression tests for non-trivial changes and update matching docs. Consult the
+  [architecture](docs/design/architecture.md) and [PWM driver design](docs/design/pwm-driver/driver-design.md).
+- Explain the problem, solution, compatibility impacts (I2C, HID, flash layout), and related issue.
+- List checks and results, including skipped checks and reasons.

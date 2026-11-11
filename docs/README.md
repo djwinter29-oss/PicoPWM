@@ -11,6 +11,7 @@ Task-oriented information for configuring, connecting, and operating PicoPWM:
 - [Hardware Setup](guides/hardware-setup.md)
 - [USB CDC shell](guides/usb-cdc-shell.md)
 - [Setup and Troubleshooting](guides/setup-and-troubleshooting.md)
+- [Direct Dashboard](../host/direct/README.md) — direct browser control, without a host service
 
 ## Deployment
 

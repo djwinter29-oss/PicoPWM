@@ -6,14 +6,16 @@
 ![Targets: RP2040 and RP2350](https://img.shields.io/badge/Targets-RP2040%20%7C%20RP2350-2674b8)
 
 **24 PWM channels. One Pico. Three control interfaces.** PicoPWM turns a Raspberry Pi Pico or Pico 2 into a PWM
-generator and frequency monitor. Control it through the USB CDC serial CLI, I2C, or USB HID; the browser dashboard
-uses WebHID, while the Python and .NET host apps use USB HID. The firmware exposes three fixed 8-channel banks.
-Configure each bank as a generator or monitor; channel IDs stay the same across control interfaces.
+generator and frequency monitor. Control it through the USB CDC serial CLI, I2C, or USB HID; Direct Dashboard
+uses the browser's WebHID API, while the Python and .NET host apps use USB HID. The firmware exposes three fixed 8-channel banks.
+Bank A uses hardware PWM, Bank B uses PIO, and Bank C uses software PWM. Generator/monitor roles apply to an
+entire bank; channel IDs stay the same across control interfaces.
 
 **Quick links:** [Download firmware](https://github.com/djwinter29-oss/PicoPWM/releases) ·
 [Hardware setup](docs/guides/hardware-setup.md) ·
 [Open dashboard](https://djwinter29-oss.github.io/PicoPWM/) ·
-[Python package](https://pypi.org/project/picopwm/)
+[Python package](https://pypi.org/project/picopwm/) ·
+[Standalone .NET downloads](https://github.com/djwinter29-oss/PicoPWM/releases/latest)
 
 ## Why PicoPWM?
 
@@ -21,10 +23,10 @@ Configure each bank as a generator or monitor; channel IDs stay the same across 
 - **Easy test automation:** integrate PWM generation and monitoring into test scripts using the CLI, Python HID
   client, or I2C. Start with the [Python scripting example](host/python/README.md#use-from-python).
 - **Ready-to-use dashboards:** control and monitor channels through a browser, Python, or standalone .NET application.
-- **24 flexible channels:** three eight-channel banks using hardware, PIO, and software PWM, each configurable as
-  generator or monitor.
+- **24 channels in three banks:** each eight-channel bank is configurable as a generator or monitor, with a fixed
+  hardware, PIO, or software PWM backend.
 
-![WebHID dashboard with simulated device identity, boot configuration, runtime status, and 24 PWM generator and monitor channels.](docs/assets/pico-pwm-dashboard.png)
+![Direct Dashboard with simulated device identity, boot configuration, runtime status, and 24 PWM generator and monitor channels.](docs/assets/pico-pwm-dashboard.png)
 
 _Illustrative dashboard with simulated readings, not a live hardware result. Python and .NET share this layout._
 
@@ -41,9 +43,9 @@ Before wiring:
 - For I2C, add external SDA/SCL pull-ups and start at 100 kHz (default address `0x40`).
 
 1. **Flash firmware.** Download your board's UF2 from [Releases](https://github.com/djwinter29-oss/PicoPWM/releases).
-   Hold **BOOTSEL** while connecting USB, then copy the UF2 to the boot drive.
+   Hold **BOOTSEL** while connecting the board with a **USB data cable**, then copy the UF2 to the boot drive.
 2. **Choose a control interface.** Follow the [wiring guide](docs/guides/hardware-setup.md), then use either:
-   - **Browser:** open the [Browser Dashboard](#browser-dashboard) in desktop Chrome or Edge; no application
+   - **Browser:** open [Direct Dashboard](#direct-dashboard) in desktop Chrome or Edge; no application
      installation is needed. Connect and check the firmware version and running bank roles.
    - **Serial CLI:** open the [USB CDC shell](docs/guides/usb-cdc-shell.md) in a serial terminal, then follow
      the example below.
@@ -88,6 +90,31 @@ Stopping does not change saved bank roles; Bank A remains configured as a genera
 monitor-only operation, see [Configure bank roles](docs/guides/setup-and-troubleshooting.md#configure-bank-roles).
 For configuration and connection issues, see [Setup and troubleshooting](docs/guides/setup-and-troubleshooting.md).
 
+## Dashboards
+
+For browser and desktop dashboards, Linux may require
+[HID permissions setup](docs/guides/setup-and-troubleshooting.md#linux-hid-access).
+
+### Direct Dashboard
+
+Open [Direct Dashboard](https://djwinter29-oss.github.io/PicoPWM/), click **Connect**, select your board, and grant
+browser permission when prompted. No application installation is needed.
+
+> [!IMPORTANT]
+> **Direct Dashboard requires desktop Google Chrome or Microsoft Edge.** Safari and Firefox are not supported.
+> Connect the board to the computer running the browser.
+
+See the [Direct Dashboard guide](host/direct/README.md) for controls and connection troubleshooting.
+
+### Desktop Dashboards
+
+| Option | Start here |
+| --- | --- |
+| Python 3.10+ | [Install and run `picopwm`](host/python/README.md#quick-start) from PyPI. |
+| Standalone .NET | [Download and run](host/dotnet/README.md#standalone-application) a release package for Linux x64, Windows x64, or macOS ARM64; no separate .NET installation needed. |
+
+Connect the board to the computer running the host application.
+
 ## Recommended Frequency Ranges
 
 Conservative starting points, **not hardware-qualified accuracy specifications**:
@@ -108,36 +135,10 @@ floor. See the [PIO monitor limitations](docs/design/pwm-driver/pio.md#monitor-d
 [reported low-frequency PIO-to-software loopback observation](docs/design/pwm-driver/software.md#low-frequency-loopback-observation).
 Backend links above cover extended ranges and limitations.
 
-Operator-reported Pico loopback checks covered all eight channels of each bank as generator at 100, 500 and
-1000 Hz with 25%, 50% and 75% duty; monitor readback met ±5% frequency and ±5 percentage points duty
-([record](docs/tests/records/30-10-2026-manual-pico-bank-rotation.md)). Firmware identity, numerical readings and
-captured logs were not recorded. These checks are not independent accuracy qualification; verify electrical
-output with an independent instrument.
-
-## Dashboards
-
-For browser and desktop dashboards, Linux may require
-[HID permissions setup](docs/guides/setup-and-troubleshooting.md#linux-hid-access).
-
-### Browser Dashboard
-
-Open [WebHID](https://djwinter29-oss.github.io/PicoPWM/), click **Connect**, select your board, and grant
-browser permission when prompted. No application installation is needed.
-
-> [!IMPORTANT]
-> **WebHID requires desktop Google Chrome or Microsoft Edge.** Safari and Firefox are not supported.
-> Connect the board to the computer running the browser.
-
-See the [WebHID guide](host/webhid/README.md) for controls and connection troubleshooting.
-
-### Desktop Dashboards
-
-| Option | Start here |
-| --- | --- |
-| Python 3.10+ | [Install and run `picopwm`](host/python/README.md#quick-start) from PyPI. |
-| Standalone .NET | [Download and run](host/dotnet/README.md#standalone-application) a release package; no separate .NET installation needed. |
-
-Connect the board to the computer running the host application.
+Operator-reported Pico loopback checks covered all three generator banks at 100, 500, and 1000 Hz with 25%, 50%,
+and 75% duty; see the [test record and its limitations](docs/tests/records/30-10-2026-manual-pico-bank-rotation.md).
+These functional checks are not independent accuracy qualification; verify electrical output with an independent
+instrument.
 
 ## Documentation
 
@@ -152,8 +153,13 @@ See the [documentation index](docs/README.md) for the full map.
 | Build, test and release | [Builds and publishing](docs/deployment/releases.md) |
 | Contribute | [Contributing](CONTRIBUTING.md), [Code of Conduct](CODE_OF_CONDUCT.md), [Security](SECURITY.md) |
 
-The USB identity `0xCAFE:0x4012` is for development and lab use, not commercial derivatives. The CDC, HID and I2C
-interfaces are unauthenticated; see [SECURITY.md](SECURITY.md).
+PicoPWM uses USB VID `0x2E8A` and PID `0x116C`, allocated by Raspberry Pi through its
+[USB PID program](https://github.com/raspberrypi/usb-pid).
+The USB manufacturer string is `djwinter` and the product string is `PicoPWM`; CDC and HID remain
+separate interfaces of the same composite device.
+
+The CDC, HID, and I2C interfaces are intended for trusted local access and have no firmware-level authentication.
+See [SECURITY.md](SECURITY.md) for the trust model and vulnerability reporting.
 
 Related projects: [PicoUART](https://github.com/djwinter29-oss/PicoUart) (six USB serial ports) and
 [PicoForge](https://github.com/djwinter29-oss/PicoForge) (host-controlled board services). They share no runtime

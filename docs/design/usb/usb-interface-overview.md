@@ -11,12 +11,12 @@ options; its protocol is documented separately in the
 [I2C protocol reference](../i2c/i2c-protocol.md).
 
 The device advertises USB 2.0 and uses the standard composite, CDC ACM, and HID
-drivers on Windows. It does not expose a BOS descriptor; WebHID uses the HID
+drivers on Windows. It does not expose a BOS descriptor; Direct Dashboard uses the HID
 interface and does not require WebUSB descriptors.
 The HID interface name shown by host device pickers is `picopwm-<serial number>`,
 using the board's USB serial string.
 
-Use CDC for interactive control. Use HID for browser-based WebHID tools and other HID-capable clients that need
+Use CDC for interactive control. Use HID for Direct Dashboard and other HID-capable clients that need
 structured reads. I2C remains a separate binary controller interface. HID is not a second control model: it reuses the
 shared channel IDs, capability checks, and result codes.
 
@@ -25,7 +25,7 @@ shared channel IDs, capability checks, and result codes.
 | Interface | Count | Purpose                                              | Host tool                          |
 | --------- | ----: | ---------------------------------------------------- | ---------------------------------- |
 | CDC ACM   |     1 | Text shell: channel set, stop, status, configuration | Serial terminal                    |
-| HID       |     1 | Identity, configuration, channel status, actions     | WebHID, Python, and .NET host apps |
+| HID       |     1 | Identity, configuration, channel status, actions     | Direct Dashboard, Python, and .NET host apps |
 | I2C       |     - | Binary register control from an external controller  | I2C controller                     |
 
 ## Architectural Boundaries
@@ -60,7 +60,7 @@ HID readback is a snapshot of
 frequency and duty, not waveform history; there are no input reports or periodic telemetry, so hosts poll when they need fresh state.
 
 The HID interface is added to the composite USB configuration alongside CDC. Descriptor and report changes are
-tested on RP2040 and RP2350 builds and with the target host APIs, including WebHID report-ID handling. Core 0
+tested on RP2040 and RP2350 builds and with the target host APIs, including WebHID API report-ID handling in Direct Dashboard. Core 0
 services HID from its normal polling loop alongside CDC and I2C, and validates framing before calling `control_api`.
 
 ## Typical Host Workflow

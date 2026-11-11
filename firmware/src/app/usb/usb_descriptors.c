@@ -12,17 +12,17 @@
 
 #include <string.h>
 
-/** @brief USB vendor ID used by the PicoPWM firmware image. */
-#define USB_VID 0xCafe
-/** @brief USB product ID used by the PicoPWM firmware image. */
-#define USB_PID 0x4012
+/** @brief Raspberry Pi USB vendor ID used under the PicoPWM PID allocation. */
+#define USB_VID 0x2E8A
+/** @brief USB product ID allocated to PicoPWM by Raspberry Pi. */
+#define USB_PID 0x116C
 /** @brief USB 2.0 specification version; this device does not expose a BOS descriptor. */
 #define USB_BCD 0x0200
 
 /** @brief Manufacturer string exposed in the USB string table. */
-#define USB_STR_MANUFACTURER "PicoPWM"
+#define USB_STR_MANUFACTURER "djwinter"
 /** @brief Product string exposed in the USB string table. */
-#define USB_STR_PRODUCT "PicoPWM USB CDC HID"
+#define USB_STR_PRODUCT "PicoPWM"
 /** @brief Interface string for the CDC command interface. */
 #define USB_STR_CDC "CDC Command"
 /** @brief Prefix for the board-specific HID interface name shown to hosts. */

@@ -17,6 +17,10 @@ by the configured token, or authenticate through `POST /api/login` with
 `{"token": "<token>"}` to receive a login cookie. Requests with an `Origin` that
 differs from the request host are rejected.
 
+Python uses `picopwm_python_auth`; .NET uses `picopwm_dotnet_auth`. Distinct names prevent login cookies
+from overwriting each other on the same hostname, since cookies are not isolated by port.
+The old shared `picopwm_auth` cookie is no longer accepted; log in again after upgrading.
+
 The built-in server does not provide TLS. Do not expose it directly to the public
 internet; use a trusted network and an appropriately configured HTTPS reverse
 proxy if remote access is needed.
@@ -204,8 +208,57 @@ another index. If `ensurepip` is unavailable, it can use the base interpreter's
 pip with `--python`; otherwise install pip or the OS Python venv package.
 
 Applications and tests can inject a client with `create_app(client)` from
-`picopwm.app`.
+`picopwm.dashboard.app`.
+Package internals are grouped into `dashboard/` (HTTP), `device/` (client and registry),
+and `hid/` (transport and report codecs). Import from these subpackages instead of the former flat modules.
+
+### Embedded application lifecycle
+
+The CLI closes its board registry when the server exits. If you embed `create_app()` in another
+application, the application owner must close the registry **after all requests and worker activity
+have stopped**, including on exceptional shutdown:
+
+```python
+from picopwm.dashboard.app import create_app
+
+app = create_app()
+try:
+    app.run(host="127.0.0.1", port=5000)
+finally:
+    app.extensions["picopwm_boards"].close()
+```
+
+For an externally managed WSGI server, perform the same cleanup in its worker-shutdown lifecycle,
+not Flask's per-request `teardown_appcontext`. Each worker owns its own registry and client locks;
+use one worker process for a given board to avoid independent command streams.
+An injected `create_app(client=client)` client remains caller-owned; close it separately, or use
+`with PicoPwmHid() as client:` around the complete server lifetime. Cleanup releases handles;
+it does not disable outputs. These examples do not change the built-in server's local-use scope.
+
+### HID failure qualification checklist
+
+**Status: not hardware-qualified.** Unit tests do not establish native transfer deadlines.
+Perform the following separately on Windows, Linux, and macOS with the actual supported hidapi backend.
+Record OS, Python/hidapi versions, board/firmware, USB connection, observed timings, and cleanup outcome.
+
+1. Obtain operator confirmation of the board, flashed artifact, port, fixture, and permission to drive
+   outputs under the [HIL connection guide](../tests/hil-test-connections.md).
+   Do not automatically change bank roles, save flash, reboot, or rewire to prepare the test.
+2. Measure normal status/command latency, then test operator-controlled USB disconnect/reconnect
+   while idle and during a command. An uncertain command must not be reported as confirmed success.
+3. Verify that reconnect retains the selected board identity, rereads capabilities and pin mapping,
+   and never silently switches to another attached board.
+4. If a repeatable native transfer stall can be induced safely, measure how long both the operation
+   and a second call on the same board remain blocked. If not reproducible, mark stall behavior
+   **not tested**, not passed. The 3/15-second polling deadlines do not interrupt a blocking OS call.
+5. Verify normal and exceptional shutdown release handles. Record partial configuration changes and
+   unconfirmed outcomes explicitly. Disconnect board power if output state is uncertain;
+   the host is not an emergency-stop mechanism.
+
+This is a manual qualification checklist, not evidence that these tests ran. Keep instrument checks
+and other transport qualification separate, and follow the [HIL test plan](../tests/hil-test-plan.md)
+for formal records.
 
 Release wheels bundle the dashboard assets. Source checkouts serve the shared
-assets from `host/web/` and `host/webhid/`; edit those canonical files rather than
+assets from `host/web/src/` and `host/direct/src/`; edit those canonical files rather than
 generated or bundled copies.

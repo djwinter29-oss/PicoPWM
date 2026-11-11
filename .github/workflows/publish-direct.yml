@@ -1,0 +1,123 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Ji Dong
+
+name: Publish Direct Dashboard Pages
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Published release tag in vMAJOR.MINOR.PATCH form, for example v1.2.3"
+        required: false
+        type: string
+      test_publish:
+        description: Deploy the selected branch commit to the live Pages URL instead of a release tag
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Validate and package Direct Dashboard
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pages: read
+    steps:
+      - name: Checkout release tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Validate published release
+        id: release
+        if: github.event_name != 'workflow_dispatch' || !inputs.test_publish
+        env:
+          RELEASE_TAG: ${{ github.event.workflow_run.head_branch || inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          VERSION=$(tools/release/resolve-release-version.sh push '' "$RELEASE_TAG")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,isPrerelease --jq '.isDraft == false and .isPrerelease == false')" = true
+
+      - name: Require successful tests
+        id: checks
+        if: github.event_name != 'workflow_dispatch' || !inputs.test_publish
+        env:
+          RELEASE_TAG: ${{ github.event.workflow_run.head_branch || inputs.tag }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/release/require_release_checks.py --tag "$RELEASE_TAG" --expected-sha "$SOURCE_SHA"
+
+      - name: Checkout Direct Dashboard
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.checks.outputs.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Setup Python for site staging
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Check Direct Dashboard
+        run: |
+          node --check host/direct/src/js/view.mjs
+          node --check host/direct/src/js/app.mjs
+          node --test host/direct/tests/*.test.mjs host/direct/tests/js/*.test.mjs
+
+      - name: Stage and verify Direct Dashboard
+        env:
+          HOST_VERSION: ${{ inputs.test_publish && format('0.0.0-test.{0}.{1}', github.run_id, github.run_attempt) || steps.release.outputs.version }}
+        run: |
+          python tools/host/direct_site.py build --output build/direct-site --version "$HOST_VERSION"
+          python tools/host/direct_site.py verify --output build/direct-site --version "$HOST_VERSION"
+          node --check build/direct-site/js/app.mjs
+          node --check build/direct-site/js/view.mjs
+          node --check build/direct-site/js/device.mjs
+
+      - name: Configure Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Upload Direct Dashboard site
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: build/direct-site
+
+  deploy:
+    name: Deploy Direct Dashboard
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

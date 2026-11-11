@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PicoPwmHost } from "../js/client.mjs";
+import { PicoPwmHost, RequestError, request } from "../src/js/client.mjs";
 
 const dashboard = serial => ({
   connected: true, identity: { serial_number: serial }, configuration: {},
@@ -125,4 +125,155 @@ test("HTTP failures surface and unavailable boards never switch to a different d
     assert.equal(client.state.phase, "disconnected");
     assert.match(client.state.error, /not found/);
   } finally { globalThis.fetch = original; }
+});
+
+test("stalled status reads time out even if fetch ignores cancellation", async t => {
+  const started = Promise.withResolvers();
+  let signal;
+  t.mock.method(globalThis, "fetch", (_, options) => {
+    signal = options.signal;
+    started.resolve();
+    return new Promise(() => {});
+  });
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const client = new PicoPwmHost();
+  client.select("a");
+  const reading = client.refresh();
+  await started.promise;
+  t.mock.timers.tick(5001);
+  await reading;
+  assert.equal(signal.aborted, true);
+  assert.equal(client.refreshing, false);
+  assert.match(client.state.error, /timed out/);
+});
+
+test("board selection cancels a stale read and starts the new board immediately", async t => {
+  let oldSignal;
+  t.mock.method(globalThis, "fetch", (path, options) => {
+    if (path.endsWith("board=a")) {
+      oldSignal = options.signal;
+      return new Promise(() => {});
+    }
+    return Promise.resolve(response(dashboard("B")));
+  });
+  const client = new PicoPwmHost();
+  client.select("a");
+  const stale = client.refresh();
+  client.select("b");
+  await client.refresh();
+  await stale;
+  assert.equal(oldSignal.aborted, true);
+  assert.equal(client.refreshing, false);
+  assert.equal(client.state.dashboard.identity.serial_number, "B");
+});
+
+test("lost write response blocks retries until fresh status and never replays the write", async t => {
+  let writes = 0;
+  t.mock.method(globalThis, "fetch", async (_, options) => {
+    if (options.method === "POST") { writes++; throw new TypeError("Failed to fetch"); }
+    return response(dashboard("A"));
+  });
+  const client = new PicoPwmHost();
+  client.select("a");
+  await client.refresh();
+  await assert.rejects(client.setLed(true), error => error.uncertain && /outcome is unconfirmed/.test(error.message));
+  assert.equal(client.state.phase, "disconnected");
+  assert.equal(client.state.dashboard.identity, null);
+  await assert.rejects(client.setLed(true), /Connect to a board/);
+  assert.equal(writes, 1);
+  await client.refresh();
+  assert.equal(client.state.phase, "connected");
+  assert.equal(writes, 1);
+});
+
+test("write and response-body deadlines release the writing state", async t => {
+  t.mock.method(globalThis, "fetch", async () => response(dashboard("A")));
+  const client = new PicoPwmHost();
+  client.select("a");
+  await client.refresh();
+  const started = Promise.withResolvers();
+  t.mock.method(globalThis, "fetch", async () => ({
+    ok: true, status: 200, json: () => { started.resolve(); return new Promise(() => {}); },
+  }));
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const writing = assert.rejects(client.reboot(), /outcome is unconfirmed/);
+  await started.promise;
+  t.mock.timers.tick(20001);
+  await writing;
+  assert.equal(client.state.phase, "disconnected");
+  client.select("b");
+  assert.equal(client.board, "b");
+});
+
+test("parallel unauthorized requests share one login and preserve their original payloads", async t => {
+  let prompts = 0;
+  let logins = 0;
+  const seen = new Set();
+  const bodies = [];
+  const originalPrompt = globalThis.prompt;
+  globalThis.prompt = () => { prompts++; return "test-token"; };
+  t.after(() => { globalThis.prompt = originalPrompt; });
+  t.mock.method(globalThis, "fetch", async (path, options) => {
+    if (path === "/api/login") { logins++; return response({ ok: true }); }
+    if (!seen.has(path)) { seen.add(path); return { status: 401 }; }
+    bodies.push(options.body);
+    return response({});
+  });
+  await Promise.all([request("/api/host"), request("/api/led", { on: true })]);
+  assert.equal(prompts, 1);
+  assert.equal(logins, 1);
+  assert.deepEqual(bodies, [undefined, '{"on":true}']);
+});
+
+test("non-JSON failures preserve HTTP status and ambiguous successful writes need recovery", async t => {
+  t.mock.method(globalThis, "fetch", async () => ({
+    ok: false, status: 502, json: async () => { throw new SyntaxError("HTML, not JSON"); },
+  }));
+  await assert.rejects(request("/api/status"), error =>
+    error instanceof RequestError && error.status === 502 && /502/.test(error.message) && !error.uncertain);
+  await assert.rejects(request("/api/led", { on: true }), error => error.status === 502 && error.uncertain);
+  t.mock.method(globalThis, "fetch", async () => ({
+    ok: true, status: 200, json: async () => { throw new SyntaxError("truncated"); },
+  }));
+  await assert.rejects(request("/api/led", { on: true }), error => error.status === 200 && error.uncertain);
+});
+
+test("a failed shared login is cleared so a later request can authenticate", async t => {
+  const originalPrompt = globalThis.prompt;
+  let prompts = 0;
+  let logins = 0;
+  let authenticated = false;
+  globalThis.prompt = () => { prompts++; return "test-token"; };
+  t.after(() => { globalThis.prompt = originalPrompt; });
+  t.mock.method(globalThis, "fetch", async path => {
+    if (path === "/api/login") {
+      logins++;
+      if (logins === 1) return { status: 401, ok: false, json: async () => ({ error: "unauthorized" }) };
+      authenticated = true;
+      return response({ ok: true });
+    }
+    return authenticated ? response({ ok: true }) : { status: 401 };
+  });
+  const first = await Promise.allSettled([request("/api/host"), request("/api/boards")]);
+  assert.ok(first.every(result => result.status === "rejected" && result.reason.status === 401));
+  assert.equal(prompts, 1);
+  assert.equal(logins, 1);
+  await request("/api/host");
+  assert.equal(prompts, 2);
+  assert.equal(logins, 2);
+});
+
+test("explicit request rejection retains connected state without replay", async t => {
+  t.mock.method(globalThis, "fetch", async () => response(dashboard("A")));
+  const client = new PicoPwmHost();
+  client.select("a");
+  await client.refresh();
+  let writes = 0;
+  t.mock.method(globalThis, "fetch", async () => {
+    writes++;
+    return { status: 400, ok: false, json: async () => ({ error: "Invalid request fields" }) };
+  });
+  await assert.rejects(client.setLed(true), error => error.status === 400 && !error.uncertain);
+  assert.equal(client.state.phase, "connected");
+  assert.equal(writes, 1);
 });

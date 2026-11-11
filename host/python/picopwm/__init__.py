@@ -3,6 +3,13 @@
 
 """Host-side tools for PicoPWM."""
 
-from .client import DeviceError, PicoPwmHid
+from importlib.metadata import PackageNotFoundError, version
 
-__all__ = ["DeviceError", "PicoPwmHid"]
+from .device.client import DeviceError, PicoPwmHid
+
+try:
+    __version__ = version("picopwm")
+except PackageNotFoundError:
+    __version__ = "0.0.0-debug"
+
+__all__ = ["DeviceError", "PicoPwmHid", "__version__"]

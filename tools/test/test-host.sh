@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2026 Ji Dong
 
-# Run every host-side test: Python, web assets, WebHID and .NET.
+# Run every host-side test: Python, web assets, Direct Dashboard and .NET.
 # Tools come from PYTHON, NODE and DOTNET (defaults python3, node, dotnet).
 set -eu
 
@@ -24,12 +24,16 @@ printf '%s\n' '=== Python host tests ==='
 printf '%s\n' '=== Host launcher tests ==='
 "$PYTHON" "$REPO_ROOT/tools/test/test_run_python.py"
 "$PYTHON" "$REPO_ROOT/tools/test/test_run_dotnet.py"
+"$PYTHON" "$REPO_ROOT/tools/test/test_dotnet_publish.py"
+"$PYTHON" "$REPO_ROOT/tools/test/test_direct_site.py"
 
 printf '%s\n' '=== HIL runner unit tests (no hardware) ==='
 "$PYTHON" -m unittest discover -s "$REPO_ROOT/tools/hil/tests" -p 'test_*.py'
 
-printf '%s\n' '=== Web and WebHID tests ==='
-"$NODE" --test "$REPO_ROOT"/host/web/tests/*.test.mjs "$REPO_ROOT"/host/webhid/tests/*.test.mjs
+printf '%s\n' '=== Web and Direct Dashboard tests ==='
+"$NODE" --test "$REPO_ROOT"/host/web/tests/*.test.mjs \
+    "$REPO_ROOT"/host/direct/tests/*.test.mjs "$REPO_ROOT"/host/direct/tests/js/*.test.mjs
 
 printf '%s\n' '=== .NET host tests ==='
 "$DOTNET" test "$REPO_ROOT/host/dotnet/PicoPwm.sln" --configuration Release --nologo
+"$PYTHON" "$REPO_ROOT/tools/test/test_dotnet_version.py"

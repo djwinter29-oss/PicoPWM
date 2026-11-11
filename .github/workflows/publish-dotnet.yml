@@ -46,6 +46,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Resolve PicoPWM version
         id: version
@@ -74,11 +76,16 @@ jobs:
 
       - name: Publish standalone PicoPWM
         env:
-          VERSION: ${{ steps.version.outputs.version }}
           RID: ${{ matrix.rid }}
+          MinVerVersionOverride: ${{ github.event_name == 'workflow_dispatch' && steps.version.outputs.version || '' }}
         run: |
           dotnet publish host/dotnet/PicoPwm -c Release -r "$RID" --self-contained true \
-            -p:Version="$VERSION" -o build/host-release
+            -o build/host-release
+
+      - name: Smoke-test published executable
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: python tools/release/check_dotnet_publish.py --directory build/host-release --version "$VERSION"
 
       - name: Check and archive standalone PicoPWM
         env:

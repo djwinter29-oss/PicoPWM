@@ -39,8 +39,9 @@ interface is limited to PWM channel reads, writes, status, and stop-all; see the
 [I2C Protocol Reference](../design/i2c/i2c-protocol.md).
 
 The SDK default is 125 MHz on RP2040 and 150 MHz on RP2350. The `150` MHz
-profile is an overclock only on RP2040. HID/dashboard saves require
-acknowledgement above 150 MHz; CDC has no separate acknowledgement step.
+profile is an overclock only on RP2040. Dashboard Save & Reboot requires checkbox acknowledgement
+for every explicit profile, including 150 MHz; SDK default does not require it.
+The HID API requires acknowledgement above 150 MHz; CDC has no separate acknowledgement step.
 The `200` and `250` MHz profiles are not qualified for every board. Configuration persistence uses
 flash and temporarily stalls CDC, HID, and I2C; allow up to two seconds for the
 operation. See [Hardware Setup](hardware-setup.md) before wiring signals.
@@ -61,9 +62,22 @@ The setup helper uses `sudo` to install a udev rule for PicoPWM USB and
 `uaccess`; it does not change group membership or overwrite a customized
 rule. Reconnect the board after setup if it remains inaccessible.
 
-WebHID also requires browser permission. Run the udev setup on the computer
+Direct Dashboard also requires browser permission to access the board. Run the udev setup on the computer
 physically connected to the board; permission on a remote server does not
 grant the browser access to a local USB device.
+
+### Upgrading from the lab USB identity
+
+PicoPWM now uses the Raspberry Pi-allocated USB identity `0x2E8A:0x116C`,
+replacing `0xCAFE:0x4012`. Update firmware and host applications together;
+current HID clients do not discover firmware using the old lab identity.
+Grant browser permission again for the new identity. The OS may also assign
+a different CDC serial device name.
+
+On Linux, review `/etc/udev/rules.d/70-picopwm-hid.rules` and replace the old
+`cafe`/`4012` vendor/product matches with `2e8a`/`116c`, preserving any local
+customizations. Then rerun the setup helper above to reload the rules.
+The helper intentionally refuses to overwrite a differing existing rule.
 
 ## Troubleshooting
 
@@ -87,9 +101,9 @@ grant the browser access to a local USB device.
 - Confirm the board is connected to the same computer that runs the host
   application.
 
-### WebHID cannot find or open the board
+### Direct Dashboard cannot find or open the board
 
-- Use a desktop browser that supports WebHID, such as Chrome or Edge.
+- Use desktop Chrome or Edge, the supported browsers for Direct Dashboard.
 - Connect the board directly to the computer running the browser, then grant
   the site access when prompted.
 - On Linux, also configure OS access as described in
@@ -124,6 +138,25 @@ grant the browser access to a local USB device.
   [HID Report Reference](../design/usb/hid-report-reference.md).
 - If a setting is rejected, check that the bank role, clock profile, or I2C
   address is supported. A rejected request is not partially applied.
+
+### Recover an unbootable configuration or reset flash
+
+If a saved clock profile prevents normal startup, use BOOTSEL to recover the board.
+Reinstalling firmware alone may preserve saved configuration; a full flash reset clears it.
+
+**A full flash reset erases all firmware, saved configuration, and other data on the board.**
+Disconnect power and attached loads before recovery, and reconnect only USB for the steps below.
+
+1. Download Raspberry Pi's official
+   [universal flash-nuke UF2](https://github.com/raspberrypi/pico-sdk-prebuilts/releases/latest/download/nuke_universal.uf2),
+   which supports both Pico and Pico 2. See the official
+   [resetting flash memory instructions](https://www.raspberrypi.com/documentation/microcontrollers/pico-series.html#resetting-flash-memory).
+2. Hold **BOOTSEL** while connecting the board with a USB data cable, then release it when the boot drive appears.
+3. Copy the flash-nuke UF2 to that drive and wait for erasure to finish. The board returns to BOOTSEL mode.
+4. Copy the correct board-specific PicoPWM UF2 from
+   [Releases](https://github.com/djwinter29-oss/PicoPWM/releases) to the boot drive.
+5. Reconnect through the CDC shell or a dashboard and verify the firmware version and running configuration.
+   Reconfigure bank roles, I2C address, and clock settings as needed before reconnecting loads.
 
 ### A monitor reports no signal or an unexpected reading
 

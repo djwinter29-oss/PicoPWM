@@ -11,7 +11,7 @@ All workflows are available from the repository's [Actions tab](https://github.c
 | Release | Push a `vMAJOR.MINOR.PATCH` tag, or manual dispatch with a version | Validates and packages firmware, a Python wheel, and standalone PicoPWM (.NET) applications for Linux x64, Windows x64 and macOS ARM64. Only tag pushes create a GitHub Release. |
 | Publish .NET Packages | Called by Release, or manual dispatch with a version | Produces downloadable archives and checksums. Direct manual runs mark the version as `X.Y.Z-test.RUN_ID.ATTEMPT`; release builds retain `X.Y.Z`. This does not publish to NuGet. |
 | Publish Python to PyPI | Successful tag-triggered Release, or manual dispatch | Publishes the verified release wheel, or an explicitly requested development wheel. |
-| Publish WebHID Pages | Successful tag-triggered Release, or manual dispatch | Deploys the released WebHID source, or an explicitly requested test deployment, to GitHub Pages. |
+| Publish Direct Dashboard Pages | Successful tag-triggered Release, or manual dispatch | Deploys the released Direct Dashboard source, or an explicitly requested test deployment, to GitHub Pages. |
 
 Build artifacts from PR Check and manual packaging runs are under **Actions > run > Artifacts**, not on the
 Releases page. Publication does not happen on every push to `main`.
@@ -22,7 +22,7 @@ Releases page. Publication does not happen on every push to `main`.
 2. Push a new tag, for example `v1.2.3`, pointing to the tested commit.
 3. Release builds both boards and packages PicoPWM for Python and .NET. Its validation jobs must succeed before the
    GitHub Release is published; the publication gate also requires successful PR checks for the same commit.
-4. Publish Python to PyPI and Publish WebHID Pages run after Release succeeds. Each verifies the release tag and
+4. Publish Python to PyPI and Publish Direct Dashboard Pages run after Release succeeds. Each verifies the release tag and
    its successful checks before publishing.
 
 For tag `v1.2.3`, the Python distribution version is `1.2.3`. Release packaging bundles the dashboard assets,
@@ -56,10 +56,14 @@ Published versions are immutable: start a new workflow run to get a new version 
 To publish an existing release instead, leave `test_publish` disabled and supply its tag, for example `v1.2.3`.
 The workflow downloads and verifies the release wheel instead of rebuilding it.
 
-### WebHID
+### Direct Dashboard
 
-In **Publish WebHID Pages**, enable `test_publish` and leave `tag` empty. The workflow checks the selected commit's
-WebHID code, stamps `0.0.0-test.RUN_ID.ATTEMPT`, and deploys it to the **live Pages URL**, replacing the previous site.
+In **Publish Direct Dashboard Pages** (`publish-direct.yml`), enable `test_publish` and leave `tag` empty.
+The workflow checks the selected commit's Direct Dashboard code, stamps `0.0.0-test.RUN_ID.ATTEMPT`, and deploys it
+to the **live Pages URL**, replacing the previous site.
+The deployment stages a separate site with a commit tooltip and `build.json` identity, generates one
+content/build-derived cache key across HTML assets and module imports, and verifies the final stamped
+version and local references before upload. Canonical source files are not modified.
 This explicit test mode does not require a published release. Restore the release site by running again with
 `test_publish` disabled and the release tag supplied.
 
@@ -69,6 +73,16 @@ Run **Publish .NET Packages** with a base version such as `1.2.3`. The marked st
 workflow artifacts for all three platforms; this does not create a GitHub Release.
 The application is named **PicoPWM**; archive filenames retain `picopwm-host-v<VERSION>-<RID>`
 with `.zip` for Windows and `.tar.gz` for Linux and macOS.
+
+.NET builds use MinVer with the repository's `v`-prefixed tags. Tag-triggered packaging derives the
+version from Git; manual runs use `MinVerVersionOverride` for their requested release/test version.
+Local commits after a release get the next patch's `-dev.<height>` version. Full Git history and
+tags are required to derive the intended version; see [.NET versioning](../../host/dotnet/README.md#git-derived-versions).
+
+Before archiving on each platform, packaging launches the native published executable and verifies its
+reported version, dashboard and bundled asset bytes, local asset references, and graceful zero-exit shutdown.
+A failed smoke check prevents archive/upload. It does not access hardware or establish browser/HID qualification.
+See the [.NET smoke checker](../../host/dotnet/README.md#published-application-smoke-check) for local usage.
 
 ## One-Time Repository Setup
 

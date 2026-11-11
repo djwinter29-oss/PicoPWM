@@ -471,12 +471,25 @@ def test_bind_and_dashboard_reject_remote_and_foreign_callers():
     assert http.post("/api/login", json={"token": "nope"}).status_code == 401
     login = http.post("/api/login", json={"token": "secret"})
     assert login.status_code == 200
-    assert "picopwm_auth" in login.headers.get("Set-Cookie", "")
+    assert login.headers["Set-Cookie"].startswith("picopwm_python_auth=")
     assert "HttpOnly" in login.headers.get("Set-Cookie", "")
     assert http.get("/api/status").status_code == 200
     other = create_app(client, token="secret").test_client()
     assert other.get("/api/status", headers={"Authorization": "Bearer secret"}).status_code == 200
     assert create_app(client).test_client().post("/api/login", json={"token": "x"}).status_code == 404
+
+
+def test_python_login_cookie_is_independent_of_dotnet_and_legacy_cookies():
+    import hashlib
+
+    http = create_app(token="secret").test_client()
+    value = hashlib.sha256(b"secret").hexdigest()
+    http.set_cookie("picopwm_dotnet_auth", value)
+    http.set_cookie("picopwm_auth", value)
+    assert http.get("/api/host").status_code == 401
+    assert http.post("/api/login", json={"token": "secret"}).status_code == 200
+    http.set_cookie("picopwm_dotnet_auth", "other")
+    assert http.get("/api/host").status_code == 200
 
 
 def test_discovery_matches_vendor_usage_or_constrained_picouart_style_fallback(monkeypatch):

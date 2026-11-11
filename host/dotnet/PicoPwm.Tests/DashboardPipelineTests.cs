@@ -39,7 +39,15 @@ public sealed class DashboardPipelineTests
             Assert.Equal(HttpStatusCode.Unauthorized, (await authed.GetAsync("/api/host")).StatusCode);
             var login = await authed.PostAsJsonAsync("/api/login", new { token = "secret" });
             Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+            Assert.StartsWith("picopwm_dotnet_auth=", Assert.Single(login.Headers.GetValues("Set-Cookie")));
             Assert.Equal(HttpStatusCode.OK, (await authed.GetAsync("/api/host")).StatusCode);
+            var isolated = locked.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+            var value = PicoPwm.Host.DashboardBind.CookieValue("secret");
+            isolated.DefaultRequestHeaders.Add("Cookie", $"picopwm_python_auth={value}; picopwm_auth={value}");
+            Assert.Equal(HttpStatusCode.Unauthorized, (await isolated.GetAsync("/api/host")).StatusCode);
+            isolated.DefaultRequestHeaders.Remove("Cookie");
+            isolated.DefaultRequestHeaders.Add("Cookie", $"picopwm_python_auth=other; picopwm_dotnet_auth={value}");
+            Assert.Equal(HttpStatusCode.OK, (await isolated.GetAsync("/api/host")).StatusCode);
         }
         finally
         {

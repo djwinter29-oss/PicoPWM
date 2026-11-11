@@ -26,6 +26,7 @@ def _int(payload: dict, name: str) -> int:
 
 
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1", "[::1]"}
+AUTH_COOKIE_NAME = "picopwm_python_auth"
 
 
 def bind_host(host: str | None, token: str | None) -> str:
@@ -77,10 +78,10 @@ def _credential_accepted(token: str, authorization: str | None, cookie: str | No
 
 def create_app(client: PicoPwmHid | None = None, registry: BoardRegistry | None = None,
                token: str | None = None) -> Flask:
-    # Wheels bundle the dashboard as picopwm/web; source checkouts use host/web.
+    # Wheels bundle the dashboard as picopwm/web; source checkouts use host/web/src.
     web_root = Path(__file__).resolve().parent / "web"
     if not (web_root / "index.html").is_file():
-        web_root = Path(__file__).resolve().parents[2] / "web"
+        web_root = Path(__file__).resolve().parents[2] / "web" / "src"
     app = Flask(__name__, static_folder=web_root, static_url_path="")
     app.config["PICOPWM_TOKEN"] = token or ""
     boards = registry or BoardRegistry(serial=os.environ.get("PICOPWM_SERIAL"),
@@ -97,7 +98,7 @@ def create_app(client: PicoPwmHid | None = None, registry: BoardRegistry | None 
         if not configured or request.path == "/api/login" or not request.path.startswith("/api"):
             return None
         if _credential_accepted(configured, request.headers.get("Authorization"),
-                                request.cookies.get("picopwm_auth")):
+                                request.cookies.get(AUTH_COOKIE_NAME)):
             return None
         return jsonify({"error": "unauthorized"}), 401
 
@@ -111,7 +112,7 @@ def create_app(client: PicoPwmHid | None = None, registry: BoardRegistry | None 
         if type(presented) is not str or not _same_secret(presented, configured):
             return jsonify({"error": "unauthorized"}), 401
         response = jsonify({"ok": True})
-        response.set_cookie("picopwm_auth", _cookie_value(configured), httponly=True, samesite="Strict")
+        response.set_cookie(AUTH_COOKIE_NAME, _cookie_value(configured), httponly=True, samesite="Strict")
         return response
 
     def selected():
@@ -141,7 +142,7 @@ def create_app(client: PicoPwmHid | None = None, registry: BoardRegistry | None 
         return jsonify(response)
 
     # Source checkouts and packaged wheels serve the same canonical Direct Dashboard presentation assets.
-    shared_root = web_root if (web_root / "css/direct.css").is_file() else web_root.parent / "direct" / "src"
+    shared_root = web_root if (web_root / "css/direct.css").is_file() else web_root.parent.parent / "direct" / "src"
     for asset in ("css/direct.css", "js/view.mjs", "js/device.mjs"):
         app.add_url_rule(f"/{asset}", endpoint=asset,
                          view_func=lambda asset=asset: send_from_directory(shared_root, asset))

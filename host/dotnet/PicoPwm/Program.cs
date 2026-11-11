@@ -54,7 +54,7 @@ app.Use(async (context, next) =>
     var isLogin = path.Equals("/api/login", StringComparison.OrdinalIgnoreCase);
     if (!string.IsNullOrEmpty(configured) && isApi && !isLogin)
     {
-        context.Request.Cookies.TryGetValue("picopwm_auth", out var cookie);
+        context.Request.Cookies.TryGetValue(DashboardBind.AuthCookieName, out var cookie);
         if (!DashboardBind.CredentialAccepted(configured, context.Request.Headers.Authorization.ToString(), cookie))
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -89,7 +89,7 @@ app.MapPost("/api/login", (HttpContext http, LoginRequest request) =>
     if (string.IsNullOrEmpty(request.Token)
         || !DashboardBind.CredentialAccepted(configured, "Bearer " + request.Token, null))
         return Results.Json(new { error = "unauthorized" }, statusCode: StatusCodes.Status401Unauthorized);
-    http.Response.Cookies.Append("picopwm_auth", DashboardBind.CookieValue(configured), new CookieOptions
+    http.Response.Cookies.Append(DashboardBind.AuthCookieName, DashboardBind.CookieValue(configured), new CookieOptions
     {
         HttpOnly = true,
         SameSite = SameSiteMode.Strict,

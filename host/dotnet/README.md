@@ -28,11 +28,13 @@ The launcher restores NuGet dependencies and builds before starting. Set
 pass `--urls` to choose another listening address. `dotnet run` without those
 settings listens on `http://127.0.0.1:5000`. A non-loopback URL is refused unless
 `PICOPWM_TOKEN` is set. With that token, `/api/*` requires
-`Authorization: Bearer <token>` or the `picopwm_auth` cookie from
+`Authorization: Bearer <token>` or the `picopwm_dotnet_auth` cookie from
 `POST /api/login` with `{"token": "..."}`. The page itself stays open so the
 browser can prompt once. A request whose `Origin` names a different host is
 rejected. Without a token, a request whose `Host` is not loopback is rejected as well,
 including a page reached by DNS rebinding. Keep board controls on loopback when the token is unset.
+The .NET cookie is separate from Python's `picopwm_python_auth`: cookies are not isolated by port.
+The old shared `picopwm_auth` cookie is no longer accepted; log in again after upgrading.
 If only a newer runtime is installed, explicitly opt in to major-version
 roll-forward with `DOTNET_ROLL_FORWARD=Major` or install the .NET 10 ASP.NET Core
 runtime instead.
@@ -62,7 +64,7 @@ The PicoUart-style board selector scans boards attached to this server and offer
 board's serial (or path if no serial); an absent board is marked **not found** after
 rescanning and never replaced silently by another.
 
-Host HTML/HTTP code lives in `host/web/`; rendering, display constants and PWM styling
+Host HTML/HTTP code lives in `host/web/src/`; rendering, display constants and PWM styling
 reuse `host/direct/src/js/view.mjs`, `js/device.mjs`, and `css/direct.css` directly. This
 project links both sets into `wwwroot` during build/publish. Unlike Direct Dashboard, the browser connects to the
 .NET host service rather than directly to USB. Edit canonical source files, not generated output.

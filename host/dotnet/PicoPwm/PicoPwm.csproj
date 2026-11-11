@@ -21,7 +21,7 @@
     <Content Include="../../direct/src/js/view.mjs;../../direct/src/js/device.mjs" Link="wwwroot/js/%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="../../web/**/*" Exclude="../../web/tests/**"
+    <Content Include="../../web/src/**/*"
              Link="wwwroot/%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />

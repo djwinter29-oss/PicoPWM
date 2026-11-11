@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PicoPwmHost } from "../js/client.mjs";
+import { PicoPwmHost } from "../src/js/client.mjs";
 
 const dashboard = serial => ({
   connected: true, identity: { serial_number: serial }, configuration: {},

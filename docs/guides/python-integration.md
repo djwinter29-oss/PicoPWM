@@ -17,6 +17,10 @@ by the configured token, or authenticate through `POST /api/login` with
 `{"token": "<token>"}` to receive a login cookie. Requests with an `Origin` that
 differs from the request host are rejected.
 
+Python uses `picopwm_python_auth`; .NET uses `picopwm_dotnet_auth`. Distinct names prevent login cookies
+from overwriting each other on the same hostname, since cookies are not isolated by port.
+The old shared `picopwm_auth` cookie is no longer accepted; log in again after upgrading.
+
 The built-in server does not provide TLS. Do not expose it directly to the public
 internet; use a trusted network and an appropriately configured HTTPS reverse
 proxy if remote access is needed.
@@ -207,5 +211,5 @@ Applications and tests can inject a client with `create_app(client)` from
 `picopwm.app`.
 
 Release wheels bundle the dashboard assets. Source checkouts serve the shared
-assets from `host/web/` and `host/direct/src/`; edit those canonical files rather than
+assets from `host/web/src/` and `host/direct/src/`; edit those canonical files rather than
 generated or bundled copies.

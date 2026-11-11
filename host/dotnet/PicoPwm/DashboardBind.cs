@@ -9,6 +9,8 @@ namespace PicoPwm.Host;
 /// <summary>Loopback bind rules and dashboard credentials for the local management API.</summary>
 public static class DashboardBind
 {
+    public const string AuthCookieName = "picopwm_dotnet_auth";
+
     public static bool IsLoopbackRequestHost(string? requestHost) =>
         !string.IsNullOrEmpty(requestHost) && IsLoopback(new HostString(requestHost).Host);
 

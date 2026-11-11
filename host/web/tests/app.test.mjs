@@ -24,7 +24,7 @@ test("browser: hosted login, board switching, editing, save and uncertain-respon
     return;
   }
   const temporary = await mkdtemp(join(tmpdir(), "picopwm-web-browser-"));
-  t.after(() => rm(temporary, { recursive: true, force: true }));
+  t.after(() => rm(temporary, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
   for (const path of ["web/src", "web/tests/fixtures", "direct/src", "direct/tests/fixtures"]) {
     await cp(join(host, path), join(temporary, path), { recursive: true });
   }

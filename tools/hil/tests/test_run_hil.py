@@ -4,6 +4,8 @@
 """Hardware-free regression tests for CDC HIL safety gates, measurements and reporting."""
 
 import argparse
+from contextlib import redirect_stderr
+import io
 import json
 import os
 from pathlib import Path
@@ -207,13 +209,17 @@ elif args[:1] != ["-c"]:
     def test_missing_artifact_writes_failure_record(self):
         with tempfile.TemporaryDirectory() as directory:
             record = Path(directory) / "latest.md"
-            with patch.object(hil, "RECORD", record):
+            errors = io.StringIO()
+            with patch.object(hil, "RECORD", record), redirect_stderr(errors):
                 status = hil.main([
                     "--port", "fake", "--board", "pico", "--firmware", str(Path(directory) / "missing.uf2"),
                     "--confirm-fixture",
                 ])
             self.assertEqual(status, 1)
             self.assertIn("Outcome: FAIL", record.read_text())
+            self.assertIn("HIL failed:", errors.getvalue())
+            self.assertIn("missing.uf2", errors.getvalue())
+            self.assertIn("disconnect board power", errors.getvalue())
 
 
 if __name__ == "__main__":

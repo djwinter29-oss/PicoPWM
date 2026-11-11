@@ -24,7 +24,7 @@ test("browser: connect, edit, save acknowledgement, timeout recovery, disconnect
     return;
   }
   const profile = await mkdtemp(join(tmpdir(), "picopwm-browser-"));
-  t.after(() => rm(profile, { recursive: true, force: true }));
+  t.after(() => rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
   await cp(join(root, "src"), join(profile, "site", "src"), { recursive: true });
   await cp(join(root, "tests", "fixtures"), join(profile, "site", "tests", "fixtures"), { recursive: true });
   const index = join(profile, "site", "src", "index.html");
@@ -48,7 +48,7 @@ test("browser: runner waits for a delayed result and reports fixture diagnostics
     return;
   }
   const profile = await mkdtemp(join(tmpdir(), "picopwm-browser-diagnostics-"));
-  t.after(() => rm(profile, { recursive: true, force: true }));
+  t.after(() => rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
   const args = ["--headless", "--disable-gpu", "--no-first-run", `--user-data-dir=${profile}`];
   if (process.env.CHROMIUM_NO_SANDBOX === "1") args.unshift("--no-sandbox");
   const page = `<body><script>

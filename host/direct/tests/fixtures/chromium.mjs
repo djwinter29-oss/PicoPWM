@@ -16,7 +16,7 @@ export async function runBrowser(chromium, args, url) {
   let state = null;
   const exited = new Promise(resolve => {
     child.once("error", error => resolve({ error }));
-    child.once("exit", (code, signal) => resolve({ code, signal }));
+    child.once("close", (code, signal) => resolve({ code, signal }));
   });
   const failPending = error => {
     for (const { reject } of pending.values()) reject(error);
@@ -83,9 +83,14 @@ export async function runBrowser(chromium, args, url) {
       + `${state?.html?.slice(-4000) ?? ""}\n${JSON.stringify(diagnostics)}\n${stderr}`, { cause: error });
   } finally {
     clearTimeout(timer);
-    child.kill();
-    const cleanup = setTimeout(() => child.kill("SIGKILL"), 2000);
+    // Let Chrome flush its profile and stop its workers before removing the test directory.
+    if (child.exitCode === null && child.signalCode === null && child.stdio[3].writable) {
+      child.stdio[3].write(JSON.stringify({ id: ++sequence, method: "Browser.close" }) + "\0");
+    }
+    const terminate = setTimeout(() => child.kill(), 2000);
+    const cleanup = setTimeout(() => child.kill("SIGKILL"), 4000);
     await exited;
+    clearTimeout(terminate);
     clearTimeout(cleanup);
   }
 }

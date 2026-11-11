@@ -103,6 +103,9 @@ CHROMIUM=/usr/bin/chromium node --test host/direct/tests/*.test.mjs host/direct/
 Without `CHROMIUM`, it tries `chromium` and explicitly skips if absent. Setting `CHROMIUM` makes a missing
 executable a failure; Linux host CI requires the runner's installed Google Chrome. Native sandboxing stays
 enabled unless an isolated test environment explicitly sets `CHROMIUM_NO_SANDBOX=1`.
+Teardown requests a graceful browser shutdown and waits for process/pipe closure before deleting its
+temporary profile. Profile deletion retries transient filesystem errors for a bounded period; persistent
+cleanup failures still fail the test.
 
 Commands reserve the client through all writes and readback, including the complete Save & Reboot
 sequence and INVALID reconciliation. A user command waits for an active background refresh, then

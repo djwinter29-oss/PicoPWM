@@ -263,6 +263,8 @@ def test_close_failure_is_logged_and_state_is_cleared(caplog):
 
 @pytest.mark.parametrize("operation", ["save", "clock", "reconcile"])
 def test_logical_operation_keeps_lock_until_validation_and_readback_complete(monkeypatch, operation):
+    # Intentionally coupled to _lock/_run boundaries; update alongside synchronization refactors.
+    # Fake-device contention does not establish native transfer deadlines or hardware responsiveness.
     _, client = make("invalid-applied" if operation == "reconcile" else "ok")
     paused = threading.Event()
     attempted = threading.Event()

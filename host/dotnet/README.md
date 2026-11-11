@@ -155,6 +155,30 @@ The test seams are internal; the public discovery and transport APIs are unchang
 Lock regressions check ownership and execute a separate thread's immediate lock attempt rather than
 assuming that a 100 ms delay proves contention. Clock/save dispatch also checks that the outer logical
 operation still owns the gate in addition to the inner command lock.
+These tests deliberately inspect the private gate and its recursion depth. Update them when changing
+synchronization; they are implementation-coupled regression checks, not a public lock API or proof of
+native transfer responsiveness.
+
+### Published-application smoke check
+
+Before archiving, the packaging workflow starts each native published executable on its matching
+Linux, Windows, or macOS runner. It checks `/api/host` against the requested version (allowing source
+commit metadata), compares the dashboard and every bundled asset over loopback HTTP, and resolves
+local HTML, ES module, and CSS URL references including cache-busting queries.
+Generated `.br`/`.gz` encoding sidecars are not requested as independent asset URLs.
+It then requests graceful shutdown and requires exit code zero; a timeout, early exit, forced kill,
+missing/changed asset, or wrong version fails packaging. Startup failures include captured host logs.
+No board discovery or output-driving endpoints are called.
+
+Run the same check locally after publishing:
+
+```sh
+python3 tools/release/check_dotnet_publish.py --directory build/host-release --version 1.2.3
+```
+
+The checker launches the published `PicoPwm`/`PicoPwm.exe`, not `dotnet run`, from an unrelated working
+directory. It uses SIGTERM on Linux/macOS and a console Ctrl+Break event on Windows.
+This tests HTTP delivery and process lifecycle, not browser rendering or native HID behavior.
 
 ### Native HID qualification still required
 

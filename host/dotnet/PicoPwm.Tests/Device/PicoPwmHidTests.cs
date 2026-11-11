@@ -125,7 +125,8 @@ public sealed class PicoPwmHidTests
 
     private static void AssertGateHeld(PicoPwmHid client, bool nested = false)
     {
-        // Inspect ownership without exposing a production lock hook or relying on a scheduling delay.
+        // Intentionally implementation-coupled to gate and Monitor recursion; update with synchronization changes.
+        // This verifies ownership, not native transfer deadlines or hardware responsiveness.
         var gate = typeof(PicoPwmHid).GetField("gate",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(client)!;
         Assert.True(Monitor.IsEntered(gate));

@@ -154,6 +154,11 @@ Tests mirror these subpackages under `tests/dashboard/`, `tests/device/`, and `t
 shared device doubles live in `tests/fakes.py`. Run them with `python -m pytest -q host/python/tests`
 from the repository root.
 
+Concurrency regressions intentionally replace private `_lock` and wrap `_run` to observe contention
+at validation/readback boundaries. Update those tests with synchronization refactors; they do not
+define a public locking API or establish native hidapi transfer deadlines.
+Shared dashboard source/selector checks are likewise implementation-coupled, not browser end-to-end tests.
+
 ## License
 
 [BSD 3-Clause](https://github.com/djwinter29-oss/PicoPWM/blob/main/LICENSE).

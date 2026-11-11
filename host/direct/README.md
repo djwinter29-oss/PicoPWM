@@ -66,6 +66,39 @@ tools/host/run-direct.sh
 node --test host/direct/tests/*.test.mjs
 ```
 
-The launcher needs Python 3, with no extra packages, and serves `http://127.0.0.1:8000/` (`--port` to override).
-Only `src/` is served or deployed; it also supplies shared assets to Python/.NET hosts.
+The launcher needs Python 3.10+, with no extra packages, and serves `http://127.0.0.1:8000/` (`--port` to override).
+It serves a temporary staged copy of `src/`, cleaned up when stopped. Restart after editing source to rebuild
+the copy. Canonical `src/` remains unchanged and also supplies shared assets to Python/.NET hosts.
 `tests/` contains hardware-free checks, not physical PWM qualification.
+Asset/selector assertions intentionally follow current HTML and module structure; shared hosted-dashboard
+tests also extract Direct event-handler source into a VM. Update these checks with markup/module refactors.
+They supplement device/view behavior tests, but do not execute a full browser or qualify WebHID.
+
+### Dashboard version and cache identity
+
+Pages release builds display the release version, for example `1.2.3`; explicit test deployments display
+`0.0.0-test.RUN_ID.ATTEMPT`. Hover over the version for the source commit. The staged `build.json` also
+records the full commit, dirty-worktree flag, and cache key. Firmware version remains independent.
+
+Local launcher versions come from Git: `v1.2.3` produces `1.2.3+g<commit>`, one later commit produces
+`1.2.4-dev.1+g<commit>`, and uncommitted changes add `.dirty`. With no version tags, the version is
+`0.0.0-dev.<commit-count>+g<commit>`; without Git metadata the launcher explicitly warns and uses
+`0.0.0-debug` with an unknown commit. Open a full checkout with tags for meaningful development versions.
+
+The staging tool hashes the source assets and build identity once, then applies the same generated `v`
+query to HTML assets and their transitive module/CSS references. Any asset change invalidates the whole
+graph, avoiding mismatched module cache versions. Source query values remain for raw-source use; staged
+sites do not rely on those manually maintained values. Local serving disables caching.
+Pages HTML revalidation remains governed by GitHub Pages; an already-open page does not auto-update.
+
+CI stages into `build/direct-site`, verifies the final version/commit label and reference graph after stamping,
+then uploads only that directory. To build and verify manually, choose a new output directory:
+
+```sh
+python3 tools/host/direct_site.py build --output build/direct-site --version 1.2.3
+python3 tools/host/direct_site.py verify --output build/direct-site --version 1.2.3
+python3 tools/test/test_direct_site.py
+```
+
+Existing output directories are rejected rather than overwritten. These staging checks do not replace
+browser rendering or hardware validation.

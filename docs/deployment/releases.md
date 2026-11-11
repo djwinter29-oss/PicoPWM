@@ -61,6 +61,9 @@ The workflow downloads and verifies the release wheel instead of rebuilding it.
 In **Publish Direct Dashboard Pages** (`publish-direct.yml`), enable `test_publish` and leave `tag` empty.
 The workflow checks the selected commit's Direct Dashboard code, stamps `0.0.0-test.RUN_ID.ATTEMPT`, and deploys it
 to the **live Pages URL**, replacing the previous site.
+The deployment stages a separate site with a commit tooltip and `build.json` identity, generates one
+content/build-derived cache key across HTML assets and module imports, and verifies the final stamped
+version and local references before upload. Canonical source files are not modified.
 This explicit test mode does not require a published release. Restore the release site by running again with
 `test_publish` disabled and the release tag supplied.
 
@@ -75,6 +78,11 @@ with `.zip` for Windows and `.tar.gz` for Linux and macOS.
 version from Git; manual runs use `MinVerVersionOverride` for their requested release/test version.
 Local commits after a release get the next patch's `-dev.<height>` version. Full Git history and
 tags are required to derive the intended version; see [.NET versioning](../../host/dotnet/README.md#git-derived-versions).
+
+Before archiving on each platform, packaging launches the native published executable and verifies its
+reported version, dashboard and bundled asset bytes, local asset references, and graceful zero-exit shutdown.
+A failed smoke check prevents archive/upload. It does not access hardware or establish browser/HID qualification.
+See the [.NET smoke checker](../../host/dotnet/README.md#published-application-smoke-check) for local usage.
 
 ## One-Time Repository Setup
 

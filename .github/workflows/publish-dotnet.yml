@@ -82,6 +82,11 @@ jobs:
           dotnet publish host/dotnet/PicoPwm -c Release -r "$RID" --self-contained true \
             -o build/host-release
 
+      - name: Smoke-test published executable
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: python tools/release/check_dotnet_publish.py --directory build/host-release --version "$VERSION"
+
       - name: Check and archive standalone PicoPWM
         env:
           VERSION: ${{ steps.version.outputs.version }}

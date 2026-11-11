@@ -24,6 +24,8 @@ printf '%s\n' '=== Python host tests ==='
 printf '%s\n' '=== Host launcher tests ==='
 "$PYTHON" "$REPO_ROOT/tools/test/test_run_python.py"
 "$PYTHON" "$REPO_ROOT/tools/test/test_run_dotnet.py"
+"$PYTHON" "$REPO_ROOT/tools/test/test_dotnet_publish.py"
+"$PYTHON" "$REPO_ROOT/tools/test/test_direct_site.py"
 
 printf '%s\n' '=== HIL runner unit tests (no hardware) ==='
 "$PYTHON" -m unittest discover -s "$REPO_ROOT/tools/hil/tests" -p 'test_*.py'

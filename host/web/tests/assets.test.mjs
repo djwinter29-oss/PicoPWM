@@ -8,6 +8,9 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
 
+// Source/selector contracts and extracted handlers intentionally follow the current app structure.
+// Update these with markup/module refactors; VM checks are not full-browser or WebHID qualification.
+
 const root = fileURLToPath(new URL("../src/", import.meta.url));
 const html = readFileSync(join(root, "index.html"), "utf8");
 const shared = new Set(["css/direct.css", "js/view.mjs", "js/device.mjs"]);

@@ -7,6 +7,9 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+// Source/selector contracts intentionally follow current markup/module structure; update with refactors.
+// These checks do not run a browser or qualify native WebHID behavior.
+
 const root = fileURLToPath(new URL("../src/", import.meta.url));
 const html = readFileSync(join(root, "index.html"), "utf8");
 

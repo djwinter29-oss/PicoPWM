@@ -9,6 +9,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import { runBrowser } from "../fixtures/chromium.mjs";
 
 const execute = promisify(execFile);
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -31,9 +32,37 @@ test("browser: connect, edit, save acknowledgement, timeout recovery, disconnect
   await writeFile(index, html.replace(/src="js\/app\.mjs[^"]*"/, 'src="../tests/fixtures/browser.mjs"'));
   const args = ["--headless", "--disable-gpu", "--no-first-run", "--enable-logging=stderr",
     `--user-data-dir=${join(profile, "profile")}`, "--allow-file-access-from-files",
-    "--dump-dom", "--timeout=30000", "--virtual-time-budget=30000", pathToFileURL(index).href];
+  ];
   if (process.env.CHROMIUM_NO_SANDBOX === "1") args.unshift("--no-sandbox");
-  const { stdout, stderr } = await execute(chromium, args, { timeout: 65000, maxBuffer: 1024 * 1024 });
-  assert.match(stdout, /data-browser-result="PASS"/,
-    `${stdout.match(/<body[^>]*>/)?.[0] ?? "No page output"}\n${stdout.slice(-2500)}\n${stderr.slice(-2500)}`);
+  const htmlResult = await runBrowser(chromium, args, pathToFileURL(index).href);
+  assert.match(htmlResult, /data-browser-result="PASS"/);
+});
+
+test("browser: runner waits for a delayed result and reports fixture diagnostics", { timeout: 75000 }, async t => {
+  const chromium = process.env.CHROMIUM || "chromium";
+  try {
+    await execute(chromium, ["--version"]);
+  } catch (error) {
+    if (error.code !== "ENOENT" || process.env.CHROMIUM) throw error;
+    t.skip("Chromium is not installed; set CHROMIUM to require a specific executable.");
+    return;
+  }
+  const profile = await mkdtemp(join(tmpdir(), "picopwm-browser-diagnostics-"));
+  t.after(() => rm(profile, { recursive: true, force: true }));
+  const args = ["--headless", "--disable-gpu", "--no-first-run", `--user-data-dir=${profile}`];
+  if (process.env.CHROMIUM_NO_SANDBOX === "1") args.unshift("--no-sandbox");
+  const page = `<body><script>
+    console.error("fixture diagnostic");
+    setTimeout(() => {
+      document.body.dataset.browserStage = "intentional failure";
+      document.body.dataset.browserResult = "FAIL";
+    }, 100);
+  </script></body>`;
+  await assert.rejects(runBrowser(chromium, args, `data:text/html,${encodeURIComponent(page)}`), error => {
+    assert.match(error.message, /Browser fixture reported FAIL/);
+    assert.match(error.message, /Stage: intentional failure/);
+    assert.match(error.message, /Runtime.consoleAPICalled/);
+    assert.match(error.message, /fixture diagnostic/);
+    return true;
+  });
 });

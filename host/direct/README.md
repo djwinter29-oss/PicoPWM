@@ -92,7 +92,9 @@ The browser regression additionally runs the actual HTML/modules in headless Chr
 device. It covers connection, channel editing and readback, dialog focus, save acknowledgement/confirmation/cancellation,
 and timeout/disconnect/reconnect. It uses a temporary local-file copy with file-module access enabled;
 it does not qualify HTTPS/Pages delivery, the native device chooser, or physical USB/PWM behavior.
-No npm dependencies are required. The same Node test command discovers it automatically:
+The runner waits for the fixture's explicit PASS/FAIL result over Chromium's debugging pipe using real
+time, not a virtual-time DOM snapshot. Failures include fixture progress, browser exceptions and console
+diagnostics. No npm dependencies are required. The same Node test command discovers it automatically:
 
 ```sh
 CHROMIUM=/usr/bin/chromium node --test host/direct/tests/*.test.mjs host/direct/tests/js/*.test.mjs

@@ -12,6 +12,7 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     Args = args,
     WebRootPath = webRoot,
 });
+builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;

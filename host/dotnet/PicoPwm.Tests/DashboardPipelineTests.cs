@@ -5,6 +5,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace PicoPwm.Tests;
 
@@ -69,6 +71,21 @@ public sealed class DashboardPipelineTests
         try
         {
             await using var app = new WebApplicationFactory<Program>();
+            var loggers = app.Services.GetRequiredService<ILoggerFactory>();
+            foreach (var category in new[]
+            {
+                "Microsoft.AspNetCore.Hosting.Diagnostics",
+                "Microsoft.AspNetCore.Routing.EndpointMiddleware",
+                "Microsoft.AspNetCore.Http.Result.OkObjectResult",
+            })
+            {
+                var logger = loggers.CreateLogger(category);
+                Assert.False(logger.IsEnabled(LogLevel.Information));
+                Assert.True(logger.IsEnabled(LogLevel.Warning));
+                Assert.True(logger.IsEnabled(LogLevel.Error));
+            }
+            Assert.True(loggers.CreateLogger("Microsoft.Hosting.Lifetime").IsEnabled(LogLevel.Information));
+            Assert.True(loggers.CreateLogger("Program").IsEnabled(LogLevel.Warning));
             var client = app.CreateClient();
             var status = await client.GetAsync("/api/status");
             Assert.Equal(HttpStatusCode.OK, status.StatusCode);

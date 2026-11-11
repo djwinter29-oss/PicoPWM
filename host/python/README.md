@@ -49,6 +49,7 @@ picopwm
 Connect the board to the computer running Python and open <http://127.0.0.1:5000/>.
 Select the board; use **Rescan** if needed. Stop the service with `Ctrl+C`.
 The older `picopwm-web` command remains an alias.
+Routine Werkzeug request logs are suppressed; warnings and errors remain visible.
 
 **Before driving outputs:** GPIO signals are 3.3 V only. Banks default to monitor-only.
 Configure the intended bank as a generator and reboot before setting output.

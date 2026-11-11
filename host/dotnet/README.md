@@ -29,6 +29,7 @@ Current distribution is through GitHub Releases, not NuGet.
 
 Each browser page keeps its own board selection; an absent board is not silently replaced.
 Stop the service with `Ctrl+C`.
+Routine ASP.NET request logs are suppressed; startup messages, warnings, and errors remain visible.
 
 **Before driving outputs:** GPIO signals are 3.3 V only. Banks default to monitor-only.
 Configure the intended bank as a generator and reboot before setting output.

@@ -4,8 +4,8 @@
 import { CLOCK_PROFILES, ROLES, PicoPwmWebHid } from "./device.mjs?v=8";
 import {
   convertFrequencyValue, frequencyEditorValue, frequencyMax, frequencyToHertz,
-  renderBootEdits, renderDashboard, updateReportAge,
-} from "./view.mjs?v=16";
+  renderBootEdits, renderDashboard,
+} from "./view.mjs?v=17";
 
 const $ = selector => document.querySelector(selector);
 const connectButton = $("#connect");
@@ -215,4 +215,3 @@ confirmSave.addEventListener("click", () => {
   run(() => client.saveAndReboot(settings, acknowledged));
 });
 globalThis.setInterval(() => client.refresh(), 1000);
-globalThis.setInterval(() => updateReportAge(client.state.dashboard), 1000);

@@ -4,8 +4,8 @@
 import { CLOCK_PROFILES, ROLES } from "./device.mjs?v=8";
 import {
   convertFrequencyValue, frequencyEditorValue, frequencyMax, frequencyToHertz,
-  renderBootEdits, renderDashboard, updateReportAge,
-} from "./view.mjs?v=16";
+  renderBootEdits, renderDashboard,
+} from "./view.mjs?v=17";
 import { PicoPwmHost, request } from "./client.mjs?v=1";
 
 const $ = selector => document.querySelector(selector);
@@ -235,8 +235,7 @@ $("#confirm-save").addEventListener("click", () => {
 render(client.state);
 request("/api/host").then(host => {
   $("#dashboard-type").textContent = host.dashboard_type;
-  document.title = `PicoPWM Control | ${host.dashboard_type}`;
+  document.title = `PicoPWM Dashboard | ${host.dashboard_type}`;
 }).catch(error => client.update({ error: `Host identity unavailable: ${error.message}` }));
 rescan();
 globalThis.setInterval(() => client.refresh(), 1000);
-globalThis.setInterval(() => updateReportAge(client.state.dashboard), 1000);

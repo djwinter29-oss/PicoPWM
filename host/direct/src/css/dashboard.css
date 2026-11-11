@@ -49,12 +49,8 @@ body {
 .mark {
   width: 32px;
   height: 32px;
-  border-radius: 9px;
-  display: grid;
-  place-items: center;
-  background: var(--lime);
-  color: var(--teal-dark);
-  font: 700 13px var(--mono);
+  flex-shrink: 0;
+  display: block;
 }
 
 .connection { display: flex; align-items: center; flex-wrap: wrap; justify-content: end; gap: 6px 9px; font: 600 12px var(--mono); }
@@ -68,9 +64,6 @@ h1, h2, p { margin-top: 0; }
 h1 { margin-bottom: 0; font-size: 28px; line-height: 1.15; font-weight: 680; letter-spacing: -0.035em; }
 h2 { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: -0.02em; }
 h2 span { margin-left: 9px; color: var(--muted); font: 500 12px var(--mono); }
-.sample-time { color: #b6d1ca; font: 12px var(--mono); }
-.sample-time::before { content: "\00b7"; margin-right: 9px; }
-.sample-time[data-stale="true"] { color: #ffca80; }
 .page-heading + section { margin-top: 16px; }
 .host-version { overflow-wrap: anywhere; }
 .host-version::before { content: "App v"; }
@@ -213,7 +206,6 @@ tbody td:nth-child(5), tbody td:nth-child(6) { font-size: 11px; line-height: 1.6
   .connection { margin-left: auto; }
   main { padding: 18px 18px 24px; }
   .page-heading { align-items: start; flex-direction: column; gap: 10px; }
-  .sample-time { margin-bottom: 0; }
   .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 8px 0 18px; }
   .summary.identity-summary, .summary.configuration-summary, .summary.runtime-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));

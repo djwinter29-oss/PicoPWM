@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, posix, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 
 const root = fileURLToPath(new URL("../src/", import.meta.url));
 const html = readFileSync(join(root, "index.html"), "utf8");
@@ -26,10 +27,31 @@ test("shared asset lookup handles Windows separators and relative import segment
 });
 
 test("HTML references only host assets or canonical Direct Dashboard presentation assets", () => {
+  assert.match(html, /<title>PicoPWM Dashboard<\/title>/);
+  assert.match(html, /<img class="mark" src="favicon\.svg" alt="" width="32" height="32">/);
+  assert.doesNotMatch(html, /sample-time/);
+  assert.match(html, /id="connection-label">Disconnected<\/span>/);
   for (const match of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
     if (match[1] === "./") continue;
     assert.ok(!match[1].startsWith(".."), match[1]);
     assert.ok(existsSync(asset(match[1].split("?")[0])), match[1]);
+  }
+});
+
+test("tab title identifies the Python or .NET host", async () => {
+  const source = readFileSync(join(root, "js/app.mjs"), "utf8");
+  const identity = source.slice(source.indexOf('request("/api/host")'), source.indexOf("\nrescan();"));
+  for (const dashboard_type of ["Python", ".NET"]) {
+    const document = { title: "PicoPWM Dashboard" };
+    const label = { textContent: "Web" };
+    await runInNewContext(identity, {
+      document,
+      $: () => label,
+      request: async () => ({ dashboard_type }),
+      client: { update: state => assert.fail(state.error) },
+    });
+    assert.equal(document.title, `PicoPWM Dashboard | ${dashboard_type}`);
+    assert.equal(label.textContent, dashboard_type);
   }
 });
 

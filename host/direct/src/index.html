@@ -7,16 +7,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
-  <title>PicoPWM | Direct Dashboard</title>
+  <title>PicoPWM Dashboard | Direct</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="css/dashboard.css?v=26">
+  <link rel="stylesheet" href="css/dashboard.css?v=28">
   <link rel="stylesheet" href="css/direct.css?v=23">
-  <script type="module" src="js/app.mjs?v=19"></script>
+  <script type="module" src="js/app.mjs?v=20"></script>
 </head>
 <body>
   <header class="topbar">
     <a class="wordmark" href="./" aria-label="PicoPWM Direct Dashboard home">
-      <span class="mark">PW</span>
+      <img class="mark" src="favicon.svg" alt="" width="32" height="32">
       <span><strong>PicoPWM</strong>
         <span class="brand-meta"><small>Direct</small>
           <span class="host-version" id="host-version" aria-label="Host application version">0.0.0-debug</span>
@@ -26,7 +26,6 @@
     <div class="connection" id="connection" data-state="disconnected">
       <span class="connection-light" aria-hidden="true"></span>
       <span id="connection-label">Disconnected</span>
-      <span class="sample-time" id="sample-time" hidden></span>
     </div>
   </header>
 
@@ -170,7 +169,7 @@
 
     <section class="channels-section" aria-labelledby="channels-title">
       <div class="section-heading">
-        <h2 id="channels-title">PWM control and monitoring <span>0&ndash;23</span></h2>
+        <h2 id="channels-title">PWM channels <span>0&ndash;23</span></h2>
         <span class="channel-edit-hint">Click generator values to edit</span>
       </div>
       <div class="channel-panels">

@@ -17,9 +17,12 @@ test("HTML references only Direct Dashboard-owned assets", () => {
     assert.ok(existsSync(join(root, match[1].split("?")[0])), match[1]);
   }
   assert.match(html, /aria-label="Host application version">0\.0\.0-debug<\/span>/);
-  assert.match(html, /<title>PicoPWM \| Direct Dashboard<\/title>/);
+  assert.match(html, /<title>PicoPWM Dashboard \| Direct<\/title>/);
   assert.match(html, /aria-label="PicoPWM Direct Dashboard home"/);
   assert.match(html, /<small>Direct<\/small>/);
+  assert.match(html, /<img class="mark" src="favicon\.svg" alt="" width="32" height="32">/);
+  assert.doesNotMatch(html, /sample-time/);
+  assert.match(html, /id="connection-label">Disconnected<\/span>/);
 });
 
 test("Device information matches PicoUart field names and order", () => {

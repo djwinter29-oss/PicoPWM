@@ -3,6 +3,8 @@
 
 import pytest
 import struct
+import logging
+from unittest.mock import Mock
 
 from picopwm import protocol as p
 from picopwm.app import create_app
@@ -11,6 +13,31 @@ from picopwm.client import DeviceError, PicoPwmHid
 IDENTITY = bytes([1, 3, 0, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 2, 24, 3, 0x1F])
 CONFIGURATION = bytes([1, 0, 1, 2, 0, 0, 1, 0x20, 0, 1, 2, 0, 0, 1, 0x20, 1, 1, 0x80, 0xD1, 0xF0, 0x08])
 BANK = bytes([1] + [0xE8, 0x03, 0, 0, 50] * 8)
+
+
+def test_server_suppresses_request_logs_but_keeps_warnings_and_errors(monkeypatch, caplog):
+    from picopwm import app as app_module
+
+    caplog.set_level(logging.INFO, logger="werkzeug")
+    monkeypatch.setenv("PICOPWM_HOST", "127.0.0.1")
+    monkeypatch.setenv("PICOPWM_PORT", "5000")
+    boards = Mock()
+    app = Mock(extensions={"picopwm_boards": boards})
+
+    def run(**kwargs):
+        logger = logging.getLogger("werkzeug")
+        logger.info("routine request")
+        logger.warning("server warning")
+        logger.error("server error")
+
+    app.run.side_effect = run
+    monkeypatch.setattr(app_module, "create_app", lambda **kwargs: app)
+    app_module.main()
+    assert "routine request" not in caplog.text
+    assert "server warning" in caplog.text
+    assert "server error" in caplog.text
+    app.run.assert_called_once_with(host="127.0.0.1", port=5000)
+    boards.close.assert_called_once()
 
 
 class FakeDevice:

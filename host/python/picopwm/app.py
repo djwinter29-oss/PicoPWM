@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import os
 from pathlib import Path
 from urllib.parse import urlparse
@@ -257,6 +258,7 @@ def main() -> None:
     token = os.environ.get("PICOPWM_TOKEN", "")
     host = bind_host(os.environ.get("PICOPWM_HOST"), token)
     app = create_app(token=token)
+    logging.getLogger("werkzeug").setLevel(logging.WARNING)
     try:
         app.run(host=host, port=int(os.environ.get("PICOPWM_PORT", "5000")))
     finally:

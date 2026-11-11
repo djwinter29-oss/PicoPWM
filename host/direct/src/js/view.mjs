@@ -64,17 +64,6 @@ export function formatUptime(seconds) {
   return `${days ? `${days}d ` : ""}${hours}h ${minutes}m ${seconds % 60}s`;
 }
 
-export function updateReportAge(data, now = Date.now()) {
-  const sample = Date.parse(data.updated_at);
-  const age = document.querySelector("#sample-time");
-  age.hidden = !data.connected;
-  const seconds = Number.isFinite(sample) ? Math.max(0, Math.floor((now - sample) / 1000)) : null;
-  const stale = seconds !== null && seconds > 3;
-  age.textContent = seconds === null ? "Waiting for status"
-    : `Status ${seconds} s ago${stale ? " (stale)" : ""}`;
-  age.dataset.stale = String(stale);
-}
-
 function syncTarget(selector, value) {
   const control = document.querySelector(selector);
   const target = value === undefined ? "" : String(value);

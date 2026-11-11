@@ -78,6 +78,11 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Require Linux browser regression
+        run: |
+          chrome=$(command -v google-chrome)
+          echo "CHROMIUM=$chrome" >> "$GITHUB_ENV"
+
       - name: Setup Python for site staging
         uses: actions/setup-python@v7
         with:

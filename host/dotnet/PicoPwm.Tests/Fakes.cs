@@ -22,6 +22,9 @@ internal static class Fakes
         public bool Closed;
         public bool InvalidPins;
         public bool Unplugged;
+        public IOException? CloseError;
+        public Action<byte>? BeforeGet;
+        public Action<byte[]>? BeforeSet;
         public uint[] FreqHz = Enumerable.Repeat(1000u, Protocol.ChannelCount).ToArray();
         public byte[] Duty = Enumerable.Repeat((byte)50, Protocol.ChannelCount).ToArray();
 
@@ -40,6 +43,7 @@ internal static class Fakes
 
         public byte[] Get(byte reportId, int size)
         {
+            BeforeGet?.Invoke(reportId);
             if (Unplugged)
                 throw new IOException("device unplugged");
             if (reportId is >= Protocol.BankStatusReport and < Protocol.BankStatusReport + Protocol.BankCount)
@@ -59,6 +63,7 @@ internal static class Fakes
 
         public void Set(byte reportId, byte[] payload)
         {
+            BeforeSet?.Invoke(payload);
             Sent.Add(payload);
             if (mode == "drop")
                 return;
@@ -77,7 +82,11 @@ internal static class Fakes
             Result = [1, payload[1], payload[2], status, 0, 0, 0, 0, 0, 0, 0, 0];
         }
 
-        public void Dispose() { Closed = true; }
+        public void Dispose()
+        {
+            Closed = true;
+            if (CloseError is not null) throw CloseError;
+        }
     }
 
     internal static (FakeDevice, PicoPwmHid) Make(string mode = "ok")

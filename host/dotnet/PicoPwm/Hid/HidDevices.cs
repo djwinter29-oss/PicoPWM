@@ -15,17 +15,24 @@ public interface IFeatureDevice : IDisposable
 
 public static class HidDevices
 {
-    private static IEnumerable<HidDevice> MatchingDevices() => DeviceList.Local.GetHidDevices(Protocol.VendorId, Protocol.ProductId)
+    private static IEnumerable<HidDevice> MatchingDevices(IEnumerable<HidDevice> devices) => devices
+        .Where(device => device.VendorID == Protocol.VendorId && device.ProductID == Protocol.ProductId)
         .Where(device => device.GetReportDescriptor().DeviceItems
             .Any(item => item.Usages.GetAllValues().Contains(Protocol.UsagePageAndUsage)));
 
-    public static BoardInfo[] Enumerate() => MatchingDevices()
+    public static BoardInfo[] Enumerate() =>
+        Enumerate(DeviceList.Local.GetHidDevices(Protocol.VendorId, Protocol.ProductId));
+
+    internal static BoardInfo[] Enumerate(IEnumerable<HidDevice> devices) => MatchingDevices(devices)
         .Select(device => BoardInfo.Create(device.GetProductName(), device.GetSerialNumber(), device.DevicePath))
         .ToArray();
 
-    public static IFeatureDevice Open(string? serial = null, string? path = null)
+    public static IFeatureDevice Open(string? serial = null, string? path = null) =>
+        Open(DeviceList.Local.GetHidDevices(Protocol.VendorId, Protocol.ProductId), serial, path);
+
+    internal static IFeatureDevice Open(IEnumerable<HidDevice> candidates, string? serial = null, string? path = null)
     {
-        var devices = MatchingDevices()
+        var devices = MatchingDevices(candidates)
             .Where(device => serial is null || device.GetSerialNumber() == serial)
             .Where(device => path is null || device.DevicePath == path)
             .ToArray();
@@ -42,20 +49,23 @@ internal sealed class HidSharpDevice : IFeatureDevice
 {
     private readonly HidDevice device;
     private readonly HidStream stream;
+    private readonly int prefix;
 
-    public HidSharpDevice(HidDevice device)
+    public HidSharpDevice(HidDevice device) : this(device, OperatingSystem.IsLinux()) { }
+
+    internal HidSharpDevice(HidDevice device, bool linux)
     {
         this.device = device;
+        prefix = linux ? 2 : 1;
         stream = device.Open();
-        // ponytail: HidSharp timeouts bound reads and writes; PicoUart additionally runs each transfer on a
-        // watchdog thread, which is only needed if a driver is seen to ignore them.
+        // ponytail: Configure ordinary I/O timeouts; native feature-report stalls remain backend-dependent.
+        // Keep synchronous transfers until qualification shows a need for isolated transfer execution.
         stream.ReadTimeout = stream.WriteTimeout = 3000;
     }
 
     public byte[] Get(byte reportId, int size)
     {
         // HidSharp on Linux echoes the report ID twice, so the payload starts at offset 2 there.
-        var prefix = OperatingSystem.IsLinux() ? 2 : 1;
         var report = new byte[Math.Max(size + prefix, device.GetMaxFeatureReportLength() + prefix - 1)];
         report[0] = reportId;
         stream.GetFeature(report);

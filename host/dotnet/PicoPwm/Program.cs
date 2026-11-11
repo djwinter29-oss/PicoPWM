@@ -18,9 +18,9 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
     options.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.Never;
 });
-builder.Services.AddSingleton(_ => new BoardRegistry(HidDevices.Enumerate,
+builder.Services.AddSingleton(services => new BoardRegistry(HidDevices.Enumerate,
     board => new PicoPwmHid(() => HidDevices.Open(board.SerialNumber,
-        board.SerialNumber is null ? board.DevicePath : null)),
+        board.SerialNumber is null ? board.DevicePath : null), logger: services.GetRequiredService<ILogger<PicoPwmHid>>()),
     Environment.GetEnvironmentVariable("PICOPWM_SERIAL"), Environment.GetEnvironmentVariable("PICOPWM_DEVICE_PATH")));
 
 var listenUrls = DashboardBind.ListenUrls(args, Environment.GetEnvironmentVariable("ASPNETCORE_URLS"),
@@ -98,7 +98,13 @@ app.MapPost("/api/login", (HttpContext http, LoginRequest request) =>
     });
     return Results.Ok(new { ok = true });
 });
-app.MapGet("/api/host", () => new { dashboard_type = ".NET" });
+app.MapGet("/api/host", () => new
+{
+    dashboard_type = ".NET",
+    version = typeof(Program).Assembly
+        .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+        .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().Single().InformationalVersion,
+});
 app.MapGet("/api/boards", (BoardRegistry boards) => Act(() => boards.Boards()));
 app.MapGet("/api/status", (string? board, BoardRegistry boards) => Act(() => board is null
     ? new DashboardStatus(false, null, null, null, null, [], new string?[3], null)
@@ -132,12 +138,14 @@ app.MapPost("/api/save-reboot", (string? board, BootRequest request, BoardRegist
 app.Run();
 
 record LoginRequest(string? Token);
-record ChannelRequest(long FreqHz, int Duty);
-record BankRequest(int Bank, int Backend, int Role);
-record AddressRequest(int Address);
-record ClockRequest(int Profile, bool AcknowledgeOverclock = false);
+record ChannelRequest([property: JsonRequired] long FreqHz, [property: JsonRequired] int Duty);
+record BankRequest([property: JsonRequired] int Bank, [property: JsonRequired] int Backend,
+    [property: JsonRequired] int Role);
+record AddressRequest([property: JsonRequired] int Address);
+record ClockRequest([property: JsonRequired] int Profile, bool AcknowledgeOverclock = false);
 record SaveRequest(bool AcknowledgeOverclock = false);
-record LedRequest(bool? On);
-record BootRequest(int Profile, int Address, int[]? Roles, bool AcknowledgeOverclock = false);
+record LedRequest([property: JsonRequired] bool? On);
+record BootRequest([property: JsonRequired] int Profile, [property: JsonRequired] int Address,
+    [property: JsonRequired] int[]? Roles, bool AcknowledgeOverclock = false);
 
 public partial class Program { }

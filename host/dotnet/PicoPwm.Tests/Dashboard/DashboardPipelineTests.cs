@@ -7,11 +7,72 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using PicoPwm.Host;
 
 namespace PicoPwm.Tests;
 
 public sealed class DashboardPipelineTests
 {
+    [Fact]
+    public async Task MissingActionFieldsAreRejectedWithoutHardwareWritesAndHostReportsVersion()
+    {
+        var previousToken = Environment.GetEnvironmentVariable("PICOPWM_TOKEN");
+        var previousUrls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
+        var previousEnvironment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        Environment.SetEnvironmentVariable("PICOPWM_TOKEN", null);
+        Environment.SetEnvironmentVariable("ASPNETCORE_URLS", "http://127.0.0.1:5000");
+        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Production");
+        try
+        {
+            var board = BoardInfo.Create("PicoPWM", "test", "/fake");
+            var (device, hid) = Fakes.Modern();
+            using var registry = new BoardRegistry(() => [board], _ => hid);
+            registry.Boards();
+            await using var app = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+                builder.ConfigureServices(services => services.AddSingleton(registry)));
+            var client = app.CreateClient();
+            var cases = new (string Route, object Body)[]
+            {
+                ("channels/0", new { }),
+                ("channels/0", new { freq_hz = 1000 }),
+                ("channels/0", new { duty = 50 }),
+                ("channels/0", new { freq_hz = (long?)null, duty = 50 }),
+                ("bank", new { backend = 0, role = 0 }),
+                ("bank", new { bank = 0, role = 0 }),
+                ("bank", new { bank = 0, backend = 0 }),
+                ("i2c-address", new { }),
+                ("clock-profile", new { }),
+                ("led", new { }),
+                ("led", new { on = (bool?)null }),
+                ("save-reboot", new { address = 64, roles = new[] { 0, 1, 1 } }),
+                ("save-reboot", new { profile = 0, roles = new[] { 0, 1, 1 } }),
+                ("save-reboot", new { profile = 0, address = 64 }),
+                ("save-reboot", new { profile = 0, address = 64, roles = (int[]?)null }),
+            };
+            foreach (var (route, body) in cases)
+            {
+                var response = await client.PostAsJsonAsync($"/api/{route}?board={board.Id}", body);
+                Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+                Assert.Empty(device.Sent);
+            }
+            var valid = await client.PostAsJsonAsync($"/api/channels/0?board={board.Id}", new { freq_hz = 0, duty = 0 });
+            Assert.Equal(HttpStatusCode.OK, valid.StatusCode);
+            Assert.Single(device.Sent);
+            using var metadata = JsonDocument.Parse(await client.GetStringAsync("/api/host"));
+            var expected = typeof(Program).Assembly.GetCustomAttributes(
+                typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().Single().InformationalVersion;
+            Assert.Equal(".NET", metadata.RootElement.GetProperty("dashboard_type").GetString());
+            Assert.Equal(expected, metadata.RootElement.GetProperty("version").GetString());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PICOPWM_TOKEN", previousToken);
+            Environment.SetEnvironmentVariable("ASPNETCORE_URLS", previousUrls);
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", previousEnvironment);
+        }
+    }
+
     [Fact]
     public async Task RejectsAForeignOriginAndRequiresTheTokenOnTheHttpPipeline()
     {

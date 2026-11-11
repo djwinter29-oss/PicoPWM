@@ -6,7 +6,11 @@ using static PicoPwm.Host.Protocol;
 namespace PicoPwm.Host;
 
 /// <summary>The device rejected a command, or its outcome could not be confirmed.</summary>
-public sealed class DeviceException(string message) : Exception(message);
+public sealed class DeviceException(string message, int? status = null, Exception? innerException = null)
+    : Exception(message, innerException)
+{
+    public int? Status { get; } = status;
+}
 
 public sealed record DashboardStatus(bool Connected, Identity? Identity, string? IdentityError,
     Configuration? Configuration, string? ConfigurationError, ChannelState[] Channels, string?[] BankErrors,
@@ -14,12 +18,14 @@ public sealed record DashboardStatus(bool Connected, Identity? Identity, string?
     Pins? Pins = null, string? PinsError = null);
 
 /// <summary>Thread-safe client for one board; opens lazily and reopens after an I/O failure.</summary>
-public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sleep = null, Func<long>? clockMs = null)
+public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sleep = null, Func<long>? clockMs = null,
+    ILogger<PicoPwmHid>? logger = null) : IDisposable
 {
     private static readonly TimeSpan ActionTimeout = TimeSpan.FromSeconds(3), SaveTimeout = TimeSpan.FromSeconds(15);
     private readonly object gate = new();
     private readonly Action<TimeSpan> sleep = sleep ?? Thread.Sleep;
     private readonly Func<long> clockMs = clockMs ?? (() => Environment.TickCount64);
+    private readonly ILogger<PicoPwmHid> logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<PicoPwmHid>.Instance;
     private IFeatureDevice? device;
     private Identity? identity;
     private Configuration? configuration;
@@ -35,9 +41,13 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
             identity = null;
             configuration = null;
             pins = null;
-            try { closing?.Dispose(); } catch (IOException) { }
+            try { closing?.Dispose(); }
+            catch (IOException error) { logger.LogWarning(error, "Failed to close HID device"); }
         }
     }
+
+    /// <summary>Release the handle without stopping outputs; subsequent operations may reopen it.</summary>
+    public void Dispose() => Close();
 
     private IFeatureDevice Device => device ??= opener();
 
@@ -53,6 +63,17 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
             current = current with { RamReservedBytes = memory.RamReservedBytes, RamTotalBytes = memory.RamTotalBytes };
         }
         return identity = current;
+    }
+
+    private Identity CommandIdentity()
+    {
+        try { return EnsureIdentity(); }
+        catch (Exception error) when (error is IOException or InvalidOperationException or InvalidDataException
+            or UnauthorizedAccessException or NotSupportedException or TimeoutException)
+        {
+            Close();
+            throw new DeviceException($"Unable to read device identity: {error.Message}", innerException: error);
+        }
     }
 
     public DashboardStatus Status()
@@ -92,7 +113,7 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
                     catch (InvalidDataException error) { bankErrors[bank] = error.Message; }
                 }
                 return new(true, current, null, configuration, configurationError, channels, bankErrors, null,
-                    runtime, runtimeError, pins, pinsError);
+                    runtime, runtimeError, pins is null ? null : pins with { Channels = [.. pins.Channels] }, pinsError);
             }
             catch (InvalidDataException error)
             {
@@ -130,7 +151,7 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
             if (result.Status != StatusPending)
             {
                 if (result.Status != StatusOk)
-                    throw new DeviceException($"command failed: {result.StatusName}");
+                    throw new DeviceException($"command failed: {result.StatusName}", result.Status);
                 return;
             }
             if (clockMs() >= deadline)
@@ -156,7 +177,7 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
                 or UnauthorizedAccessException or NotSupportedException or TimeoutException)
             {
                 Close();
-                throw new DeviceException($"HID transfer failed; outcome is unconfirmed: {error.Message}");
+                throw new DeviceException($"HID transfer failed; outcome is unconfirmed: {error.Message}", innerException: error);
             }
             if (changesConfiguration)
                 configuration = null;
@@ -172,25 +193,29 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
             throw new ArgumentException("freq_hz must be an unsigned 32-bit integer");
         if (duty is < 0 or > 100)
             throw new ArgumentException("duty must be between 0 and 100");
-        try
+        lock (gate)
         {
-            return Run(false, OpSetChannel, (byte)channel, (uint)freqHz, (byte)duty);
-        }
-        catch (DeviceException error) when (error.Message == "command failed: INVALID")
-        {
-            var actual = new ChannelState(channel, null, null);
-            for (var attempt = 0; attempt < 3; attempt++)
+            try
             {
-                var state = Status();
-                actual = state.Channels[channel];
-                if (actual.FreqHz == (uint)freqHz && actual.Duty == duty)
-                    return state;
-                if (attempt < 2)
-                    sleep(TimeSpan.FromMilliseconds(50));
+                return Run(false, OpSetChannel, (byte)channel, (uint)freqHz, (byte)duty);
             }
-            var readback = actual.FreqHz is uint hz ? $"{hz} Hz / {actual.Duty}%" : "unavailable";
-            throw new DeviceException(
-                $"command failed: INVALID (requested {freqHz} Hz / {duty}%, readback {readback})");
+            catch (DeviceException error) when (error.Status == StatusInvalid)
+            {
+                var actual = new ChannelState(channel, null, null);
+                for (var attempt = 0; attempt < 3; attempt++)
+                {
+                    var state = Status();
+                    actual = state.Channels[channel];
+                    if (actual.FreqHz == (uint)freqHz && actual.Duty == duty)
+                        return state;
+                    if (attempt < 2)
+                        sleep(TimeSpan.FromMilliseconds(50));
+                }
+                var readback = actual.FreqHz is uint hz ? $"{hz} Hz / {actual.Duty}%" : "unavailable";
+                throw new DeviceException(
+                    $"command failed: INVALID (requested {freqHz} Hz / {duty}%, readback {readback})",
+                    error.Status, error);
+            }
         }
     }
 
@@ -209,24 +234,29 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
         catch (Exception error) when (error is IOException or InvalidOperationException or InvalidDataException
             or UnauthorizedAccessException or NotSupportedException or TimeoutException)
         {
-            throw new DeviceException($"HID transfer failed; outcome is unconfirmed: {error.Message}");
+            throw new DeviceException($"HID transfer failed; outcome is unconfirmed: {error.Message}", innerException: error);
         }
         finally { Close(); }
     }
 
     public void SaveAndReboot(int profile, int address, int[] roles, bool acknowledgeOverclock)
     {
+        if (profile is < 0 or > 4)
+            throw new ArgumentException("choose a clock profile the firmware advertises");
+        if (address is < 8 or > 119 || roles is null || roles.Length != 3)
+            throw new ArgumentException("expected I2C address 8-119 and three bank roles");
+        roles = (int[])roles.Clone();
+        if (roles.Any(role => role is < 0 or > 1))
+            throw new ArgumentException("expected I2C address 8-119 and three bank roles");
+        if (profile > 1 && !acknowledgeOverclock)
+            throw new ArgumentException("acknowledge the overclock first");
         lock (gate)
         {
-            var current = EnsureIdentity();
+            var current = CommandIdentity();
             if (!current.CanSaveReboot || !current.CanSetClock)
                 throw new DeviceException("update firmware to enable Save and Reboot");
-            if (profile is < 0 or > 4 || (current.ClockProfileMask & 1 << profile) == 0)
+            if ((current.ClockProfileMask & 1 << profile) == 0)
                 throw new ArgumentException("choose a clock profile the firmware advertises");
-            if (address is < 8 or > 119 || roles.Length != 3 || roles.Any(role => role is < 0 or > 1))
-                throw new ArgumentException("expected I2C address 8-119 and three bank roles");
-            if (profile > 1 && !acknowledgeOverclock)
-                throw new ArgumentException("acknowledge the overclock first");
             try
             {
                 var flags = profile > 1 ? FlagAckOverclock : (byte)0;
@@ -240,7 +270,8 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
                 or InvalidDataException or UnauthorizedAccessException or NotSupportedException or TimeoutException)
             {
                 Close();
-                throw new DeviceException($"Save and Reboot did not complete; target settings may have changed: {error.Message}");
+                throw new DeviceException($"Save and Reboot did not complete; target settings may have changed: {error.Message}",
+                    (error as DeviceException)?.Status, error);
             }
         }
     }
@@ -261,24 +292,27 @@ public sealed class PicoPwmHid(Func<IFeatureDevice> opener, Action<TimeSpan>? sl
 
     public DashboardStatus SetClockProfile(int profile, bool acknowledgeOverclock)
     {
-        int mask;
-        lock (gate)
-            mask = (identity ?? Status().Identity)?.ClockProfileMask ?? 0;
-        if (profile is < 0 or > 4 || (mask & 1 << profile) == 0)
+        if (profile is < 0 or > 4)
             throw new ArgumentException("choose a clock profile the firmware advertises");
         if (profile > 1 && !acknowledgeOverclock)
             throw new ArgumentException("acknowledge the overclock first");
-        return Run(true, OpSetClockProfile, arg0: (uint)profile, flags: profile > 1 ? FlagAckOverclock : (byte)0);
+        lock (gate)
+        {
+            if ((CommandIdentity().ClockProfileMask & 1 << profile) == 0)
+                throw new ArgumentException("choose a clock profile the firmware advertises");
+            return Run(true, OpSetClockProfile, arg0: (uint)profile, flags: profile > 1 ? FlagAckOverclock : (byte)0);
+        }
     }
 
     public DashboardStatus SaveConfiguration(bool acknowledgeOverclock)
     {
-        Configuration current;
         lock (gate)
-            current = Status().Configuration ?? throw new DeviceException("read the configuration first");
-        var overclock = current.ClockProfile > 1;
-        if (overclock && !acknowledgeOverclock)
-            throw new ArgumentException("acknowledge the overclock first");
-        return Run(true, OpSaveConfig, flags: (byte)(FlagConfirmSave | (overclock ? FlagAckOverclock : 0)));
+        {
+            var current = Status().Configuration ?? throw new DeviceException("read the configuration first");
+            var overclock = current.ClockProfile > 1;
+            if (overclock && !acknowledgeOverclock)
+                throw new ArgumentException("acknowledge the overclock first");
+            return Run(true, OpSaveConfig, flags: (byte)(FlagConfirmSave | (overclock ? FlagAckOverclock : 0)));
+        }
     }
 }

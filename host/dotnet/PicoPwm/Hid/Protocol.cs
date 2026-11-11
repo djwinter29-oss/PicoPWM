@@ -22,7 +22,7 @@ public static class Protocol
     public const byte OpSetChannel = 1, OpStop = 2, OpSetBank = 3, OpSetI2cAddress = 4, OpSaveConfig = 5,
         OpSetClockProfile = 6, OpSaveReboot = 7, OpSetLed = 8, OpReboot = 9;
     public const byte FlagConfirmSave = 1, FlagAckOverclock = 2;
-    public const byte StatusOk = 0, StatusPending = 6;
+    public const byte StatusOk = 0, StatusInvalid = 2, StatusPending = 6;
 
     private static readonly string[] StatusNames =
         ["OK", "BUSY", "INVALID", "UNAVAILABLE", "TIMEOUT", "APPLY_FAILED", "PENDING", "UNSUPPORTED", "STORAGE_FAILED"];

@@ -2,12 +2,196 @@
 // Copyright (c) 2026 Ji Dong
 
 using PicoPwm.Host;
+using Microsoft.Extensions.Logging;
 using static PicoPwm.Tests.Fakes;
 
 namespace PicoPwm.Tests;
 
 public sealed class PicoPwmHidTests
 {
+    [Fact]
+    public void StatusPinSnapshotsDoNotExposeCachedArrays()
+    {
+        var client = Modern().Item2;
+        var first = client.Status();
+        first.Pins!.Channels[0] = 47;
+        Assert.Equal(0, client.Status().Pins!.Channels[0]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PrerequisiteFailuresAreDeviceErrorsWithTheirCause(bool saveReboot)
+    {
+        var cause = new IOException("unplugged");
+        var client = new PicoPwmHid(() => throw cause);
+        var error = Assert.Throws<DeviceException>(() =>
+        {
+            if (saveReboot) client.SaveAndReboot(0, 64, [0, 1, 1], false);
+            else client.SetClockProfile(0, false);
+        });
+        Assert.Same(cause, error.InnerException);
+        Assert.Equal(409, DashboardHttp.FromException(error).StatusCode);
+        Assert.Null(error.Status);
+    }
+
+    [Fact]
+    public void InvalidBootDraftIsRejectedBeforeOpeningHardware()
+    {
+        var opened = false;
+        var client = new PicoPwmHid(() =>
+        {
+            opened = true;
+            throw new IOException("unplugged");
+        });
+        Assert.Throws<ArgumentException>(() => client.SaveAndReboot(0, 64, null!, false));
+        Assert.Throws<ArgumentException>(() => client.SaveAndReboot(0, 120, [0, 1, 1], false));
+        Assert.Throws<ArgumentException>(() => client.SaveAndReboot(3, 64, [0, 1, 1], false));
+        Assert.Throws<ArgumentException>(() => client.SetClockProfile(5, false));
+        Assert.False(opened);
+    }
+
+    [Fact]
+    public void SaveAndRebootUsesAnIndependentRolesDraft()
+    {
+        var (device, _) = Modern();
+        int[] roles = [0, 1, 1];
+        var client = new PicoPwmHid(() =>
+        {
+            roles[0] = 99;
+            return device;
+        });
+        client.SaveAndReboot(0, 64, roles, false);
+        Assert.Equal(0, device.Sent[2][4]);
+        Assert.Equal(1, device.Sent[3][5]);
+        Assert.Equal(1, device.Sent[4][5]);
+    }
+
+    [Fact]
+    public void FirmwareFailuresPreserveStatusAndWrappedCauses()
+    {
+        var invalid = Assert.Throws<DeviceException>(() => Make("invalid-channel").Item2.SetChannel(0, 2000, 25));
+        Assert.Equal(Protocol.StatusInvalid, invalid.Status);
+        Assert.IsType<DeviceException>(invalid.InnerException);
+        var save = Assert.Throws<DeviceException>(() =>
+            Modern("fail-bank").Item2.SaveAndReboot(0, 64, [0, 1, 1], false));
+        Assert.Equal(Protocol.StatusInvalid, save.Status);
+        Assert.IsType<DeviceException>(save.InnerException);
+        Assert.Contains("target settings may have changed", save.Message);
+        var cause = new IOException("unplugged");
+        var transfer = Assert.Throws<DeviceException>(() => new PicoPwmHid(() => throw cause).Stop());
+        Assert.Same(cause, transfer.InnerException);
+        var reboot = Assert.Throws<DeviceException>(() => new PicoPwmHid(() => throw cause).Reboot());
+        Assert.Same(cause, reboot.InnerException);
+    }
+
+    [Fact]
+    public void ReconciliationHoldsTheLockUntilTheWholeOperationFinishes()
+    {
+        var (device, _) = Make("invalid-channel");
+        PicoPwmHid? client = null;
+        var checks = 0;
+        client = new PicoPwmHid(() => device, _ =>
+        {
+            AssertGateHeld(client!);
+            checks++;
+        });
+        Assert.Throws<DeviceException>(() => client.SetChannel(0, 2000, 25));
+        Assert.Equal(2, checks);
+        client.Stop();
+        Assert.Equal(new byte[] { Protocol.OpSetChannel, Protocol.OpStop },
+            device.Sent.Select(command => command[2]).ToArray());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ClockAndSaveHoldTheGateDuringPrerequisiteReadsAndCommandDispatch(bool save)
+    {
+        var (device, client) = Modern();
+        var reads = new List<byte>();
+        device.BeforeGet = report =>
+        {
+            reads.Add(report);
+            AssertGateHeld(client);
+        };
+        device.BeforeSet = _ => AssertGateHeld(client, nested: true);
+        if (save) client.SaveConfiguration(false);
+        else client.SetClockProfile(0, false);
+        Assert.Contains(Protocol.IdentityReport, reads);
+        if (save) Assert.Contains(Protocol.ConfigurationReport, reads);
+        Assert.Equal(save ? Protocol.OpSaveConfig : Protocol.OpSetClockProfile, Assert.Single(device.Sent)[2]);
+    }
+
+    private static void AssertGateHeld(PicoPwmHid client, bool nested = false)
+    {
+        // Inspect ownership without exposing a production lock hook or relying on a scheduling delay.
+        var gate = typeof(PicoPwmHid).GetField("gate",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(client)!;
+        Assert.True(Monitor.IsEntered(gate));
+        if (nested)
+        {
+            // Balance Run's inner entry temporarily: the logical operation must still own its outer entry.
+            Monitor.Exit(gate);
+            try { Assert.True(Monitor.IsEntered(gate), "Prerequisite validation and dispatch need one outer lock"); }
+            finally { Monitor.Enter(gate); }
+        }
+        var acquired = false;
+        var contender = new Thread(() =>
+        {
+            acquired = Monitor.TryEnter(gate);
+            if (acquired) Monitor.Exit(gate);
+        }) { IsBackground = true };
+        contender.Start();
+        Assert.True(contender.Join(TimeSpan.FromSeconds(5)), "Lock contender did not execute");
+        Assert.False(acquired);
+    }
+
+    [Fact]
+    public void DisposeIsLazyClosesOnlyAndLogsCleanupFailures()
+    {
+        var opened = false;
+        using (var unused = new PicoPwmHid(() =>
+        {
+            opened = true;
+            throw new IOException("must not open");
+        })) { }
+        Assert.False(opened);
+        var (device, _) = Make();
+        var logger = new RecordingLogger();
+        var client = new PicoPwmHid(() => device, logger: logger);
+        var bodyError = new InvalidOperationException("script failed");
+        device.CloseError = new IOException("close failed");
+        void RunScript()
+        {
+            using (client)
+            {
+                client.Status();
+                throw bodyError;
+            }
+        }
+        var caught = Assert.Throws<InvalidOperationException>(RunScript);
+        Assert.Same(bodyError, caught);
+        Assert.True(device.Closed);
+        Assert.Empty(device.Sent);
+        Assert.Same(device.CloseError, Assert.Single(logger.Errors));
+        client.Dispose();
+        Assert.Single(logger.Errors);
+    }
+
+    private sealed class RecordingLogger : ILogger<PicoPwmHid>
+    {
+        public List<Exception?> Errors { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Assert.Equal(LogLevel.Warning, logLevel);
+            Errors.Add(exception);
+        }
+    }
+
     [Fact]
     public void StatusReadsAllBanks()
     {

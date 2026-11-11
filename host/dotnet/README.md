@@ -30,6 +30,7 @@ Current distribution is through GitHub Releases, not NuGet.
 Each browser page keeps its own board selection; an absent board is not silently replaced.
 Stop the service with `Ctrl+C`.
 Routine ASP.NET request logs are suppressed; startup messages, warnings, and errors remain visible.
+The dashboard displays the assembly informational version, including the version supplied by release builds.
 
 **Before driving outputs:** GPIO signals are 3.3 V only. Banks default to monitor-only.
 Configure the intended bank as a generator and reboot before setting output.
@@ -72,6 +73,8 @@ Cross-origin requests are rejected; without a token, non-loopback request hosts 
 The HTTP API uses the same snake_case route and payload conventions as the
 [Python host API](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/python-integration.md).
 Actions require a board ID from `GET /api/boards`. An unconfirmed command returns an error, not success.
+Required action fields must be present: omitted numeric fields are rejected, not treated as zero.
+Overclock acknowledgement remains optional and defaults to false.
 
 ## Development
 
@@ -101,6 +104,47 @@ Source files under `PicoPwm/` are grouped by responsibility:
 `Program.cs` remains the application entry point. Tests mirror these folders under `PicoPwm.Tests/`,
 with shared device doubles in `Fakes.cs`. Existing namespaces and CLI behavior are unchanged;
 no compatibility wrappers or extra `src/` layer are needed.
+
+Client operations serialize prerequisite validation, command execution, and readback reconciliation per board.
+Returned status snapshots do not expose cached pin arrays. `DeviceException.Status` carries a firmware
+status code when available, and wrapped failures retain their `InnerException`; HTTP error sentences remain fixed.
+The registry owns its clients and is disposed by the service container. Standalone callers can use
+`using var client = new PicoPwmHid(...);` to release handles. Dispose/Close do not stop generator outputs,
+and subsequent operations may reopen the client. Cleanup I/O failures are logged when a logger is supplied;
+the application supplies its logger automatically.
+
+Polling deadlines and configured HID read/write timeouts are not proof that native feature-report calls
+cannot stall on every backend. Cross-platform disconnect, reconnect, and stall qualification remains a
+hardware task; follow the [failure qualification checklist](../../docs/guides/python-integration.md#hid-failure-qualification-checklist)
+with the .NET runtime and HidSharp version recorded instead of Python/hidapi versions.
+Do not treat the host as an emergency-stop mechanism.
+
+### Automated transport and concurrency checks
+
+Hardware-free tests exercise HidSharp device discovery and streams using in-memory subclasses:
+VID/PID and usage filtering, serial/path selection, absent and ambiguous devices, permission failures,
+feature-report IDs, platform-specific prefixes, buffer sizing, writes, timeouts configuration, and disposal.
+Both Linux and non-Linux framing policies are tested on any test host; this does not execute those OS drivers.
+The test seams are internal; the public discovery and transport APIs are unchanged.
+
+Lock regressions check ownership and execute a separate thread's immediate lock attempt rather than
+assuming that a 100 ms delay proves contention. Clock/save dispatch also checks that the outer logical
+operation still owns the gate in addition to the inner command lock.
+
+### Native HID qualification still required
+
+| Platform | Disconnect/reconnect | Native transfer stall | Shutdown/handle cleanup |
+| --- | --- | --- | --- |
+| Windows | Not run | Not run | Not run |
+| Linux | Not run | Not run | Not run |
+| macOS | Not run | Not run | Not run |
+
+These are outstanding qualification cases, not failed tests or automated passes. Before running them,
+the operator must identify the board, flashed artifact, CDC port and fixture, and authorize output changes.
+Record the OS, architecture, .NET and HidSharp versions, command, elapsed time, confirmed/unconfirmed outcome,
+selected-board identity after reconnect, and cleanup result. Mark a stall that cannot be safely reproduced
+as not tested. Never automatically save, reboot, change roles, or rewire to make qualification possible.
+Keep results and instrument checks separate from the hardware-free suite.
 
 ## Help and License
 

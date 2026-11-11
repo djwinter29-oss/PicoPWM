@@ -155,7 +155,7 @@ def main() -> None:
     checking.add_argument("--output", type=Path, required=True)
     checking.add_argument("--version", required=True)
     serving = commands.add_parser("serve")
-    serving.add_argument("--port", type=int, default=8000)
+    serving.add_argument("--port", type=int, default=8000, help="Listen port; 0 selects an available port")
     args = parser.parse_args()
     if args.command == "verify":
         verify(args.output.resolve(), args.version)
@@ -165,8 +165,8 @@ def main() -> None:
         build(SOURCE, args.output.resolve(), version, commit, dirty)
         print(f"Verified Direct Dashboard {version} ({commit}) in {args.output}")
         return
-    if not 1 <= args.port <= 65535:
-        parser.error("port must be between 1 and 65535")
+    if not 0 <= args.port <= 65535:
+        parser.error("port must be between 0 and 65535")
     with tempfile.TemporaryDirectory(prefix="picopwm-direct-") as temporary:
         output = Path(temporary) / "site"
         build(SOURCE, output, version, commit, dirty)
@@ -178,7 +178,7 @@ def main() -> None:
             signal.signal(signal.SIGTERM, terminate)
             if sys.platform == "win32":
                 signal.signal(signal.SIGBREAK, terminate)
-            print(f"Direct Dashboard {version} at http://127.0.0.1:{args.port}/", flush=True)
+            print(f"Direct Dashboard {version} at http://127.0.0.1:{server.server_port}/", flush=True)
             try:
                 server.serve_forever()
             except KeyboardInterrupt:

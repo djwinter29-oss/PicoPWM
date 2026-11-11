@@ -159,6 +159,19 @@ at validation/readback boundaries. Update those tests with synchronization refac
 define a public locking API or establish native hidapi transfer deadlines.
 Shared dashboard source/selector checks are likewise implementation-coupled, not browser end-to-end tests.
 
+The shared web client bounds reads (including JSON bodies) to 5 seconds and writes/login to 20 seconds.
+Changing boards cancels obsolete status reads. Parallel unauthorized requests share one token prompt/login.
+HTTP errors retain their status even when a proxy returns HTML instead of JSON.
+After a lost, timed-out, malformed successful, or server-error write response, controls remain unavailable
+until fresh selected-board status is received. The command may have taken effect; it is never automatically
+replayed, and canceling HTTP does not cancel USB work on the server. Verify readback before retrying.
+
+Run shared dashboard tests with `node --test host/web/tests/*.test.mjs`. They include a Chromium flow
+with a simulated HTTP API for login, board switching, editing, save acknowledgement, and uncertain-write
+recovery. Set `CHROMIUM` to the browser executable to require that check; otherwise it explicitly skips
+when `chromium` is absent. Linux host CI requires the browser. The browser uses a temporary local-file
+copy: this does not qualify real Flask/ASP.NET delivery, authentication cookies, or physical USB/PWM.
+
 ## License
 
 [BSD 3-Clause](https://github.com/djwinter29-oss/PicoPWM/blob/main/LICENSE).

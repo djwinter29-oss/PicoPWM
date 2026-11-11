@@ -32,6 +32,11 @@ Stop the service with `Ctrl+C`.
 Routine ASP.NET request logs are suppressed; startup messages, warnings, and errors remain visible.
 The dashboard displays the assembly informational version, including the version supplied by release builds.
 
+The shared dashboard has bounded HTTP waits, canceled obsolete board reads, one shared login attempt,
+and fresh-status recovery after uncertain writes; it never automatically replays commands.
+See the [shared web client behavior and browser validation notes](../python/README.md#source-organization)
+for timeouts, recovery limitations, and the hardware-free Chromium check.
+
 **Before driving outputs:** GPIO signals are 3.3 V only. Banks default to monitor-only.
 Configure the intended bank as a generator and reboot before setting output.
 Follow the [wiring guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/hardware-setup.md).

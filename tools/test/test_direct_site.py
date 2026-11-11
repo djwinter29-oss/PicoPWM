@@ -7,9 +7,9 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
-import socket
 import subprocess
 import sys
 import tempfile
@@ -119,34 +119,43 @@ class DirectSiteTests(unittest.TestCase):
 
     def test_local_server_serves_staged_identity_and_stops_cleanly(self):
         opener = build_opener(ProxyHandler({}))
-        with socket.socket() as sock:
-            sock.bind(("127.0.0.1", 0))
-            port = sock.getsockname()[1]
-        with tempfile.TemporaryDirectory() as cwd, tempfile.TemporaryFile(mode="w+b") as log:
+        with tempfile.TemporaryDirectory() as cwd, open(Path(cwd) / "server.log", "w+b") as log:
             process = subprocess.Popen([sys.executable, str(ROOT / "tools/host/direct_site.py"),
-                                        "serve", "--port", str(port)], cwd=cwd,
+                                        "serve", "--port", "0"], cwd=cwd,
                                        stdout=log, stderr=subprocess.STDOUT,
                                        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0)
             try:
-                deadline = time.monotonic() + 15
+                def output():
+                    return (Path(cwd) / "server.log").read_text(encoding="utf-8", errors="replace")
+
+                deadline = time.monotonic() + 30
                 while True:
-                    self.assertIsNone(process.poll(), "Direct server exited early")
+                    text = output()
+                    self.assertIsNone(process.poll(), f"Direct server exited early:\n{text}")
+                    ready = re.search(r"Direct Dashboard .+ at (http://127\.0\.0\.1:[1-9]\d*/)", text)
+                    if ready:
+                        url = ready[1]
+                        break
+                    if time.monotonic() >= deadline:
+                        self.fail(f"Direct server did not announce readiness within 30 seconds:\n{text}")
+                    time.sleep(0.1)
+                while True:
                     try:
-                        with opener.open(f"http://127.0.0.1:{port}/build.json", timeout=1) as response:
+                        with opener.open(url + "build.json", timeout=2) as response:
                             metadata = json.load(response)
                         break
-                    except (URLError, TimeoutError):
+                    except (URLError, TimeoutError) as error:
                         if time.monotonic() >= deadline:
-                            self.fail("Direct server did not start")
+                            self.fail(f"Direct server announced readiness but HTTP failed: {error}\n{output()}")
                         time.sleep(0.1)
-                with opener.open(f"http://127.0.0.1:{port}/", timeout=2) as response:
+                with opener.open(url, timeout=5) as response:
                     self.assertEqual("no-store", response.headers["Cache-Control"])
                     page = response.read().decode()
                 self.assertIn(metadata["version"], page)
                 self.assertIn(metadata["cache_key"], page)
                 self.assertNotEqual("unknown", metadata["commit"])
-                with opener.open(f"http://127.0.0.1:{port}/js/app.mjs?v={metadata['cache_key']}",
-                                 timeout=2) as response:
+                with opener.open(f"{url}js/app.mjs?v={metadata['cache_key']}",
+                                 timeout=5) as response:
                     self.assertIn(metadata["cache_key"], response.read().decode())
                 process.send_signal(signal.CTRL_BREAK_EVENT if sys.platform == "win32" else signal.SIGTERM)
                 self.assertEqual(0, process.wait(timeout=10))

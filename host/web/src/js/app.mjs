@@ -6,7 +6,7 @@ import {
   convertFrequencyValue, frequencyEditorValue, frequencyMax, frequencyToHertz,
   renderBootEdits, renderDashboard,
 } from "./view.mjs?v=17";
-import { PicoPwmHost, request } from "./client.mjs?v=1";
+import { PicoPwmHost, request } from "./client.mjs?v=2";
 
 const $ = selector => document.querySelector(selector);
 const boardSelect = $("#board-select");

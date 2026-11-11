@@ -10,8 +10,8 @@ include technical details until one is provided.
 
 ## Device Security Notes
 
-- The USB identity `0xCAFE:0x4012` is an unallocated development/lab identity. Do not use it for commercial
-  products; collisions and driver-association conflicts are possible.
+- The USB identity `0x2E8A:0x116C` is allocated to PicoPWM by Raspberry Pi. USB identifiers are not
+  authentication and do not establish that a connected device is trusted.
 - The USB CDC shell, USB HID interface and I2C slave have no authentication. Any local process that can open the CDC
   or HID device, and any device on the I2C bus, can change PWM outputs and the startup configuration. Restrict
   operating-system access to the device nodes to trusted users and keep the I2C bus private.

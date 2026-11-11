@@ -65,6 +65,19 @@ WebHID also requires browser permission. Run the udev setup on the computer
 physically connected to the board; permission on a remote server does not
 grant the browser access to a local USB device.
 
+### Upgrading from the lab USB identity
+
+PicoPWM now uses the Raspberry Pi-allocated USB identity `0x2E8A:0x116C`,
+replacing `0xCAFE:0x4012`. Update firmware and host applications together;
+current HID clients do not discover firmware using the old lab identity.
+Grant browser permission again for the new identity. The OS may also assign
+a different CDC serial device name.
+
+On Linux, review `/etc/udev/rules.d/70-picopwm-hid.rules` and replace the old
+`cafe`/`4012` vendor/product matches with `2e8a`/`116c`, preserving any local
+customizations. Then rerun the setup helper above to reload the rules.
+The helper intentionally refuses to overwrite a differing existing rule.
+
 ## Troubleshooting
 
 ### The board does not appear in the terminal

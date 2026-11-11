@@ -23,21 +23,20 @@ PicoPWM exposes one vendor-defined USB HID interface alongside its CDC interface
 
 ### Identity And Collision Avoidance
 
-PicoPWM shares the unallocated lab `0xCAFE` vendor ID with sibling projects.
-The product IDs distinguish these projects from one another, but do not provide
-a globally allocated USB identity.
+Raspberry Pi has allocated USB PID `0x116C` under its VID `0x2E8A` to PicoPWM through the
+[USB PID program](https://github.com/raspberrypi/usb-pid).
 
 | Identifier | Value | Notes |
 | ---------- | ----- | ----- |
-| USB VID | `0xCAFE` | Unallocated lab ID shared by sibling projects; replace with an allocated VID/PID before distributing devices. |
-| USB PID | `0x4012` | Unique among siblings: PicoUart `0x4010`, PicoForge `0x4011`, PicoLogic `0x4020`, PicoTrace `0x4023`. |
+| USB VID | `0x2E8A` | Raspberry Pi vendor ID. |
+| USB PID | `0x116C` | Allocated to PicoPWM by Raspberry Pi. |
 | HID `product_id` | `0x0003` | Follows PicoUart's registry: `0x0001` PicoUart, `0x0002` PicoForge. Register `0x0003` there. |
 | HID usage | page `0xFF00`, usage `0x01` | Vendor-defined, same as siblings; WebHID must filter on VID, PID, and usage page. |
 
 The USB descriptors, `tools/release/check-usb-identity.py`, and the USB
-identity documentation must all carry `0xCAFE:0x4012`. Hosts must still
-validate `product_id` from the identity report before decoding anything,
-because VID/PID alone are not an allocated identity.
+identity documentation must all carry `0x2E8A:0x116C`. Hosts must still
+validate `product_id` from the identity report before decoding anything.
+The HID `product_id` remains `0x0003`; it is a protocol identifier, not the USB PID.
 
 ## Ownership
 

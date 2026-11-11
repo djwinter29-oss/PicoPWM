@@ -8,8 +8,8 @@ from __future__ import annotations
 import struct
 from typing import Any
 
-VENDOR_ID = 0xCAFE
-PRODUCT_ID = 0x4012
+VENDOR_ID = 0x2E8A
+PRODUCT_ID = 0x116C
 USAGE_PAGE = 0xFF00
 USAGE = 0x01
 HID_PRODUCT_ID = 0x0003

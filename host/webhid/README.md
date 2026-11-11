@@ -9,7 +9,7 @@ commands. It follows the
 
 - Desktop Google Chrome or Microsoft Edge with WebHID enabled; Firefox, Safari, and most mobile browsers are not
   supported
-- A Raspberry Pi Pico or Pico 2 running PicoPWM firmware that implements the HID interface (`0xCAFE:0x4012`, HID
+- A Raspberry Pi Pico or Pico 2 running PicoPWM firmware that implements the HID interface (`0x2E8A:0x116C`, HID
   `product_id` `0x0003`), connected to the computer running the browser
 - Browser permission and OS access to the board's HID interface; Linux needs a udev rule for the device
 

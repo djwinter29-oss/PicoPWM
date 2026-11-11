@@ -148,7 +148,7 @@ for authentication, network access, and the dashboard's JSON HTTP API.
 ## Troubleshooting
 
 - **No board found:** check the USB data cable, firmware, HID permissions, and board
-  selection. The vendor interface uses VID `0xCAFE` and PID `0x4012`.
+  selection. The vendor interface uses VID `0x2E8A` and PID `0x116C`.
 - **Multiple boards found in a script:** pass a serial number or device path to
   `open_device()`.
 - **A control is unavailable:** check the bank's running role and the firmware's

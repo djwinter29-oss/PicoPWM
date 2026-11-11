@@ -51,8 +51,8 @@ if [ -z "${SUDO_USER:-}" ] || [ "$SUDO_USER" = root ]; then
 fi
 
 ACCESS_GROUP=$(id -g "$SUDO_USER")
-USB_RULE="SUBSYSTEM==\"usb\", ENV{DEVTYPE}==\"usb_device\", ATTR{idVendor}==\"cafe\", ATTR{idProduct}==\"4012\", GROUP=\"$ACCESS_GROUP\", MODE=\"0660\", TAG+=\"uaccess\""
-HIDRAW_RULE="SUBSYSTEM==\"hidraw\", KERNEL==\"hidraw*\", ATTRS{idVendor}==\"cafe\", ATTRS{idProduct}==\"4012\", GROUP=\"$ACCESS_GROUP\", MODE=\"0660\", TAG+=\"uaccess\""
+USB_RULE="SUBSYSTEM==\"usb\", ENV{DEVTYPE}==\"usb_device\", ATTR{idVendor}==\"2e8a\", ATTR{idProduct}==\"116c\", GROUP=\"$ACCESS_GROUP\", MODE=\"0660\", TAG+=\"uaccess\""
+HIDRAW_RULE="SUBSYSTEM==\"hidraw\", KERNEL==\"hidraw*\", ATTRS{idVendor}==\"2e8a\", ATTRS{idProduct}==\"116c\", GROUP=\"$ACCESS_GROUP\", MODE=\"0660\", TAG+=\"uaccess\""
 RULE_CONTENT=$(printf '%s\n%s' "$USB_RULE" "$HIDRAW_RULE")
 
 if [ -L "$RULE_TARGET" ]; then
@@ -72,7 +72,7 @@ if [ ! -e "$RULE_TARGET" ]; then
 fi
 
 udevadm control --reload-rules
-udevadm trigger --subsystem-match=usb --attr-match=idVendor=cafe --attr-match=idProduct=4012
+udevadm trigger --subsystem-match=usb --attr-match=idVendor=2e8a --attr-match=idProduct=116c
 udevadm trigger --subsystem-match=hidraw
 udevadm settle
 echo "PicoPWM HID permissions applied for $SUDO_USER (primary group $ACCESS_GROUP)."

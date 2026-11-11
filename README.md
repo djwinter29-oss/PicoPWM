@@ -152,7 +152,8 @@ See the [documentation index](docs/README.md) for the full map.
 | Build, test and release | [Builds and publishing](docs/deployment/releases.md) |
 | Contribute | [Contributing](CONTRIBUTING.md), [Code of Conduct](CODE_OF_CONDUCT.md), [Security](SECURITY.md) |
 
-The USB identity `0xCAFE:0x4012` is for development and lab use, not commercial derivatives. The CDC, HID and I2C
+PicoPWM uses USB VID `0x2E8A` and PID `0x116C`, allocated by Raspberry Pi through its
+[USB PID program](https://github.com/raspberrypi/usb-pid). The CDC, HID and I2C
 interfaces are unauthenticated; see [SECURITY.md](SECURITY.md).
 
 Related projects: [PicoUART](https://github.com/djwinter29-oss/PicoUart) (six USB serial ports) and

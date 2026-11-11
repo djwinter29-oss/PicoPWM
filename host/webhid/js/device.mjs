@@ -2,8 +2,8 @@
 // Copyright (c) 2026 Ji Dong
 
 export const DEVICE_FILTER = Object.freeze({
-  vendorId: 0xcafe,
-  productId: 0x4012,
+  vendorId: 0x2e8a,
+  productId: 0x116c,
   usagePage: 0xff00,
   usage: 0x01,
 });

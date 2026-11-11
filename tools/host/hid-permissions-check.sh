@@ -41,7 +41,7 @@ for device_node in /dev/hidraw* /dev/bus/usb/*/*; do
         if [ -f "$sys_path/idVendor" ] && [ -f "$sys_path/idProduct" ]; then
             read -r vendor < "$sys_path/idVendor"
             read -r product < "$sys_path/idProduct"
-            if [ "$vendor" = cafe ] && [ "$product" = 4012 ]; then
+            if [ "$vendor" = 2e8a ] && [ "$product" = 116c ]; then
                 if [ ! -r "$device_node" ] || [ ! -w "$device_node" ]; then
                     echo "No read/write permission for PicoPWM device node: $device_node" >&2
                     echo "Run tools/host/hid-permissions-setup.sh, then retry or reconnect the board." >&2

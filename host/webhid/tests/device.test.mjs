@@ -68,17 +68,20 @@ test("action request and result match the report 20 layout", () => {
   assert.throws(() => decodeActionResult(view([2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])), /Invalid/);
 });
 
-test("device filter requires the vendor usage page", () => {
-  assert.equal(DEVICE_FILTER.productId, 0x4012);
-  assert.ok(matchesPicoPwm({ vendorId: 0xcafe, productId: 0x4012, collections: [{ usagePage: 0xff00 }] }));
-  assert.ok(!matchesPicoPwm({ vendorId: 0xcafe, productId: 0x4010, collections: [{ usagePage: 0xff00 }] }));
-  assert.ok(!matchesPicoPwm({ vendorId: 0xcafe, productId: 0x4012, collections: [{ usagePage: 1 }] }));
+test("device filter requires the allocated USB identity and vendor usage page", () => {
+  assert.equal(DEVICE_FILTER.vendorId, 0x2e8a);
+  assert.equal(DEVICE_FILTER.productId, 0x116c);
+  assert.ok(matchesPicoPwm({ vendorId: 0x2e8a, productId: 0x116c, collections: [{ usagePage: 0xff00 }] }));
+  assert.ok(!matchesPicoPwm({ vendorId: 0xcafe, productId: 0x4012, collections: [{ usagePage: 0xff00 }] }));
+  assert.ok(!matchesPicoPwm({ vendorId: 0xcafe, productId: 0x116c, collections: [{ usagePage: 0xff00 }] }));
+  assert.ok(!matchesPicoPwm({ vendorId: 0x2e8a, productId: 0x4012, collections: [{ usagePage: 0xff00 }] }));
+  assert.ok(!matchesPicoPwm({ vendorId: 0x2e8a, productId: 0x116c, collections: [{ usagePage: 1 }] }));
 });
 
 function fakeDevice({ acceptSet = true, pendingPolls = 1, capabilities = 3, actionStatus = 0,
   applyChannelReadback = false } = {}) {
   const device = {
-    vendorId: 0xcafe, productId: 0x4012, collections: [{ usagePage: 0xff00 }], opened: false,
+    vendorId: 0x2e8a, productId: 0x116c, collections: [{ usagePage: 0xff00 }], opened: false,
     sent: [], result: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], pending: 0,
     appliedChannels: new Map(),
     async open() { this.opened = true; },

@@ -1,7 +1,7 @@
 # PicoPWM (.NET)
 
 This ASP.NET Core application serves the PicoPWM dashboard and controls the board over
-the USB HID vendor interface (VID `0xCAFE`, PID `0x4012`) described in
+the USB HID vendor interface (VID `0x2E8A`, PID `0x116C`) described in
 [hid-report-reference.md](../../docs/design/usb/hid-report-reference.md). The firmware
 implements it in `firmware/src/app/usb`.
 

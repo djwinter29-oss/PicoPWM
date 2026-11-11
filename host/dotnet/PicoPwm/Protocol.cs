@@ -8,8 +8,8 @@ namespace PicoPwm.Host;
 /// <summary>HID feature-report layouts (version 1); see docs/design/usb/hid-report-reference.md.</summary>
 public static class Protocol
 {
-    public const ushort VendorId = 0xCAFE;
-    public const ushort ProductId = 0x4012;
+    public const ushort VendorId = 0x2E8A;
+    public const ushort ProductId = 0x116C;
     public const uint UsagePageAndUsage = 0xFF000001;
     public const ushort HidProductId = 3;
 

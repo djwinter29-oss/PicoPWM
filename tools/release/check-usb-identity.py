@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2026 Ji Dong
 
-"""Report the USB identity configured by the PicoPWM firmware."""
+"""Check that the PicoPWM firmware uses its allocated USB identity."""
 
 from __future__ import annotations
 
@@ -43,10 +43,9 @@ def main() -> int:
         parser.error(str(error))
 
     print(f"USB identity {vid:#06x}:{pid:#06x}")
-    if (vid, pid) == (0xCAFE, 0x4012):
-        print("Using the unallocated lab USB identity reserved for development builds.")
-    else:
-        print("Allocated USB identity configured.")
+    if (vid, pid) != (0x2E8A, 0x116C):
+        parser.error("PicoPWM requires its allocated USB identity 0x2e8a:0x116c")
+    print("Raspberry Pi USB PID allocation for PicoPWM configured.")
     return 0
 
 

@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+from socketserver import TCPServer
 import subprocess
 import sys
 import tempfile
@@ -137,6 +138,14 @@ def build(source: Path, output: Path, version: str, commit: str, dirty: bool) ->
     verify(output, version)
 
 
+class DevelopmentServer(ThreadingHTTPServer):
+    """Bind the loopback server without HTTPServer's unnecessary reverse-DNS lookup."""
+
+    def server_bind(self) -> None:
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
+
 class DevelopmentHandler(SimpleHTTPRequestHandler):
     """Revalidate local HTML as well as assets after restarting the staged server."""
 
@@ -171,7 +180,7 @@ def main() -> None:
         output = Path(temporary) / "site"
         build(SOURCE, output, version, commit, dirty)
         handler = partial(DevelopmentHandler, directory=str(output))
-        with ThreadingHTTPServer(("127.0.0.1", args.port), handler) as server:
+        with DevelopmentServer(("127.0.0.1", args.port), handler) as server:
             def terminate(signum, frame):
                 raise KeyboardInterrupt
 

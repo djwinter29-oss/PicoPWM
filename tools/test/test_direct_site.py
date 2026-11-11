@@ -15,6 +15,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 from urllib.error import URLError
 from urllib.request import build_opener, ProxyHandler
 
@@ -117,10 +118,22 @@ class DirectSiteTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             self.assertEqual(("0.0.0-debug", "unknown", False), site.identity(Path(temporary), None))
 
+    def test_loopback_server_binds_without_reverse_dns(self):
+        with patch("socket.getfqdn", side_effect=AssertionError("Loopback startup must not resolve DNS")):
+            with site.DevelopmentServer(("127.0.0.1", 0), site.DevelopmentHandler) as server:
+                self.assertEqual("127.0.0.1", server.server_name)
+                self.assertGreater(server.server_port, 0)
+                self.assertEqual(server.server_address[1], server.server_port)
+
     def test_local_server_serves_staged_identity_and_stops_cleanly(self):
         opener = build_opener(ProxyHandler({}))
         with tempfile.TemporaryDirectory() as cwd, open(Path(cwd) / "server.log", "w+b") as log:
-            process = subprocess.Popen([sys.executable, str(ROOT / "tools/host/direct_site.py"),
+            # Dump the child's stack before the readiness deadline if startup stalls in CI.
+            diagnostic = ("import faulthandler, runpy, sys; "
+                          "faulthandler.dump_traceback_later(20, repeat=False); "
+                          "script = sys.argv.pop(1); runpy.run_path(script, run_name='__main__')")
+            process = subprocess.Popen([sys.executable, "-u", "-c", diagnostic,
+                                        str(ROOT / "tools/host/direct_site.py"),
                                         "serve", "--port", "0"], cwd=cwd,
                                        stdout=log, stderr=subprocess.STDOUT,
                                        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0)

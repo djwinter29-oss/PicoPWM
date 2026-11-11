@@ -68,6 +68,8 @@ node --test host/direct/tests/*.test.mjs host/direct/tests/js/*.test.mjs
 
 The launcher needs Python 3.10+, with no extra packages, and serves `http://127.0.0.1:8000/` (`--port` to override).
 Use `--port 0` to let the OS choose an available port; the startup message prints the bound URL.
+Loopback startup does not require reverse DNS. The server lifecycle test captures a child stack dump
+if startup stalls, so CI failures identify the blocking operation.
 It serves a temporary staged copy of `src/`, cleaned up when stopped. Restart after editing source to rebuild
 the copy. Canonical `src/` remains unchanged and also supplies shared assets to Python/.NET hosts.
 `tests/` contains hardware-free checks, not physical PWM qualification.

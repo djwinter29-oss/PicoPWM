@@ -161,13 +161,6 @@ separate interfaces of the same composite device.
 The CDC, HID, and I2C interfaces are intended for trusted local access and have no firmware-level authentication.
 See [SECURITY.md](SECURITY.md) for the trust model and vulnerability reporting.
 
-Related projects: [PicoUART](https://github.com/djwinter29-oss/PicoUart) (six USB serial ports) and
-[PicoForge](https://github.com/djwinter29-oss/PicoForge) (host-controlled board services). They share no runtime
-dependency.
-
-Third-party software: the CDC shell uses [embedded-cli](https://github.com/funbiscuit/embedded-cli), included as the
-`firmware/third_party/embedded-cli` submodule (v0.1.4, MIT).
-
 ## License
 
 First-party code: [BSD 3-Clause](LICENSE), copyright (c) 2026 Ji Dong.

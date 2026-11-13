@@ -33,6 +33,8 @@ Raspberry Pi has allocated USB PID `0x116C` under its VID `0x2E8A` to PicoPWM th
 | HID `product_id` | `0x0003` | Follows PicoUart's registry: `0x0001` PicoUart, `0x0002` PicoForge. Register `0x0003` there. |
 | HID usage | page `0xFF00`, usage `0x01` | Vendor-defined, same as siblings; Direct Dashboard must filter on VID, PID, and usage page. |
 
+The USB manufacturer and product strings are `djwinter` and `PicoPWM`, respectively.
+
 The USB descriptors, `tools/release/check-usb-identity.py`, and the USB
 identity documentation must all carry `0x2E8A:0x116C`. Hosts must still
 validate `product_id` from the identity report before decoding anything.

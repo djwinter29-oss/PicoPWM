@@ -32,8 +32,9 @@ _Illustrative dashboard with simulated readings, not a live hardware result. Pyt
 
 ## Get Started
 
-**Supported boards:** Raspberry Pi Pico (`pico`, RP2040) and Pico 2 (`pico2`, RP2350).
-Pico W and Pico 2 W are not supported; [third-party boards need compatibility checks](docs/guides/hardware-setup.md#board-compatibility).
+**Board profiles:** Raspberry Pi Pico (`pico`, RP2040) and Pico 2 (`pico2`, RP2350).
+Pico W and Pico 2 W can use the corresponding profiles; onboard LED control is unavailable and wireless is not enabled.
+See [board compatibility](docs/guides/hardware-setup.md#board-compatibility) for details and third-party board checks.
 
 Before wiring:
 

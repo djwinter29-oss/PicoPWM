@@ -25,13 +25,13 @@ profiles.
 ## Board Compatibility
 
 The `pico` and `pico2` profiles use the standard Pico and Pico 2 GPIO assignments.
+Pico W and Pico 2 W can use the corresponding profiles; wireless functionality
+is not enabled, and onboard LED control is unavailable on those boards.
+
 A third-party RP2040/RP2350 board is not automatically compatible: verify it
 exposes channel GPIOs `0-22` and `28`; I2C additionally requires GPIOs `26` and
 `27`. The standard profile assumes the LED is on GPIO 25. Verify SWD access
 only if programming with a Debug Probe.
-
-Pico W and Pico 2 W are not supported; build helpers and releases cover only
-the `pico` and `pico2` boards.
 
 ## Fixed PWM Banks
 

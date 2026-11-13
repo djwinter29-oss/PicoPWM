@@ -5,17 +5,23 @@ Raspberry Pi Pico and Pico 2 boards. The static pin sets live in
 `firmware/src/config/board.c`; the logical channel IDs permanently identify one
 of three 8-channel banks.
 
+## Before Wiring
+
+All GPIO signals are 3.3 V only; never apply 5 V to a channel pin. Connect the
+Pico ground to the ground of any connected signal source or measurement
+instrument. Never connect generator outputs together.
+
 Hardware PWM and PIO assignments have peripheral-specific pin and resource
 constraints. Hardware PWM is fixed to one set of 8 slice-B GPIOs and PIO PWM is
 fixed to the 8 companion slice-A GPIOs on the same PWM slices; neither backend
-supports picking an arbitrary GPIO. Software PWM has no fixed peripheral pin
-bank and may use any remaining GPIO not claimed by hardware PWM or PIO, still
-subject to valid unique GPIO ownership and board functions such as the LED and
-ADC pins.
+supports picking an arbitrary GPIO. Software PWM has no peripheral-specific
+pin bank; a custom board profile may assign it to an otherwise available GPIO
+not claimed by hardware PWM or PIO, subject to valid unique GPIO ownership and
+board functions such as the LED and ADC pins.
 
-On the standard Pico board, GPIO24 is the VBUS sense/input-related board pin
-and GPIO25 is the onboard LED. Neither is assigned to the default software
-channel map. A custom board profile may reclaim those numbers only when its
+On the standard Pico board, GPIO24 is the VBUS sense pin and GPIO25 is the
+onboard LED. Neither is assigned to the default software channel map. A custom
+board profile may reclaim those numbers only when its
 board wiring and policy explicitly support that choice.
 
 GPIO23 and GPIO24 are optional software-only profile pins. They are not part
@@ -85,8 +91,10 @@ The I2C control interface uses I2C1:
 | SDA | GPIO 26 |
 | SCL | GPIO 27 |
 
-The 7-bit I2C address is `0x40`. External pull-up resistors are recommended;
-typically use 4.7 kOhm pull-ups on SDA and SCL.
+The 7-bit I2C address is `0x40`. External pull-up resistors are required for
+reliable bus operation; 4.7 kOhm is typical. The MCU's internal pull-ups do
+not replace external pull-ups. Use a 100 kHz or 400 kHz controller clock; see
+the [I2C protocol reference](../design/i2c/i2c-protocol.md) for bus and register details.
 
 ## Shared Pins
 

@@ -120,7 +120,7 @@ Connect the board to the computer running the host application.
 
 ## Recommended Frequency Ranges
 
-Conservative starting points, **not hardware-qualified accuracy specifications**:
+Conservative operating ranges, **not hardware-qualified accuracy specifications**:
 
 | Backend | Generation | Measurement |
 | --- | --- | --- |

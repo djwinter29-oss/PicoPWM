@@ -32,8 +32,9 @@ _Illustrative dashboard with simulated readings, not a live hardware result. Pyt
 
 ## Get Started
 
-**Supported boards:** Raspberry Pi Pico (`pico`, RP2040) and Pico 2 (`pico2`, RP2350).
-Pico W and Pico 2 W are not supported; [third-party boards need compatibility checks](docs/guides/hardware-setup.md#board-compatibility).
+**Board profiles:** Raspberry Pi Pico (`pico`, RP2040) and Pico 2 (`pico2`, RP2350).
+Pico W and Pico 2 W can use the corresponding profiles; onboard LED control is unavailable and wireless is not enabled.
+See [board compatibility](docs/guides/hardware-setup.md#board-compatibility) for details and third-party board checks.
 
 Before wiring:
 
@@ -44,11 +45,13 @@ Before wiring:
 
 1. **Flash firmware.** Download your board's UF2 from [Releases](https://github.com/djwinter29-oss/PicoPWM/releases).
    Hold **BOOTSEL** while connecting the board with a **USB data cable**, then copy the UF2 to the boot drive.
-2. **Choose a control interface.** Follow the [wiring guide](docs/guides/hardware-setup.md), then use either:
+2. **Choose a control interface.** Follow the [wiring guide](docs/guides/hardware-setup.md), then use:
    - **Browser:** open [Direct Dashboard](#direct-dashboard) in desktop Chrome or Edge; no application
      installation is needed. Connect and check the firmware version and running bank roles.
    - **Serial CLI:** open the [USB CDC shell](docs/guides/usb-cdc-shell.md) in a serial terminal, then follow
      the example below.
+   - **I2C controller:** wire SDA/SCL as described in the [hardware setup](docs/guides/hardware-setup.md), then
+     follow the [I2C protocol reference](docs/design/i2c/i2c-protocol.md). Configure bank roles through CDC or HID.
 
 ### Serial CLI Example
 
@@ -117,7 +120,7 @@ Connect the board to the computer running the host application.
 
 ## Recommended Frequency Ranges
 
-Conservative starting points, **not hardware-qualified accuracy specifications**:
+Conservative operating ranges, **not hardware-qualified accuracy specifications**:
 
 | Backend | Generation | Measurement |
 | --- | --- | --- |
@@ -135,11 +138,6 @@ floor. See the [PIO monitor limitations](docs/design/pwm-driver/pio.md#monitor-d
 [reported low-frequency PIO-to-software loopback observation](docs/design/pwm-driver/software.md#low-frequency-loopback-observation).
 Backend links above cover extended ranges and limitations.
 
-Operator-reported Pico loopback checks covered all three generator banks at 100, 500, and 1000 Hz with 25%, 50%,
-and 75% duty; see the [test record and its limitations](docs/tests/records/30-10-2026-manual-pico-bank-rotation.md).
-These functional checks are not independent accuracy qualification; verify electrical output with an independent
-instrument.
-
 ## Documentation
 
 See the [documentation index](docs/README.md) for the full map.
@@ -153,20 +151,8 @@ See the [documentation index](docs/README.md) for the full map.
 | Build, test and release | [Builds and publishing](docs/deployment/releases.md) |
 | Contribute | [Contributing](CONTRIBUTING.md), [Code of Conduct](CODE_OF_CONDUCT.md), [Security](SECURITY.md) |
 
-PicoPWM uses USB VID `0x2E8A` and PID `0x116C`, allocated by Raspberry Pi through its
-[USB PID program](https://github.com/raspberrypi/usb-pid).
-The USB manufacturer string is `djwinter` and the product string is `PicoPWM`; CDC and HID remain
-separate interfaces of the same composite device.
-
 The CDC, HID, and I2C interfaces are intended for trusted local access and have no firmware-level authentication.
 See [SECURITY.md](SECURITY.md) for the trust model and vulnerability reporting.
-
-Related projects: [PicoUART](https://github.com/djwinter29-oss/PicoUart) (six USB serial ports) and
-[PicoForge](https://github.com/djwinter29-oss/PicoForge) (host-controlled board services). They share no runtime
-dependency.
-
-Third-party software: the CDC shell uses [embedded-cli](https://github.com/funbiscuit/embedded-cli), included as the
-`firmware/third_party/embedded-cli` submodule (v0.1.4, MIT).
 
 ## License
 

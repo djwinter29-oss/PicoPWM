@@ -79,7 +79,9 @@ on discovery order.
 
 Responses and request fields use snake_case. Send action requests with
 `Content-Type: application/json` and a JSON object, including `{}` for commands
-without arguments.
+without arguments. Required fields must be present; omitted numeric fields are
+rejected, not treated as zero. `acknowledge_overclock` is optional and defaults
+to `false`.
 
 | Endpoint | Purpose |
 | --- | --- |
@@ -125,7 +127,8 @@ save/reboot command. The example makes Bank A a generator and Banks B and C
 monitors. Already submitted configuration edits are not rolled back if a later
 step fails; reread configuration before retrying.
 
-The lower-level configuration endpoints remain available with a board selection:
+The lower-level endpoints edit target settings for the next startup. Save and
+reboot separately with `/api/save`, or use `/api/save-reboot` to do both:
 
 | Endpoint | JSON body |
 | --- | --- |
@@ -134,23 +137,14 @@ The lower-level configuration endpoints remain available with a board selection:
 | `POST /api/clock-profile` | `{"profile": 0, "acknowledge_overclock": false}` |
 | `POST /api/save` | `{"acknowledge_overclock": false}` |
 
-Banks and backends use indexes `0..2`; fixed backends are hardware PWM (`0`),
-PIO (`1`), and software (`2`). Keep the backend matched to the bank.
-Bank roles use `0` for generator and `1` for monitor. Clock profiles must be
-advertised in `clock_profile_mask`; this firmware supports profiles `0..3`.
-Configuration edits target the next startup; saving and rebooting are separate
-steps unless using `/api/save-reboot`.
+For `/api/bank`, `bank` and `backend` are indexes `0..2`; the fixed backends
+are hardware PWM, PIO, and software, respectively.
 
 ### Responses and Failures
 
-`GET /api/host` returns `{"dashboard_type": "Python"}` or `{"dashboard_type": ".NET"}`. Status responses include
-`connected`, `identity`, `configuration`, `runtime`, `pins`, and `channels`.
-Inspect `error`, per-section error fields, and `bank_errors` as well as `connected`:
-a connected board may still have unavailable telemetry or an invalid report.
-
-Most successful actions return a refreshed status snapshot. Reboot and
-save/reboot return `{"rebooting": true}` only after command confirmation; this
-does not mean USB reconnection has finished.
+`GET /api/host` returns `{"dashboard_type": "Python"}` or `{"dashboard_type": ".NET"}`.
+Status responses include `connected`, `identity`, `configuration`, `runtime`,
+`pins`, and `channels`.
 
 | HTTP status | Meaning |
 | --- | --- |
@@ -162,10 +156,13 @@ does not mean USB reconnection has finished.
 | `500` | Unexpected server failure; the body is `Internal server error` |
 | `503` | Discovery or unhandled transport/runtime failure |
 
-Errors use a stable, user-safe `{"error": "description"}` message. A status
-request can return HTTP 200 with `connected: false`; a successful action can
-also return a refreshed snapshot with unavailable sections. Check `connected`,
-`error`, section errors, and `bank_errors`, not only the HTTP status.
+Errors use a stable, user-safe `{"error": "description"}` message. Most
+successful actions return refreshed status, though its sections may be
+unavailable. A status request can return HTTP 200 with `connected: false`;
+even a connected board may have invalid or unavailable telemetry. Check
+`connected`, `error`, section errors, and `bank_errors`, not only the HTTP
+status. Reboot and save/reboot return `{"rebooting": true}` only after command
+confirmation; this does not mean USB reconnection has finished.
 
 Do not blindly retry mutations after a timeout or disconnect. A client timeout
 does not cancel a command already submitted to the board; reconnect and inspect

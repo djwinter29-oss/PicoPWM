@@ -25,6 +25,9 @@ Use one controlling host per board. Status refreshes every second; reconnection 
 
 ## Controls and Readings
 
+These controls are shared by the Direct, Python, and .NET dashboards; browser
+connection and pairing steps above apply only to Direct Dashboard.
+
 | Control | Behavior |
 | --- | --- |
 | PWM tables | Hardware channels 0-7, PIO 8-15, software 16-23. Backends are fixed; roles apply to whole banks. Monitors are read-only. |

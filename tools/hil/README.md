@@ -26,6 +26,16 @@ cannot verify the flashed artifact's identity or detect the board model.
 `--confirm-fixture` is required because the run drives outputs. The runner
 stops generator channels on completion but does not restore previous waveforms.
 
+See the [HIL test plan](../../docs/validation/hil/test-plan.md) for subset
+coverage and test limits.
+
+Each started run replaces `docs/validation/hil/records/latest.md`, including
+failed runs. Invalid CLI arguments do not replace it. The report includes
+metadata, results, unexecuted scope, and a CDC transcript. A passing exit
+status applies only to this subset; nonzero exit or report-write failure is a
+failure. If cleanup cannot confirm stop, disconnect board power. Preserve a
+record under a dated filename before the next run if it must be retained.
+
 The launcher is for Linux/macOS. On Windows or with a custom environment,
 install and invoke the project directly:
 

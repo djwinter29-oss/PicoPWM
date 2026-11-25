@@ -27,8 +27,3 @@ recover transitions that were never sampled.
 The recommended measurement range is **10 Hz to 1 kHz**. Actual scan spacing
 depends on callback time and interrupt load; verify measurements against an
 instrument when accuracy matters.
-
-Monitoring retains only a latest sample, not waveform history. A static-low
-reading and an unavailable sample are not always distinguishable in the
-shared channel format. Use an independent instrument when the distinction or
-measurement accuracy matters.

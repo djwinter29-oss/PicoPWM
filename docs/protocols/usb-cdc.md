@@ -72,7 +72,7 @@ takes effect immediately; check the bank role and GPIO before applying it.
 | --- | --- | --- |
 | `config get` | Show all effective running settings. | `config get` |
 | `config get <item>` | Show one setting's effective running value. Valid items: `banka`, `bankb`, `bankc`, `clock`, `address`. | `config get clock` |
-| `config set <key=value>[, <key=value>...]` | Validate and apply all assignments together, save them, and reboot to apply. | `config set banka=generator, clock=150, address=64` |
+| `config set <key=value>[, <key=value>...]` | Set one or more configuration values. | `config set banka=generator, clock=150, address=64` |
 
 The setting names are `banka`, `bankb`, `bankc`, `clock`, and `address`.
 Banks accept `generator` or `monitor`; the system clock accepts `default`,
@@ -107,10 +107,6 @@ Clock-profile precautions are in the
 [configuration guide](../guides/configuration.md). CDC does not require a
 separate overclock acknowledgement.
 
-Configuration changes do not affect running hardware until reboot. Flash-save
-timing and clock-profile guidance are in the
-[configuration guide](../guides/configuration.md).
-
 ### Help
 
 `help` is the canonical help command. Use `help <group>` for a group's command
@@ -138,10 +134,7 @@ realized channel state, not just the last requested values. The `enabled` field
 is `yes` when the realized frequency is nonzero and `no` when it is zero; a
 zero-frequency channel can still be held high at `100%` duty.
 
-See the [configuration guide](../guides/configuration.md) for
-bank roles and the
-[I2C Protocol Reference](i2c.md) for the binary
-register protocol.
+For the binary register interface, see the [I2C protocol reference](i2c.md).
 
 For firmware development guidance on the CLI structure and adding commands,
 see [CDC shell design](../design/usb-cdc.md).

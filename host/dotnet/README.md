@@ -40,11 +40,11 @@ Before driving outputs, check the bank role and wiring in the
 [hardware setup guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/hardware-setup.md);
 GPIOs are 3.3 V only.
 
-## Dashboard
+## Shared Dashboard Controls
 
-The Python and .NET dashboards share the controls described in the
-[dashboard guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/host/direct/README.md#controls-and-readings).
-Browser pairing instructions there apply only to Direct Dashboard.
+The Python and .NET dashboards share the [controls and readings](https://github.com/djwinter29-oss/PicoPWM/blob/main/host/direct/README.md#controls-and-readings)
+with Direct Dashboard. Its browser connection instructions apply only to
+Direct Dashboard.
 
 ## Configuration and Authentication
 
@@ -60,9 +60,6 @@ Set environment variables before starting the application:
 `--urls` takes precedence over `ASPNETCORE_URLS`, then the host/port settings above.
 The dashboard prompts for a configured token. Network access, authentication, routes, and payloads are described in the
 [Dashboard HTTP API](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/protocols/dashboard-http-api.md).
-Actions require a board ID from `GET /api/boards`. An unconfirmed command returns an error, not success.
-Required action fields must be present: omitted numeric fields are rejected, not treated as zero.
-Overclock acknowledgement remains optional and defaults to false.
 
 ## Development
 

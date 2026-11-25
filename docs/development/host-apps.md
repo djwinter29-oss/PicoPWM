@@ -1,7 +1,7 @@
 # Host App Development
 
-This page covers host-app development and automated tests. For deployment,
-versioning, packaging, and site-staging instructions, see
+This page covers local host-app development, tests, and site staging. For
+versioning, release packaging, and deployment, see
 [CI and Releases](ci-and-releases.md). For installation and normal use, start
 with the [host application guides](../README.md#use-picopwm).
 

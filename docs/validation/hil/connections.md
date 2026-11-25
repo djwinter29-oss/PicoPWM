@@ -123,14 +123,7 @@ for no-signal checks rather than relying on floating inputs.
 
 ## Record the Test
 
-For each run, record:
-
-- Date, board model, firmware version, commit and artifact SHA-256.
-- Host OS, application/version and control interface.
-- Running bank roles, system clock and I2C address.
-- Wiring/pass used, instrument model, sample rate and measurement settings.
-- Requested and realized frequency/duty, independently measured results and acceptance limits.
-- Pass/fail results, skipped checks, logs and capture filenames.
-
-Store the report and supporting captures under [records/](records/README.md). A result applies only to the recorded
-artifact, wiring and conditions; passing host unit tests does not establish hardware qualification.
+Record results using the [HIL test plan](test-plan.md) and
+[test-record guidance](records/README.md). Results apply only to the recorded
+artifact, wiring, and conditions; passing host unit tests does not establish
+hardware qualification.

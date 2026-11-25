@@ -41,22 +41,13 @@ version behavior with `python3 tools/test/test_dotnet_version.py`.
 4. Publish Python to PyPI and Publish Direct Dashboard Pages run after Release succeeds. Each verifies the release tag and
    its successful checks before publishing.
 
-For tag `v1.2.3`, the Python distribution version is `1.2.3`. Release packaging bundles the dashboard assets,
-installs the wheel in a fresh environment, starts the installed `picopwm` command outside the source tree,
-and verifies the dashboard and every bundled asset over localhost HTTP before publication.
-After **Publish Python to PyPI** succeeds, users can run the following in an activated Python 3.10+ virtual environment:
+Release jobs validate the Python wheel before publication. For installation
+and launch instructions, see the [Python host guide](../../host/python/README.md).
 
-```sh
-python -m pip install picopwm==1.2.3
-picopwm
-```
-
-Visit <http://localhost:5000/>. The page can load without a board; device control requires a connected PicoPWM board
-and HID permissions. For future releases, use `python -m pip install --upgrade picopwm` to get the latest stable version.
-
-Release versions come from the tag without the leading `v`. Major/minor must be 0-99 and patch 0-255. Local
-`-dev` and `-rcN` firmware versions are not release tags. Manual Release runs build packages but do not publish a
-GitHub Release or trigger automatic PyPI/Pages publication.
+Major/minor release components must be 0-99 and patch 0-255. Local `-dev` and
+`-rcN` firmware versions are not release tags. Manual Release runs build
+packages but do not publish a GitHub Release or trigger automatic PyPI/Pages
+publication.
 
 ## Manual Test Publishing
 
@@ -99,9 +90,6 @@ Run the local smoke check with:
 ```sh
 python3 tools/release/check_dotnet_publish.py --directory build/host-release --version 1.2.3
 ```
-
-It checks `/api/host`, version, bundled assets/references, and graceful shutdown over loopback HTTP; it does not
-access a board.
 
 ## One-Time Repository Setup
 

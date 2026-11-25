@@ -6,10 +6,20 @@ Store completed hardware test reports and supporting captures here.
 | --- | --- |
 | [Manual Pico bank-rotation loopback](2026-10-30-manual-pico-bank-rotation.md) | Operator-reported loopback, each bank as generator, 100-1000 Hz, 25-75% duty |
 
-Name records `YYYY-MM-DD-<description>.md`, for example `2026-10-27-pico2-pwm-loopback.md`, so they sort by date. Include the artifact identity, fixture wiring,
-conditions, acceptance limits, results and skipped checks listed in the [HIL connection guide](../connections.md).
-Do not include credentials or unrelated personal information in logs and captures.
-Reference case IDs from the [HIL test plan](../test-plan.md), including failed, skipped and blocked cases.
+Name records `YYYY-MM-DD-<description>.md`, for example
+`2026-10-27-pico2-pwm-loopback.md`, so they sort by date. Reference case IDs
+from the [HIL test plan](../test-plan.md), including failed, skipped, and
+blocked cases.
 
-The CDC runner replaces `latest.md` on each started run, including failed runs. Copy that report to a dated filename
-to preserve it before running again. A generated report covers only the automated subset, not the full HIL plan.
+Include:
+
+- Date, board model, firmware version, commit, and artifact SHA-256.
+- Host OS, application/version, control interface, wiring, instruments, sample
+  rate, and measurement settings.
+- Running bank roles, system clock, I2C address, and test conditions.
+- Requested, realized, and independently measured values with acceptance limits.
+- Pass/fail results, skipped checks, logs, and capture filenames.
+
+Do not include credentials or unrelated personal information in logs and captures.
+
+A generated runner report covers only its automated subset, not the full HIL plan.

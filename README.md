@@ -11,10 +11,10 @@ uses the browser's WebHID API, while the Python and .NET host apps use USB HID. 
 Bank A uses hardware PWM, Bank B uses PIO, and Bank C uses software PWM. Generator/monitor roles apply to an
 entire bank; channel IDs stay the same across control interfaces.
 
-**Quick links:** [Download firmware](https://github.com/djwinter29-oss/PicoPWM/releases) ·
+**Quick links:** [Release](https://github.com/djwinter29-oss/PicoPWM/releases) ·
 [Hardware setup](docs/guides/hardware-setup.md) ·
-[Open dashboard](https://djwinter29-oss.github.io/PicoPWM/) ·
-[Python package](https://pypi.org/project/picopwm/) ·
+[Direct Dashboard](https://djwinter29-oss.github.io/PicoPWM/) ·
+[PyPI Package](https://pypi.org/project/picopwm/) ·
 [Standalone .NET downloads](https://github.com/djwinter29-oss/PicoPWM/releases/latest)
 
 ![Direct Dashboard with simulated device identity, boot configuration, runtime status, and 24 PWM generator and monitor channels.](docs/assets/pico-pwm-dashboard.png)
@@ -119,9 +119,9 @@ Conservative operating ranges, **not hardware-qualified accuracy specifications*
 | [PIO PWM](docs/design/pwm/backend-pio.md) (Bank B) | 1 Hz-100 kHz | 10 Hz-100 kHz |
 | [Software PWM](docs/design/pwm/backend-software.md) (Bank C) | 1 Hz-1 kHz | 10 Hz-1 kHz |
 
-These are recommended operating ranges, not the maximum accepted request
-ranges. The backend design pages are authoritative for recommendations; the
-interface references list accepted request limits where required.
+These are recommended operating ranges, not maximum request limits. The
+[PWM bank design](docs/design/pwm/banks.md) lists accepted request limits;
+backend pages describe recommended performance and measurement ranges.
 
 Generation accepts integer 0%-100% duty. At `0 Hz`, duties `0%-99%` drive static low and `100%` drives static high;
 readback reports `0 Hz` with `0%` or `100%` respectively. Use moderate duty cycles for PWM;

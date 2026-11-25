@@ -40,10 +40,6 @@ The bank layout reflects the resources of the target MCU:
 - Software PWM uses CPU time, timer service, and GPIO ownership rather than
   dedicated PWM peripherals.
 
-The fixed layout avoids runtime backend reassignment. A channel's logical
-identity remains stable while its configured bank role determines whether it
-is used for generation or monitoring.
-
 ## Board Profiles
 
 Hardware PWM and PIO use fixed pin assignments: hardware PWM uses one set of
@@ -61,7 +57,6 @@ only when the board wiring and policy support it.
 - Each logical channel and GPIO has one owner.
 - A selected backend must support the bank's role and resources.
 - Generator and monitor implementations must not claim the same resources.
-- Host interfaces share the same channel model and control path.
 - Backend-specific timing and measurement limits remain with each
   [backend design](./).
 

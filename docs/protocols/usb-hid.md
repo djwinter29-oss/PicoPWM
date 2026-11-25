@@ -2,24 +2,10 @@
 
 This document defines PicoPWM's USB HID feature reports.
 
-## Report ID Allocation
+PicoPWM exposes one vendor-defined USB HID interface alongside CDC. It uses
+feature reports only; report ID `0` is unused.
 
-Report IDs are allocated by range:
-
-| IDs | Generic role | PicoPWM assignments |
-| --- | ------------ | ------------------- |
-| `1`-`9` | Device information and monitoring | `1` Identity, `2` Board Configuration, `3` Firmware Memory, `4` Runtime Status, `5` Pin Assignment; `6`-`9` unassigned. |
-| `10`-`19` | Application monitoring | Three Bank Status reports, addressed as `10 + bank`; `13`-`19` unassigned. |
-| `20`-`29` | Device and application control | `20` Board Action & Result; `21`-`29` unassigned. |
-| `30`-`255` | Unassigned expansion | None. |
-
-Report IDs are scoped to one device, so identical numbers in other products do not conflict. Reusing the ranges
-does not imply shared payload layouts: hosts identify the product and select its contract before decoding
-project-specific fields. ID `0` is unused; unassigned IDs require no padding.
-
-PicoPWM exposes one vendor-defined USB HID interface alongside its CDC interface. There are no input reports.
-
-### Identity and Collision Avoidance
+## USB Identity
 
 Raspberry Pi has allocated USB PID `0x116C` under its VID `0x2E8A` to PicoPWM through the
 [USB PID program](https://github.com/raspberrypi/usb-pid).
@@ -92,15 +78,15 @@ capability is absent on boards without a default LED.
 Feature report, host reads, 21-byte payload.
 
 Running values describe the active configuration; target values describe
-settings that will apply after save and restart.
+pending settings.
 
 | Offset | Size | Field | Meaning |
 | -----: | ---: | ----- | ------- |
 | 0 | 1 | `version` | Layout version, `1`. |
 | 1 | 7 | `running` | Bytes 0-2 Bank A/B/C backend, bytes 3-5 Bank A/B/C role, byte 6 7-bit I2C address. Values use the enums below. |
-| 8 | 7 | `target` | Same layout; takes effect only after save and restart. |
+| 8 | 7 | `target` | Same layout for pending settings. |
 | 15 | 1 | `led_state` | Bit 0 identification LED on; bits 1-7 zero. Valid only with identity capability bit 3; older firmware returns zero here. |
-| 16 | 1 | `clock_profile` | Target system clock request (profile table below). Always a valid, accepted profile. Takes effect after save and restart. |
+| 16 | 1 | `clock_profile` | Target system clock request (profile table below). Always a valid, accepted profile. |
 | 17 | 4 | `system_clock_hz` | Running system clock in Hz, separate from the requested profile. |
 
 Bank enums: backend `0` HW, `1` PIO, `2` SW. The backend is fixed per bank
@@ -108,12 +94,13 @@ Bank enums: backend `0` HW, `1` PIO, `2` SW. The backend is fixed per bank
 as a constant and a `SET_BANK` with any other value is rejected. Role `0` is
 generator and role `1` is monitor.
 
-Change target settings through report 20, not report 2. They take effect after
-the device restarts.
+Report 2 is read-only; change target settings through report 20. Target
+settings apply after they are saved and the device restarts.
 
 ### System Clock Profile
 
-CDC uses the same clock profiles through `config set clock=<value>`:
+CDC sets these profiles with `config set clock=<value>` (`default`, `150`,
+`200`, or `250`):
 
 | Profile | Requested `clk_sys` | Notes |
 | ------: | ------------------- | ----- |
@@ -127,9 +114,8 @@ Rules:
 
 - `clock_profile` in report 2 is the target profile, including unsaved changes made by
   `SET_CLOCK_PROFILE` or the CDC command. This firmware sets `clock_profile_mask` to `0x0F` and capability bit 1.
-- The profile is a request, not the running clock. Hosts display `clock_profile` and `system_clock_hz` separately
+- The profile is a request, not the running clock. Hosts read `clock_profile` and `system_clock_hz` separately
   and never infer one from the other. A profile above `3` returns `INVALID` and changes nothing.
-- The clock changes only after save and restart.
 - Profiles above `1` are overclocks. `SET_CLOCK_PROFILE` for one, and a `SAVE_CONFIG` while the target profile is
   above `1`, require the unsafe-overclock acknowledgement flag; without it the request returns `INVALID` and changes
   nothing. Other requests must not set the flag. See the
@@ -147,7 +133,7 @@ bit 5.
 | 1 | 4 | `ram_reserved_bytes` | SRAM reserved by the firmware image, scratch data, and core stacks. |
 | 5 | 4 | `ram_total_bytes` | Physical SRAM capacity: 264 KiB on Pico, 520 KiB on Pico 2. |
 
-These values do not report live heap/stack use or free memory.
+These values do not report live heap or stack use, or free memory.
 
 ## Report ID 4: Runtime Status
 
@@ -211,35 +197,27 @@ length because a report ID has a single descriptor length.
 | 1 | 1 | `transaction_id` | Host-chosen, nonzero, echoed by the result. A zero ID is `INVALID`. |
 | 2 | 1 | `operation` | See table below. |
 | 3 | 1 | `channel` | Channel for `SET_CHANNEL`, or bank index for `SET_BANK`. |
-| 4 | 4 | `arg0` | `freq_hz` for `SET_CHANNEL`; for `SET_BANK`, byte 0 backend and byte 1 role (enums under report 2) applied to the bank in `channel`; I2C address for `SET_I2C_ADDRESS`; profile for `SET_CLOCK_PROFILE`. Unused bytes zero. |
-| 8 | 1 | `arg1` | Duty percent `[0, 100]` for `SET_CHANNEL`. |
-| 9 | 1 | `flags` | Bit 0 confirms save or standalone reboot; bit 1 acknowledges overclock. Bits 2-7 zero. |
+| 4 | 4 | `arg0` | Operation-specific argument; see the operation table. |
+| 8 | 1 | `arg1` | Duty percent for `SET_CHANNEL`; otherwise zero. |
+| 9 | 1 | `flags` | Bit 0 confirms save or standalone reboot; bit 1 acknowledges overclock. Other bits zero. |
 | 10 | 2 | reserved | Zero. |
 
-| Op | Name | Behavior |
-| -: | ---- | ------- |
-| 1 | `SET_CHANNEL` | Set one generator channel using its logical channel, frequency, and duty. |
-| 2 | `STOP` | Stop every generator output. A failure status can mean the stop was partial. |
-| 3 | `SET_BANK` | Set a bank's target role; `channel` is the bank (`0`-`2`), `arg0` byte 0 backend, byte 1 role. |
-| 4 | `SET_I2C_ADDRESS` | Set the target 7-bit I2C address from the low byte of `arg0`. |
-| 5 | `SAVE_CONFIG` | Persist target settings; does not restart the device. Requires flag bit 0, plus bit 1 for an overclock target. |
-| 6 | `SET_CLOCK_PROFILE` | Set the target clock profile from the low byte of `arg0`; profiles above `1` require flag bit 1. |
-| 7 | `SAVE_REBOOT` | Save target settings and restart after the host reads the successful result. Requires capability bit 2. Storage failure does not restart. |
-| 8 | `SET_LED` | Set the identification LED using `arg0` (`0` off, `1` on). Requires capability bit 3; a board without an LED returns `UNAVAILABLE`. |
-| 9 | `REBOOT` | Restart without saving target settings. Requires capability bit 4 and explicit confirmation (flag bit 0). |
+Operation fields are validated before side effects. Invalid fields return
+`INVALID` without changing device state; unsupported versions or operations
+return `UNSUPPORTED`. Fields not specified for an operation, unused flag bits,
+and reserved bytes must be zero.
 
-Operation validity, checked before any side effect; every failure returns `INVALID` and changes nothing:
-
-- `SET_CHANNEL`: `channel` below `channel_count`, the channel is a generator in the running configuration, `arg1`
-  is `[0, 100]`, and `freq_hz` is within the channel's accepted range.
-- `STOP`: `channel`, `arg0`, and `arg1` are zero.
-- `SET_BANK`: `channel` is `0`-`2`, and the backend/role pair is allowed for that bank.
-- `SET_I2C_ADDRESS`: the address is in `8..119`.
-- `SAVE_CONFIG`, `SAVE_REBOOT`: flag bit 0 set (and bit 1 for an overclock target), and no other fields set.
-- `SET_CLOCK_PROFILE`: the profile is set in `clock_profile_mask`.
-- `SET_LED`: `arg0` is 0 or 1; all other fields zero.
-- `REBOOT`: flag bit 0 set, all other fields zero; never persists target changes.
-- Unused fields and reserved bits are zero; a nonzero value is `INVALID`.
+| Operation | Arguments and constraints | Behavior |
+| --------- | ------------------------- | -------- |
+| `1` `SET_CHANNEL` | `channel` is a generator below `channel_count`; `arg0` is `freq_hz` within its accepted range; `arg1` is duty `[0, 100]`. | Set one generator channel. |
+| `2` `STOP` | `channel`, `arg0`, and `arg1` are zero. | Stop every generator output. A failure status can mean the stop was partial. |
+| `3` `SET_BANK` | `channel` is bank `0`-`2`; `arg0` byte 0 is backend and byte 1 is role; the pair must be allowed for that bank. | Set the bank's target role. |
+| `4` `SET_I2C_ADDRESS` | The low byte of `arg0` is a 7-bit address in `8..119`. | Set the target I2C address. |
+| `5` `SAVE_CONFIG` | Flag bit 0 set; also bit 1 for an overclock target. Requires capability bit 0. | Persist target settings without restarting. |
+| `6` `SET_CLOCK_PROFILE` | The low byte of `arg0` is set in `clock_profile_mask`; profiles above `1` require flag bit 1. Requires capability bit 1. | Set the target clock profile. |
+| `7` `SAVE_REBOOT` | Flag bit 0 set; also bit 1 for an overclock target. Requires capability bit 2. | Save target settings and restart after the host reads the successful result. Storage failure does not restart. |
+| `8` `SET_LED` | `arg0` is `0` or `1`. Requires capability bit 3. | Set the identification LED; a board without an LED returns `UNAVAILABLE`. |
+| `9` `REBOOT` | Flag bit 0 set. Requires capability bit 4. | Restart without saving target settings. |
 
 ### GET_REPORT: Result (payload 12 bytes)
 

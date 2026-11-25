@@ -18,9 +18,8 @@ levels; see [bank design](banks.md) for accepted request limits.
 
 ## Monitoring
 
-The monitor captures one complete high/low period at a time and publishes
-the latest sample. This keeps resource use bounded, but readings can lag rapid
-changes and do not provide waveform history.
+The monitor captures one complete high/low period at a time. This keeps
+resource use bounded, but readings can lag rapid changes.
 
 Capture time depends on the input period. Short pulses, input synchronization,
 and fixed capture overhead limit useful measurement at high frequencies.

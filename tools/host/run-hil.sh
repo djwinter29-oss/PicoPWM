@@ -14,7 +14,7 @@ case "${1:-}" in
         cat <<'EOF'
 Usage: tools/host/run-hil.sh --port PORT --board pico|pico2 --firmware PATH --confirm-fixture [runner options]
 
-Run the CDC loopback HIL tests and replace docs/tests/records/latest.md.
+Run the CDC loopback HIL tests and replace docs/validation/hil/records/latest.md.
 Creates a virtualenv under build/hil-venv and installs the HIL project in editable mode.
 Set PYTHON to select Python 3.10+, or VENV_DIR to select the environment.
 Requires the documented three-bank fixture and one generator/two monitor banks.

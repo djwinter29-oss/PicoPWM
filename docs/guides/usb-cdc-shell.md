@@ -61,8 +61,9 @@ The duty argument is an integer percentage from `0` to `100`; if omitted it
 defaults to `50`. Generator request ranges are Bank A `10 Hz..10 MHz`, Bank B
 `1 Hz..10 MHz`, and Bank C `1 Hz..10 kHz`. Bank C above 1 kHz is experimental,
 with coarse duty resolution and software timing jitter. Banks A and B above 1 MHz are experimental;
-duty resolution is reduced and clock-dependent (see [hardware PWM limits](../design/pwm-driver/hardware.md#target-working-range)
-and [PIO limits](../design/pwm-driver/pio.md#high-frequency-generation)).
+duty resolution is reduced and clock-dependent (see the
+[hardware PWM design](../design/pwm/hardware.md) and
+[PIO design](../design/pwm/pio.md)).
 A `0 Hz` request selects a static
 output: `0%` holds the pin low and `100%` holds it high. These are accepted
 request ranges, not accuracy guarantees. Monitor banks measure inputs instead
@@ -152,10 +153,10 @@ realized channel state, not just the last requested values. The `enabled` field
 is `yes` when the realized frequency is nonzero and `no` when it is zero; a
 zero-frequency channel can still be held high at `100%` duty.
 
-See the [Setup and Troubleshooting guide](setup-and-troubleshooting.md) for
-bank behavior and the
-[I2C Protocol Reference](../design/i2c/i2c-protocol.md) for the binary
+See the [configuration guide](configuration.md) for
+bank roles and the
+[I2C Protocol Reference](../protocols/i2c.md) for the binary
 register protocol.
 
 For firmware development guidance on the CLI structure and adding commands,
-see [USB CDC CLI Design](../design/usb/cdc-cli-design.md).
+see [USB CDC CLI Design](../design/cdc-cli.md).

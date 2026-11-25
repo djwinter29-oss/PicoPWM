@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2026 Ji Dong
 
-"""PicoPWM HID feature-report layouts (version 1); see docs/design/usb/hid-report-reference.md."""
+"""PicoPWM HID feature-report layouts (version 1); see docs/protocols/usb/hid-report-reference.md."""
 
 from __future__ import annotations
 

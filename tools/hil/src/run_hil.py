@@ -20,7 +20,7 @@ import time
 
 
 ROOT = Path(__file__).resolve().parents[3]
-RECORD = ROOT / "docs/tests/records/latest.md"
+RECORD = ROOT / "docs/validation/hil/records/latest.md"
 ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 PROMPT = re.compile(r"(?:^|[\r\n])pico> $")
 STATE = re.compile(r"CH(\d+): freq=(\d+) Hz, duty=(\d+)%, enabled=(yes|no)")

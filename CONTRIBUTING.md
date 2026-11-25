@@ -54,7 +54,7 @@ Fresh builds prefer Ninja; existing builds retain their cached generator. Set `C
 using a fresh build directory when switching generators.
 
 Local firmware defaults to `0.0.0-dev`; override with `--firmware-version x.y.z` (optional `-dev` or `-rcN`).
-See [Builds and Publishing](docs/deployment/releases.md) for CI and release packaging.
+See [Builds and Publishing](docs/development/releases.md) for CI and release packaging.
 
 ## Validate Your Change
 
@@ -117,20 +117,17 @@ For PWM, CDC, or HIL tooling changes, also run the hardware-free regressions:
 python -m unittest discover -s tools/hil/tests -p 'test_*.py'
 ```
 
-Follow the [HIL connection guide](docs/tests/hil-test-connections.md) and [test plan](docs/tests/hil-test-plan.md).
-The CDC subset requires operator confirmation of the port, board, flashed artifact, fixture, and permission to drive
-outputs (`--confirm-fixture`). Require one running generator bank and two monitor banks; never automatically change
-roles, save configuration, reboot, or rewire to enable a run.
-
-The runner replaces `docs/tests/records/latest.md`; [preserve records](docs/tests/records/README.md) when needed.
-Inspect failures, unexecuted checks, and cleanup; a nonzero exit is a failure. Without hardware or confirmation,
-report HIL as not run and explain why. Host tests and CDC loopback are not full hardware qualification:
-instrument accuracy, other transports, and remaining generator-bank passes require separate validation.
+Before physical testing, follow the [HIL connection guide](docs/validation/hil/connections.md) and
+[test plan](docs/validation/hil/test-plan.md). The CDC subset requires `--confirm-fixture` and operator
+authorization; it does not change roles, save configuration, reboot, or rewire. Review the plan before
+rerunning because the runner replaces `docs/validation/hil/records/latest.md`. Report missing hardware or
+confirmation as not run. Host tests and the CDC subset are not full hardware qualification.
 
 ## Documentation
 
-- Use kebab-case filenames: user tasks in `docs/guides/`, design/protocols in `docs/design/`,
-  releases in `docs/deployment/`, and validation in `docs/tests/`.
+- Use kebab-case filenames. Put operating instructions in `docs/guides/`, host-facing contracts in
+  `docs/protocols/`, firmware internals in `docs/design/`, host-app development and releases in
+  `docs/development/`, and hardware validation in `docs/validation/`.
 - Link to authoritative pages rather than duplicating details. Update the [index](docs/README.md) and affected
   links when adding, moving, or renaming pages.
 
@@ -143,6 +140,6 @@ instrument accuracy, other transports, and remaining generator-bank passes requi
 - Respect the core split: Core 0 owns CDC, I2C and HID; Core 1 owns PWM backends, and
   `firmware/src/driver/pwm/pwm_driver.c` is the multicore boundary.
 - Add regression tests for non-trivial changes and update matching docs. Consult the
-  [architecture](docs/design/architecture.md) and [PWM driver design](docs/design/pwm-driver/driver-design.md).
+  [architecture](docs/design/architecture.md) and [PWM driver design](docs/design/pwm/driver.md).
 - Explain the problem, solution, compatibility impacts (I2C, HID, flash layout), and related issue.
 - List checks and results, including skipped checks and reasons.

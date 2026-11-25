@@ -8,7 +8,7 @@ qualification. Record execution results in [records/](records/README.md).
 
 ## CDC Automated Subset
 
-The [CDC runner](../../tools/hil/src/run_hil.py) tests the **current running roles only** on the three-bank junction
+The [CDC runner](../../../tools/hil/src/run_hil.py) tests the **current running roles only** on the three-bank junction
 fixture. Exactly one bank must be a generator and the other two monitors. It never saves configuration, changes
 roles or reboots. It drives outputs and stops all generator channels on completion; it does not restore previous
 waveforms. Disconnect other equipment and close dashboards/serial terminals before running it.
@@ -44,7 +44,7 @@ command timeout. These are functional-test limits, **not backend accuracy specif
 `--frequencies` (100..1000 Hz), `--frequency-tolerance`, `--duty-tolerance`, `--settle-timeout` and
 `--command-timeout`; choose limits before the run.
 
-Every started run atomically replaces `docs/tests/records/latest.md` with metadata, results, unexecuted scope and a
+Every started run atomically replaces `docs/validation/hil/records/latest.md` with metadata, results, unexecuted scope and a
 CDC transcript, including failures opening the port or reading the artifact. Invalid CLI arguments do not replace
 the record. Exit status is zero for a passing subset and nonzero for failure; report-write failures are also errors.
 If cleanup cannot confirm `stop`, disconnect board power. Copy the record to a dated filename before the next run
@@ -56,9 +56,9 @@ Hardware-free runner regression tests:
 python -m unittest discover -s tools/hil/tests -p 'test_*.py'
 ```
 
-Follow [HIL Test Connections](hil-test-connections.md) for wiring and safety. Protocol expectations come from the
-[CDC shell](../guides/usb-cdc-shell.md), [I2C protocol](../design/i2c/i2c-protocol.md) and
-[HID report reference](../design/usb/hid-report-reference.md).
+Follow [HIL Test Connections](connections.md) for wiring and safety. Protocol expectations come from the
+[CDC shell](../../guides/usb-cdc-shell.md), [I2C protocol](../../protocols/i2c.md) and
+[HID report reference](../../protocols/usb/hid-report-reference.md).
 
 ## Preconditions
 

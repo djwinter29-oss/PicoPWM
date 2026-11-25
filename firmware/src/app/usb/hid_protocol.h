@@ -3,7 +3,7 @@
 
 /**
  * @file hid_protocol.h
- * @brief PicoPWM HID feature-report contract; see docs/design/usb/hid-report-reference.md.
+ * @brief PicoPWM HID feature-report contract; see docs/protocols/usb/hid-report-reference.md.
  *
  * This layer owns report layouts and the report 20 transaction. It has no TinyUSB dependency and reaches the
  * PWM runtime only through `control_api`.

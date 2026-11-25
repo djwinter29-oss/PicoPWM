@@ -94,7 +94,7 @@ The I2C control interface uses I2C1:
 The 7-bit I2C address is `0x40`. External pull-up resistors are required for
 reliable bus operation; 4.7 kOhm is typical. The MCU's internal pull-ups do
 not replace external pull-ups. Use a 100 kHz or 400 kHz controller clock; see
-the [I2C protocol reference](../design/i2c/i2c-protocol.md) for bus and register details.
+the [I2C protocol reference](../protocols/i2c.md) for bus and register details.
 
 ## Shared Pins
 

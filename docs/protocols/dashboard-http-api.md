@@ -1,8 +1,9 @@
-# Python API and Development Guide
+# Dashboard HTTP API
 
-Use this guide to integrate scripts and applications with the PicoPWM Python
-dashboard. For installation, supported platforms, hardware precautions, and
-direct HID client examples, start with the [Python README](../../host/python/README.md).
+The Python and .NET dashboards expose the same HTTP API for scripts and
+applications. For installation, supported platforms, and hardware precautions,
+start with the [Python](../../host/python/README.md) or
+[.NET](../../host/dotnet/README.md) host README.
 
 The HTTP API runs on the computer connected to the board over USB HID. The
 default base URL is `http://127.0.0.1:5000`; it is not an endpoint on the Pico
@@ -30,7 +31,7 @@ all `/api/*` routes except `/api/login` require authentication, including reads
 and discovery. A missing or incorrect credential returns HTTP 401.
 The dashboard page remains accessible so it can prompt for a token.
 
-When embedding Flask with `create_app()`, pass `token=...` explicitly; the factory
+When embedding the Python dashboard with `create_app()`, pass `token=...` explicitly; the factory
 does not read `PICOPWM_TOKEN` itself. The `picopwm` entry point reads that
 environment variable and passes it to the factory.
 
@@ -140,7 +141,7 @@ steps unless using `/api/save-reboot`.
 
 ### Responses and Failures
 
-`GET /api/host` returns `{"dashboard_type": "Python"}`. Status responses include
+`GET /api/host` returns `{"dashboard_type": "Python"}` or `{"dashboard_type": ".NET"}`. Status responses include
 `connected`, `identity`, `configuration`, `runtime`, `pins`, and `channels`.
 Inspect `error`, per-section error fields, and `bank_errors` as well as `connected`:
 a connected board may still have unavailable telemetry or an invalid report.
@@ -177,88 +178,3 @@ firmware holds its control lock, and during that wait the board services USB
 CDC only. Allow several seconds for those calls. `GET /api/boards` includes
 each board's local `device_path` so the dashboard can reopen the HID node; an
 authenticated client can see that path.
-
-## Windows Installation Without Activation
-
-If PowerShell blocks `Activate.ps1`, use the virtual environment directly.
-Activation is optional; no execution-policy change is needed:
-
-```powershell
-py -m venv .venv
-.\.venv\Scripts\python.exe -m pip install picopwm
-.\.venv\Scripts\picopwm.exe
-```
-
-Open <http://127.0.0.1:5000> after starting the application.
-
-## Development
-
-From a repository checkout:
-
-```sh
-cd host/python
-python -m pip install -e '.[test]'
-python -m pytest -q
-```
-
-Alternatively, run `tools/host/run-python.sh` from the repository root to create a
-virtual environment, refresh the editable installation, and start the dashboard.
-The launcher uses `https://pypi.org/simple` by default; set `PIP_INDEX_URL` to use
-another index. If `ensurepip` is unavailable, it can use the base interpreter's
-pip with `--python`; otherwise install pip or the OS Python venv package.
-
-Applications and tests can inject a client with `create_app(client)` from
-`picopwm.dashboard.app`.
-Package internals are grouped into `dashboard/` (HTTP), `device/` (client and registry),
-and `hid/` (transport and report codecs). Import from these subpackages instead of the former flat modules.
-
-### Embedded application lifecycle
-
-The CLI closes its board registry when the server exits. If you embed `create_app()` in another
-application, the application owner must close the registry **after all requests and worker activity
-have stopped**, including on exceptional shutdown:
-
-```python
-from picopwm.dashboard.app import create_app
-
-app = create_app()
-try:
-    app.run(host="127.0.0.1", port=5000)
-finally:
-    app.extensions["picopwm_boards"].close()
-```
-
-For an externally managed WSGI server, perform the same cleanup in its worker-shutdown lifecycle,
-not Flask's per-request `teardown_appcontext`. Each worker owns its own registry and client locks;
-use one worker process for a given board to avoid independent command streams.
-An injected `create_app(client=client)` client remains caller-owned; close it separately, or use
-`with PicoPwmHid() as client:` around the complete server lifetime. Cleanup releases handles;
-it does not disable outputs. These examples do not change the built-in server's local-use scope.
-
-### HID failure qualification checklist
-
-**Status: not hardware-qualified.** Unit tests do not establish native transfer deadlines.
-Perform the following separately on Windows, Linux, and macOS with the actual supported hidapi backend.
-Record OS, Python/hidapi versions, board/firmware, USB connection, observed timings, and cleanup outcome.
-
-1. Obtain operator confirmation of the board, flashed artifact, port, fixture, and permission to drive
-   outputs under the [HIL connection guide](../tests/hil-test-connections.md).
-   Do not automatically change bank roles, save flash, reboot, or rewire to prepare the test.
-2. Measure normal status/command latency, then test operator-controlled USB disconnect/reconnect
-   while idle and during a command. An uncertain command must not be reported as confirmed success.
-3. Verify that reconnect retains the selected board identity, rereads capabilities and pin mapping,
-   and never silently switches to another attached board.
-4. If a repeatable native transfer stall can be induced safely, measure how long both the operation
-   and a second call on the same board remain blocked. If not reproducible, mark stall behavior
-   **not tested**, not passed. The 3/15-second polling deadlines do not interrupt a blocking OS call.
-5. Verify normal and exceptional shutdown release handles. Record partial configuration changes and
-   unconfirmed outcomes explicitly. Disconnect board power if output state is uncertain;
-   the host is not an emergency-stop mechanism.
-
-This is a manual qualification checklist, not evidence that these tests ran. Keep instrument checks
-and other transport qualification separate, and follow the [HIL test plan](../tests/hil-test-plan.md)
-for formal records.
-
-Release wheels bundle the dashboard assets. Source checkouts serve the shared
-assets from `host/web/src/` and `host/direct/src/`; edit those canonical files rather than
-generated or bundled copies.

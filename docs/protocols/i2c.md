@@ -16,7 +16,7 @@ sets the actual bus clock. Use a 100 kHz or 400 kHz controller clock.
 
 External pull-up resistors are required for reliable bus operation; 4.7 kOhm
 is typical. The firmware enables the MCU's internal pull-ups, but they are not
-a replacement for external pull-ups. See [Hardware Setup](../../guides/hardware-setup.md)
+a replacement for external pull-ups. See [Hardware Setup](../guides/hardware-setup.md)
 for the SDA and SCL pins.
 
 ## Address Map
@@ -28,7 +28,7 @@ The generic I2C driver only frames bus transactions and transports response
 bytes. Register selection, frame-length validation, command status, and
 deferred PWM execution belong to the PWM protocol layer.
 For the implementation boundary and callback rules, see the
-[I2C Slave Driver Design](i2c-slave-driver-design.md).
+[I2C Slave Driver Design](../design/i2c-slave-driver.md).
 The realized-state snapshot read may briefly stretch SCL while it acquires a
 short cross-core lock.
 

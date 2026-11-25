@@ -77,12 +77,12 @@ with `.zip` for Windows and `.tar.gz` for Linux and macOS.
 .NET builds use MinVer with the repository's `v`-prefixed tags. Tag-triggered packaging derives the
 version from Git; manual runs use `MinVerVersionOverride` for their requested release/test version.
 Local commits after a release get the next patch's `-dev.<height>` version. Full Git history and
-tags are required to derive the intended version; see [.NET versioning](../../host/dotnet/README.md#git-derived-versions).
+tags are required to derive the intended version; see [.NET versioning](host-apps.md#net-host).
 
 Before archiving on each platform, packaging launches the native published executable and verifies its
 reported version, dashboard and bundled asset bytes, local asset references, and graceful zero-exit shutdown.
 A failed smoke check prevents archive/upload. It does not access hardware or establish browser/HID qualification.
-See the [.NET smoke checker](../../host/dotnet/README.md#published-application-smoke-check) for local usage.
+See the [.NET smoke checker](host-apps.md#net-host) for local usage.
 
 ## One-Time Repository Setup
 

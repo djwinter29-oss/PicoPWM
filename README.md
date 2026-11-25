@@ -51,7 +51,7 @@ Before wiring:
    - **Serial CLI:** open the [USB CDC shell](docs/guides/usb-cdc-shell.md) in a serial terminal, then follow
      the example below.
    - **I2C controller:** wire SDA/SCL as described in the [hardware setup](docs/guides/hardware-setup.md), then
-     follow the [I2C protocol reference](docs/design/i2c/i2c-protocol.md). Configure bank roles through CDC or HID.
+     follow the [I2C protocol reference](docs/protocols/i2c.md). Configure bank roles through CDC or HID.
 
 ### Serial CLI Example
 
@@ -90,13 +90,13 @@ pwm stop all
 ```
 
 Stopping does not change saved bank roles; Bank A remains configured as a generator after reboot. To restore
-monitor-only operation, see [Configure bank roles](docs/guides/setup-and-troubleshooting.md#configure-bank-roles).
-For configuration and connection issues, see [Setup and troubleshooting](docs/guides/setup-and-troubleshooting.md).
+monitor-only operation, see [Configure bank roles](docs/guides/configuration.md).
+For connection and output issues, see [Troubleshooting](docs/guides/troubleshooting.md).
 
 ## Dashboards
 
 For browser and desktop dashboards, Linux may require
-[HID permissions setup](docs/guides/setup-and-troubleshooting.md#linux-hid-access).
+[HID permissions setup](docs/guides/linux-hid-access.md).
 
 ### Direct Dashboard
 
@@ -124,18 +124,17 @@ Conservative operating ranges, **not hardware-qualified accuracy specifications*
 
 | Backend | Generation | Measurement |
 | --- | --- | --- |
-| [Hardware PWM](docs/design/pwm-driver/hardware.md) (Bank A) | 10 Hz-1 MHz | 100 Hz-1 MHz |
-| [PIO PWM](docs/design/pwm-driver/pio.md) (Bank B) | 1 Hz-100 kHz | 10 Hz-100 kHz |
-| [Software PWM](docs/design/pwm-driver/software.md) (Bank C) | 1 Hz-1 kHz | 10 Hz-1 kHz |
+| [Hardware PWM](docs/design/pwm/hardware.md) (Bank A) | 10 Hz-1 MHz | 100 Hz-1 MHz |
+| [PIO PWM](docs/design/pwm/pio.md) (Bank B) | 1 Hz-100 kHz | 10 Hz-100 kHz |
+| [Software PWM](docs/design/pwm/software.md) (Bank C) | 1 Hz-1 kHz | 10 Hz-1 kHz |
 
 Generation accepts integer 0%-100% duty. At `0 Hz`, duties `0%-99%` drive static low and `100%` drives static high;
 readback reports `0 Hz` with `0%` or `100%` respectively. Use moderate duty cycles for PWM;
 narrow pulses and timing quantization reduce usable ranges.
 **PIO duty readback can differ from the physical signal**, especially at high frequencies;
-see the [timing caveats](docs/design/pwm-driver/pio.md#frequency-versus-duty-resolution).
+see the [PIO generation design](docs/design/pwm/pio.md#generation).
 Start PIO and software measurement at 10 Hz; below that, results are experimental rather than a verified accuracy
-floor. See the [PIO monitor limitations](docs/design/pwm-driver/pio.md#monitor-design) and the
-[reported low-frequency PIO-to-software loopback observation](docs/design/pwm-driver/software.md#low-frequency-loopback-observation).
+floor. See the [PIO monitoring design](docs/design/pwm/pio.md#monitoring).
 Backend links above cover extended ranges and limitations.
 
 ## Documentation
@@ -144,11 +143,11 @@ See the [documentation index](docs/README.md) for the full map.
 
 | Need | Resource |
 | --- | --- |
-| Wire, configure, and troubleshoot | [Hardware setup](docs/guides/hardware-setup.md), [Setup and troubleshooting](docs/guides/setup-and-troubleshooting.md) |
-| Control it | [USB CDC shell](docs/guides/usb-cdc-shell.md), [I2C protocol](docs/design/i2c/i2c-protocol.md), [USB interface overview](docs/design/usb/usb-interface-overview.md) |
-| Understand the design | [Architecture](docs/design/architecture.md), [PWM driver design](docs/design/pwm-driver/driver-design.md) |
-| Write a HID host | [HID report reference](docs/design/usb/hid-report-reference.md) |
-| Build, test and release | [Builds and publishing](docs/deployment/releases.md) |
+| Wire, configure, and troubleshoot | [Hardware setup](docs/guides/hardware-setup.md), [Configuration](docs/guides/configuration.md), [Troubleshooting](docs/guides/troubleshooting.md) |
+| Control it | [USB CDC shell](docs/guides/usb-cdc-shell.md), [I2C protocol](docs/protocols/i2c.md), [USB interface overview](docs/protocols/usb/interface-overview.md) |
+| Understand the design | [Architecture](docs/design/architecture.md), [PWM driver design](docs/design/pwm/driver.md) |
+| Write a HID host | [HID report reference](docs/protocols/usb/hid-report-reference.md) |
+| Build, test and release | [Builds and publishing](docs/development/releases.md) |
 | Contribute | [Contributing](CONTRIBUTING.md), [Code of Conduct](CODE_OF_CONDUCT.md), [Security](SECURITY.md) |
 
 The CDC, HID, and I2C interfaces are intended for trusted local access and have no firmware-level authentication.

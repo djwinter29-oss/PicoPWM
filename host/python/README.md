@@ -16,7 +16,7 @@ The included dashboard runs locally; your browser connects to Python, which comm
 - Python 3.10+, a USB data cable, and compatible
   [PicoPWM firmware](https://github.com/djwinter29-oss/PicoPWM/releases).
 - OS permission to access the board. Linux users should follow the
-  [HID permissions guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/setup-and-troubleshooting.md#linux-hid-access).
+  [HID permissions guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/linux-hid-access.md).
 
 ## Quick Start
 
@@ -36,8 +36,12 @@ py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-If activation is blocked, use the
-[activation-free instructions](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/python-integration.md#windows-installation-without-activation).
+If PowerShell blocks `Activate.ps1`, skip activation and call the environment's executables directly:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install picopwm
+.\.venv\Scripts\picopwm.exe
+```
 
 Install and launch:
 
@@ -122,8 +126,8 @@ Set these before starting `picopwm`; direct Python clients select boards through
 
 Keep loopback binding for local use. Remote binding requires a token; the built-in server has no TLS.
 Do not expose it directly to the internet. See the
-[integration guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/python-integration.md)
-for authentication, HTTP APIs, and development.
+[Dashboard HTTP API](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/protocols/dashboard-http-api.md)
+for authentication and routes.
 
 ## Troubleshooting
 
@@ -136,41 +140,15 @@ No minimum hardware-verified firmware release has been established.
 - **Control unavailable:** check the running bank role and firmware capabilities; monitors cannot be driven.
 - **Readings:** temperature is an uncalibrated internal estimate; service load is not CPU utilization.
 
-See [setup and troubleshooting](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/setup-and-troubleshooting.md).
+See [troubleshooting](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/troubleshooting.md).
 For bug reports, include package/firmware versions, OS, and the exact error message.
 
-## Source Organization
+## Development
 
-The package stays under `host/python/picopwm/`, with functional subpackages:
-
-- `dashboard/`: Flask HTTP interface and server entry point.
-- `device/`: thread-safe device client and board registry.
-- `hid/`: USB discovery, transport, and report codecs.
-
-Import directly from these subpackages; the former flat module paths have been removed.
-CLI commands `picopwm` and `picopwm-web` are unchanged. No extra `src/` layer is needed.
-
-Tests mirror these subpackages under `tests/dashboard/`, `tests/device/`, and `tests/hid/`;
-shared device doubles live in `tests/fakes.py`. Run them with `python -m pytest -q host/python/tests`
-from the repository root.
-
-Concurrency regressions intentionally replace private `_lock` and wrap `_run` to observe contention
-at validation/readback boundaries. Update those tests with synchronization refactors; they do not
-define a public locking API or establish native hidapi transfer deadlines.
-Shared dashboard source/selector checks are likewise implementation-coupled, not browser end-to-end tests.
-
-The shared web client bounds reads (including JSON bodies) to 5 seconds and writes/login to 20 seconds.
-Changing boards cancels obsolete status reads. Parallel unauthorized requests share one token prompt/login.
-HTTP errors retain their status even when a proxy returns HTML instead of JSON.
-After a lost, timed-out, malformed successful, or server-error write response, controls remain unavailable
-until fresh selected-board status is received. The command may have taken effect; it is never automatically
-replayed, and canceling HTTP does not cancel USB work on the server. Verify readback before retrying.
-
-Run shared dashboard tests with `node --test host/web/tests/*.test.mjs`. They include a Chromium flow
-with a simulated HTTP API for login, board switching, editing, save acknowledgement, and uncertain-write
-recovery. Set `CHROMIUM` to the browser executable to require that check; otherwise it explicitly skips
-when `chromium` is absent. Linux host CI requires the browser. The browser uses a temporary local-file
-copy: this does not qualify real Flask/ASP.NET delivery, authentication cookies, or physical USB/PWM.
+The package tests, source layout, and shared dashboard checks are in
+[Host App Development](../../docs/development/host-apps.md). Native HID
+qualification is covered in
+[Native HID Qualification](../../docs/validation/native-hid-qualification.md).
 
 ## License
 

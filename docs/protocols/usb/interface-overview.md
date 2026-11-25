@@ -8,7 +8,7 @@ PicoPWM exposes one composite USB device with two host-facing interface types:
 This document covers the USB interfaces and their shared device-control
 boundaries. I2C is included only as context when comparing host-facing control
 options; its protocol is documented separately in the
-[I2C protocol reference](../i2c/i2c-protocol.md).
+[I2C protocol reference](../i2c.md).
 
 The device advertises USB 2.0 and uses the standard composite, CDC ACM, and HID
 drivers on Windows. It does not expose a BOS descriptor; Direct Dashboard uses the HID
@@ -31,7 +31,7 @@ shared channel IDs, capability checks, and result codes.
 ## Architectural Boundaries
 
 The Core 0 and Core 1 split, the `control_api` facade, and the `pwm_driver` multicore boundary are defined in the
-[architecture](../architecture.md). HID adds these rules on top:
+[architecture](../../design/architecture.md). HID adds these rules on top:
 
 - HID is another Core 0 transport. It never calls generator or monitor backends and never bypasses
   `driver/pwm/pwm_driver.*`.

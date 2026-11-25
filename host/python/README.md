@@ -55,14 +55,9 @@ Select the board; use **Rescan** if needed. Stop the service with `Ctrl+C`.
 The older `picopwm-web` command remains an alias.
 Routine Werkzeug request logs are suppressed; warnings and errors remain visible.
 
-Hatchling and hatch-vcs derive package versions from Git: a clean `v1.2.3` tag builds `1.2.3`;
-later commits get development versions, and dirty checkouts include a local version marker.
-Clone with Git history and tags available. Editable-install metadata updates when reinstalled.
-Manual CI builds use `SETUPTOOLS_SCM_PRETEND_VERSION` to select an explicit version.
-
-**Before driving outputs:** GPIO signals are 3.3 V only. Banks default to monitor-only.
-Configure the intended bank as a generator and reboot before setting output.
-Follow the [wiring guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/hardware-setup.md).
+Before driving outputs, check the bank role and wiring in the
+[hardware setup guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/hardware-setup.md);
+GPIOs are 3.3 V only.
 
 ## Use from Python
 
@@ -83,34 +78,17 @@ finally:
     client.close()
 ```
 
-Alternatively, use `with PicoPwmHid() as client:` for automatic handle cleanup on normal
-or exceptional exit. Entering the block does not open USB until the first operation.
-Closing a client releases its handle; it does **not** stop generator outputs.
+Use `with PicoPwmHid() as client:` for automatic handle cleanup. Closing a
+client does **not** stop generator outputs. After checking roles and wiring,
+call `client.set_channel(0, 1000, 50)` to request 1 kHz / 50% duty, or
+`client.stop()` to stop all generators. Read back realized state.
 
-For multiple boards, replace the client initialization, retaining the `try/finally` block:
-
-```python
-from picopwm.hid.transport import open_device
-
-client = PicoPwmHid(lambda: open_device(serial="YOUR_BOARD_SERIAL"))
-```
-
-After checking roles and wiring, use `client.set_channel(0, 1000, 50)` inside the `try` block to request
-1 kHz / 50% duty, or `client.stop()` to stop all generators. Read back realized state; it is not an independent
-electrical measurement. `status()` returns connection errors in its result; commands can raise `DeviceError`
-on rejection or an unconfirmed outcome. Inspect state before retrying an unconfirmed command.
-Integer arguments reject booleans and non-integers; LED and overclock acknowledgements require booleans.
-Invalid arguments raise `ValueError` before device I/O. `DeviceError.status` contains the firmware result
-code when a command was rejected, or `None` for errors without a firmware result.
-Save & Reboot preserves that status when wrapping failures with a partial-settings warning.
-Returned status snapshots can be modified without changing the client's cached identity or pin map.
-Status-returning methods use the `DeviceStatus` dictionary contract; reboot methods return
-`RebootResult`. Nested report types are defined in `picopwm.hid.protocol`, without changing JSON shapes.
-
-The 3-second command and 15-second save deadlines bound result polling, not blocking hidapi transfers.
-A stalled OS/USB transfer can delay other calls on the same board, including stop. If output state is
-uncertain, disconnect board power. Cross-platform transfer-stall behavior has not been hardware-qualified;
-do not rely on the host as an emergency-stop mechanism.
+Connection failures are returned by `status()`; rejected or unconfirmed
+commands raise `DeviceError`. Inspect board state before retrying an
+unconfirmed command. A stalled USB transfer can delay other calls, including
+stop; if output state is uncertain, disconnect board power. See
+[Native HID Qualification](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/validation/native-hid-qualification.md)
+for platform-specific transfer checks.
 
 ## Dashboard Configuration
 
@@ -124,10 +102,9 @@ Set these before starting `picopwm`; direct Python clients select boards through
 | `PICOPWM_PORT` | Listen port | `5000` |
 | `PICOPWM_TOKEN` | API access token | Unset |
 
-Keep loopback binding for local use. Remote binding requires a token; the built-in server has no TLS.
-Do not expose it directly to the internet. See the
+For network access and authentication rules, see the
 [Dashboard HTTP API](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/protocols/dashboard-http-api.md)
-for authentication and routes.
+reference.
 
 ## Troubleshooting
 

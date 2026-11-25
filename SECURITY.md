@@ -59,10 +59,6 @@ is guaranteed. Please coordinate disclosure before publishing exploit details.
 
 ## Operational Safety
 
-Authorized control can still produce unsafe outputs or settings. Wiring mistakes, unsuitable PWM settings, and
-intentional overclocking are operational risks, not security vulnerabilities by themselves. Follow the
-[hardware setup guide](docs/guides/hardware-setup.md).
-
-Saving a configuration writes flash and can select an overclocked system clock. A saved profile that prevents boot
-may require clearing saved settings. See [Recover an unbootable configuration or reset flash](docs/guides/troubleshooting.md#recover-an-unbootable-configuration-or-reset-flash)
-for BOOTSEL recovery and full-flash reset instructions.
+Wiring, output settings, and overclocking are operational risks rather than
+security vulnerabilities. Follow the [hardware setup](docs/guides/hardware-setup.md)
+and [configuration](docs/guides/configuration.md) guides.

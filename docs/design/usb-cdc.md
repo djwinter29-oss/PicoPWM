@@ -1,7 +1,7 @@
-# USB CDC CLI Design
+# CDC Shell Design
 
 The CDC shell is the serial command interface to PicoPWM. This page describes
-its design boundaries; the [USB CDC shell guide](../guides/usb-cdc-shell.md)
+its design boundaries; the [USB CDC shell reference](../protocols/usb-cdc.md)
 is the reference for command syntax and behavior.
 
 ## Responsibilities
@@ -28,7 +28,7 @@ service's result rather than assuming success.
 
 New commands should fit an existing command group where possible. Add a new
 group only for a distinct area of device control. Keep the command contract in
-the [shell guide](../guides/usb-cdc-shell.md), not duplicated here.
+the [shell reference](../protocols/usb-cdc.md), not duplicated here.
 
 ## Sessions and Bounded I/O
 

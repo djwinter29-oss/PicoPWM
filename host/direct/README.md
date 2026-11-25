@@ -3,7 +3,7 @@
 Control and monitor 24 PWM channels directly from your browser over USB HID. No Python or .NET host service is needed.
 
 [Open Direct Dashboard](https://djwinter29-oss.github.io/PicoPWM/) ·
-[Firmware and wiring](../../README.md) · [HID reference](../../docs/protocols/usb/hid-report-reference.md)
+[Firmware and wiring](../../README.md) · [HID reference](../../docs/protocols/usb-hid.md)
 
 ## Requirements
 
@@ -37,16 +37,16 @@ Use one controlling host per board. Status refreshes every second; reconnection 
 identify clock-profile differences. Missing readings show explicit errors; unsupported features require newer firmware.
 
 Readback is not an independent electrical measurement. RAM is static reservation, temperature is an uncalibrated
-internal estimate, and service load is not CPU utilization. See the [HID reference](../../docs/protocols/usb/hid-report-reference.md)
+internal estimate, and service load is not CPU utilization. See the [HID reference](../../docs/protocols/usb-hid.md)
 for interpretation and the [frequency guidance](../../README.md#recommended-frequency-ranges) for output limitations.
 
 ## Saving Safely
 
-- Stop software generators before saving: flash writes briefly pause HID, CDC, and I2C and disturb software output.
-- Save & Reboot requires acknowledgement for every explicit clock profile, including 150 MHz.
-  SDK default needs no checkbox; 150 MHz overclocks RP2040 but is the default speed on RP2350.
-  Saving does not establish stability. For an unbootable profile, follow the
-  [BOOTSEL and flash-reset recovery guide](../../docs/guides/troubleshooting.md#recover-an-unbootable-configuration-or-reset-flash).
+- Flash saves briefly pause channel service and host communication; stop software generators before saving.
+- Save & Reboot requires acknowledgement for explicit clock profiles. See the
+  [configuration guide](../../docs/guides/configuration.md) for profile precautions and the
+  [recovery guide](../../docs/guides/troubleshooting.md#recover-an-unbootable-configuration-or-reset-flash)
+  if a saved profile prevents startup.
 - A failed settings command prevents the final save but may leave partial target changes.
   After a failed or unconfirmed operation, reconnect and inspect target settings before retrying.
 
@@ -61,14 +61,5 @@ for interpretation and the [frequency guidance](../../README.md#recommended-freq
 
 ## Development
 
-From the repository root, serve locally and run the focused tests:
-
-```sh
-tools/host/run-direct.sh
-node --test host/direct/tests/*.test.mjs host/direct/tests/js/*.test.mjs
-```
-
-The launcher needs Python 3.10+ and no extra packages. It serves a temporary
-copy of `src/` at `http://127.0.0.1:8000/`; restart after editing source.
-Test coverage, browser-test requirements, and site-staging checks are in
+For local development, tests, and site-staging checks, see
 [Host App Development](../../docs/development/host-apps.md).

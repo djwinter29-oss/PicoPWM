@@ -1,7 +1,7 @@
-# Builds and Publishing
+# CI and Releases
 
-PicoPWM separates validation, release packaging and deployment, following PicoUart and PicoForge.
-All workflows are available from the repository's [Actions tab](https://github.com/djwinter29-oss/PicoPWM/actions).
+PicoPWM separates validation, release packaging, and deployment. Workflows are available from the repository's
+[Actions tab](https://github.com/djwinter29-oss/PicoPWM/actions).
 
 ## What Runs When
 
@@ -15,6 +15,22 @@ All workflows are available from the repository's [Actions tab](https://github.c
 
 Build artifacts from PR Check and manual packaging runs are under **Actions > run > Artifacts**, not on the
 Releases page. Publication does not happen on every push to `main`.
+
+## Versioning
+
+Release packages use the version from their `vMAJOR.MINOR.PATCH` tag, without
+the `v`. Local and manual builds derive or receive a development version as
+follows:
+
+| Artifact | Local version source | Manual build override |
+| --- | --- | --- |
+| Firmware | `--firmware-version`; default `0.0.0-dev` | `--firmware-version <version>` |
+| Python wheel | Git tag/history via Hatchling and hatch-vcs; dirty checkouts include a local marker | `SETUPTOOLS_SCM_PRETEND_VERSION` |
+| .NET app | MinVer: `v1.2.3` builds `1.2.3`; next commit builds `1.2.4-dev.1`; untagged history falls back to `0.0.0-dev` | `-p:MinVerVersionOverride=<version>` |
+| Direct Dashboard | Git tags and commit height; dirty checkouts add `.dirty` | `--version <version>` for staged builds |
+
+Keep Git history and tags when building host packages locally. Check .NET
+version behavior with `python3 tools/test/test_dotnet_version.py`.
 
 ## Publish a Release
 
@@ -61,11 +77,12 @@ The workflow downloads and verifies the release wheel instead of rebuilding it.
 In **Publish Direct Dashboard Pages** (`publish-direct.yml`), enable `test_publish` and leave `tag` empty.
 The workflow checks the selected commit's Direct Dashboard code, stamps `0.0.0-test.RUN_ID.ATTEMPT`, and deploys it
 to the **live Pages URL**, replacing the previous site.
-The deployment stages a separate site with a commit tooltip and `build.json` identity, generates one
-content/build-derived cache key across HTML assets and module imports, and verifies the final stamped
-version and local references before upload. Canonical source files are not modified.
 This explicit test mode does not require a published release. Restore the release site by running again with
 `test_publish` disabled and the release tag supplied.
+
+The deployment uses a staged copy and verifies its stamped version and local
+references before upload. It does not modify canonical source files. A live
+deployment does not update pages that are already open.
 
 ### .NET
 
@@ -74,15 +91,17 @@ workflow artifacts for all three platforms; this does not create a GitHub Releas
 The application is named **PicoPWM**; archive filenames retain `picopwm-host-v<VERSION>-<RID>`
 with `.zip` for Windows and `.tar.gz` for Linux and macOS.
 
-.NET builds use MinVer with the repository's `v`-prefixed tags. Tag-triggered packaging derives the
-version from Git; manual runs use `MinVerVersionOverride` for their requested release/test version.
-Local commits after a release get the next patch's `-dev.<height>` version. Full Git history and
-tags are required to derive the intended version; see [.NET versioning](host-apps.md#net-host).
-
 Before archiving on each platform, packaging launches the native published executable and verifies its
 reported version, dashboard and bundled asset bytes, local asset references, and graceful zero-exit shutdown.
 A failed smoke check prevents archive/upload. It does not access hardware or establish browser/HID qualification.
-See the [.NET smoke checker](host-apps.md#net-host) for local usage.
+Run the local smoke check with:
+
+```sh
+python3 tools/release/check_dotnet_publish.py --directory build/host-release --version 1.2.3
+```
+
+It checks `/api/host`, version, bundled assets/references, and graceful shutdown over loopback HTTP; it does not
+access a board.
 
 ## One-Time Repository Setup
 

@@ -17,15 +17,6 @@ entire bank; channel IDs stay the same across control interfaces.
 [Python package](https://pypi.org/project/picopwm/) ·
 [Standalone .NET downloads](https://github.com/djwinter29-oss/PicoPWM/releases/latest)
 
-## Why PicoPWM?
-
-- **Simple serial CLI:** control outputs and read channel state from a USB serial terminal.
-- **Easy test automation:** integrate PWM generation and monitoring into test scripts using the CLI, Python HID
-  client, or I2C. Start with the [Python scripting example](host/python/README.md#use-from-python).
-- **Ready-to-use dashboards:** control and monitor channels through a browser, Python, or standalone .NET application.
-- **24 channels in three banks:** each eight-channel bank is configurable as a generator or monitor, with a fixed
-  hardware, PIO, or software PWM backend.
-
 ![Direct Dashboard with simulated device identity, boot configuration, runtime status, and 24 PWM generator and monitor channels.](docs/assets/pico-pwm-dashboard.png)
 
 _Illustrative dashboard with simulated readings, not a live hardware result. Python and .NET share this layout._
@@ -48,7 +39,7 @@ Before wiring:
 2. **Choose a control interface.** Follow the [wiring guide](docs/guides/hardware-setup.md), then use:
    - **Browser:** open [Direct Dashboard](#direct-dashboard) in desktop Chrome or Edge; no application
      installation is needed. Connect and check the firmware version and running bank roles.
-   - **Serial CLI:** open the [USB CDC shell](docs/guides/usb-cdc-shell.md) in a serial terminal, then follow
+   - **Serial CLI:** open the [USB CDC shell](docs/protocols/usb-cdc.md) in a serial terminal, then follow
      the example below.
    - **I2C controller:** wire SDA/SCL as described in the [hardware setup](docs/guides/hardware-setup.md), then
      follow the [I2C protocol reference](docs/protocols/i2c.md). Configure bank roles through CDC or HID.
@@ -124,31 +115,27 @@ Conservative operating ranges, **not hardware-qualified accuracy specifications*
 
 | Backend | Generation | Measurement |
 | --- | --- | --- |
-| [Hardware PWM](docs/design/pwm/hardware.md) (Bank A) | 10 Hz-1 MHz | 100 Hz-1 MHz |
-| [PIO PWM](docs/design/pwm/pio.md) (Bank B) | 1 Hz-100 kHz | 10 Hz-100 kHz |
-| [Software PWM](docs/design/pwm/software.md) (Bank C) | 1 Hz-1 kHz | 10 Hz-1 kHz |
+| [Hardware PWM](docs/design/pwm/backend-hardware.md) (Bank A) | 10 Hz-1 MHz | 100 Hz-1 MHz |
+| [PIO PWM](docs/design/pwm/backend-pio.md) (Bank B) | 1 Hz-100 kHz | 10 Hz-100 kHz |
+| [Software PWM](docs/design/pwm/backend-software.md) (Bank C) | 1 Hz-1 kHz | 10 Hz-1 kHz |
+
+These are recommended operating ranges, not the maximum accepted request
+ranges. The backend design pages are authoritative for recommendations; the
+interface references list accepted request limits where required.
 
 Generation accepts integer 0%-100% duty. At `0 Hz`, duties `0%-99%` drive static low and `100%` drives static high;
 readback reports `0 Hz` with `0%` or `100%` respectively. Use moderate duty cycles for PWM;
 narrow pulses and timing quantization reduce usable ranges.
 **PIO duty readback can differ from the physical signal**, especially at high frequencies;
-see the [PIO generation design](docs/design/pwm/pio.md#generation).
+see the [PIO generation design](docs/design/pwm/backend-pio.md#generation).
 Start PIO and software measurement at 10 Hz; below that, results are experimental rather than a verified accuracy
-floor. See the [PIO monitoring design](docs/design/pwm/pio.md#monitoring).
+floor. See the [PIO monitoring design](docs/design/pwm/backend-pio.md#monitoring).
 Backend links above cover extended ranges and limitations.
 
 ## Documentation
 
-See the [documentation index](docs/README.md) for the full map.
-
-| Need | Resource |
-| --- | --- |
-| Wire, configure, and troubleshoot | [Hardware setup](docs/guides/hardware-setup.md), [Configuration](docs/guides/configuration.md), [Troubleshooting](docs/guides/troubleshooting.md) |
-| Control it | [USB CDC shell](docs/guides/usb-cdc-shell.md), [I2C protocol](docs/protocols/i2c.md), [USB interface overview](docs/protocols/usb/interface-overview.md) |
-| Understand the design | [Architecture](docs/design/architecture.md), [PWM driver design](docs/design/pwm/driver.md) |
-| Write a HID host | [HID report reference](docs/protocols/usb/hid-report-reference.md) |
-| Build, test and release | [Builds and publishing](docs/development/releases.md) |
-| Contribute | [Contributing](CONTRIBUTING.md), [Code of Conduct](CODE_OF_CONDUCT.md), [Security](SECURITY.md) |
+Use the [documentation index](docs/README.md) to find user guides, interface
+contracts, design references, validation procedures, and contribution resources.
 
 The CDC, HID, and I2C interfaces are intended for trusted local access and have no firmware-level authentication.
 See [SECURITY.md](SECURITY.md) for the trust model and vulnerability reporting.

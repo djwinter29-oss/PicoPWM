@@ -60,10 +60,9 @@ flowchart LR
     RC --- J
 ```
 
-Lines represent electrical connections, not signal direction. Junction 0 is one connected breadboard row.
-
-Put the three junction-side resistor leads in the same connected breadboard row. Keep the GPIO-side leads separate,
-and do not use a power rail as a junction. Repeat for the other seven rows below, using three resistors per junction.
+Put the three junction-side resistor leads in the same connected breadboard
+row. Keep the GPIO-side leads separate, and do not use a power rail as a
+junction. Repeat for the other seven rows below, using three resistors per junction.
 
 | Local channel | Bank A: hardware | Bank B: PIO | Bank C: software |
 | --- | --- | --- | --- |

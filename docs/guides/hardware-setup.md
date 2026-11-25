@@ -11,22 +11,8 @@ All GPIO signals are 3.3 V only; never apply 5 V to a channel pin. Connect the
 Pico ground to the ground of any connected signal source or measurement
 instrument. Never connect generator outputs together.
 
-Hardware PWM and PIO assignments have peripheral-specific pin and resource
-constraints. Hardware PWM is fixed to one set of 8 slice-B GPIOs and PIO PWM is
-fixed to the 8 companion slice-A GPIOs on the same PWM slices; neither backend
-supports picking an arbitrary GPIO. Software PWM has no peripheral-specific
-pin bank; a custom board profile may assign it to an otherwise available GPIO
-not claimed by hardware PWM or PIO, subject to valid unique GPIO ownership and
-board functions such as the LED and ADC pins.
-
-On the standard Pico board, GPIO24 is the VBUS sense pin and GPIO25 is the
-onboard LED. Neither is assigned to the default software channel map. A custom
-board profile may reclaim those numbers only when its
-board wiring and policy explicitly support that choice.
-
-GPIO23 and GPIO24 are optional software-only profile pins. They are not part
-of the normal Pico channel map and cannot be assigned to hardware PWM or PIO
-profiles.
+The standard profiles use fixed channel-to-GPIO assignments. Custom board
+profile constraints are described in the [PWM bank design](../design/pwm/banks.md).
 
 ## Board Compatibility
 
@@ -39,18 +25,11 @@ exposes channel GPIOs `0-22` and `28`; I2C additionally requires GPIOs `26` and
 `27`. The standard profile assumes the LED is on GPIO 25. Verify SWD access
 only if programming with a Debug Probe.
 
-## Fixed PWM Banks
-
-| Bank | Logical channels | GPIOs | Allowed backend families |
-|---|---:|---|---|
-| Bank A | 0..7 | GPIO `1,3,5,7,9,11,13,15` | HW generator or monitor |
-| Bank B | 8..15 | GPIO `0,2,4,6,8,10,12,14` | PIO generator or monitor |
-| Bank C | 16..23 | GPIO `16,17,18,19,20,21,22,28` | SW generator or monitor |
-
-The startup configuration selects one role (generator or monitor) for each bank; the
-backend is fixed per bank. The mapping cannot be changed at runtime.
-
 ## PWM Channels
+
+The standard profile has 24 channels in three fixed banks. Each bank has one
+backend; startup configuration selects whether it generates or monitors PWM.
+This table is the complete logical-channel-to-GPIO mapping.
 
 | Logical Channel | Backend | Backend-local Channel | GPIO | Notes |
 |-----------------|---------|-----------------------|------|-------|
@@ -79,9 +58,6 @@ backend is fixed per bank. The mapping cannot be changed at runtime.
 | 22 | Software PWM | 6 | GPIO 22 | |
 | 23 | Software PWM | 7 | GPIO 28 | Shared with ADC2 |
 
-Bank A uses PWM slice channel-B pins intentionally. Bank B uses the companion
-slice-A pins for PIO-capable routing. Bank C is software-only.
-
 ## I2C
 
 The I2C control interface uses I2C1:
@@ -91,9 +67,10 @@ The I2C control interface uses I2C1:
 | SDA | GPIO 26 |
 | SCL | GPIO 27 |
 
-The 7-bit I2C address is `0x40`. External pull-up resistors are required for
-reliable bus operation; 4.7 kOhm is typical. The MCU's internal pull-ups do
-not replace external pull-ups. Use a 100 kHz or 400 kHz controller clock; see
+The default 7-bit I2C address is `0x40`; it can be changed in configuration.
+External pull-up resistors are required for reliable bus operation; 4.7 kOhm
+is typical. The MCU's internal pull-ups do not replace external pull-ups. Use
+a 100 kHz or 400 kHz controller clock; see
 the [I2C protocol reference](../protocols/i2c.md) for bus and register details.
 
 ## Shared Pins
@@ -103,22 +80,3 @@ the [I2C protocol reference](../protocols/i2c.md) for bus and register details.
 - GPIO 26 is I2C1 SDA and ADC0.
 - GPIO 27 is I2C1 SCL and ADC1.
 - GPIO 28 is software PWM channel 23 and ADC2.
-
-## Program with a Pico Debug Probe
-
-For local builds, `tools/firmware/load.sh` programs the ELF over SWD using OpenOCD. Connect the Debug Probe's three-pin
-SWD cable to the target:
-
-| Debug Probe signal | Cable color | Target signal |
-|---|---|---|
-| `SC` / SWCLK | Orange | SWCLK |
-| GND | Black | GND |
-| `SD` / SWDIO | Yellow | SWDIO |
-
-Connect GND first to establish a common reference. Power the target board separately over USB; the SWD cable does not
-power it. The Debug Probe uses 3.3 V I/O. For a third-party board, identify SWCLK, SWDIO, and GND from its schematic
-rather than assuming the standard Pico connector placement. See the [Raspberry Pi Debug Probe guide](https://www.raspberrypi.com/documentation/microcontrollers/debug-probe.html)
-for probe details.
-
-The loader's `--flash-size <bytes>` option overrides OpenOCD's flash-size
-assumption only; it does not change the firmware's GPIO mapping or board profile.

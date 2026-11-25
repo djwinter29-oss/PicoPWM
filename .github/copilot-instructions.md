@@ -4,7 +4,7 @@ Read [README.md](../README.md) first for product intent, channel map, and user-f
 Use the [architecture design](../docs/design/architecture.md) for system
 boundaries and the [PWM driver design](../docs/design/pwm/driver.md) for
 cross-core ownership and realized-state behavior. Use the
-[USB CDC shell guide](../docs/guides/usb-cdc-shell.md) and
+[USB CDC shell reference](../docs/protocols/usb-cdc.md) and
 [I2C protocol](../docs/protocols/i2c.md) for host-visible behavior, and source
 headers under `firmware/src` for exact C interfaces.
 
@@ -39,16 +39,11 @@ Key repo constraints:
 
 - For changes affecting PWM generation/monitoring, CDC commands or HIL tooling, run
   `python3 -m unittest discover -s tools/hil/tests -p 'test_*.py'` for hardware-free runner regression checks.
-- For hardware-affecting changes, run the CDC HIL subset when a board and fixture are available and the operator
-  confirms the port, board, flashed artifact and permission to drive outputs:
-  `tools/host/run-hil.sh --port <CDC_PORT> --board <pico|pico2> --firmware <FLASHED_ARTIFACT> --confirm-fixture`.
-  The launcher creates its venv and installs the editable HIL project.
-- Follow the [HIL connection guide](../docs/validation/hil/connections.md) and
-  [test plan](../docs/validation/hil/test-plan.md). Require exactly one running generator bank and two monitor banks;
-  never change roles, save flash, reboot or rewire automatically to make a run possible.
-- The runner replaces `docs/validation/hil/records/latest.md`. Preserve an existing record under a dated filename before
-  rerunning if it must be retained. Inspect the new outcome, failed checks and cleanup status; a nonzero exit is
-  a failure, and unexecuted checks are not passes.
+- For hardware-affecting changes, run the CDC HIL subset only when the operator confirms the board, fixture,
+  flashed artifact, port, and permission to drive outputs. Follow the [runner instructions](../tools/hil/README.md),
+  [connection guide](../docs/validation/hil/connections.md), and [test plan](../docs/validation/hil/test-plan.md).
+- Before rerunning, preserve any `latest.md` record that must be retained. Inspect the new outcome, failed checks,
+  and cleanup status; a nonzero exit is a failure, and unexecuted checks are not passes.
 - If hardware or operator confirmation is unavailable, report HIL as not run with the reason. Never fabricate
   records or claim full qualification from unit tests or the CDC loopback subset. Instrument checks, other
   transports and the other generator-bank passes remain separate validation.

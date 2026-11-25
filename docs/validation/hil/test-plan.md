@@ -8,34 +8,13 @@ qualification. Record execution results in [records/](records/README.md).
 
 ## CDC Automated Subset
 
-The [CDC runner](../../../tools/hil/src/run_hil.py) tests the **current running roles only** on the three-bank junction
-fixture. Exactly one bank must be a generator and the other two monitors. It never saves configuration, changes
-roles or reboots. It drives outputs and stops all generator channels on completion; it does not restore previous
-waveforms. Disconnect other equipment and close dashboards/serial terminals before running it.
-
-On Linux/macOS, the launcher creates `build/hil-venv` and installs the HIL Python project in editable mode when needed:
-
-```sh
-tools/host/run-hil.sh --port /dev/ttyACM0 --board pico \
-    --firmware build/pico/pico_pwm.uf2 --confirm-fixture
-```
-
-Set `PYTHON` to select Python 3.10+ or `VENV_DIR` to override the environment location. The interpreter must support
-`venv`; on Debian/Ubuntu install its matching `python3-venv` package if environment creation fails.
-The launcher forwards all arguments to the runner. `tools/host/run-hil.sh --help` displays launcher usage without
-creating an environment.
-
-Alternatively, install and run directly (including on Windows):
-
-```sh
-python -m pip install --editable tools/hil
-picopwm-hil --port /dev/ttyACM0 --board pico \
-    --firmware build/pico/pico_pwm.uf2 --confirm-fixture
-```
-
-Use the appropriate port (for example `COM5` on Windows), board and actual flashed artifact. Artifact identity and
-board model are operator supplied: CDC cannot verify the flashed binary's hash or identify the MCU here.
-Use an editable installation: this repository-local tool locates the fixed record directory relative to its source.
+The CDC runner tests the current running roles on the three-bank junction
+fixture. Exactly one bank must be a generator and the other two monitors. It
+does not change roles, save configuration, or reboot. It drives outputs and
+stops all generator channels on completion; it does not restore previous
+waveforms. Disconnect other equipment and close dashboards or serial terminals
+before running it. See the [HIL runner instructions](../../../tools/hil/README.md)
+for installation and invocation.
 
 The runner checks all eight junctions at 100, 500 and 1000 Hz and 25%, 50%, 75% duty, comparing both monitors
 against generator readback. It then checks eight simultaneous outputs and stop readback. Defaults are 5% frequency
@@ -50,15 +29,9 @@ the record. Exit status is zero for a passing subset and nonzero for failure; re
 If cleanup cannot confirm `stop`, disconnect board power. Copy the record to a dated filename before the next run
 to retain history. Run separately after safely configuring each of the other generator-bank passes.
 
-Hardware-free runner regression tests:
-
-```sh
-python -m unittest discover -s tools/hil/tests -p 'test_*.py'
-```
-
 Follow [HIL Test Connections](connections.md) for wiring and safety. Protocol expectations come from the
-[CDC shell](../../guides/usb-cdc-shell.md), [I2C protocol](../../protocols/i2c.md) and
-[HID report reference](../../protocols/usb/hid-report-reference.md).
+[CDC shell](../../protocols/usb-cdc.md), [I2C protocol](../../protocols/i2c.md) and
+[USB HID reports](../../protocols/usb-hid.md).
 
 ## Preconditions
 

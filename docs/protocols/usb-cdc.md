@@ -26,15 +26,8 @@ prefix.
 
 ## Command Format
 
-Commands follow the `group verb parameters` format. The group identifies the
-target (`pwm`, `board`, or `config`); the verb describes the operation.
-
-| Group | Commands | Purpose |
-| --- | --- | --- |
-| PWM | `pwm get <channel>`, `pwm get all`, `pwm set <channel> <freq_hz> [duty_percent]`, `pwm stop all` | Read realized channel state, set a generator channel, or stop every generator output. |
-| Board | `board get <clock\|led\|version>`, `board set led <on\|off>`, `board reboot` | Read board state, control the LED, or restart. |
-| Configuration | `config get [banka\|bankb\|bankc\|clock\|address]`, `config set <key=value>[, <key=value>...]` | Read configuration or update several settings together. |
-| Help | `help [group]`, `?` | List commands or show contextual options and syntax. |
+Commands follow the `group verb parameters` format. The groups are `pwm`,
+`board`, `config`, and `help`; detailed syntax and examples follow.
 
 ### PWM Commands
 
@@ -55,20 +48,13 @@ listing finishes; rerun the command if the output appears incomplete.
 
 Channel numbers are stable logical IDs. Their backend and GPIO are fixed by
 bank; configuration changes only the bank's role (generator or monitor). See
-[Hardware Setup](hardware-setup.md) for the authoritative channel-to-GPIO map.
+[Hardware Setup](../guides/hardware-setup.md) for the authoritative channel-to-GPIO map.
 
 The duty argument is an integer percentage from `0` to `100`; if omitted it
-defaults to `50`. Generator request ranges are Bank A `10 Hz..10 MHz`, Bank B
-`1 Hz..10 MHz`, and Bank C `1 Hz..10 kHz`. Bank C above 1 kHz is experimental,
-with coarse duty resolution and software timing jitter. Banks A and B above 1 MHz are experimental;
-duty resolution is reduced and clock-dependent (see the
-[hardware PWM design](../design/pwm/hardware.md) and
-[PIO design](../design/pwm/pio.md)).
-A `0 Hz` request selects a static
-output: `0%` holds the pin low and `100%` holds it high. These are accepted
-request ranges, not accuracy guarantees. Monitor banks measure inputs instead
-of driving outputs. A nonzero `pwm set` request takes effect immediately, so
-check the bank role and GPIO before applying one.
+defaults to `50`. Accepted periodic frequency limits are listed in the
+[PWM bank design](../design/pwm/banks.md). A `0 Hz` request selects a static
+output: `0%` holds the pin low and `100%` holds it high. A nonzero `pwm set`
+takes effect immediately; check the bank role and GPIO before applying it.
 
 ### Board Commands
 
@@ -117,14 +103,13 @@ address=64
 These are illustrative values; the running roles, clock, and address depend
 on the board and its applied configuration.
 
-The `150` MHz profile is an overclock on RP2040, and the `200` and `250` MHz
-profiles are not qualified for every board. CDC does not require a separate
-overclock acknowledgement. Use these profiles only if you understand the
-stability and hardware risks for your board.
+Clock-profile precautions are in the
+[configuration guide](../guides/configuration.md). CDC does not require a
+separate overclock acknowledgement.
 
-Configuration changes do not affect running hardware until the reboot applies
-the saved target. Saving uses flash and temporarily stalls CDC, HID, and I2C
-while the flash sector is programmed; the operation can take up to 2 seconds.
+Configuration changes do not affect running hardware until reboot. Flash-save
+timing and clock-profile guidance are in the
+[configuration guide](../guides/configuration.md).
 
 ### Help
 
@@ -153,10 +138,10 @@ realized channel state, not just the last requested values. The `enabled` field
 is `yes` when the realized frequency is nonzero and `no` when it is zero; a
 zero-frequency channel can still be held high at `100%` duty.
 
-See the [configuration guide](configuration.md) for
+See the [configuration guide](../guides/configuration.md) for
 bank roles and the
-[I2C Protocol Reference](../protocols/i2c.md) for the binary
+[I2C Protocol Reference](i2c.md) for the binary
 register protocol.
 
 For firmware development guidance on the CLI structure and adding commands,
-see [USB CDC CLI Design](../design/cdc-cli.md).
+see [CDC shell design](../design/usb-cdc.md).

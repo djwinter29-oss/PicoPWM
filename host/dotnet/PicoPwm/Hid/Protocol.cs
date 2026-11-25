@@ -5,7 +5,7 @@ using System.Buffers.Binary;
 
 namespace PicoPwm.Host;
 
-/// <summary>HID feature-report layouts (version 1); see docs/protocols/usb/hid-report-reference.md.</summary>
+/// <summary>HID feature-report layouts, version 1.</summary>
 public static class Protocol
 {
     public const ushort VendorId = 0x2E8A;

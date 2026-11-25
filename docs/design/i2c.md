@@ -1,4 +1,4 @@
-# I2C Slave Driver Design
+# I2C Slave Design
 
 The I2C implementation separates bus transport from the PWM register
 protocol. The host-visible addresses, payloads, and status values are defined
@@ -24,6 +24,11 @@ STOP, repeated START, or the start of a read—the protocol layer receives the
 frame and decides whether it is valid. Valid changes are queued for the Core 0
 foreground loop, then passed through the shared control path. The I2C
 interrupt never waits for a PWM backend to apply a change.
+
+The command queue is bounded and drained in the foreground loop. If it fills,
+the protocol reports an unavailable command instead of blocking the bus
+handler. Queue delay depends on work already in progress; the protocol does
+not promise a fixed end-to-end completion time.
 
 At the start of a read, the protocol builds a fresh response from current
 state. The transport streams that response; bytes requested beyond its length

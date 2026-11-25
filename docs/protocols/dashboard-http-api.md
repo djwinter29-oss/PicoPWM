@@ -98,8 +98,8 @@ disconnected and does not open a HID device.
 
 Channel IDs are `0..23`, frequency is an unsigned 32-bit integer in Hz, and duty
 is an integer percent in `0..100`. Firmware applies backend-specific frequency
-limits and rejects writes to monitor channels. Read realized state after a
-mutation rather than assuming it exactly matches the request.
+limits listed in the [PWM bank design](../design/pwm/banks.md) and rejects
+writes to monitor channels. Read realized state after a mutation.
 
 ### Save and Reboot
 
@@ -114,16 +114,16 @@ mutation rather than assuming it exactly matches the request.
 }
 ```
 
-- `profile`: clock-profile index `0..4`, supported by the firmware's advertised
+- `profile`: clock-profile index `0..3`, supported by the firmware's advertised
   `clock_profile_mask`. Profiles above `1` require explicit overclock acknowledgement.
 - `address`: I2C address in `8..119`.
-- `roles`: three integers for Banks A, B, and C; `0` means monitor and `1` generator.
+- `roles`: three integers for Banks A, B, and C; `0` means generator and `1` means monitor.
 - `acknowledge_overclock`: must be `true` when the selected profile requires it.
 
 The client validates the draft before sending target settings and the final
-save/reboot command. The example changes bank roles; it is not a read-only probe.
-Already submitted configuration edits are not rolled back if a later step fails.
-On failure, reread configuration and reconcile the target settings before retrying.
+save/reboot command. The example makes Bank A a generator and Banks B and C
+monitors. Already submitted configuration edits are not rolled back if a later
+step fails; reread configuration before retrying.
 
 The lower-level configuration endpoints remain available with a board selection:
 
@@ -136,6 +136,8 @@ The lower-level configuration endpoints remain available with a board selection:
 
 Banks and backends use indexes `0..2`; fixed backends are hardware PWM (`0`),
 PIO (`1`), and software (`2`). Keep the backend matched to the bank.
+Bank roles use `0` for generator and `1` for monitor. Clock profiles must be
+advertised in `clock_profile_mask`; this firmware supports profiles `0..3`.
 Configuration edits target the next startup; saving and rebooting are separate
 steps unless using `/api/save-reboot`.
 
@@ -160,21 +162,12 @@ does not mean USB reconnection has finished.
 | `500` | Unexpected server failure; the body is `Internal server error` |
 | `503` | Discovery or unhandled transport/runtime failure |
 
-Route-level errors return a stable, user-safe `{"error": "description"}` message;
-internal exception details are kept out of HTTP responses. Invalid request fields
-return HTTP 400. A HID connection failure handled by `status()` can instead return
-HTTP 200 with `connected: false` and a generic status error.
-Likewise, an action may be confirmed before its refreshed status loses connection.
-Both status reads and action snapshots replace exception messages in `error`,
-per-section error fields, and non-null `bank_errors` entries with
-`"Device status unavailable"`; diagnostic details are logged only on the server.
-Do not treat HTTP success as proof that every response section is valid.
+Errors use a stable, user-safe `{"error": "description"}` message. A status
+request can return HTTP 200 with `connected: false`; a successful action can
+also return a refreshed snapshot with unavailable sections. Check `connected`,
+`error`, section errors, and `bank_errors`, not only the HTTP status.
 
-Do not blindly retry mutations after timeouts, disconnects, or unconfirmed
-outcomes. Reconnect and inspect realized state or configuration first. An HTTP
-client timeout does not cancel a command already submitted to the board.
-Stop-all and other multi-channel updates apply one channel at a time while
-firmware holds its control lock, and during that wait the board services USB
-CDC only. Allow several seconds for those calls. `GET /api/boards` includes
-each board's local `device_path` so the dashboard can reopen the HID node; an
-authenticated client can see that path.
+Do not blindly retry mutations after a timeout or disconnect. A client timeout
+does not cancel a command already submitted to the board; reconnect and inspect
+the state first. Multi-channel actions can take several seconds. Board entries
+include a local `device_path` for reopening the HID device.

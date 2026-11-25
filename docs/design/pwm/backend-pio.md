@@ -10,12 +10,11 @@ A short PIO instruction loop creates continuous PWM without per-edge CPU
 service. A timing search selects a period and divider; both frequency and duty
 are quantized by the available instruction cycles.
 
-The recommended generation range is **1 Hz to 100 kHz**. Higher requests are
-experimental, up to the **10 MHz firmware request limit**. Duty resolution
+The recommended generation range is **1 Hz to 100 kHz**. Duty resolution
 falls quickly as periods shorten, and the reported duty model can diverge
 from the physical signal at high frequencies. Treat readback as an applied
-timing estimate, not an instrument result. Zero-frequency and endpoint-duty
-requests use static output levels.
+timing estimate. Zero-frequency and endpoint-duty requests use static output
+levels; see [bank design](banks.md) for accepted request limits.
 
 ## Monitoring
 
@@ -25,9 +24,7 @@ changes and do not provide waveform history.
 
 Capture time depends on the input period. Short pulses, input synchronization,
 and fixed capture overhead limit useful measurement at high frequencies.
-The recommended measurement range is **10 Hz to 100 kHz**, not a qualified
-accuracy envelope. There is no qualified absolute maximum for this monitor;
-the generator's request limit does not define monitor accuracy. Confirm the
+The recommended measurement range is **10 Hz to 100 kHz**. Confirm the
 intended input range against an instrument.
 
 Generation and monitoring use the same finite PIO resources. The configured

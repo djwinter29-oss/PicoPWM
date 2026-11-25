@@ -1,7 +1,7 @@
 # Troubleshooting
 
 Find the next check when the board, a host application, or an output does not
-behave as expected. Commands below use the [USB CDC shell](usb-cdc-shell.md).
+behave as expected. Commands below use the [USB CDC shell](../protocols/usb-cdc.md).
 
 ## The board does not appear in the terminal
 
@@ -57,7 +57,7 @@ behave as expected. Commands below use the [USB CDC shell](usb-cdc-shell.md).
   on connection. Run `board get clock` to check the actual clock in Hz.
 - CDC `config set` saves and reboots automatically. HID configuration changes
   have their own save and reboot workflow; consult the
-  [HID Report Reference](../protocols/usb/hid-report-reference.md).
+  [USB HID reports](../protocols/usb-hid.md).
 - If a setting is rejected, check that the bank role, clock profile, or I2C
   address is supported. A rejected request is not partially applied.
 

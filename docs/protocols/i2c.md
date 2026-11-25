@@ -5,8 +5,7 @@ controlling generator outputs. I2C does not configure bank roles, change the
 slave address, save configuration, or control unrelated device functions.
 Configure bank roles and other device settings through USB CDC or HID.
 
-This is a fresh register-map design. It intentionally replaces the legacy
-register assignments; firmware and hosts must use matching protocol support.
+Firmware and hosts must use matching protocol support.
 
 ## Electrical and Bus Configuration
 
@@ -22,15 +21,10 @@ for the SDA and SCL pins.
 ## Address Map
 
 This is a byte-addressed register-selection protocol, not a memory window.
-Each register has its own read or command semantics.
-
-The generic I2C driver only frames bus transactions and transports response
-bytes. Register selection, frame-length validation, command status, and
-deferred PWM execution belong to the PWM protocol layer.
-For the implementation boundary and callback rules, see the
-[I2C Slave Driver Design](../design/i2c-slave-driver.md).
-The realized-state snapshot read may briefly stretch SCL while it acquires a
-short cross-core lock.
+Each register has its own read or command semantics. For the separation
+between bus transport and protocol handling, see the
+[I2C slave design](../design/i2c.md). A channel-state
+read may briefly stretch SCL while firmware captures a consistent snapshot.
 
 | Register | Address | Write length | Read length | Purpose |
 | --- | ---: | ---: | ---: | --- |
@@ -45,8 +39,7 @@ registers `0x10..0x27` and write registers `0x30..0x47`.
 Addresses not listed here are reserved and outside the protocol contract.
 
 The first two addresses provide protocol/device identification and stop-all,
-followed by separate channel-read and channel-command ranges. The addresses
-are not compatible with the legacy I2C map.
+followed by separate channel-read and channel-command ranges.
 
 ## Register Values
 
@@ -77,8 +70,7 @@ unless they explicitly support a development build.
 All operations defined by this register map are required for a firmware major
 version that supports the map; there is no optional-capabilities field. The
 signature is at the first register address so hosts can check compatibility
-before interpreting the rest of the record. Legacy firmware's response at
-this address does not begin with the `PPWM` signature.
+before interpreting the rest of the record.
 
 `bank_roles` describes active, running roles; it does not report unsaved
 target settings.
@@ -140,18 +132,10 @@ static low and `0 Hz / 100%` for static high, regardless of the requested
 frequency. For other accepted generator requests, readback reports the
 realized frequency and duty.
 
-Nonzero generator frequency limits depend on the bank:
-
-| Bank | Backend | Accepted request range |
-| --- | --- | --- |
-| A | Hardware PWM | 10 Hz-10 MHz (above 1 MHz experimental; reduced duty resolution) |
-| B | PIO | 1 Hz-10 MHz (above 1 MHz experimental; coarse duty resolution) |
-| C | Software PWM | 1 Hz-10 kHz (above 1 kHz experimental; coarse duty resolution and software jitter) |
-
-These are accepted request ranges, not accuracy guarantees. Read back the
-channel to inspect its realized frequency and duty; backend quantization can
-make them differ from the request. A channel in a monitor bank cannot be driven
-and returns `UNAVAILABLE`.
+See [PWM bank design](../design/pwm/banks.md) for accepted frequency requests
+by backend. Read back the channel to inspect its realized frequency and duty;
+backend quantization can make them differ from the request. A channel in a
+monitor bank cannot be driven and returns `UNAVAILABLE`.
 
 ## I2C Transactions
 
@@ -219,38 +203,19 @@ status.
 | `5` | `APPLY_FAILED` | Backend accepted the command but failed to apply it |
 | `6` | `NOT_RUN` | No complete command attempt has been recorded for this register since startup |
 
-Each command register's status starts as `NOT_RUN`. When a
-command is rejected because the shared write queue is full, its register
-reports `UNAVAILABLE`. The queue is four deep and is drained only from the Core 0
-main loop. While Core 0 is inside a PWM apply it keeps USB CDC moving and does
-not run HID, CLI, or I2C command execution, so a burst of writes during that
-stall fills the queue and further writes report `UNAVAILABLE`. Wait before
-retrying so the host can avoid sustained queue pressure. A host timeout does
-not cancel a command Core 1 has already claimed.
+Each command register's status starts as `NOT_RUN`. A bounded command queue
+may reject a burst with `UNAVAILABLE`; wait before retrying. Queue wait has no
+fixed upper bound, so poll no more often than every 10 ms while `BUSY` and use
+a host-side watchdog for the overall operation. A host timeout does not cancel
+a command already claimed for application.
 
-The 1-second apply deadline starts when Core 0 begins processing a channel
-update, not when the I2C transaction is received. Queue wait time is additional
-and has no fixed upper bound. Hosts should poll status no more frequently than
-once every 10 ms while it is `BUSY`, and should use an overall host-side
-watchdog rather than assuming a fixed end-to-end completion time. If that
-watchdog expires, do not blindly resend: read the status and realized channel
-state first. `REG_STOP_ALL` applies stops sequentially. It attempts every
-generator channel even if an earlier stop fails, then returns the first
-non-`OK` channel result in ascending channel order. This includes `TIMEOUT` if
-an individual stop was not claimed before its one-second apply deadline.
-
-Because status is per register and there is no transaction ID, hosts must send
-at most one outstanding command per command register. Firmware does not reject
-same-register writes while another attempt is queued or being applied: valid
-writes are each queued and executed in FIFO order. The status reports only the
-most recent attempt, so it cannot identify which queued command completed if
-the host violates this constraint.
-A newer attempt replaces that register's status; an older completion cannot
-overwrite the newer status. A malformed short or overlong write leaves
-`INVALID` as the status for that attempt. Status is volatile and resets to
-`NOT_RUN` on device startup or reboot. After a reset or lost connection, treat
-any prior command completion as unknown and reconcile with the realized
-channel state before retrying.
+Because status is per register and there is no transaction ID, send at most
+one outstanding command per command register. Firmware queues valid writes in
+order, but status describes only the most recent attempt. A newer attempt
+replaces that register's status; an older completion cannot overwrite it.
+Malformed writes report `INVALID`. Status resets to `NOT_RUN` on startup or
+reboot. After a reset or lost connection, reconcile against realized channel
+state before retrying.
 
 ## Examples
 
@@ -289,18 +254,8 @@ S  address+R  status  NACK  P
 
 Poll `REG_STOP_ALL` using pure reads; do not write `0x01` again to poll.
 
-## Compatibility and Host Guidance
+## Host Guidance
 
-- This design replaces the legacy I2C register assignments. Legacy firmware
-  does not implement this map; use a firmware build that explicitly supports
-  this protocol before sending commands.
-- Read `REG_INFO` and verify the `PPWM` signature and supported firmware major
-  version before using the map. The map has no optional capabilities; all its
-  operations are required for a supported major version. Treat major `0` as
-  development firmware unless explicitly supported. Do not infer support from
-  a device name alone.
-- Bank roles and other device settings are configured through USB CDC or HID,
-  not I2C.
 - Multi-byte integers are little-endian, independent of host or MCU byte order.
 - Read channel state to verify realized output or measurement values.
 - Do not use reserved addresses or depend on undocumented register behavior.

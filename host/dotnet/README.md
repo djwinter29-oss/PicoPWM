@@ -36,23 +36,15 @@ The shared dashboard has bounded HTTP waits and fresh-status recovery after
 uncertain writes; it never automatically replays commands. See
 [Host App Development](../../docs/development/host-apps.md) for test coverage and limitations.
 
-**Before driving outputs:** GPIO signals are 3.3 V only. Banks default to monitor-only.
-Configure the intended bank as a generator and reboot before setting output.
-Follow the [wiring guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/hardware-setup.md).
+Before driving outputs, check the bank role and wiring in the
+[hardware setup guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/hardware-setup.md);
+GPIOs are 3.3 V only.
 
 ## Dashboard
 
-- Click a generator's frequency or duty to edit it. **Apply changes live output immediately**;
-  the 1 kHz / 50% preset only fills fields. Monitors are read-only.
-- Edit startup settings through **Boot configuration**, then review and confirm **Save & Reboot**.
-  Reconnect and verify settings afterward. Failed operations may leave partial target changes; inspect before retrying.
-- Pin assignments come from the connected board and use GPIO IDs, not physical header-pin numbers.
-  Unsupported firmware features show disabled controls or update guidance.
-- Readings are not independent electrical measurements. Temperature is an internal estimate, RAM is static
-  reservation, and service load is not CPU utilization.
-
-See the [dashboard control guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/host/direct/README.md#controls-and-readings)
-for shared controls and safety notes; browser pairing applies only to Direct Dashboard.
+The Python and .NET dashboards share the controls described in the
+[dashboard guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/host/direct/README.md#controls-and-readings).
+Browser pairing instructions there apply only to Direct Dashboard.
 
 ## Configuration and Authentication
 
@@ -66,37 +58,17 @@ Set environment variables before starting the application:
 | `PICOPWM_TOKEN` | API access token | Unset |
 
 `--urls` takes precedence over `ASPNETCORE_URLS`, then the host/port settings above.
-Keep loopback binding for local use. Listening beyond loopback requires a token; do not expose the service
-directly to the internet.
-
-When a token is configured, the dashboard prompts for it. Authentication, routes, and payloads are
-described in the [Dashboard HTTP API](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/protocols/dashboard-http-api.md), shared with the Python dashboard.
+The dashboard prompts for a configured token. Network access, authentication, routes, and payloads are described in the
+[Dashboard HTTP API](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/protocols/dashboard-http-api.md).
 Actions require a board ID from `GET /api/boards`. An unconfirmed command returns an error, not success.
 Required action fields must be present: omitted numeric fields are rejected, not treated as zero.
 Overclock acknowledgement remains optional and defaults to false.
 
 ## Development
 
-Install the **.NET 10 SDK**. From the repository root, run:
-
-```sh
-dotnet run --project host/dotnet/PicoPwm
-```
-
-In another terminal:
-
-```sh
-dotnet test host/dotnet/PicoPwm.sln --configuration Release --nologo
-```
-
-The POSIX launcher `tools/host/run-dotnet.sh` also restores, builds, and starts the application.
-With a newer SDK, install the .NET 10 ASP.NET Core runtime. Explicit major-version roll-forward is an
-unverified compatibility option, not a substitute for testing against the targeted runtime.
-Edit canonical assets in `host/web/src/` and `host/direct/src/`, not generated `wwwroot` output.
-
-Source layout, versioning, test scope, and packaging checks are covered in
+For build, test, launcher, and packaging instructions, see
 [Host App Development](../../docs/development/host-apps.md) and
-[Builds and Publishing](../../docs/development/releases.md). See
+[CI and Releases](../../docs/development/ci-and-releases.md). See
 [Native HID Qualification](../../docs/validation/native-hid-qualification.md)
 for platform-specific device checks.
 

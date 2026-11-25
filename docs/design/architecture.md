@@ -38,7 +38,7 @@ flowchart LR
 Reads return the latest published state. A change request crosses the core
 boundary and is applied by the selected backend before its result is returned.
 I2C defers channel changes out of interrupt context before using this path; the
-[I2C driver design](i2c-slave-driver.md) describes that boundary.
+[I2C driver design](i2c.md) describes that boundary.
 
 ## Startup and Runtime
 
@@ -53,6 +53,6 @@ For channel ownership and state-publication rules, see the
 ## Related Design
 
 - [PWM driver](pwm/driver.md) — core boundary, command handling, and readback
-- [PWM configuration](pwm/configuration.md) — fixed banks and startup roles
-- [USB CDC CLI](cdc-cli.md) — command and session boundaries
-- [I2C slave driver](i2c-slave-driver.md) — bus transport and deferred commands
+- [PWM banks](pwm/banks.md) — fixed banks and startup roles
+- [CDC shell](usb-cdc.md) — command and session boundaries
+- [I2C slave](i2c.md) — bus transport and deferred commands

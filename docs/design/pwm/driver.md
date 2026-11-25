@@ -17,7 +17,7 @@ and timing, while Core 0 owns host requests and responses.
 Transport and control layers must not call a backend directly. I2C changes
 leave interrupt context before entering the shared control path. Bank roles
 are selected at startup; runtime changes do not switch backend ownership.
-The [configuration design](configuration.md) describes the fixed bank model.
+The [configuration design](banks.md) describes the fixed bank model.
 
 ## Applying Changes
 
@@ -54,5 +54,5 @@ monitor sample.
 - Generator requests and monitor samples use the same realized-state model.
 - Stopping disables generator output; it does not change saved bank roles.
 - Backend-specific limits and tradeoffs belong in the
-  [hardware](hardware.md), [PIO](pio.md), and
-  [software](software.md) design pages.
+  [hardware](backend-hardware.md), [PIO](backend-pio.md), and
+  [software](backend-software.md) design pages.

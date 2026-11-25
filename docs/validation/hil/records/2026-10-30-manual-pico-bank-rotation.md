@@ -7,12 +7,12 @@ Operator-reported manual functional check. Every value below comes from the oper
 
 | Item | Value |
 | --- | --- |
-| Date | 30-10-2026 |
+| Date | 2026-10-30 |
 | Board | Raspberry Pi Pico |
 | Firmware version / commit / SHA-256 | Not recorded |
 | Control interface | Not recorded |
 | System clock | Not recorded |
-| Fixture | Operator's HIL setup; wiring details not recorded (reference: [HIL connection guide](../hil-test-connections.md)) |
+| Fixture | Operator's HIL setup; wiring details not recorded (reference: [HIL connection guide](../connections.md)) |
 | Independent instrument | None reported; monitor readback only |
 
 ## Procedure

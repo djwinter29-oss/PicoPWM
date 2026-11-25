@@ -1,44 +1,64 @@
 # Documentation
 
-PicoPWM documentation is grouped by audience and purpose: guides cover using
-the device, design documents explain its implementation and interfaces,
-deployment documents cover releases, and test documents describe validation.
+Start with the root [README](../README.md) for the product overview and quick
+start. Firmware build and test commands are in [CONTRIBUTING](../CONTRIBUTING.md).
 
-## Guides
+The linked pages are the detailed references for their subjects. Other pages
+should summarize only what their audience needs and link here for full details.
 
-Task-oriented information for configuring, connecting, and operating PicoPWM:
+| Folder | Read it when you want to… |
+| --- | --- |
+| [guides/](guides/) | Wire, configure, operate, or troubleshoot a board |
+| [protocols/](protocols/) | Look up a wire protocol: CDC commands, HID reports, or I2C |
+| [design/](design/) | Change firmware and need its ownership rules and tradeoffs |
+| [development/](development/) | Build, test, or release the host applications |
+| [validation/](validation/) | Qualify a build on real hardware |
 
-- [Hardware Setup](guides/hardware-setup.md)
-- [USB CDC shell](guides/usb-cdc-shell.md)
-- [Setup and Troubleshooting](guides/setup-and-troubleshooting.md)
-- [Direct Dashboard](../host/direct/README.md) — direct browser control, without a host service
+## Use PicoPWM
 
-## Deployment
+- [Hardware setup](guides/hardware-setup.md) — board compatibility, wiring, and the channel-to-GPIO map
+- [Configuration](guides/configuration.md) — bank roles, clock profiles, and I2C address
+- [CDC shell](protocols/usb-cdc.md) — interactive serial commands (full command reference)
+- [Linux HID access](guides/linux-hid-access.md) — device permissions for host applications
+- [Troubleshooting](guides/troubleshooting.md) — connection problems, unexpected output, and recovery
 
-Release packaging and publishing workflows:
+Host applications are documented beside their code:
+[Direct Dashboard](../host/direct/README.md) (browser, WebHID),
+[Python dashboard and HID client](../host/python/README.md), and
+[.NET dashboard](../host/dotnet/README.md).
 
-- [Builds and Publishing](deployment/releases.md)
+## Wire Protocols
 
-## Design and Protocol References
+| Interface | Use it for | Reference |
+| --- | --- | --- |
+| USB CDC | Interactive text commands | [CDC shell](protocols/usb-cdc.md) |
+| USB HID | Structured status and actions from host software | [USB HID reports](protocols/usb-hid.md) |
+| I2C | Channel control from an external controller | [I2C protocol](protocols/i2c.md) |
 
-Architecture and implementation details for contributors, plus interface
-contracts for host implementers:
+To script a board from Python, use the
+[Python client](../host/python/README.md#use-from-python), which talks USB HID directly.
 
-- [Architecture](design/architecture.md)
-- [PWM Driver Design](design/pwm-driver/driver-design.md)
-- [PWM Driver Configuration](design/pwm-driver/configuration.md)
-- [Hardware PWM](design/pwm-driver/hardware.md) — generator and monitor
-- [PIO PWM](design/pwm-driver/pio.md) — generator and monitor
-- [Software PWM](design/pwm-driver/software.md) — generator and monitor
-- [I2C Slave Driver Design](design/i2c/i2c-slave-driver-design.md) — generic transport and protocol-layer ownership
-- [I2C Protocol Reference](design/i2c/i2c-protocol.md)
-- [USB Interface Overview](design/usb/usb-interface-overview.md) and
-  [HID Report Reference](design/usb/hid-report-reference.md)
+## Firmware Design
 
-## Tests
+- [Architecture](design/architecture.md) — core ownership, request path, and host-transport layering; read first
+- PWM:
+  - [Driver](design/pwm/driver.md) — the multicore boundary and realized-state readback
+  - [Banks](design/pwm/banks.md) — fixed banks, startup roles, and resource ownership
+  - Backends, including timing and measurement limits:
+    [hardware PWM](design/pwm/backend-hardware.md) (Bank A),
+    [PIO](design/pwm/backend-pio.md) (Bank B), and
+    [software](design/pwm/backend-software.md) (Bank C)
 
-Hardware setup and recorded validation results:
+## Development
 
-- [HIL Test Connections](tests/hil-test-connections.md)
-- [HIL Test Plan](tests/hil-test-plan.md)
-- [HIL Test Records](tests/records/README.md)
+- [Host app development](development/host-apps.md) — tests, launchers, and packaging checks
+- [Dashboard backend API](development/dashboard-api.md) — internal HTTP contract shared by the Python and .NET dashboards
+- [CI and releases](development/ci-and-releases.md) — workflows and publishing
+
+## Validation
+
+- [Native HID qualification](validation/native-hid-qualification.md) — host app checks against a real board
+- Hardware-in-the-loop (HIL):
+  - [Fixture connections](validation/hil/connections.md)
+  - [Test plan](validation/hil/test-plan.md)
+  - [Test records](validation/hil/records/README.md)

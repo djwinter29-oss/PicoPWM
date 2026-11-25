@@ -20,14 +20,11 @@ import time
 
 
 ROOT = Path(__file__).resolve().parents[3]
-RECORD = ROOT / "docs/tests/records/latest.md"
+RECORD = ROOT / "docs/validation/hil/records/latest.md"
 ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 PROMPT = re.compile(r"(?:^|[\r\n])pico> $")
 STATE = re.compile(r"CH(\d+): freq=(\d+) Hz, duty=(\d+)%, enabled=(yes|no)")
-RUNNING = re.compile(
-    r"^running=clk=(\d+)MHz i2c=0x([0-9A-Fa-f]{2}) "
-    r"A:hw/(gen|mon) B:pio/(gen|mon) C:sw/(gen|mon)\r?$", re.MULTILINE
-)
+BANK_ROLE = re.compile(r"^bank([abc])=(generator|monitor)\r?$", re.MULTILINE)
 
 
 class HilError(RuntimeError):
@@ -71,7 +68,7 @@ class Console:
 
 
 def read_state(console: Console, channel: int) -> tuple[int, int]:
-    match = STATE.search(console.command(f"get {channel}"))
+    match = STATE.search(console.command(f"pwm get {channel}"))
     if not match or int(match[1]) != channel:
         raise HilError(f"Unrecognized channel {channel} response")
     return int(match[2]), int(match[3])
@@ -102,28 +99,26 @@ def wait_monitor(console: Console, channel: int, expected: tuple[int, int], args
 
 def exercise(console: Console, args, results: list[tuple[str, str, str]]) -> None:
     """Validate roles before touching output, then run isolated and eight-channel loopbacks."""
-    info = console.command("info")
-    if not re.search(r"^PicoPWM\r?$", info, re.MULTILINE):
-        raise HilError("Connected CDC device did not identify as PicoPWM")
-    version = console.command("version")
-    config = console.command("config")
-    match = RUNNING.search(config)
-    if not match:
+    version = console.command("board get version")
+    config = console.command("config get")
+    role_lines = BANK_ROLE.findall(config)
+    role_map = dict(role_lines)
+    if len(role_lines) != 3 or set(role_map) != {"a", "b", "c"}:
         raise HilError("Cannot parse running bank configuration")
-    roles = list(match.groups()[2:])
-    if roles.count("gen") != 1 or roles.count("mon") != 2:
+    roles = [role_map[bank] for bank in "abc"]
+    if roles.count("generator") != 1 or roles.count("monitor") != 2:
         raise HilError("Shared fixture requires exactly one running generator bank and two monitor banks")
-    generator = roles.index("gen")
-    monitors = [bank for bank, role in enumerate(roles) if role == "mon"]
-    results.append(("BOOT-02 / CDC", "PASS", f"{info}; version response: {version}; {match[0]}"))
+    generator = roles.index("generator")
+    monitors = [bank for bank, role in enumerate(roles) if role == "monitor"]
+    results.append(("BOOT-02 / CDC", "PASS", f"version={version}; running roles={roles}"))
     # Once fixture roles are verified, always attempt stop, including after a failed command.
     try:
-        require_ok(console, "stop")
+        require_ok(console, "pwm stop all")
         for local in range(8):
             for frequency in args.frequencies:
                 for duty in (25, 50, 75):
                     source = generator * 8 + local
-                    require_ok(console, f"set {source} {frequency} {duty}")
+                    require_ok(console, f"pwm set {source} {frequency} {duty}")
                     realized = read_state(console, source)
                     if realized[0] == 0 or not within_limits(realized, (frequency, duty), args):
                         raise HilError(f"CH{source}: unexpected realized state {realized}")
@@ -135,10 +130,10 @@ def exercise(console: Console, args, results: list[tuple[str, str, str]]) -> Non
                         f"PWM-01 / CH{source} / {frequency} Hz / {duty}%",
                         "PASS", f"realized={realized}; monitors={observations}",
                     ))
-            require_ok(console, f"set {source} 0 0")
+            require_ok(console, f"pwm set {source} 0 0")
 
         for local in range(8):
-            require_ok(console, f"set {generator * 8 + local} {args.frequencies[0]} 50")
+            require_ok(console, f"pwm set {generator * 8 + local} {args.frequencies[0]} 50")
         for local in range(8):
             source = generator * 8 + local
             realized = read_state(console, source)
@@ -150,7 +145,7 @@ def exercise(console: Console, args, results: list[tuple[str, str, str]]) -> Non
             ]
             results.append((f"LOAD-01 / partial / CH{source}", "PASS",
                             f"Eight active outputs; realized={realized}; monitors={observations}"))
-        require_ok(console, "stop")
+        require_ok(console, "pwm stop all")
         for local in range(8):
             source = generator * 8 + local
             if read_state(console, source) != (0, 0):
@@ -158,7 +153,7 @@ def exercise(console: Console, args, results: list[tuple[str, str, str]]) -> Non
         results.append(("PWM-04 / readback only", "PASS", "All generator channels report 0 Hz / 0% after stop"))
     finally:
         try:
-            require_ok(console, "stop")
+            require_ok(console, "pwm stop all")
         except (HilError, OSError) as error:
             results.append(("CLEANUP", "FAIL", f"Stop could not be confirmed: {error}. Disconnect board power."))
             raise

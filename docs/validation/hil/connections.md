@@ -2,10 +2,10 @@
 
 This guide describes a suggested hardware-in-the-loop (HIL) fixture for PicoPWM on a Raspberry Pi Pico or Pico 2.
 It is a wiring plan, not a record of a completed test. Save actual results in [records/](records/README.md).
-Use the [HIL test plan](hil-test-plan.md) to select cases and define acceptance limits.
+Use the [HIL test plan](test-plan.md) to select cases and define acceptance limits.
 
-Use the [hardware setup guide](../guides/hardware-setup.md) as the source of truth for channel assignments and the
-[setup and troubleshooting guide](../guides/setup-and-troubleshooting.md) for bank roles.
+Use the [hardware setup guide](../../guides/hardware-setup.md) as the source of truth for channel assignments and the
+[configuration guide](../../guides/configuration.md) for bank roles.
 
 ## Equipment
 
@@ -41,7 +41,7 @@ For optional I2C tests:
 Pull SDA and SCL up to **3.3 V**, typically with 4.7 kOhm resistors; account for any pull-ups already fitted to the
 controller. Do not connect a controller's power output to the USB-powered board unless the power arrangement is
 explicitly designed for it. Start at 100 kHz and use the running slave address (default `0x40`).
-See the [I2C protocol reference](../design/i2c/i2c-protocol.md).
+See the [I2C protocol reference](../../protocols/i2c.md).
 
 ## PWM Loopback
 
@@ -60,10 +60,9 @@ flowchart LR
     RC --- J
 ```
 
-Lines represent electrical connections, not signal direction. Junction 0 is one connected breadboard row.
-
-Put the three junction-side resistor leads in the same connected breadboard row. Keep the GPIO-side leads separate,
-and do not use a power rail as a junction. Repeat for the other seven rows below, using three resistors per junction.
+Put the three junction-side resistor leads in the same connected breadboard
+row. Keep the GPIO-side leads separate, and do not use a power rail as a
+junction. Repeat for the other seven rows below, using three resistors per junction.
 
 | Local channel | Bank A: hardware | Bank B: PIO | Bank C: software |
 | --- | --- | --- | --- |
@@ -124,14 +123,7 @@ for no-signal checks rather than relying on floating inputs.
 
 ## Record the Test
 
-For each run, record:
-
-- Date, board model, firmware version, commit and artifact SHA-256.
-- Host OS, application/version and control interface.
-- Running bank roles, system clock and I2C address.
-- Wiring/pass used, instrument model, sample rate and measurement settings.
-- Requested and realized frequency/duty, independently measured results and acceptance limits.
-- Pass/fail results, skipped checks, logs and capture filenames.
-
-Store the report and supporting captures under [records/](records/README.md). A result applies only to the recorded
-artifact, wiring and conditions; passing host unit tests does not establish hardware qualification.
+Record results using the [HIL test plan](test-plan.md) and
+[test-record guidance](records/README.md). Results apply only to the recorded
+artifact, wiring, and conditions; passing host unit tests does not establish
+hardware qualification.

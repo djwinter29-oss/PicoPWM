@@ -26,15 +26,8 @@ prefix.
 
 ## Command Format
 
-Commands follow the `group verb parameters` format. The group identifies the
-target (`pwm`, `board`, or `config`); the verb describes the operation.
-
-| Group | Commands | Purpose |
-| --- | --- | --- |
-| PWM | `pwm get <channel>`, `pwm get all`, `pwm set <channel> <freq_hz> [duty_percent]`, `pwm stop all` | Read realized channel state, set a generator channel, or stop every generator output. |
-| Board | `board get <clock\|led\|version>`, `board set led <on\|off>`, `board reboot` | Read board state, control the LED, or restart. |
-| Configuration | `config get [banka\|bankb\|bankc\|clock\|address]`, `config set <key=value>[, <key=value>...]` | Read configuration or update several settings together. |
-| Help | `help [group]`, `?` | List commands or show contextual options and syntax. |
+Commands follow the `group verb parameters` format. The groups are `pwm`,
+`board`, `config`, and `help`; detailed syntax and examples follow.
 
 ### PWM Commands
 
@@ -55,19 +48,13 @@ listing finishes; rerun the command if the output appears incomplete.
 
 Channel numbers are stable logical IDs. Their backend and GPIO are fixed by
 bank; configuration changes only the bank's role (generator or monitor). See
-[Hardware Setup](hardware-setup.md) for the authoritative channel-to-GPIO map.
+[Hardware Setup](../guides/hardware-setup.md) for the authoritative channel-to-GPIO map.
 
 The duty argument is an integer percentage from `0` to `100`; if omitted it
-defaults to `50`. Generator request ranges are Bank A `10 Hz..10 MHz`, Bank B
-`1 Hz..10 MHz`, and Bank C `1 Hz..10 kHz`. Bank C above 1 kHz is experimental,
-with coarse duty resolution and software timing jitter. Banks A and B above 1 MHz are experimental;
-duty resolution is reduced and clock-dependent (see [hardware PWM limits](../design/pwm-driver/hardware.md#target-working-range)
-and [PIO limits](../design/pwm-driver/pio.md#high-frequency-generation)).
-A `0 Hz` request selects a static
-output: `0%` holds the pin low and `100%` holds it high. These are accepted
-request ranges, not accuracy guarantees. Monitor banks measure inputs instead
-of driving outputs. A nonzero `pwm set` request takes effect immediately, so
-check the bank role and GPIO before applying one.
+defaults to `50`. Accepted periodic frequency limits are listed in the
+[PWM bank design](../design/pwm/banks.md). A `0 Hz` request selects a static
+output: `0%` holds the pin low and `100%` holds it high. A nonzero `pwm set`
+takes effect immediately; check the bank role and GPIO before applying it.
 
 ### Board Commands
 
@@ -85,7 +72,7 @@ check the bank role and GPIO before applying one.
 | --- | --- | --- |
 | `config get` | Show all effective running settings. | `config get` |
 | `config get <item>` | Show one setting's effective running value. Valid items: `banka`, `bankb`, `bankc`, `clock`, `address`. | `config get clock` |
-| `config set <key=value>[, <key=value>...]` | Validate and apply all assignments together, save them, and reboot to apply. | `config set banka=generator, clock=150, address=64` |
+| `config set <key=value>[, <key=value>...]` | Set one or more configuration values. | `config set banka=generator, clock=150, address=64` |
 
 The setting names are `banka`, `bankb`, `bankc`, `clock`, and `address`.
 Banks accept `generator` or `monitor`; the system clock accepts `default`,
@@ -116,14 +103,9 @@ address=64
 These are illustrative values; the running roles, clock, and address depend
 on the board and its applied configuration.
 
-The `150` MHz profile is an overclock on RP2040, and the `200` and `250` MHz
-profiles are not qualified for every board. CDC does not require a separate
-overclock acknowledgement. Use these profiles only if you understand the
-stability and hardware risks for your board.
-
-Configuration changes do not affect running hardware until the reboot applies
-the saved target. Saving uses flash and temporarily stalls CDC, HID, and I2C
-while the flash sector is programmed; the operation can take up to 2 seconds.
+Clock-profile precautions are in the
+[configuration guide](../guides/configuration.md). CDC does not require a
+separate overclock acknowledgement.
 
 ### Help
 
@@ -152,10 +134,4 @@ realized channel state, not just the last requested values. The `enabled` field
 is `yes` when the realized frequency is nonzero and `no` when it is zero; a
 zero-frequency channel can still be held high at `100%` duty.
 
-See the [Setup and Troubleshooting guide](setup-and-troubleshooting.md) for
-bank behavior and the
-[I2C Protocol Reference](../design/i2c/i2c-protocol.md) for the binary
-register protocol.
-
-For firmware development guidance on the CLI structure and adding commands,
-see [USB CDC CLI Design](../design/usb/cdc-cli-design.md).
+For the binary register interface, see the [I2C protocol reference](i2c.md).

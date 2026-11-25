@@ -8,57 +8,34 @@ qualification. Record execution results in [records/](records/README.md).
 
 ## CDC Automated Subset
 
-The [CDC runner](../../tools/hil/src/run_hil.py) tests the **current running roles only** on the three-bank junction
-fixture. Exactly one bank must be a generator and the other two monitors. It never saves configuration, changes
-roles or reboots. It drives outputs and stops all generator channels on completion; it does not restore previous
-waveforms. Disconnect other equipment and close dashboards/serial terminals before running it.
+The CDC runner tests the current running roles on the three-bank junction
+fixture. Exactly one bank must be a generator and the other two monitors. It
+does not change roles, save configuration, or reboot. It drives outputs and
+stops all generator channels on completion; it does not restore previous
+waveforms. Disconnect other equipment and close dashboards or serial terminals
+before running it. See the [HIL runner instructions](../../../tools/hil/README.md)
+for installation and invocation.
 
-On Linux/macOS, the launcher creates `build/hil-venv` and installs the HIL Python project in editable mode when needed:
+The runner checks all eight junctions at 100, 500, and 1000 Hz and 25%, 50%,
+and 75% duty against both monitors, then checks eight simultaneous outputs
+and stop readback. Generator readback is compared with the requested
+frequency and duty; each monitor is compared with the generator's realized
+readback. Defaults are 5% frequency tolerance (minimum 1 Hz), 5
+percentage points duty tolerance, and 3-second monitor and command timeouts.
+These are functional-test limits, not backend accuracy specifications. Use
+`--frequencies` (100..1000 Hz), `--frequency-tolerance`, `--duty-tolerance`,
+`--settle-timeout`, and `--command-timeout` to override them; choose limits
+before the run.
 
-```sh
-tools/host/run-hil.sh --port /dev/ttyACM0 --board pico \
-    --firmware build/pico/pico_pwm.uf2 --confirm-fixture
-```
+The runner writes each run to
+`docs/validation/hil/records/latest.md`; see the
+[runner instructions](../../../tools/hil/README.md) for overwrite behavior and
+[test records](records/README.md) for report requirements. Run separately
+after safely configuring each of the other generator-bank passes.
 
-Set `PYTHON` to select Python 3.10+ or `VENV_DIR` to override the environment location. The interpreter must support
-`venv`; on Debian/Ubuntu install its matching `python3-venv` package if environment creation fails.
-The launcher forwards all arguments to the runner. `tools/host/run-hil.sh --help` displays launcher usage without
-creating an environment.
-
-Alternatively, install and run directly (including on Windows):
-
-```sh
-python -m pip install --editable tools/hil
-picopwm-hil --port /dev/ttyACM0 --board pico \
-    --firmware build/pico/pico_pwm.uf2 --confirm-fixture
-```
-
-Use the appropriate port (for example `COM5` on Windows), board and actual flashed artifact. Artifact identity and
-board model are operator supplied: CDC cannot verify the flashed binary's hash or identify the MCU here.
-Use an editable installation: this repository-local tool locates the fixed record directory relative to its source.
-
-The runner checks all eight junctions at 100, 500 and 1000 Hz and 25%, 50%, 75% duty, comparing both monitors
-against generator readback. It then checks eight simultaneous outputs and stop readback. Defaults are 5% frequency
-tolerance (at least 1 Hz), 5 percentage points duty tolerance, a 3-second monitor settling timeout and a 3-second CDC
-command timeout. These are functional-test limits, **not backend accuracy specifications**. Override with
-`--frequencies` (100..1000 Hz), `--frequency-tolerance`, `--duty-tolerance`, `--settle-timeout` and
-`--command-timeout`; choose limits before the run.
-
-Every started run atomically replaces `docs/tests/records/latest.md` with metadata, results, unexecuted scope and a
-CDC transcript, including failures opening the port or reading the artifact. Invalid CLI arguments do not replace
-the record. Exit status is zero for a passing subset and nonzero for failure; report-write failures are also errors.
-If cleanup cannot confirm `stop`, disconnect board power. Copy the record to a dated filename before the next run
-to retain history. Run separately after safely configuring each of the other generator-bank passes.
-
-Hardware-free runner regression tests:
-
-```sh
-python -m unittest discover -s tools/hil/tests -p 'test_*.py'
-```
-
-Follow [HIL Test Connections](hil-test-connections.md) for wiring and safety. Protocol expectations come from the
-[CDC shell](../guides/usb-cdc-shell.md), [I2C protocol](../design/i2c/i2c-protocol.md) and
-[HID report reference](../design/usb/hid-report-reference.md).
+Follow [HIL Test Connections](connections.md) for wiring and safety. Protocol expectations come from the
+[CDC shell](../../protocols/usb-cdc.md), [I2C protocol](../../protocols/i2c.md) and
+[USB HID reports](../../protocols/usb-hid.md).
 
 ## Preconditions
 
@@ -96,10 +73,12 @@ use an independent signal source or measurement instrument instead of exceeding 
 | --- | --- | --- |
 | BOOT-01 | Boot with invalid/erased configuration on a designated test board. Inspect configuration before attaching loopbacks. | Monitor-only defaults, I2C address `0x40`, SDK default clock, and no active PWM generator outputs. |
 | BOOT-02 | Read version and configuration through CDC/HID, and channel count/state through I2C. | Values agree with the artifact and running configuration; host tools connect without a reset loop. |
-| CFG-01 | Through CDC/HID, change a target bank role and I2C address without saving. Read running/target values, then power-cycle. | Running roles/address remain unchanged until reboot; unsaved target changes are lost. |
-| CFG-02 | Through CDC/HID, save known roles and an address, then power-cycle. | Saved roles/address become running values; I2C responds at the saved address. Restore the fixture configuration afterward. |
-| CFG-03 | Change the clock profile through CDC and HID, observing HID report 2 before saving. | Both interfaces share the target profile; running clock does not change immediately. |
-| CFG-04 | Save an explicitly selected clock profile and reboot. | Running clock matches the requested value or reports fallback explicitly; all backend measurements are repeated for that clock. |
+| CFG-01a | Through HID, change a target bank role and I2C address without saving. Read report 2, then power-cycle. | Running roles/address remain unchanged before reboot; unsaved target changes are lost. |
+| CFG-01b | Through CDC, change a bank role and I2C address with one `config set` command; check the new I2C address after reconnect. | CDC saves and reboots automatically; the new values are running and I2C responds at the new address. |
+| CFG-02a | Through HID, save known target roles and an address, then power-cycle. | Saved roles/address become running values; I2C responds at the saved address. Restore the fixture configuration afterward. |
+| CFG-03a | Through HID, set a target clock profile, inspect report 2 before saving, then save and restart. | Before save, report 2 shows the new target and unchanged running clock; after restart, verify the actual clock or fallback. |
+| CFG-03b | Through CDC, set the clock with `config set clock=default`. | CDC saves and reboots automatically; after reconnect, `board get clock` reports the actual running clock. |
+| CFG-04 | Through HID, save and restart with an explicitly selected clock profile. | Running clock matches the requested value or reports fallback explicitly; all backend measurements are repeated for that clock. |
 | CFG-05 | Exercise invalid bank, address, profile and missing HID confirmation/overclock flags. | Requests are rejected without changing the prior valid target or saving it. |
 
 Only run non-default clock tests with operator approval and BOOTSEL recovery available. Do not treat successful
@@ -133,11 +112,12 @@ solely by a waveform or a passing initialization check.
 | IO-02 | Exercise HID identity, configuration, bank status, actions and completion status. | Report lengths, transaction IDs and results match the reference; reconnecting the host remains possible. |
 | IO-03 | At 100 and 400 kHz, exercise I2C register selection, repeated-start reads, short/long reads and queued writes. Include a short read that ends with the master's NACK, then immediately start a fresh read and a repeated-start transaction. | Data, padding and completion status match the protocol; the aborted response does not continue into the next transaction and the bus remains usable. |
 | IO-04 | Poll the same active channels over all three transports while changing generator settings. | Each interface eventually reports the same realized state; no deadlock or cross-channel corruption. |
-| SAVE-01 | Save configuration through CDC or HID while generators are active and an I2C controller polls. Capture bus and PWM waveforms. | Save completes or reports failure explicitly; control recovers without reset. Record flash-induced I2C stalls/errors and PWM gaps, rather than assuming uninterrupted operation. |
+| SAVE-01 | Through HID, issue `SAVE_CONFIG` while generators are active and an I2C controller polls. Capture bus and PWM waveforms. | Save completes or reports failure explicitly; no reboot is expected. Record flash-induced I2C stalls/errors and PWM gaps. |
+| SAVE-02 | Through CDC, run `config set` while generators are active and an I2C controller polls. Capture bus and PWM waveforms. | CDC saves and reboots automatically. Record the expected interruption, then reconnect and verify control recovers. |
 | REC-01 | Power-cycle after a completed save, then verify every saved field. | Valid configuration survives; outputs start in the documented safe state. |
 | REC-02 | Reflash using BOOTSEL on a designated recovery board. | Board enumerates and accepts firmware again. Reflashing alone must not be assumed to erase saved configuration. |
 
-Use finite controller timeouts and bounded retries for SAVE-01. Record the longest observed stall and the required
+Use finite controller timeouts and bounded retries for the save tests. Record the longest observed stall and required
 retry behavior. Power interruption during flash writes is a separate destructive test: perform it only with explicit
 approval, a recoverable board and a recorded recovery procedure.
 

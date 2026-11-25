@@ -54,7 +54,26 @@ Fresh builds prefer Ninja; existing builds retain their cached generator. Set `C
 using a fresh build directory when switching generators.
 
 Local firmware defaults to `0.0.0-dev`; override with `--firmware-version x.y.z` (optional `-dev` or `-rcN`).
-See [Builds and Publishing](docs/deployment/releases.md) for CI and release packaging.
+See [CI and Releases](docs/development/ci-and-releases.md) for CI and release packaging.
+
+#### Program with a Pico Debug Probe
+
+For local builds, `tools/firmware/load.sh` programs the ELF over SWD using OpenOCD. Connect the Debug Probe's three-pin
+SWD cable to the target:
+
+| Debug Probe signal | Cable color | Target signal |
+|---|---|---|
+| `SC` / SWCLK | Orange | SWCLK |
+| GND | Black | GND |
+| `SD` / SWDIO | Yellow | SWDIO |
+
+Connect GND first to establish a common reference. Power the target board separately over USB; the SWD cable does not
+power it. The Debug Probe uses 3.3 V I/O. For a third-party board, identify SWCLK, SWDIO, and GND from its schematic
+rather than assuming the standard Pico connector placement. See the [Raspberry Pi Debug Probe guide](https://www.raspberrypi.com/documentation/microcontrollers/debug-probe.html)
+for probe details.
+
+The loader's `--flash-size <bytes>` option overrides OpenOCD's flash-size
+assumption only; it does not change the firmware's GPIO mapping or board profile.
 
 ## Validate Your Change
 
@@ -63,7 +82,7 @@ Run the smallest relevant checks first, then broaden validation for shared behav
 | Change | Validation |
 | --- | --- |
 | Firmware | `tools/test/test-firmware-c.sh`, `tools/test/check-firmware-invariants.sh`, the formatting checks below, and builds for both `pico` and `pico2` with `tools/firmware/build.sh`. |
-| Python, .NET, or browser tools | Use the focused commands below; run `tools/test/test-host.sh` for shared host changes. |
+| Python, .NET, or browser tools | See [Host App Development](docs/development/host-apps.md) for focused commands; run `tools/test/test-host.sh` for shared host changes. |
 | Scripts and tooling | Run the relevant `tools/test/syntax-check-python.sh` or `tools/test/syntax-check-shell.sh`; for firmware build/load helper changes, run `python3 -m unittest discover -s tools/test -p 'test_firmware_*.py'`. |
 | Documentation only | Check links, examples, and rendered formatting; run `git diff --check`. |
 
@@ -92,22 +111,14 @@ tools/test/check-clang-format.sh --base "$(git merge-base upstream/main HEAD)" -
 
 The script checks changed line ranges, not whole files or uncommitted edits. Without arguments, it checks the last commit.
 
-### Focused Host Tests
+### Host Tests
 
-- **Python:** use Python 3.10+ and an [activated virtual environment](host/python/README.md#quick-start). Install with
-  `python -m pip install --editable "host/python[test]"`, then run `python -m pytest -q host/python/tests`.
-  CI also installs `libhidapi-dev` on Linux or `hidapi` via Homebrew on macOS.
-- **Browser:** use Node.js 22, matching CI, and run
-  `node --test host/web/tests/*.test.mjs host/direct/tests/*.test.mjs host/direct/tests/js/*.test.mjs`
-  in a POSIX shell.
-- **.NET:** install the .NET 10 SDK and run
-  `dotnet test host/dotnet/PicoPwm.sln --configuration Release --nologo`.
-- **Host launchers:** run `python tools/test/test_run_python.py` and
-  `python tools/test/test_run_dotnet.py`.
+Per-application setup, focused test commands, and coverage limits are in
+[Host App Development](docs/development/host-apps.md).
 
 The aggregate runner requires Python test dependencies, Node.js, .NET, and a POSIX shell.
 With the Python environment active, run `PYTHON=python tools/test/test-host.sh`.
-See [Host Validation](.github/workflows/host-validation.yml) for CI's platform setup.
+See the [host validation workflow](.github/workflows/host-validation.yml) for CI's platform setup.
 
 ### Hardware Validation
 
@@ -117,20 +128,16 @@ For PWM, CDC, or HIL tooling changes, also run the hardware-free regressions:
 python -m unittest discover -s tools/hil/tests -p 'test_*.py'
 ```
 
-Follow the [HIL connection guide](docs/tests/hil-test-connections.md) and [test plan](docs/tests/hil-test-plan.md).
-The CDC subset requires operator confirmation of the port, board, flashed artifact, fixture, and permission to drive
-outputs (`--confirm-fixture`). Require one running generator bank and two monitor banks; never automatically change
-roles, save configuration, reboot, or rewire to enable a run.
-
-The runner replaces `docs/tests/records/latest.md`; [preserve records](docs/tests/records/README.md) when needed.
-Inspect failures, unexecuted checks, and cleanup; a nonzero exit is a failure. Without hardware or confirmation,
-report HIL as not run and explain why. Host tests and CDC loopback are not full hardware qualification:
-instrument accuracy, other transports, and remaining generator-bank passes require separate validation.
+For physical testing, follow the [HIL connection guide](docs/validation/hil/connections.md) and
+[test plan](docs/validation/hil/test-plan.md). See the [runner instructions](tools/hil/README.md) for setup
+and invocation. Hardware tests require operator authorization; report missing hardware or confirmation as not
+run. Host tests and the CDC subset are not full hardware qualification.
 
 ## Documentation
 
-- Use kebab-case filenames: user tasks in `docs/guides/`, design/protocols in `docs/design/`,
-  releases in `docs/deployment/`, and validation in `docs/tests/`.
+- Use kebab-case filenames. Put operating instructions in `docs/guides/`, host-facing contracts in
+  `docs/protocols/`, firmware internals in `docs/design/`, host-app development and releases in
+  `docs/development/`, and hardware validation in `docs/validation/`.
 - Link to authoritative pages rather than duplicating details. Update the [index](docs/README.md) and affected
   links when adding, moving, or renaming pages.
 
@@ -143,6 +150,6 @@ instrument accuracy, other transports, and remaining generator-bank passes requi
 - Respect the core split: Core 0 owns CDC, I2C and HID; Core 1 owns PWM backends, and
   `firmware/src/driver/pwm/pwm_driver.c` is the multicore boundary.
 - Add regression tests for non-trivial changes and update matching docs. Consult the
-  [architecture](docs/design/architecture.md) and [PWM driver design](docs/design/pwm-driver/driver-design.md).
+  [architecture](docs/design/architecture.md) and [PWM driver design](docs/design/pwm/driver.md).
 - Explain the problem, solution, compatibility impacts (I2C, HID, flash layout), and related issue.
 - List checks and results, including skipped checks and reasons.

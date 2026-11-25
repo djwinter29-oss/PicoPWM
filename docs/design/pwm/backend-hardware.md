@@ -13,11 +13,12 @@ duty from the available counter steps. This trades frequency range against
 duty resolution: as frequency rises, fewer steps remain in each period.
 Readback reports the programmed timing model, not an electrical measurement.
 
-Static endpoints are handled without a periodic waveform: zero frequency or
-zero duty produces a low output; full duty produces a high output. The
-recommended range is **10 Hz to 1 MHz**. Duty steps become coarse above that
-range. The minimum representable periodic frequency also depends on the
-running system clock; see [bank design](banks.md) for accepted request limits.
+A zero-frequency request is static: duty below 100% drives low, and 100% duty
+drives high. At nonzero frequency, 0% and 100% duty also produce static low
+and high outputs. The recommended range is **10 Hz to 1 MHz**. Duty steps
+become coarse above that range. The minimum representable periodic frequency
+also depends on the running system clock; see [bank design](banks.md) for
+accepted request limits.
 
 Verify physical frequency, duty, and signal integrity when the application
 depends on them.

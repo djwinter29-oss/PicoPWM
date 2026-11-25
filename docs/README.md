@@ -9,7 +9,7 @@ should summarize only what their audience needs and link here for full details.
 | Folder | Read it when you want to… |
 | --- | --- |
 | [guides/](guides/) | Wire, configure, operate, or troubleshoot a board |
-| [protocols/](protocols/) | Look up an interface contract: CDC commands, HID reports, I2C, or HTTP |
+| [protocols/](protocols/) | Look up a wire protocol: CDC commands, HID reports, or I2C |
 | [design/](design/) | Change firmware and need its ownership rules and tradeoffs |
 | [development/](development/) | Build, test, or release the host applications |
 | [validation/](validation/) | Qualify a build on real hardware |
@@ -27,20 +27,20 @@ Host applications are documented beside their code:
 [Python dashboard and HID client](../host/python/README.md), and
 [.NET dashboard](../host/dotnet/README.md).
 
-## Interface Contracts
+## Wire Protocols
 
 | Interface | Use it for | Reference |
 | --- | --- | --- |
 | USB CDC | Interactive text commands | [CDC shell](protocols/usb-cdc.md) |
 | USB HID | Structured status and actions from host software | [USB HID reports](protocols/usb-hid.md) |
 | I2C | Channel control from an external controller | [I2C protocol](protocols/i2c.md) |
-| HTTP | Scripting the Python or .NET dashboard | [Dashboard HTTP API](protocols/dashboard-http-api.md) |
+
+To script a board from Python, use the
+[Python client](../host/python/README.md#use-from-python), which talks USB HID directly.
 
 ## Firmware Design
 
-- [Architecture](design/architecture.md) — core ownership and the request path; read first
-- [CDC shell design](design/usb-cdc.md) — command handling and bounded I/O
-- [I2C slave design](design/i2c.md) — bus transport and deferred commands
+- [Architecture](design/architecture.md) — core ownership, request path, and host-transport layering; read first
 - PWM:
   - [Driver](design/pwm/driver.md) — the multicore boundary and realized-state readback
   - [Banks](design/pwm/banks.md) — fixed banks, startup roles, and resource ownership
@@ -52,6 +52,7 @@ Host applications are documented beside their code:
 ## Development
 
 - [Host app development](development/host-apps.md) — tests, launchers, and packaging checks
+- [Dashboard backend API](development/dashboard-api.md) — internal HTTP contract shared by the Python and .NET dashboards
 - [CI and releases](development/ci-and-releases.md) — workflows and publishing
 
 ## Validation

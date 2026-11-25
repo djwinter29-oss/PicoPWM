@@ -58,8 +58,10 @@ Set environment variables before starting the application:
 | `PICOPWM_TOKEN` | API access token | Unset |
 
 `--urls` takes precedence over `ASPNETCORE_URLS`, then the host/port settings above.
-The dashboard prompts for a configured token. Network access, authentication, routes, and payloads are described in the
-[Dashboard HTTP API](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/protocols/dashboard-http-api.md).
+The dashboard listens on loopback by default. Binding another address requires
+`PICOPWM_TOKEN`, and the page then prompts for it. The server has no TLS: do not
+expose it to untrusted networks, and put an HTTPS reverse proxy in front for
+remote access.
 
 ## Development
 

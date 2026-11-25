@@ -47,11 +47,8 @@ readback is the latest sample, not waveform history. The shared channel
 format cannot always distinguish a static-low input from an unavailable
 monitor sample.
 
-## Behavioral Constraints
+## Stop Behavior
 
-- The backend owns its timing and resources; upper layers use the logical
-  channel service.
-- Generator requests and monitor samples use the same realized-state model.
 - Stopping disables generator output; it does not change saved bank roles.
 - Backend-specific limits and tradeoffs belong in the
   [hardware](backend-hardware.md), [PIO](backend-pio.md), and

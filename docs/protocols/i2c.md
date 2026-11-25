@@ -21,10 +21,8 @@ for the SDA and SCL pins.
 ## Address Map
 
 This is a byte-addressed register-selection protocol, not a memory window.
-Each register has its own read or command semantics. For the separation
-between bus transport and protocol handling, see the
-[I2C slave design](../design/i2c.md). A channel-state
-read may briefly stretch SCL while firmware captures a consistent snapshot.
+Each register has its own read or command semantics. A channel-state read may
+briefly stretch SCL while firmware captures a consistent snapshot.
 
 | Register | Address | Write length | Read length | Purpose |
 | --- | ---: | ---: | ---: | --- |
@@ -104,14 +102,14 @@ Returns the latest realized state for channel `k` as five bytes:
 
 For generator channels, this is the applied output state, not merely the last
 request. For monitor channels, it is the latest measurement. If a PIO or
-software monitor cannot produce a stable sample, it reports the sentinel
-`freq_hz = 0x0FFFFFFF`, `duty = 0`; hosts must treat that pair as invalid
-measurement data. A stable static input is reported as `0 Hz` with duty `0%`
-or `100%`. Each five-byte response is copied from one channel-state snapshot
-captured at the start of that I2C read transaction; bytes in one response
-cannot mix different updates. The snapshot is the latest state available at
-that instant, not a promise that a monitor has just completed a new sample.
-The register has no sample timestamp or freshness guarantee.
+software monitor has no valid sample, readback is `0 Hz / 0%`, indistinguishable
+from a static-low input; the protocol has no validity flag. A stable static
+input is reported as `0 Hz` with duty `0%` or `100%`. Each five-byte response
+is copied from one channel-state snapshot captured at the start of that I2C
+read transaction; bytes in one response cannot mix different updates. The
+snapshot is the latest state available at that instant, not a promise that a
+monitor has just completed a new sample. The register has no sample timestamp
+or freshness guarantee.
 
 ### `REG_SET_CHk` (`0x30 + k`)
 
@@ -253,9 +251,3 @@ S  address+R  status  NACK  P
 ```
 
 Poll `REG_STOP_ALL` using pure reads; do not write `0x01` again to poll.
-
-## Host Guidance
-
-- Multi-byte integers are little-endian, independent of host or MCU byte order.
-- Read channel state to verify realized output or measurement values.
-- Do not use reserved addresses or depend on undocumented register behavior.

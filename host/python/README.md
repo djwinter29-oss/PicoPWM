@@ -58,6 +58,8 @@ Routine Werkzeug request logs are suppressed; warnings and errors remain visible
 Before driving outputs, check the bank role and wiring in the
 [hardware setup guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/hardware-setup.md);
 GPIOs are 3.3 V only.
+For dashboard channel controls and readings, see
+[Controls and Readings](https://github.com/djwinter29-oss/PicoPWM/blob/main/host/direct/README.md#controls-and-readings).
 
 ## Use from Python
 
@@ -102,9 +104,10 @@ Set these before starting `picopwm`; direct Python clients select boards through
 | `PICOPWM_PORT` | Listen port | `5000` |
 | `PICOPWM_TOKEN` | API access token | Unset |
 
-For network access and authentication rules, see the
-[Dashboard HTTP API](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/protocols/dashboard-http-api.md)
-reference.
+The dashboard listens on loopback by default. Binding another address requires
+`PICOPWM_TOKEN`, and the page then prompts for it. The server has no TLS: do not
+expose it to untrusted networks, and put an HTTPS reverse proxy in front for
+remote access.
 
 ## Troubleshooting
 
@@ -123,9 +126,9 @@ For bug reports, include package/firmware versions, OS, and the exact error mess
 ## Development
 
 The package tests, source layout, and shared dashboard checks are in
-[Host App Development](../../docs/development/host-apps.md). Native HID
+[Host App Development](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/development/host-apps.md). Native HID
 qualification is covered in
-[Native HID Qualification](../../docs/validation/native-hid-qualification.md).
+[Native HID Qualification](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/validation/native-hid-qualification.md).
 
 ## License
 

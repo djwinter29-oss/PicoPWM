@@ -18,7 +18,9 @@ for installation and invocation.
 
 The runner checks all eight junctions at 100, 500, and 1000 Hz and 25%, 50%,
 and 75% duty against both monitors, then checks eight simultaneous outputs
-and stop readback. Defaults are 5% frequency tolerance (minimum 1 Hz), 5
+and stop readback. Generator readback is compared with the requested
+frequency and duty; each monitor is compared with the generator's realized
+readback. Defaults are 5% frequency tolerance (minimum 1 Hz), 5
 percentage points duty tolerance, and 3-second monitor and command timeouts.
 These are functional-test limits, not backend accuracy specifications. Use
 `--frequencies` (100..1000 Hz), `--frequency-tolerance`, `--duty-tolerance`,

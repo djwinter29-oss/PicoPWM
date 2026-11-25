@@ -14,8 +14,7 @@ entire bank; channel IDs stay the same across control interfaces.
 **Quick links:** [Release](https://github.com/djwinter29-oss/PicoPWM/releases) ·
 [Hardware setup](docs/guides/hardware-setup.md) ·
 [Direct Dashboard](https://djwinter29-oss.github.io/PicoPWM/) ·
-[PyPI Package](https://pypi.org/project/picopwm/) ·
-[Standalone .NET downloads](https://github.com/djwinter29-oss/PicoPWM/releases/latest)
+[PyPI Package](https://pypi.org/project/picopwm/)
 
 ![Direct Dashboard with simulated device identity, boot configuration, runtime status, and 24 PWM generator and monitor channels.](docs/assets/pico-pwm-dashboard.png)
 

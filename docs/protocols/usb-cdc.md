@@ -135,6 +135,3 @@ is `yes` when the realized frequency is nonzero and `no` when it is zero; a
 zero-frequency channel can still be held high at `100%` duty.
 
 For the binary register interface, see the [I2C protocol reference](i2c.md).
-
-For firmware development guidance on the CLI structure and adding commands,
-see [CDC shell design](../design/usb-cdc.md).

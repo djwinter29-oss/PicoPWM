@@ -26,6 +26,6 @@
 
 ## Checklist
 
-- [ ] I read [CONTRIBUTING.md](../CONTRIBUTING.md)
+- [ ] I read [CONTRIBUTING.md](https://github.com/djwinter29-oss/PicoPWM/blob/main/CONTRIBUTING.md)
 - [ ] Docs were updated to match behavior changes
 - [ ] No unrelated changes are included

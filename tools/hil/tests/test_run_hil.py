@@ -21,7 +21,7 @@ import run_hil as hil
 
 
 class FakeConsole:
-    def __init__(self, roles=("gen", "mon", "mon"), fail_monitor=False):
+    def __init__(self, roles=("generator", "monitor", "monitor"), fail_monitor=False):
         self.roles = roles
         self.states = {}
         self.commands = []
@@ -29,24 +29,21 @@ class FakeConsole:
 
     def command(self, command):
         self.commands.append(command)
-        if command == "info":
-            return "PicoPWM\nclock=125000000 Hz target=met"
-        if command == "version":
+        if command == "board get version":
             return "0.1.1"
-        if command == "config":
-            return ("running=clk=125MHz i2c=0x40 A:hw/%s B:pio/%s C:sw/%s" % self.roles
-                    + "\ntarget=clk=125MHz i2c=0x40 A:hw/mon B:pio/mon C:sw/mon")
-        if command == "stop":
+        if command == "config get":
+            return "\n".join(f"bank{bank}={role}" for bank, role in zip("abc", self.roles))
+        if command == "pwm stop all":
             self.states.clear()
-            return "OK all channels stopped"
+            return "OK generator outputs stopped; monitor channels unchanged"
         fields = command.split()
-        if fields[0] == "set":
-            channel, freq, duty = map(int, fields[1:])
+        if fields[:2] == ["pwm", "set"]:
+            channel, freq, duty = map(int, fields[2:])
             self.states[channel % 8] = (freq, duty)
-            return "OK"
-        if fields[0] == "get":
-            channel = int(fields[1])
-            if self.fail_monitor and self.roles[channel // 8] == "mon":
+            return f"OK CH{channel} freq={freq} Hz duty={duty}%"
+        if fields[:2] == ["pwm", "get"]:
+            channel = int(fields[2])
+            if self.fail_monitor and self.roles[channel // 8] == "monitor":
                 raise hil.HilError("Disconnected monitor")
             freq, duty = self.states.get(channel % 8, (0, 0))
             return f"CH{channel}: freq={freq} Hz, duty={duty}%, enabled={'yes' if freq else 'no'}"
@@ -99,29 +96,36 @@ elif args[:1] != ["-c"]:
 
     def test_each_generator_bank_and_final_stop(self):
         for generator in range(3):
-            roles = ["mon"] * 3
-            roles[generator] = "gen"
+            roles = ["monitor"] * 3
+            roles[generator] = "generator"
             console = FakeConsole(tuple(roles))
             results = []
             hil.exercise(console, arguments(), results)
-            self.assertEqual(console.commands[-1], "stop")
+            self.assertEqual(console.commands[-1], "pwm stop all")
             self.assertEqual(len([r for r in results if r[0].startswith("PWM-01")]), 24)
             self.assertEqual(len([r for r in results if r[0].startswith("LOAD-01")]), 8)
             self.assertTrue(all(status == "PASS" for _, status, _ in results))
-            self.assertFalse(any(c.startswith(("config ", "reboot")) for c in console.commands))
+            self.assertFalse(any(c.startswith(("config set", "reboot")) for c in console.commands))
+            self.assertIn("board get version", console.commands)
+            self.assertIn("config get", console.commands)
+            self.assertTrue(all(
+                command in ("board get version", "config get", "pwm stop all")
+                or command.startswith(("pwm get ", "pwm set "))
+                for command in console.commands
+            ))
 
     def test_unsafe_roles_never_drive_or_stop(self):
-        for roles in [("mon",) * 3, ("gen", "gen", "mon")]:
+        for roles in [("monitor",) * 3, ("generator", "generator", "monitor")]:
             console = FakeConsole(roles)
             with self.assertRaises(hil.HilError):
                 hil.exercise(console, arguments(), [])
-            self.assertFalse(any(c.startswith(("set ", "stop")) for c in console.commands))
+            self.assertFalse(any(c.startswith(("pwm set ", "pwm stop")) for c in console.commands))
 
     def test_measurement_failure_still_stops(self):
         console = FakeConsole(fail_monitor=True)
         with self.assertRaises(hil.HilError):
             hil.exercise(console, arguments(), [])
-        self.assertEqual(console.commands[-1], "stop")
+        self.assertEqual(console.commands[-1], "pwm stop all")
 
     def test_monitor_mismatch_times_out(self):
         console = FakeConsole()

@@ -14,10 +14,14 @@ blocked cases.
 Include:
 
 - Date, board model, firmware version, commit, and artifact SHA-256.
+- Build command and relevant SDK, compiler, and build-tool versions. Mark unavailable details
+  *not recorded*; do not infer them from the firmware version.
 - Host OS, application/version, control interface, wiring, instruments, sample
   rate, and measurement settings.
 - Running bank roles, system clock, I2C address, and test conditions.
 - Requested, realized, and independently measured values with acceptance limits.
+- For timing results, include channel count, polling rate, workload, sample duration,
+  measured jitter/latency/settling time, and instrument uncertainty where applicable.
 - Pass/fail results, skipped checks, logs, and capture filenames.
 
 Do not include credentials or unrelated personal information in logs and captures.

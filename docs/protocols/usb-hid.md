@@ -112,8 +112,8 @@ CDC sets these profiles with `config set clock=<value>` (`default`, `150`,
 
 Rules:
 
-- `clock_profile` in report 2 is the target profile, including unsaved changes made by
-  `SET_CLOCK_PROFILE` or the CDC command. This firmware sets `clock_profile_mask` to `0x0F` and capability bit 1.
+- `clock_profile` in report 2 is the target profile, including unsaved changes made by `SET_CLOCK_PROFILE`.
+  This firmware sets `clock_profile_mask` to `0x0F` and capability bit 1.
 - The profile is a request, not the running clock. Hosts read `clock_profile` and `system_clock_hz` separately
   and never infer one from the other. A profile above `3` returns `INVALID` and changes nothing.
 - Profiles above `1` are overclocks. `SET_CLOCK_PROFILE` for one, and a `SAVE_CONFIG` while the target profile is
@@ -232,17 +232,18 @@ and reserved bytes must be zero.
 | Value | Name | Meaning |
 | ---: | --- | --- |
 | 0 | `OK` | Completed successfully. |
-| 1 | `BUSY` | Temporarily waiting to apply an accepted action. |
+| 1 | `BUSY` | Control-API reentry rejected the PWM operation; it is not queued. |
 | 2 | `INVALID` | Request fields or operation are invalid. |
-| 3 | `UNAVAILABLE` | Channel operation is unavailable. |
+| 3 | `UNAVAILABLE` | Requested operation is unavailable. |
 | 4 | `TIMEOUT` | Channel operation was not claimed within 1 second and was cancelled. |
 | 5 | `APPLY_FAILED` | Backend failed to apply a channel operation. |
 | 6 | `PENDING` | Accepted request is still processing. |
 | 7 | `UNSUPPORTED` | Unsupported version or operation. |
 | 8 | `STORAGE_FAILED` | Configuration could not be saved or verified; previous saved settings remain. |
 
-`UNAVAILABLE` and `TIMEOUT` apply only to `SET_CHANNEL` and `STOP`. A save
-without its confirmation flag returns `INVALID`.
+`UNAVAILABLE` may be returned by `SET_CHANNEL`, `STOP`, or `SET_LED`.
+`TIMEOUT` applies only to `SET_CHANNEL` and `STOP`. A save without its
+confirmation flag returns `INVALID`.
 
 The result carries only the final command status. After a successful mutation, read the bank status reports (or
 report 2 for configuration) to see the realized state.
@@ -254,8 +255,7 @@ Serialize requests per device:
 - **Framing:** A SET contains exactly 12 payload bytes (13 with the report ID). A wrong-length request is ignored
   without changing the result. Hosts confirm acceptance by matching `transaction_id` and `operation`, not by the
   transfer completing successfully.
-- **Validation:** unsupported versions or operations return `UNSUPPORTED`; zero transaction IDs, nonzero reserved
-  or unused fields, and invalid operation fields return `INVALID`. Rejected requests echo the ID and operation.
+- **Validation:** rejected requests echo the ID and operation.
 - **Slot:** before the first request, GET returns version 1 with all other fields zero. A correctly framed SET is
   accepted when the slot is free, even if validation fails. Its result is `PENDING` until final. A SET while the slot
   is occupied is dropped; it does not change the result. The slot stays occupied until that result is final.

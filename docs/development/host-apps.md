@@ -44,7 +44,8 @@ version. See [CI and Releases](ci-and-releases.md) for deployment behavior.
 
 ## Shared Python and .NET Dashboard
 
-The browser client tests use a simulated HTTP API:
+Both servers implement the [dashboard backend API](dashboard-api.md). The
+browser client tests use a simulated copy of it:
 
 ```sh
 node --test host/web/tests/*.test.mjs
@@ -92,9 +93,6 @@ For an externally managed WSGI server, close it during worker shutdown, not
 per-request teardown. Each worker owns a registry and client locks; use one
 worker process per board. An injected client remains caller-owned and must be
 closed separately. Closing handles does not stop generator outputs.
-
-The shared web client tests are listed above. HTTP timeout and uncertain-write
-behavior is described in the [Dashboard HTTP API](../protocols/dashboard-http-api.md).
 
 ## .NET Host
 

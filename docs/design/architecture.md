@@ -37,8 +37,38 @@ flowchart LR
 
 Reads return the latest published state. A change request crosses the core
 boundary and is applied by the selected backend before its result is returned.
-I2C defers channel changes out of interrupt context before using this path; the
-[I2C driver design](i2c.md) describes that boundary.
+
+## Host Transports
+
+Each interface's host-visible behavior is defined only in its
+[protocol reference](../README.md#wire-protocols); this section covers
+how the firmware is layered behind it.
+
+All transports follow the same split: USB callbacks and the I2C interrupt only
+capture bytes, and commands execute later in the Core 0 main loop. While Core 0
+waits for a PWM apply, it keeps the USB stack moving but does not execute
+another command, which would re-enter the shared control path.
+
+| Transport | Capture | Execution | Bound |
+| --- | --- | --- | --- |
+| CDC | USB stack queues line input per session | Shell parses and runs one line at a time | Input/output queues; one command in progress |
+| HID | SET_REPORT copies the request into one slot | Main loop executes the slot and publishes its result | One request slot |
+| I2C | Interrupt captures write frames and streams read responses | Main loop drains queued valid writes | Fixed command queue |
+
+Layer rules:
+
+- **Transport** code (USB glue, I2C peripheral port) moves bytes and tracks
+  session or transaction boundaries; it does not interpret commands.
+- **Protocol** code (shell command groups, HID report codec, I2C register map)
+  validates complete input, calls shared control, and reports the result it
+  returns rather than assuming success.
+- I2C interrupt work stays bounded: no blocking, no backend calls, and only
+  short synchronization when a read needs a consistent channel snapshot.
+- A CDC disconnect resets the session but does not cancel work already
+  started. Each output write is all-or-nothing, but a multi-write response can
+  still stop partway.
+- Add CDC commands to an existing command group unless they control a distinct
+  device area.
 
 ## Startup and Runtime
 
@@ -47,12 +77,7 @@ the selected backends and signals readiness before host transports accept
 channel operations. After startup, Core 0 handles requests while Core 1
 services channel work independently.
 
-For channel ownership and state-publication rules, see the
-[PWM driver design](pwm/driver.md).
-
 ## Related Design
 
 - [PWM driver](pwm/driver.md) — core boundary, command handling, and readback
 - [PWM banks](pwm/banks.md) — fixed banks and startup roles
-- [CDC shell](usb-cdc.md) — command and session boundaries
-- [I2C slave](i2c.md) — bus transport and deferred commands

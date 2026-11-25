@@ -1,33 +1,35 @@
 # Troubleshooting
 
-Find the next check when the board, a host application, or an output does not
-behave as expected. Commands below use the [USB CDC shell](../protocols/usb-cdc.md).
+Commands below run in the [USB CDC shell](../protocols/usb-cdc.md).
+
+- [Serial device missing](#the-board-does-not-appear-in-the-terminal)
+- [HID access denied](#a-python-or-net-host-reports-hid-access-denied)
+- [Browser cannot connect](#direct-dashboard-cannot-find-or-open-the-board)
+- [Unexpected output](#pwm-output-stays-low-or-does-not-match-the-request)
+- [Configuration not applied](#a-configuration-change-does-not-take-effect)
+- [Flash recovery](#recover-an-unbootable-configuration-or-reset-flash)
+- [Unexpected monitor reading](#a-monitor-reports-no-signal-or-an-unexpected-reading)
 
 ## The board does not appear in the terminal
 
-- Confirm the board is powered and use a USB data cable, not a charge-only
-  cable.
-- Check that the board is running PicoPWM firmware and that the host opened
-  its CDC serial device. Common device names are `/dev/ttyACM*` on Linux,
+- Use a USB data cable and check board power.
+- Confirm PicoPWM firmware is running and open its CDC device: `/dev/ttyACM*` on Linux,
   `COMx` on Windows, and `/dev/cu.usbmodem*` on macOS.
-- Close another terminal or program that may already have the serial port
-  open. USB CDC does not depend on the terminal baud-rate setting.
+- Close other programs using the port. USB CDC ignores the baud-rate setting.
 - Reconnect the board and retry. If necessary, reflash the appropriate
   `pico` or `pico2` firmware from [Releases](https://github.com/djwinter29-oss/PicoPWM/releases).
 
 ## A Python or .NET host reports HID access denied
 
-- On Linux, run the two commands in [Linux HID Access](linux-hid-access.md),
-  reconnect the board, and run the permission check again.
+- On Linux, run [HID setup and its check](linux-hid-access.md), reconnect,
+  and check again.
 - Close another program that may have the HID device open.
-- Confirm the board is connected to the same computer that runs the host
-  application.
+- Connect the board to the computer running the host application.
 
 ## Direct Dashboard cannot find or open the board
 
-- Use desktop Chrome or Edge, the supported browsers for Direct Dashboard.
-- Connect the board directly to the computer running the browser, then grant
-  the site access when prompted.
+- Use desktop Chrome or Edge.
+- Connect the board to the browser's computer and grant site access when prompted.
 - On Linux, also configure OS access as described in
   [Linux HID Access](linux-hid-access.md). Browser permission does not replace
   device-node permission.
@@ -35,36 +37,42 @@ behave as expected. Commands below use the [USB CDC shell](../protocols/usb-cdc.
 
 ## PWM output stays low or does not match the request
 
-- Run `config get` and check the **running** role for the channel's bank. If
-  it is a monitor, configure that bank as a generator and apply the change
-  before requesting output.
+- Run `config get` and check the bank's **running** role. If it is a monitor,
+  use only the matching command:
+
+  | Channels | Command |
+  | --- | --- |
+  | 0-7 | `config set banka=generator` |
+  | 8-15 | `config set bankb=generator` |
+  | 16-23 | `config set bankc=generator` |
+
+  It saves and reboots. Reconnect and verify the role before driving output.
 - Check the channel-to-GPIO mapping in [Hardware Setup](hardware-setup.md)
   before connecting an instrument or load.
-- Run `pwm get <channel>` and compare the realized frequency and duty with
-  the request. A generator at `0 Hz / 0%` is intentionally held low; at
-  `0 Hz / 100%` it is held high.
+- Compare `pwm get <channel>` with the request. `0 Hz / 0%` holds a generator
+  low; `0 Hz / 100%` holds it high.
 - Confirm signal grounds are shared and that connected signals are 3.3 V
   safe. Do not connect outputs together.
-- Use a suitable oscilloscope or logic analyzer to verify the physical
-  output. Requested frequency ranges are not accuracy guarantees; see the
-  [backend design pages](../design/pwm/).
+- Verify the pin with an oscilloscope or logic analyzer.
+  Request limits are not accuracy guarantees; see the
+  [operating ranges](configuration.md#pwm-operating-ranges).
 
 ## A configuration change does not take effect
 
-- After reconnecting, compare the actual values from `config get` with your
-  request. It reports running settings only; bank roles change only after reboot.
+- After reconnecting, compare `config get` with the request.
+  It reports running settings; roles change only after reboot.
 - If the configured clock could not be applied, the CDC shell prints a warning
   on connection. Run `board get clock` to check the actual clock in Hz.
-- CDC `config set` saves and reboots automatically. HID configuration changes
-  have their own save and reboot workflow; consult the
-  [USB HID reports](../protocols/usb-hid.md).
-- If a setting is rejected, check that the bank role, clock profile, or I2C
-  address is supported. A rejected request is not partially applied.
+- CDC `config set` saves and reboots. HID changes are targets until saved
+  and rebooted; confirm **Save & Reboot** in a dashboard.
+- Check supported roles, clock profiles, and I2C addresses. CDC rejects an
+  invalid assignment set without applying it. After a failed HID sequence,
+  reread targets: earlier settings may have been applied.
 
 ## Recover an unbootable configuration or reset flash
 
-If a saved clock profile prevents normal startup, use BOOTSEL to recover the board.
-Reinstalling firmware alone may preserve saved configuration; a full flash reset clears it.
+Use BOOTSEL if a saved clock profile prevents startup. Reflashing firmware
+may preserve configuration; a full flash reset clears it.
 
 **A full flash reset erases all firmware, saved configuration, and other data on the board.**
 Disconnect power and attached loads before recovery, and reconnect only USB for the steps below.
@@ -82,14 +90,12 @@ Disconnect power and attached loads before recovery, and reconnect only USB for 
 
 ## A monitor reports no signal or an unexpected reading
 
-- Confirm the bank is configured as a monitor and the signal is connected to
-  the GPIO for the logical channel.
+- Check the bank is a monitor and the signal reaches the correct GPIO.
 - Check the signal voltage, common ground, and frequency against the selected
   backend's measurement range.
-- Monitor readings are sampled values, not waveform history. Rapidly changing
-  signals may change between samples; see the relevant
-  [backend design](../design/pwm/).
+- Allow settling time: hardware takes about half a second, PIO captures a
+  complete period, and software can miss narrow pulses. Readings are samples,
+  not waveform history. Verify changing signals with an instrument.
 
-For unresolved problems, record the board model, firmware version, interface,
-configuration, command or host action, and observed result. Include whether the
-issue reproduces after reconnecting with the default clock profile.
+For bug reports, include board, firmware, interface, configuration, action,
+and result. Check whether it reproduces after reconnecting at the default clock.

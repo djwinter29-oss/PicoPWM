@@ -1,31 +1,18 @@
 # Documentation
 
-Start with the root [README](../README.md) for the product overview and quick
-start. Firmware build and test commands are in [CONTRIBUTING](../CONTRIBUTING.md).
-
-The linked pages are the detailed references for their subjects. Other pages
-should summarize only what their audience needs and link here for full details.
-
-| Folder | Read it when you want to… |
-| --- | --- |
-| [guides/](guides/) | Wire, configure, operate, or troubleshoot a board |
-| [protocols/](protocols/) | Look up a wire protocol: CDC commands, HID reports, or I2C |
-| [design/](design/) | Change firmware and need its ownership rules and tradeoffs |
-| [development/](development/) | Build, test, or release the host applications |
-| [validation/](validation/) | Qualify a build on real hardware |
+For flashing and control options, start with the [project README](../README.md).
 
 ## Use PicoPWM
 
-- [Hardware setup](guides/hardware-setup.md) — board compatibility, wiring, and the channel-to-GPIO map
-- [Configuration](guides/configuration.md) — bank roles, clock profiles, and I2C address
-- [CDC shell](protocols/usb-cdc.md) — interactive serial commands (full command reference)
-- [Linux HID access](guides/linux-hid-access.md) — device permissions for host applications
-- [Troubleshooting](guides/troubleshooting.md) — connection problems, unexpected output, and recovery
-
-Host applications are documented beside their code:
-[Direct Dashboard](../host/direct/README.md) (browser, WebHID),
-[Python dashboard and HID client](../host/python/README.md), and
-[.NET dashboard](../host/dotnet/README.md).
+| Task | Start here |
+| --- | --- |
+| Wire a board or find a channel's GPIO | [Hardware setup](guides/hardware-setup.md) |
+| Generate your first signal | [First generator output](guides/configuration.md#first-generator-output) |
+| Set roles, clock, or address; check operating ranges | [Configuration](guides/configuration.md) |
+| Install or connect a dashboard | [Browser](../host/direct/README.md), [Python](../host/python/README.md), or [.NET](../host/dotnet/README.md) |
+| Edit outputs or save dashboard settings | [Dashboard controls](guides/dashboard-controls.md) |
+| Fix Linux USB permissions | [Linux HID access](guides/linux-hid-access.md) |
+| Diagnose a problem or recover a board | [Troubleshooting](guides/troubleshooting.md) |
 
 ## Wire Protocols
 
@@ -40,25 +27,22 @@ To script a board from Python, use the
 
 ## Firmware Design
 
-- [Architecture](design/architecture.md) — core ownership, request path, and host-transport layering; read first
-- PWM:
-  - [Driver](design/pwm/driver.md) — the multicore boundary and realized-state readback
-  - [Banks](design/pwm/banks.md) — fixed banks, startup roles, and resource ownership
-  - Backends, including timing and measurement limits:
-    [hardware PWM](design/pwm/backend-hardware.md) (Bank A),
-    [PIO](design/pwm/backend-pio.md) (Bank B), and
-    [software](design/pwm/backend-software.md) (Bank C)
+- [Architecture](design/architecture.md) — cores, request path, and transports
+- [PWM driver](design/pwm/driver.md) — multicore boundary and readback
+- [Banks](design/pwm/banks.md) — startup roles and resource ownership
+- Backend timing: [hardware PWM](design/pwm/backend-hardware.md),
+  [PIO](design/pwm/backend-pio.md), [software](design/pwm/backend-software.md)
 
 ## Development
 
+- [Contributing](../CONTRIBUTING.md) — firmware builds, tests, and pull requests
 - [Host app development](development/host-apps.md) — tests, launchers, and packaging checks
-- [Dashboard backend API](development/dashboard-api.md) — internal HTTP contract shared by the Python and .NET dashboards
+- [Dashboard backend API](development/dashboard-api.md) — Python/.NET HTTP contract
 - [CI and releases](development/ci-and-releases.md) — workflows and publishing
 
 ## Validation
 
-- [Native HID qualification](validation/native-hid-qualification.md) — host app checks against a real board
-- Hardware-in-the-loop (HIL):
-  - [Fixture connections](validation/hil/connections.md)
-  - [Test plan](validation/hil/test-plan.md)
-  - [Test records](validation/hil/records/README.md)
+- [CDC loopback runner](../tools/hil/README.md) — setup, execution, and cleanup
+- [Native HID qualification](validation/native-hid-qualification.md) — real-device transport checks
+- Hardware tests: [fixture](validation/hil/connections.md),
+  [test plan](validation/hil/test-plan.md), [records](validation/hil/records/README.md)

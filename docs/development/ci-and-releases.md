@@ -1,26 +1,30 @@
 # CI and Releases
 
-PicoPWM separates validation, release packaging, and deployment. Workflows are available from the repository's
-[Actions tab](https://github.com/djwinter29-oss/PicoPWM/actions).
+Builds and publishing run through [GitHub Actions](https://github.com/djwinter29-oss/PicoPWM/actions).
+
+- [Workflow triggers](#what-runs-when)
+- [Versioning](#versioning)
+- [Publish a release](#publish-a-release)
+- [Manual test publishing](#manual-test-publishing)
+- [One-time repository setup](#one-time-repository-setup)
 
 ## What Runs When
 
 | Workflow | Trigger | Result |
 | --- | --- | --- |
-| PR Check | Pull request, push to `main`, or manual dispatch | Formatting, firmware tests and coverage, `pico`/`pico2` builds, and Linux/macOS/Windows host tests. Firmware and coverage are downloadable workflow artifacts. |
-| Release | Push a `vMAJOR.MINOR.PATCH` tag, or manual dispatch with a version | Validates and packages firmware, a Python wheel, and standalone PicoPWM (.NET) applications for Linux x64, Windows x64 and macOS ARM64. Only tag pushes create a GitHub Release. |
+| PR Check | Pull request, push to `main`, or manual dispatch | Formatting, firmware tests/coverage, both board builds, and Linux/macOS/Windows host tests. Firmware and coverage are artifacts. |
+| Release | Push a `vMAJOR.MINOR.PATCH` tag, or manual dispatch with a version | Validates and packages both firmwares, a Python wheel, and .NET apps for Linux x64, Windows x64, and macOS ARM64. Only tags create a GitHub Release. |
 | Publish .NET Packages | Called by Release, or manual dispatch with a version | Produces downloadable archives and checksums. Direct manual runs mark the version as `X.Y.Z-test.RUN_ID.ATTEMPT`; release builds retain `X.Y.Z`. This does not publish to NuGet. |
 | Publish Python to PyPI | Successful tag-triggered Release, or manual dispatch | Publishes the verified release wheel, or an explicitly requested development wheel. |
 | Publish Direct Dashboard Pages | Successful tag-triggered Release, or manual dispatch | Deploys the released Direct Dashboard source, or an explicitly requested test deployment, to GitHub Pages. |
 
-Build artifacts from PR Check and manual packaging runs are under **Actions > run > Artifacts**, not on the
-Releases page. Publication does not happen on every push to `main`.
+PR and manual-build artifacts are under **Actions > run > Artifacts**, not
+Releases. A push to `main` does not publish packages.
 
 ## Versioning
 
-Release packages use the version from their `vMAJOR.MINOR.PATCH` tag, without
-the `v`. Local and manual builds derive or receive a development version as
-follows:
+Release versions come from `vMAJOR.MINOR.PATCH` tags, without `v`.
+Local/manual version sources:
 
 | Artifact | Local version source | Manual build override |
 | --- | --- | --- |
@@ -36,13 +40,10 @@ version behavior with `python3 tools/test/test_dotnet_version.py`.
 
 1. Merge the changes into `main` and wait for PR Check to succeed on that exact commit.
 2. Push a new tag, for example `v1.2.3`, pointing to the tested commit.
-3. Release builds both boards and packages PicoPWM for Python and .NET. Its validation jobs must succeed before the
-   GitHub Release is published; the publication gate also requires successful PR checks for the same commit.
-4. Publish Python to PyPI and Publish Direct Dashboard Pages run after Release succeeds. Each verifies the release tag and
-   its successful checks before publishing.
-
-Release jobs validate the Python wheel before publication. For installation
-and launch instructions, see the [Python host guide](../../host/python/README.md).
+3. Release validates both firmwares and host packages, including the Python
+   wheel. Publication also requires successful PR checks for the same commit.
+4. After Release succeeds, PyPI and Pages workflows verify its tag and checks,
+   then publish.
 
 Major/minor release components must be 0-99 and patch 0-255. Local `-dev` and
 `-rcN` firmware versions are not release tags. Manual Release runs build
@@ -51,14 +52,15 @@ publication.
 
 ## Manual Test Publishing
 
-These are real deployments, not dry runs. Choose the desired branch in **Run workflow**.
+**These publish to live services.** Select the branch in **Run workflow**.
 
 ### Python
 
-In **Publish Python to PyPI**, enable `test_publish` and leave `tag` empty. The workflow tests the Python host,
-builds `0.0.0.devRUN_ID`, installs the wheel in a fresh environment and checks that its bundled dashboard loads.
-It then publishes that development version to **production PyPI**, using the same `pypi` environment as a release.
-Published versions are immutable: start a new workflow run to get a new version instead of rerunning a published one.
+In **Publish Python to PyPI**, enable `test_publish` and leave `tag` empty.
+It tests the host, builds `0.0.0.devRUN_ID`, installs the wheel in a fresh
+environment, and checks its dashboard. It publishes to **production PyPI**
+through the release `pypi` environment. Versions are immutable: start a new
+run, not a rerun, after publication.
 
 To publish an existing release instead, leave `test_publish` disabled and supply its tag, for example `v1.2.3`.
 The workflow downloads and verifies the release wheel instead of rebuilding it.
@@ -71,9 +73,8 @@ to the **live Pages URL**, replacing the previous site.
 This explicit test mode does not require a published release. Restore the release site by running again with
 `test_publish` disabled and the release tag supplied.
 
-The deployment uses a staged copy and verifies its stamped version and local
-references before upload. It does not modify canonical source files. A live
-deployment does not update pages that are already open.
+Before upload, staging verifies the stamped version and local references
+without editing source. Already-open pages do not update.
 
 ### .NET
 
@@ -82,18 +83,16 @@ workflow artifacts for all three platforms; this does not create a GitHub Releas
 The application is named **PicoPWM**; archive filenames retain `picopwm-host-v<VERSION>-<RID>`
 with `.zip` for Windows and `.tar.gz` for Linux and macOS.
 
-Before archiving on each platform, packaging launches the native published executable and verifies its
-reported version, dashboard and bundled asset bytes, local asset references, and graceful zero-exit shutdown.
-A failed smoke check prevents archive/upload. It does not access hardware or establish browser/HID qualification.
-Run the local smoke check with:
+Each platform's smoke check launches the published executable and verifies
+version, dashboard/asset bytes, local references, and graceful zero-exit
+shutdown. Failure prevents archiving/upload. It uses no hardware and does
+not qualify browser/HID behavior. Run locally with:
 
 ```sh
 python3 tools/release/check_dotnet_publish.py --directory build/host-release --version 1.2.3
 ```
 
 ## One-Time Repository Setup
-
-Workflow files alone cannot configure external publishing services:
 
 - Enable GitHub Actions for the repository and allow the actions referenced by these workflows.
 - Set **Settings > Pages > Build and deployment > Source** to **GitHub Actions**. The workflow uses the
@@ -104,6 +103,6 @@ Workflow files alone cannot configure external publishing services:
 - Ensure deployment-environment branch/tag policies allow the intended release tags and any branches used for
   manual test publishing. Required approvals can leave publication waiting even after packaging succeeds.
 
-If publication does not start, check the triggering Release run first: a queued, failed, cancelled or manually
-dispatched Release does not trigger automatic publication. A successful build also does not qualify hardware;
-record board-level testing separately.
+If publication does not start, check Release first: queued, failed, cancelled,
+and manual runs do not trigger automatic publishing. Record hardware tests
+separately; successful builds do not qualify a board.

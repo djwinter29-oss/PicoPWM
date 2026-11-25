@@ -1,43 +1,33 @@
 # I2C PWM Control Protocol
 
-This document defines the I2C interface for reading PWM channel state and
-controlling generator outputs. I2C does not configure bank roles, change the
-slave address, save configuration, or control unrelated device functions.
-Configure bank roles and other device settings through USB CDC or HID.
-
-Firmware and hosts must use matching protocol support.
+I2C reads channel state and controls generators. Use USB CDC or HID for bank
+roles, slave address, configuration saves, and other board functions.
 
 ## Electrical and Bus Configuration
 
-The board acts as an I2C slave on I2C1 at the default 7-bit address `0x40`.
-The peripheral's internal timing is configured for 400 kHz; the I2C controller
-sets the actual bus clock. Use a 100 kHz or 400 kHz controller clock.
+The I2C1 slave defaults to 7-bit address `0x40`. Internal timing is configured
+for 400 kHz; the controller sets the actual bus clock to 100 or 400 kHz.
 
-External pull-up resistors are required for reliable bus operation; 4.7 kOhm
-is typical. The firmware enables the MCU's internal pull-ups, but they are not
-a replacement for external pull-ups. See [Hardware Setup](../guides/hardware-setup.md)
-for the SDA and SCL pins.
+Connect SDA to GPIO 26, SCL to GPIO 27, and common GND. Signals and pull-ups
+must be **3.3 V**. Fit external pull-ups, typically 4.7 kOhm; internal pull-ups
+are insufficient.
 
 ## Address Map
 
-This is a byte-addressed register-selection protocol, not a memory window.
-Each register has its own read or command semantics. A channel-state read may
-briefly stretch SCL while firmware captures a consistent snapshot.
+Registers select responses or commands, not a memory window. Channel reads
+may briefly stretch SCL to capture a consistent snapshot.
 
 | Register | Address | Write length | Read length | Purpose |
 | --- | ---: | ---: | ---: | --- |
-| `REG_INFO` | `0x00` | 1 | 7 | Protocol signature, firmware major, channel count, and roles |
-| `REG_STOP_ALL` | `0x01` | 1 | 1 | Stop all generator outputs; read command status |
-| `REG_GET_CHk` | `0x10 + k` | 1 | 5 | Read realized state of channel `k` |
-| `REG_SET_CHk` | `0x30 + k` | 6 | 1 | Request frequency and duty for channel `k`; read status |
+| [`REG_INFO`](#reg_info-0x00) | `0x00` | 1 | 7 | Protocol signature, firmware major, channel count, and roles |
+| [`REG_STOP_ALL`](#reg_stop_all-0x01) | `0x01` | 1 | 1 | Stop all generator outputs; read command status |
+| [`REG_GET_CHk`](#reg_get_chk-0x10--k) | `0x10 + k` | 1 | 5 | Read realized state of channel `k` |
+| [`REG_SET_CHk`](#reg_set_chk-0x30--k) | `0x30 + k` | 6 | 1 | Request frequency and duty for channel `k`; read status |
 
 `k` is a logical channel ID in the range `0..n-1`, where `n` is the value
 reported by `REG_INFO`. The standard profile exposes 24 channels: read
 registers `0x10..0x27` and write registers `0x30..0x47`.
 Addresses not listed here are reserved and outside the protocol contract.
-
-The first two addresses provide protocol/device identification and stop-all,
-followed by separate channel-read and channel-command ranges.
 
 ## Register Values
 
@@ -54,21 +44,15 @@ signature.
 | 5 | 1 | `channel_count` | Unsigned channel count |
 | 6 | 1 | `bank_roles` | Bitmask of active bank roles, using the bit assignments below |
 
-Any firmware release that changes the I2C contract incompatibly must increment
-the firmware major version. Firmware releases with the same major version
-preserve I2C compatibility. The major byte is the same major component used
-in the firmware version exposed by the firmware's other interfaces. Hosts
-must reject an unrecognized signature or unsupported major version; no
-separate protocol version is maintained.
+Breaking I2C changes increment the firmware major version; released firmware
+with the same major stays compatible. This is the firmware's major byte, not
+a separate protocol version. Reject unknown signatures or unsupported majors.
 
 Major version `0` denotes development firmware and does not promise a stable
 I2C contract. Hosts intended for released firmware should reject major `0`
 unless they explicitly support a development build.
 
-All operations defined by this register map are required for a firmware major
-version that supports the map; there is no optional-capabilities field. The
-signature is at the first register address so hosts can check compatibility
-before interpreting the rest of the record.
+All mapped operations are required; there is no optional-capabilities field.
 
 `bank_roles` describes active, running roles; it does not report unsaved
 target settings.
@@ -85,11 +69,9 @@ means Banks A and C are generators and Bank B is a monitor.
 
 ### `REG_STOP_ALL` (`0x01`)
 
-A one-byte write requests every configured generator channel to stop at
-`0 Hz / 0%`, holding its output low. Monitor banks are unchanged. The command
-is queued and returns its completion status when read. If stopping one or more
-channels fails, some outputs may already have stopped while others remain
-active; read channel state to verify.
+A one-byte write queues stop for all generators, holding outputs low at
+`0 Hz / 0%`; monitors are unchanged. Read completion status. Failure can mean
+a partial stop, so verify channel state.
 
 ### `REG_GET_CHk` (`0x10 + k`)
 
@@ -100,16 +82,12 @@ Returns the latest realized state for channel `k` as five bytes:
 | 0 | 4 | `freq_hz` | Unsigned 32-bit Hz, little-endian |
 | 4 | 1 | `duty` | Unsigned percent, `0..100` |
 
-For generator channels, this is the applied output state, not merely the last
-request. For monitor channels, it is the latest measurement. If a PIO or
-software monitor has no valid sample, readback is `0 Hz / 0%`, indistinguishable
-from a static-low input; the protocol has no validity flag. A stable static
-input is reported as `0 Hz` with duty `0%` or `100%`. Each five-byte response
-is copied from one channel-state snapshot captured at the start of that I2C
-read transaction; bytes in one response cannot mix different updates. The
-snapshot is the latest state available at that instant, not a promise that a
-monitor has just completed a new sample. The register has no sample timestamp
-or freshness guarantee.
+Generators report applied state; monitors report their latest measurement.
+PIO/software monitors without a valid sample return `0 Hz / 0%`, identical
+to static low. Stable static inputs report `0 Hz` at `0%` or `100%`.
+
+Each response comes from one snapshot at read start, so its bytes cannot mix
+updates. There is no validity flag, timestamp, or promise of a fresh sample.
 
 ### `REG_SET_CHk` (`0x30 + k`)
 
@@ -121,75 +99,54 @@ payload:
 | 0 | 4 | `freq_hz` | Unsigned 32-bit Hz, little-endian |
 | 4 | 1 | `duty` | Unsigned percent |
 
-Duty values above `100` are rejected as `INVALID`, matching HID and the CDC shell.
-For generator banks, frequency
-`0` requests a static output: duty `100` sets it high and any lower duty sets
-it low. At nonzero frequency, duty `0` and `100` also request static low and
-high outputs. Readback reports the realized static level as `0 Hz / 0%` for
-static low and `0 Hz / 100%` for static high, regardless of the requested
-frequency. For other accepted generator requests, readback reports the
-realized frequency and duty.
+Duty above `100` returns `INVALID`, as in HID/CDC. At frequency `0`, duty
+`100` drives high and lower duties drive low. At nonzero frequency, duties
+`0`/`100` also select static low/high. Static readback is always `0 Hz / 0%`
+or `0 Hz / 100%`; periodic readback gives realized frequency and duty.
 
-See [PWM bank design](../design/pwm/banks.md) for accepted frequency requests
-by backend. Read back the channel to inspect its realized frequency and duty;
-backend quantization can make them differ from the request. A channel in a
-monitor bank cannot be driven and returns `UNAVAILABLE`.
+Accepted periodic requests are 10 Hz-10 MHz for Bank A, 1 Hz-10 MHz for B,
+and 1 Hz-10 kHz for C. These limits are not accuracy guarantees.
+Quantization can change readback. Monitor writes return `UNAVAILABLE`.
 
 ## I2C Transactions
 
 ### Register Reads
 
-To read a register, write its one-byte address, then begin a read using a
-repeated START or a STOP followed by a separate read:
+Write the one-byte register address, then read after repeated START or STOP:
 
 ```text
 S  address+W  register  Sr  address+R  response bytes...  NACK  P
 ```
 
-`S` is START, `Sr` is repeated START, `P` is STOP, and `NACK` is the master's
-normal termination of a read. A register selection takes effect at the
-repeated START or STOP ending the one-byte write. The selected register
-remains available after STOP for the following pure read.
-Writes that contain extra bytes or overflow the transport frame are malformed
-and do not change the selected register.
+`S` = START, `Sr` = repeated START, `P` = STOP. The master's NACK ends a read.
+Selection takes effect at repeated START or STOP and persists for a following
+pure read. Extra bytes or frame overflow are malformed and do not change
+selection.
 
-The read length is chosen by the master. A shorter read returns a prefix of
-the response; bytes requested beyond the response length are zero-padded.
-Before a register has been selected, read bytes are zero.
-
-For `REG_INFO`, read exactly seven bytes. Reads longer than the response are
-zero-padded as specified above.
+The master chooses length: short reads return a prefix; extra bytes and
+reads before selection return zeros. Read exactly seven bytes for `REG_INFO`.
 
 ### Command Writes and Status Reads
 
-Write lengths in the address map include the register byte. Send one complete
-command per write transaction. The command is committed only at STOP or
-repeated START, and only if the transaction contains exactly the listed
-number of bytes. Except for the channel-command status-select shortcut below,
-a short or overlong command is not executed and sets that command register's
-status to `INVALID`; retransmit the complete command in a new transaction.
-Bytes beyond the expected length in the same transaction must not be
-interpreted as another register or command.
+Write lengths include the register byte. Send one complete command per
+transaction; it commits at STOP or repeated START only with the exact length.
+Except for status selection below, short/overlong writes execute nothing and
+set `INVALID`. Resend complete commands in a new transaction. Extra bytes
+cannot become another command or register.
 
-A complete command write selects its register for a following pure status
-read. A one-byte write to a channel command register selects its status
-without submitting another command and does not change its status. Do not use
-that status-select shortcut for `REG_STOP_ALL`: its one-byte write executes
-the command, so poll its status with a pure read instead. A one-byte write to
-`REG_INFO` or another read-only register only selects that register; it never
-changes device state.
+A complete command selects its register for pure status reads. A one-byte
+channel-command write selects status without executing or changing status.
+**Do not do this for `REG_STOP_ALL`: its one-byte write executes stop.**
+Poll stop with pure reads. One-byte writes to read-only registers only select
+them.
 
-An I2C ACK confirms receipt of bytes at the bus level; it does not confirm
-that a command was accepted or applied. Use the command's status response.
+ACK confirms byte receipt, not command acceptance or application. Read status.
 
 ## Status and Retry Behavior
 
-Status is one unsigned byte, maintained per command register and representing
-the most recent command attempt, including malformed writes. The first read
-after a valid command may return `BUSY` while it is queued or being applied.
-Poll with pure reads until a final status is returned. A one-byte
-channel-command status-select write does not create an attempt or change the
-status.
+Each command register stores a one-byte status for its latest attempt,
+including malformed writes. Valid commands may first return `BUSY`; poll
+pure reads until final. Status-select writes are not command attempts.
 
 | Value | Name | Meaning |
 | ---: | --- | --- |
@@ -201,19 +158,14 @@ status.
 | `5` | `APPLY_FAILED` | Backend accepted the command but failed to apply it |
 | `6` | `NOT_RUN` | No complete command attempt has been recorded for this register since startup |
 
-Each command register's status starts as `NOT_RUN`. A bounded command queue
-may reject a burst with `UNAVAILABLE`; wait before retrying. Queue wait has no
-fixed upper bound, so poll no more often than every 10 ms while `BUSY` and use
-a host-side watchdog for the overall operation. A host timeout does not cancel
-a command already claimed for application.
+Bursts can fill the queue and return `UNAVAILABLE`; wait before retrying.
+Queue wait has no fixed bound. While `BUSY`, poll no faster than every 10 ms
+and use a host watchdog. Host timeouts do not cancel claimed commands.
 
-Because status is per register and there is no transaction ID, send at most
-one outstanding command per command register. Firmware queues valid writes in
-order, but status describes only the most recent attempt. A newer attempt
-replaces that register's status; an older completion cannot overwrite it.
-Malformed writes report `INVALID`. Status resets to `NOT_RUN` on startup or
-reboot. After a reset or lost connection, reconcile against realized channel
-state before retrying.
+There is no transaction ID: allow one outstanding command per register.
+Valid writes queue in order, but newer attempts replace status and older
+completions cannot overwrite it. Startup/reboot resets status to `NOT_RUN`.
+After reset or connection loss, inspect realized state before retrying.
 
 ## Examples
 

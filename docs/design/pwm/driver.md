@@ -1,55 +1,40 @@
 # PWM Driver Design
 
-The PWM driver presents one channel service across the hardware, PIO, and
-software backends. Its central design rule is that Core 1 owns backend state
-and timing, while Core 0 owns host requests and responses.
+The driver is the multicore boundary: Core 0 sends requests; Core 1 owns
+backend state and timing.
 
 ## Boundary and Ownership
 
-| Area | Responsibility |
-| --- | --- |
-| Host transports | Translate CDC, HID, and I2C requests; format responses |
-| Shared control | Provide one transport-independent route to channel state and changes |
-| Core boundary | Serialize channel changes and return their outcome |
-| Core 1 runtime | Route channels to their configured backend and own backend state |
-| Backends | Generate or measure signals using their own timing resources |
-
-Transport and control layers must not call a backend directly. I2C changes
-leave interrupt context before entering the shared control path. Bank roles
-are selected at startup; runtime changes do not switch backend ownership.
-The [configuration design](banks.md) describes the fixed bank model.
+Transport/control code must not call backends directly. I2C commands leave
+interrupt context before entering shared control. Startup roles fix ownership:
+A uses hardware channels 0-7, B uses PIO 8-15, and C uses software 16-23.
 
 ## Applying Changes
 
-A channel change crosses from Core 0 to Core 1 through a single-command
-mailbox. Only one change is in flight at a time. Core 0 waits for the apply
-result, so a response can reflect whether the selected backend accepted the
-request.
+One channel command at a time crosses the mailbox to Core 1. Core 0 waits
+for the backend result. It cancels commands unclaimed after one second;
+claimed commands must finish rather than return an uncertain cancellation.
+Invalid or unsupported requests are rejected before or during application,
+and failures reach the requesting transport.
 
-If Core 1 has not claimed a command by the deadline, Core 0 can cancel it. If
-Core 1 has claimed it, the caller waits for the backend result rather than
-reporting an uncertain cancellation. Invalid channels and unsupported
-requests are rejected before or during backend application; failure is
-reported to the requesting transport.
-
-The mailbox carries control changes, not PWM edges or monitor samples. Those
-remain owned by Core 1.
+The mailbox carries commands, not PWM edges or monitor samples.
+Implementation: [`pwm_driver.c`](../../../firmware/src/driver/pwm/pwm_driver.c);
+interface: [`pwm_driver.h`](../../../firmware/src/driver/pwm/pwm_driver.h).
 
 ## Realized-State Snapshot
 
-Core 1 publishes one latest state per logical channel. Core 0 reads that
-snapshot rather than keeping a separate copy of requested state. This keeps
-readback aligned with what the backend configured or measured.
+Core 1 publishes the latest configured or measured state per channel.
+Core 0 reads that snapshot, not a separate requested-state cache.
+Synchronization keeps frequency and duty coherent.
 
-Snapshot updates and reads are synchronized so frequency and duty are read as
-one coherent value. Generator readback reflects timing quantization; monitor
-readback is the latest sample, not waveform history. The shared channel
-format cannot always distinguish a static-low input from an unavailable
-monitor sample.
+Generator readings include timing quantization; monitor readings are the
+latest sample, not waveform history. The format cannot always distinguish
+an unavailable monitor sample from static low.
 
 ## Stop Behavior
 
-- Stopping disables generator output; it does not change saved bank roles.
-- Backend-specific limits and tradeoffs belong in the
-  [hardware](backend-hardware.md), [PIO](backend-pio.md), and
-  [software](backend-software.md) design pages.
+Stop disables generator output without changing saved bank roles.
+
+Backend timing: [hardware](backend-hardware.md), [PIO](backend-pio.md),
+[software](backend-software.md).
+[Operating ranges](../../guides/configuration.md#pwm-operating-ranges).

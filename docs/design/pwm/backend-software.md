@@ -1,29 +1,26 @@
 # Software PWM Backend
 
-The software backend uses Core 1 timer service and GPIO operations instead of
-dedicated PWM peripherals. It trades timing precision and range for flexible
-resource use. Its work shares Core 1 with command servicing and other
-real-time activity.
+Bank C uses Core 1 timers and GPIOs, sharing CPU time with commands and other
+real-time work. Implementation:
+[`software_generator.c`](../../../firmware/src/driver/pwm/software/software_generator.c)
+and [`software_monitor.c`](../../../firmware/src/driver/pwm/software/software_monitor.c).
 
 ## Generation
 
-The generator schedules GPIO transitions on a fixed time grid. Period and
-duty are quantized to that grid, and timer latency can add jitter. The
-recommended range is **1 Hz to 1 kHz**. Use hardware PWM or PIO when tighter
-timing or higher frequencies are needed; see [bank design](banks.md) for
-accepted request limits.
+GPIO transitions follow a 10 microsecond tick. Period and duty are quantized
+to that grid; timer latency can add jitter. Use hardware PWM or PIO for tighter
+timing or higher frequencies.
+[`pwm_driver.c`](../../../firmware/src/driver/pwm/pwm_driver.c) enforces request limits.
 
-Static endpoint requests use a steady GPIO level rather than periodic timer
-work.
+Static endpoints use a steady GPIO level without periodic timer work.
 
 ## Monitoring
 
-One shared sampler checks all software-monitor inputs and records observed
-transitions using elapsed time. This avoids an interrupt for every input edge
-and bounds work per scan, but narrow pulses may be missed. Out-of-range
-signals can alias to a lower frequency or appear static; averaging cannot
-recover transitions that were never sampled.
+One sampler checks all inputs and timestamps observed transitions, avoiding
+per-edge interrupts. Narrow pulses may be missed; out-of-range signals can
+alias to a lower frequency or appear static. Averaging cannot recover missed
+edges.
 
-The recommended measurement range is **10 Hz to 1 kHz**. Actual scan spacing
-depends on callback time and interrupt load; verify measurements against an
-instrument when accuracy matters.
+Scan spacing depends on callback time and interrupt load. Verify accuracy
+with an instrument.
+[Operating ranges](../../guides/configuration.md#pwm-operating-ranges).

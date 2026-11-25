@@ -1,30 +1,26 @@
 # PIO PWM Backend
 
-The PIO backend uses one state machine per channel, so its capacity is limited
-by the MCU's finite PIO resources and fixed pin allocation. The physical map is
-documented in the [hardware setup guide](../../guides/hardware-setup.md).
+Bank B uses one PIO state machine per channel and a
+[fixed GPIO map](../../guides/hardware-setup.md#pwm-channels).
 
 ## Generation
 
-A short PIO instruction loop creates continuous PWM without per-edge CPU
-service. A timing search selects a period and divider; both frequency and duty
-are quantized by the available instruction cycles.
+A PIO loop generates PWM without per-edge CPU service. A timing search picks
+the period and divider; instruction cycles quantize frequency and duty.
+Implementation:
+[`pio_generator.c`](../../../firmware/src/driver/pwm/pio/pio_generator.c)
+and [`pio_generator.pio`](../../../firmware/src/driver/pwm/pio/pio_generator.pio).
 
-The recommended generation range is **1 Hz to 100 kHz**. Duty resolution
-falls quickly as periods shorten, and the reported duty model can diverge
-from the physical signal at high frequencies. Treat readback as an applied
-timing estimate. Zero-frequency and endpoint-duty requests use static output
-levels; see [bank design](banks.md) for accepted request limits.
+Short periods reduce duty resolution. At high frequencies, duty readback
+can differ from the physical signal. Zero-frequency and endpoint-duty
+requests use static levels.
 
 ## Monitoring
 
-The monitor captures one complete high/low period at a time. This keeps
-resource use bounded, but readings can lag rapid changes.
+[`pio_monitor.c`](../../../firmware/src/driver/pwm/pio/pio_monitor.c) captures
+one complete high/low period at a time. Readings can lag rapid changes;
+capture time follows the input period. Short pulses, input synchronization,
+and capture overhead limit high-frequency measurement. Verify with an instrument.
 
-Capture time depends on the input period. Short pulses, input synchronization,
-and fixed capture overhead limit useful measurement at high frequencies.
-The recommended measurement range is **10 Hz to 100 kHz**. Confirm the
-intended input range against an instrument.
-
-Generation and monitoring use the same finite PIO resources. The configured
-bank role selects which implementation owns them at startup.
+Generator and monitor share the same PIO resources; the startup role chooses
+the owner. [Operating ranges](../../guides/configuration.md#pwm-operating-ranges).

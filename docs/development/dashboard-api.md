@@ -1,15 +1,16 @@
 # Dashboard Backend API
 
-The Python and .NET dashboards serve the same browser page from
-`host/web/src/`. That page talks to its local server over this HTTP API; both
-servers must implement it identically. It is an internal contract between the
-shared page and its two backends, not a supported scripting interface, and may
-change with the dashboards. Scripts should use the Python
+Internal HTTP contract for the shared page in `host/web/src/` and its Python/.NET
+servers. Both servers implement it identically; it may change with the page.
+For scripts, use the Python
 [`PicoPwmHid` client](../../host/python/README.md#use-from-python) or the
 [USB HID reports](../protocols/usb-hid.md) directly.
 
-The server runs on the computer connected to the board over USB HID, not on
-the Pico. Requests can change physical outputs or persist board configuration.
+The server runs on the USB-connected computer, not the Pico. Requests can
+drive outputs and save board configuration.
+
+[Access](#access-rules) · [Board selection](#board-selection) ·
+[Routes](#routes) · [Failures](#responses-and-failures)
 
 ## Access Rules
 
@@ -28,17 +29,16 @@ the Pico. Requests can change physical outputs or persist board configuration.
 
 `GET /api/boards` returns `boards` (each with `id`, `product_name`,
 `serial_number`, `device_path`) and `default_board_id`, which may be `null`.
-Other requests pass the chosen ID as the `board` query parameter. IDs are
-opaque; a client stays pinned to its board across reconnects and never
-silently selects another. Status without a selection is disconnected and does
-not open a HID device; actions without a valid selection are rejected.
+Other requests pass the opaque ID as `board`. Selection stays pinned across
+reconnects. Unselected status is disconnected and opens no HID device;
+actions require a valid selection.
 
 ## Routes
 
-Fields use snake_case. Actions take a JSON object body (`{}` when there are no
-arguments) with `Content-Type: application/json`. Required numeric fields are
-never defaulted to zero; `acknowledge_overclock` is optional and defaults to
-`false`. Every route except login, host, and boards takes `?board=<id>`.
+Fields use snake_case. Actions require a JSON object (`{}` for no arguments)
+and `Content-Type: application/json`. Required numbers never default to zero;
+optional `acknowledge_overclock` defaults to `false`.
+All routes except login, host, and boards take `?board=<id>`.
 
 | Route | Body | Purpose |
 | --- | --- | --- |
@@ -57,11 +57,14 @@ never defaulted to zero; `acknowledge_overclock` is optional and defaults to
 | `POST /api/save-reboot` | see below | Stage, save, and reboot in one operation |
 
 Channel IDs are `0..23`, frequency is an unsigned 32-bit Hz value, and duty is
-`0..100`; firmware applies the [bank limits](../design/pwm/banks.md) and
-rejects writes to monitor channels. `bank` and `backend` are `0..2` (hardware
-PWM, PIO, software); role `0` is generator and `1` is monitor. Clock profiles
-are `0..3`, limited to the firmware's advertised `clock_profile_mask`; profiles
-above `1` require `acknowledge_overclock`.
+`0..100`; periodic generation limits are 10 Hz-10 MHz for hardware PWM, 1
+Hz-10 MHz for PIO, and 1 Hz-10 kHz for software PWM. A `0 Hz` request selects
+a static output level. Firmware rejects writes to monitor channels; see the
+[complete operating ranges](../guides/configuration.md#pwm-operating-ranges).
+`bank` and `backend` are `0..2` (hardware PWM, PIO, software); role `0` is
+generator and `1` is monitor. Clock profiles are `0..3`, limited to the
+firmware's advertised `clock_profile_mask`; profiles above `1` require
+`acknowledge_overclock`.
 
 `/api/save-reboot` takes the complete target:
 
@@ -69,9 +72,8 @@ above `1` require `acknowledge_overclock`.
 {"profile": 0, "address": 64, "roles": [0, 1, 1], "acknowledge_overclock": false}
 ```
 
-The server validates it, then sends each setting and the final save/reboot
-command. Settings already sent are not rolled back if a later step fails, so
-the page rereads configuration before retrying.
+After validation, settings are sent before save/reboot. A later failure does
+not roll back earlier settings; reread configuration before retrying.
 
 ## Responses and Failures
 
@@ -88,14 +90,10 @@ Status responses include `connected`, `identity`, `configuration`, `runtime`,
 | `500` | Unexpected server failure; the body is `Internal server error` |
 | `503` | Discovery or unhandled transport/runtime failure |
 
-Errors use a stable, user-safe `{"error": "description"}` message. Most
-successful actions return refreshed status, though its sections may be
-unavailable. A status request can return HTTP 200 with `connected: false`;
-even a connected board may have invalid or unavailable telemetry. Check
-`connected`, `error`, section errors, and `bank_errors`, not only the HTTP
-status. Reboot and save/reboot return `{"rebooting": true}` only after command
-confirmation; this does not mean USB reconnection has finished.
+Errors use user-safe `{"error": "description"}` messages. Actions usually
+return refreshed status. HTTP 200 can still mean disconnected or unavailable
+telemetry: inspect `connected`, `error`, section errors, and `bank_errors`.
+`{"rebooting": true}` confirms the command, not USB reconnection.
 
-Do not blindly retry mutations after a timeout or disconnect. A client timeout
-does not cancel a command already submitted to the board; reconnect and inspect
-the state first. Multi-channel actions can take several seconds.
+Timeouts do not cancel submitted board commands. Reconnect and inspect state
+before retrying mutations. Multi-channel actions can take several seconds.

@@ -5,139 +5,44 @@
 [![License: BSD 3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
 ![Targets: RP2040 and RP2350](https://img.shields.io/badge/Targets-RP2040%20%7C%20RP2350-2674b8)
 
-**24 PWM channels. One Pico. Three control interfaces.** PicoPWM turns a Raspberry Pi Pico or Pico 2 into a PWM
-generator and frequency monitor. Control it through the USB CDC serial CLI, I2C, or USB HID; Direct Dashboard
-uses the browser's WebHID API, while the Python and .NET host apps use USB HID. The firmware exposes three fixed 8-channel banks.
-Bank A uses hardware PWM, Bank B uses PIO, and Bank C uses software PWM. Generator/monitor roles apply to an
-entire bank; channel IDs stay the same across control interfaces.
-
-**Quick links:** [Release](https://github.com/djwinter29-oss/PicoPWM/releases) ·
-[Hardware setup](docs/guides/hardware-setup.md) ·
-[Direct Dashboard](https://djwinter29-oss.github.io/PicoPWM/) ·
-[PyPI Package](https://pypi.org/project/picopwm/)
+PicoPWM turns a Raspberry Pi Pico or Pico 2 into a 24-channel PWM generator and monitor.
+Control it through USB CDC, USB HID, or I2C. Three fixed 8-channel banks use
+hardware PWM (A), PIO (B), and software PWM (C); each bank generates or monitors.
+Channel IDs are the same across interfaces.
 
 ![Direct Dashboard with simulated device identity, boot configuration, runtime status, and 24 PWM generator and monitor channels.](docs/assets/pico-pwm-dashboard.png)
 
-_Illustrative dashboard with simulated readings, not a live hardware result. Python and .NET share this layout._
+_Simulated readings, not live hardware. Python and .NET share this layout._
 
 ## Get Started
 
-**Board profiles:** Raspberry Pi Pico (`pico`, RP2040) and Pico 2 (`pico2`, RP2350).
-Pico W and Pico 2 W can use the corresponding profiles; onboard LED control is unavailable and wireless is not enabled.
-See [board compatibility](docs/guides/hardware-setup.md#board-compatibility) for details and third-party board checks.
+1. Download the `pico` or `pico2` UF2 from [Releases](https://github.com/djwinter29-oss/PicoPWM/releases).
+   Hold **BOOTSEL** while connecting a **USB data cable**, then copy the UF2 to the boot drive.
+2. Check [board compatibility and wiring](docs/guides/hardware-setup.md) before connecting signals.
+3. Choose a control option below and check the running bank roles before driving outputs.
 
-Before wiring:
+**GPIOs are 3.3 V only. Never connect generator outputs together.** Banks default to monitor-only;
+generator banks start at 0 Hz / 0% duty. Start with the default system clock.
 
-- GPIO signals are **3.3 V only**; never connect 5 V signals or tie generator outputs together.
-- Banks default to **monitor-only**. Generator banks start at 0 Hz / 0% duty.
-- Use the default system clock; higher profiles may overclock the board and are not qualified for every board.
-- For I2C, add external SDA/SCL pull-ups and start at 100 kHz (default address `0x40`).
-
-1. **Flash firmware.** Download your board's UF2 from [Releases](https://github.com/djwinter29-oss/PicoPWM/releases).
-   Hold **BOOTSEL** while connecting the board with a **USB data cable**, then copy the UF2 to the boot drive.
-2. **Choose a control interface.** Follow the [wiring guide](docs/guides/hardware-setup.md), then use:
-   - **Browser:** open [Direct Dashboard](#direct-dashboard) in desktop Chrome or Edge; no application
-     installation is needed. Connect and check the firmware version and running bank roles.
-   - **Serial CLI:** open the [USB CDC shell](docs/protocols/usb-cdc.md) in a serial terminal, then follow
-     the example below.
-   - **I2C controller:** wire SDA/SCL as described in the [hardware setup](docs/guides/hardware-setup.md), then
-     follow the [I2C protocol reference](docs/protocols/i2c.md). Configure bank roles through CDC or HID.
-
-### Serial CLI Example
-
-Verify the firmware version and running configuration:
-
-```text
-board get version
-config get
-```
-
-To try 1 kHz / 50% output, connect a 3.3 V-safe oscilloscope or logic analyzer to
-**GPIO 1 (physical pin 2 on Pico/Pico 2) and GND**, then run:
-
-```text
-config set banka=generator
-```
-
-This saves the setting and reboots automatically. Reconnect, then run:
-
-```text
-pwm set 0 1000 50
-pwm get 0
-```
-
-Illustrative readback (realized values can vary with timing quantization):
-
-```text
-CH0: freq=1000 Hz, duty=50%, enabled=yes
-```
-
-This is firmware readback, not an independent electrical measurement.
-**When finished**, stop all generator outputs:
-
-```text
-pwm stop all
-```
-
-Stopping does not change saved bank roles; Bank A remains configured as a generator after reboot. To restore
-monitor-only operation, see [Configure bank roles](docs/guides/configuration.md).
-For connection and output issues, see [Troubleshooting](docs/guides/troubleshooting.md).
-
-## Dashboards
-
-For browser and desktop dashboards, Linux may require
-[HID permissions setup](docs/guides/linux-hid-access.md).
-
-### Direct Dashboard
-
-Open [Direct Dashboard](https://djwinter29-oss.github.io/PicoPWM/), click **Connect**, select your board, and grant
-browser permission when prompted. No application installation is needed.
-
-> [!IMPORTANT]
-> **Direct Dashboard requires desktop Google Chrome or Microsoft Edge.** Safari and Firefox are not supported.
-> Connect the board to the computer running the browser.
-
-See the [Direct Dashboard guide](host/direct/README.md) for controls and connection troubleshooting.
-
-### Desktop Dashboards
-
-| Option | Start here |
+| Control option | Start here |
 | --- | --- |
-| Python 3.10+ | [Install and run `picopwm`](host/python/README.md#quick-start) from PyPI. |
-| Standalone .NET | [Download and run](host/dotnet/README.md#standalone-application) a release package for Linux x64, Windows x64, or macOS ARM64; no separate .NET installation needed. |
+| Browser | [Open Direct Dashboard](https://djwinter29-oss.github.io/PicoPWM/) in desktop Chrome or Edge; no installation. [Connection guide](host/direct/README.md). |
+| Python | [Install `picopwm` from PyPI](host/python/README.md#quick-start); Python 3.10+. |
+| .NET | [Download a standalone dashboard](host/dotnet/README.md#standalone-application); no separate .NET runtime needed. |
+| Serial CLI | [Try your first generator output](docs/guides/configuration.md#first-generator-output). [Command reference](docs/protocols/usb-cdc.md). |
+| I2C | [Wire the controller](docs/guides/hardware-setup.md#i2c), then use the [register reference](docs/protocols/i2c.md). |
 
-Connect the board to the computer running the host application.
-
-## Recommended Frequency Ranges
-
-Conservative operating ranges, **not hardware-qualified accuracy specifications**:
-
-| Backend | Generation | Measurement |
-| --- | --- | --- |
-| [Hardware PWM](docs/design/pwm/backend-hardware.md) (Bank A) | 10 Hz-1 MHz | 100 Hz-1 MHz |
-| [PIO PWM](docs/design/pwm/backend-pio.md) (Bank B) | 1 Hz-100 kHz | 10 Hz-100 kHz |
-| [Software PWM](docs/design/pwm/backend-software.md) (Bank C) | 1 Hz-1 kHz | 10 Hz-1 kHz |
-
-These are recommended operating ranges, not maximum request limits. The
-[PWM bank design](docs/design/pwm/banks.md) lists accepted request limits;
-backend pages describe recommended performance and measurement ranges.
-
-Generation accepts integer 0%-100% duty. At `0 Hz`, duties `0%-99%` drive static low and `100%` drives static high;
-readback reports `0 Hz` with `0%` or `100%` respectively. Use moderate duty cycles for PWM;
-narrow pulses and timing quantization reduce usable ranges.
-**PIO duty readback can differ from the physical signal**, especially at high frequencies;
-see the [PIO generation design](docs/design/pwm/backend-pio.md#generation).
-Start PIO and software measurement at 10 Hz; below that, results are experimental rather than a verified accuracy
-floor. See the [PIO monitoring design](docs/design/pwm/backend-pio.md#monitoring).
-Backend links above cover extended ranges and limitations.
+Connect the board to the computer running the browser or host application.
+Linux may need [HID permissions setup](docs/guides/linux-hid-access.md).
 
 ## Documentation
 
-Use the [documentation index](docs/README.md) to find user guides, interface
-contracts, design references, validation procedures, and contribution resources.
+- [Documentation index](docs/README.md) — guides, protocols, design, and validation.
+- [Configuration and operating ranges](docs/guides/configuration.md) · [Dashboard controls](docs/guides/dashboard-controls.md) · [Troubleshooting](docs/guides/troubleshooting.md).
+- [Contributing](CONTRIBUTING.md) — build, test, and development instructions.
 
-The CDC, HID, and I2C interfaces are intended for trusted local access and have no firmware-level authentication.
-See [SECURITY.md](SECURITY.md) for the trust model and vulnerability reporting.
+Interfaces have no firmware-level authentication and are intended for trusted local access.
+See [SECURITY.md](SECURITY.md) for the trust model and reporting.
 
 ## License
 

@@ -1,10 +1,8 @@
 # Native HID Qualification
 
-Unit tests and polling deadlines do not establish native USB transfer
-deadlines. Perform disconnect/reconnect, transfer-stall, and handle-cleanup
-checks separately on Windows, Linux, and macOS with the supported HID backend.
-Record the OS, application/runtime and HID-library versions, board and firmware,
-connection, timings, outcome, and cleanup result.
+Qualify native USB transfers separately on Windows, Linux, and macOS; unit
+tests and polling deadlines are not transfer deadlines. Record OS, app/runtime
+and HID-library versions, board/firmware, connection, timing, outcome, and cleanup.
 
 ## Safety and Preconditions
 
@@ -37,5 +35,4 @@ No native HID qualification is recorded for Windows, Linux, or macOS:
 | Linux | Not run | Not run | Not run |
 | macOS | Not run | Not run | Not run |
 
-Keep instrument and transport qualification separate. Record HIL results under
-the [HIL test plan](hil/test-plan.md).
+Record physical PWM tests separately under the [HIL plan](hil/test-plan.md).

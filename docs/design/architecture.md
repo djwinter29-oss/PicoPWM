@@ -1,8 +1,6 @@
 # Firmware Architecture
 
-PicoPWM separates host communication from real-time channel work. This page
-describes the main ownership boundaries; the linked design pages cover the
-decisions within each subsystem.
+Core 0 handles host communication. Core 1 owns PWM backends and timing.
 
 ## Core Ownership
 
@@ -16,10 +14,9 @@ channel state. Host transports do not call PWM backends directly.
 
 ## Channel Model
 
-PicoPWM exposes one logical channel model over three fixed backend banks.
-Startup configuration selects whether each bank generates or monitors PWM.
-Channel identity is consistent across CDC, HID, and I2C; physical pin
-assignments are documented in [Hardware Setup](../guides/hardware-setup.md).
+Three fixed banks share one logical channel model across CDC, HID, and I2C.
+Startup configuration selects generator or monitor for each bank.
+See the [GPIO map](../guides/hardware-setup.md#pwm-channels).
 
 ## Request Path
 
@@ -40,14 +37,12 @@ boundary and is applied by the selected backend before its result is returned.
 
 ## Host Transports
 
-Each interface's host-visible behavior is defined only in its
-[protocol reference](../README.md#wire-protocols); this section covers
-how the firmware is layered behind it.
+Wire contracts: [CDC](../protocols/usb-cdc.md),
+[HID](../protocols/usb-hid.md), [I2C](../protocols/i2c.md).
 
-All transports follow the same split: USB callbacks and the I2C interrupt only
-capture bytes, and commands execute later in the Core 0 main loop. While Core 0
-waits for a PWM apply, it keeps the USB stack moving but does not execute
-another command, which would re-enter the shared control path.
+USB callbacks and the I2C interrupt capture bytes; the Core 0 main loop
+executes commands. While waiting for a PWM apply, Core 0 services USB but
+does not execute another command or re-enter shared control.
 
 | Transport | Capture | Execution | Bound |
 | --- | --- | --- | --- |
@@ -55,15 +50,12 @@ another command, which would re-enter the shared control path.
 | HID | SET_REPORT copies the request into one slot | Main loop executes the slot and publishes its result | One request slot |
 | I2C | Interrupt captures write frames and streams read responses | Main loop drains queued valid writes | Fixed command queue |
 
-Layer rules:
-
-- **Transport** code (USB glue, I2C peripheral port) moves bytes and tracks
-  session or transaction boundaries; it does not interpret commands.
-- **Protocol** code (shell command groups, HID report codec, I2C register map)
-  validates complete input, calls shared control, and reports the result it
-  returns rather than assuming success.
-- I2C interrupt work stays bounded: no blocking, no backend calls, and only
-  short synchronization when a read needs a consistent channel snapshot.
+- **Transport** code moves bytes and tracks sessions/transactions; it does
+  not interpret commands.
+- **Protocol** code validates complete input, calls shared control, and
+  reports the actual result.
+- I2C interrupts must not block or call backends. Snapshot reads use only
+  short synchronization.
 - A CDC disconnect resets the session but does not cancel work already
   started. Each output write is all-or-nothing, but a multi-write response can
   still stop partway.
@@ -72,12 +64,19 @@ Layer rules:
 
 ## Startup and Runtime
 
-Core 0 loads the running configuration and starts Core 1. Core 1 initializes
-the selected backends and signals readiness before host transports accept
-channel operations. After startup, Core 0 handles requests while Core 1
-services channel work independently.
+Core 0 loads configuration and starts Core 1. Core 1 initializes backends
+and signals readiness before transports accept channel operations.
+The cores then service requests and channel work independently.
 
-## Related Design
+PWM details: [driver](pwm/driver.md), [banks](pwm/banks.md).
 
-- [PWM driver](pwm/driver.md) — core boundary, command handling, and readback
-- [PWM banks](pwm/banks.md) — fixed banks and startup roles
+## Implementation Map
+
+| Responsibility | Source |
+| --- | --- |
+| Shared host-facing channel control | [`control_api.c`](../../firmware/src/control_api.c) |
+| Core boundary and realized-state snapshot | [`pwm_driver.c`](../../firmware/src/driver/pwm/pwm_driver.c), [`pwm_driver.h`](../../firmware/src/driver/pwm/pwm_driver.h) |
+| CDC command handling | [`cli_channel_commands.c`](../../firmware/src/app/cli/cli_channel_commands.c) |
+| USB HID reports | [`hid_protocol.c`](../../firmware/src/app/usb/hid_protocol.c) |
+| I2C register map | [`i2c_control_map.c`](../../firmware/src/app/i2c/i2c_control_map.c) |
+| Backend implementations | [`driver/pwm/`](../../firmware/src/driver/pwm/) |

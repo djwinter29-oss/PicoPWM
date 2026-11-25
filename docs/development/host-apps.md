@@ -15,10 +15,15 @@ Installation: [browser](../../host/direct/README.md),
 
 ## Direct Dashboard
 
-Serve and test in separate terminals:
+Start the server in one terminal:
 
 ```sh
 tools/host/run-direct.sh
+```
+
+In another terminal, run the tests:
+
+```sh
 node --test host/direct/tests/*.test.mjs host/direct/tests/js/*.test.mjs
 ```
 
@@ -96,11 +101,16 @@ caller-owned. Closing handles does not stop outputs.
 
 ## .NET Host
 
-Install the .NET 10 SDK. From the repository root, run the application and its
-tests with:
+Install the .NET 10 SDK. From the repository root, start the application in
+one terminal and leave it running:
 
 ```sh
 dotnet run --project host/dotnet/PicoPwm
+```
+
+In another terminal, run the tests:
+
+```sh
 dotnet test host/dotnet/PicoPwm.sln --configuration Release --nologo
 ```
 

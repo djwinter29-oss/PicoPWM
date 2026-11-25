@@ -80,6 +80,36 @@ not roll back earlier settings; reread configuration before retrying.
 Status responses include `connected`, `identity`, `configuration`, `runtime`,
 `pins`, and `channels`.
 
+The examples below are excerpts; a full response also includes the other
+status sections and all 24 channel entries. For a connected board with
+successful reads:
+
+```json
+{
+  "connected": true,
+  "channels": [{"channel": 0, "freq_hz": 1000, "duty": 50}],
+  "bank_errors": [null, null, null],
+  "error": null
+}
+```
+
+A partial bank-read failure keeps the connection but marks that bank's data
+unavailable. Do not treat its channel entries as a fresh reading:
+
+```json
+{
+  "connected": true,
+  "channels": [{"channel": 8, "freq_hz": 1000, "duty": 50}],
+  "bank_errors": ["Device status unavailable", null, null],
+  "error": null
+}
+```
+
+Other report failures use the corresponding `identity_error`,
+`configuration_error`, `runtime_error`, or `pins_error` field. Device details
+are logged by the host and replaced in HTTP responses with
+`"Device status unavailable"`.
+
 | HTTP status | Meaning |
 | --- | --- |
 | `200` | Route completed; inspect the response for connection and section errors |

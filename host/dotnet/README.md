@@ -16,6 +16,10 @@ Local dashboard for 24-channel PicoPWM boards. The browser connects to the
 - OS access to the HID interface. Linux users should follow the
   [HID permissions guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/linux-hid-access.md).
 
+Firmware compatibility follows HID report layouts and advertised capabilities,
+not a minimum version. No minimum hardware-verified firmware release has been
+established; unsupported identities or layouts produce protocol errors.
+
 ## Standalone Application
 
 Release archives for **Linux x64, Windows x64, and macOS ARM64** include the

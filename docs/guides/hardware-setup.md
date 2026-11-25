@@ -9,7 +9,7 @@ Wiring and GPIO assignments for Pico and Pico 2. The pin map is fixed in
 source or instrument ground. Never connect generator outputs together.
 
 The standard profiles use fixed channel-to-GPIO assignments. Custom board
-profile constraints are described in the [PWM bank design](../design/pwm/banks.md).
+profile constraints are described in [PWM design](../design/pwm.md#board-profiles).
 
 ## Board Compatibility
 

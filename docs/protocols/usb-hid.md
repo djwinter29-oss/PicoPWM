@@ -116,7 +116,7 @@ CDC sets these profiles with `config set clock=<value>` (`default`, `150`,
 | Profile | Requested `clk_sys` | Notes |
 | ------: | ------------------- | ----- |
 | `0` | SDK default | No reconfiguration (125 MHz RP2040, 150 MHz RP2350); used when storage is invalid or erased. |
-| `1` | 150 MHz | |
+| `1` | 150 MHz | Overclock on RP2040; default on RP2350. |
 | `2` | 200 MHz | Overclock. |
 | `3` | 250 MHz | Overclock. |
 | `4`-`255` | Unassigned | Invalid. |
@@ -221,7 +221,9 @@ For `SET_CHANNEL`, `0 Hz` selects a static level. Periodic limits are
 10 Hz-10 MHz for hardware PWM, 1 Hz-10 MHz for PIO, and 1 Hz-10 kHz for
 software PWM. They are not accuracy guarantees; see
 [operating ranges](../guides/configuration.md#pwm-operating-ranges) for
-recommended generation and measurement ranges.
+recommended generation and measurement ranges. At `0 Hz`, duty below `100%`
+holds the output low and `100%` holds it high. At nonzero frequency, duty
+`0%` and `100%` also produce static low and high levels.
 
 | Operation | Arguments and constraints | Behavior |
 | --------- | ------------------------- | -------- |

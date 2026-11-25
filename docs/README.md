@@ -28,10 +28,7 @@ To script a board from Python, use the
 ## Firmware Design
 
 - [Architecture](design/architecture.md) — cores, request path, and transports
-- [PWM driver](design/pwm/driver.md) — multicore boundary and readback
-- [Banks](design/pwm/banks.md) — startup roles and resource ownership
-- Backend timing: [hardware PWM](design/pwm/backend-hardware.md),
-  [PIO](design/pwm/backend-pio.md), [software](design/pwm/backend-software.md)
+- [PWM design](design/pwm.md) — multicore boundary, banks, and backend timing
 
 ## Development
 

@@ -10,9 +10,7 @@ Control it through USB CDC, USB HID, or I2C. Three fixed 8-channel banks use
 hardware PWM (A), PIO (B), and software PWM (C); each bank generates or monitors.
 Channel IDs are the same across interfaces.
 
-![Direct Dashboard with simulated device identity, boot configuration, runtime status, and 24 PWM generator and monitor channels.](docs/assets/pico-pwm-dashboard.png)
-
-_Simulated readings, not live hardware. Python and .NET share this layout._
+**Quick links:** [Release](https://github.com/djwinter29-oss/PicoPWM/releases) · [Hardware setup](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/hardware-setup.md) · [Direct Dashboard](https://djwinter29-oss.github.io/PicoPWM/) · [PyPI Package](https://pypi.org/project/picopwm/)
 
 ## Get Started
 
@@ -34,6 +32,10 @@ generator banks start at 0 Hz / 0% duty. Start with the default system clock.
 
 Connect the board to the computer running the browser or host application.
 Linux may need [HID permissions setup](docs/guides/linux-hid-access.md).
+
+![Direct Dashboard with simulated device identity, boot configuration, runtime status, and 24 PWM generator and monitor channels.](docs/assets/pico-pwm-dashboard.png)
+
+_Simulated readings, not live hardware. Python and .NET share this layout._
 
 ## Documentation
 

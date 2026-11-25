@@ -75,6 +75,42 @@ for probe details.
 The loader's `--flash-size <bytes>` option overrides OpenOCD's flash-size
 assumption only; it does not change the firmware's GPIO mapping or board profile.
 
+Program a previously built ELF from the repository root:
+
+```sh
+tools/firmware/load.sh --board pico --skip-build
+```
+
+Use `--board pico2` for Pico 2. Omit `--skip-build` to build before loading.
+The loader requires OpenOCD and a connected Pico Debug Probe.
+
+For Pico 2, verify the installed OpenOCD includes the RP2350 target script:
+
+```sh
+openocd -c 'echo [find target/rp2350.cfg]' -c shutdown
+```
+
+The command must print the path to `target/rp2350.cfg`. If it cannot find the
+file, use Raspberry Pi's [OpenOCD `sdk-2.0.0` branch](https://github.com/raspberrypi/openocd/tree/sdk-2.0.0),
+which includes the RP2040 and RP2350 target scripts. On Ubuntu 24.04, install
+build dependencies and compile it:
+
+```sh
+sudo apt-get install --no-install-recommends \
+    git build-essential autoconf automake libtool pkg-config texinfo \
+    libhidapi-dev libusb-1.0-0-dev
+git clone --recursive --branch sdk-2.0.0 --depth 1 \
+    https://github.com/raspberrypi/openocd.git
+cd openocd
+./bootstrap
+./configure --enable-cmsis-dap
+make -j"$(nproc)"
+sudo make install
+```
+
+Repeat the script check before loading Pico 2. See the fork's
+[build instructions](https://github.com/raspberrypi/openocd/blob/sdk-2.0.0/README).
+
 ## Validate Your Change
 
 Start with focused checks; broaden them for shared behavior.
@@ -152,6 +188,6 @@ not run. Host tests and the CDC subset are not full hardware qualification.
 - Respect the core split: Core 0 owns CDC, I2C and HID; Core 1 owns PWM backends, and
   `firmware/src/driver/pwm/pwm_driver.c` is the multicore boundary.
 - Add regression tests for non-trivial changes and update matching docs. Consult the
-  [architecture](docs/design/architecture.md) and [PWM driver design](docs/design/pwm/driver.md).
+  [architecture](docs/design/architecture.md) and [PWM design](docs/design/pwm.md).
 - Explain the problem, solution, compatibility impacts (I2C, HID, flash layout), and related issue.
 - List checks and results, including skipped checks and reasons.

@@ -17,12 +17,21 @@ All banks default to monitor. Changing a bank's role requires a reboot.
 
 ## Change Settings
 
-Read running settings with `config get`. Change one or more settings with
-`config set`, for example:
+Read running settings with `config get`. Before a configuration save and
+reboot, stop any active generators and verify their state:
 
 ```text
-config set banka=generator
-config set bankb=monitor, clock=default, address=64
+pwm stop all
+pwm get all
+```
+
+Confirm every generator reports `0 Hz / 0%` and is disabled. If stop fails or
+the state is uncertain, disconnect board power and do not save.
+
+Change one or more settings with `config set`, for example:
+
+```text
+config set banka=generator, address=64
 ```
 
 CDC validates the complete assignment set, saves, and reboots automatically.
@@ -40,6 +49,17 @@ board get version
 config get
 ```
 
+Before saving a configuration, stop any active generators and verify their
+state:
+
+```text
+pwm stop all
+pwm get all
+```
+
+Confirm every generator reports `0 Hz / 0%` and is disabled. If stop fails or
+the state is uncertain, disconnect board power and do not continue.
+
 Connect a 3.3 V-safe oscilloscope or logic analyzer
 to **GPIO 1 (physical pin 2 on Pico/Pico 2) and GND**, then run:
 
@@ -47,7 +67,14 @@ to **GPIO 1 (physical pin 2 on Pico/Pico 2) and GND**, then run:
 config set banka=generator
 ```
 
-This saves the setting and reboots automatically. Reconnect, then run:
+This saves the setting and reboots automatically. Reconnect, run `config get`,
+and confirm Bank A is a generator before continuing:
+
+```text
+config get
+```
+
+Then run:
 
 ```text
 pwm set 0 1000 50
@@ -64,9 +91,12 @@ Readback is not an instrument measurement. **When finished**, stop all generator
 
 ```text
 pwm stop all
+pwm get all
 ```
 
-Stopping preserves saved roles. To restore Bank A to monitoring, run
+Confirm every generator reports `0 Hz / 0%` and is disabled. If stopping
+fails or the state is uncertain, disconnect board power. Stopping preserves
+saved roles. To restore Bank A to monitoring, run
 `config set banka=monitor`; it saves and reboots.
 For problems, see [Troubleshooting](troubleshooting.md).
 

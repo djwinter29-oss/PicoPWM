@@ -38,6 +38,9 @@ The subset checks all eight junctions at 100, 500, and 1000 Hz and 25%, 50%,
 and 75% duty, simultaneous outputs, and stop readback. Defaults are 5%
 frequency tolerance (minimum 1 Hz), 5 percentage points duty tolerance, and
 3-second command and monitor timeouts. Choose limits before the run.
+Override defaults with `--frequencies` (100..1000 Hz),
+`--frequency-tolerance`, `--duty-tolerance`, `--settle-timeout`, or
+`--command-timeout`.
 
 ## Results and Cleanup
 

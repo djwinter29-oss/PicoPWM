@@ -12,6 +12,10 @@ Control 24 PWM channels over browser USB HID. No host service is needed.
 - A Pico or Pico 2 running compatible PicoPWM firmware, connected to the browser's computer by a USB data cable.
 - Browser device permission and OS access; Linux needs [HID permissions setup](../../docs/guides/linux-hid-access.md).
 
+Firmware compatibility follows HID report layouts and advertised capabilities,
+not a minimum version. No minimum hardware-verified firmware release has been
+established; unsupported identities or layouts produce protocol errors.
+
 ## Quick Start
 
 1. Connect the board, open the dashboard, and click **Connect**.

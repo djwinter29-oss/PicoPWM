@@ -2,7 +2,7 @@
 Read [README.md](../README.md) first for product intent, channel map, and user-facing behavior.
 
 Use the [architecture design](../docs/design/architecture.md) for system
-boundaries and the [PWM driver design](../docs/design/pwm/driver.md) for
+boundaries and the [PWM design](../docs/design/pwm.md) for
 cross-core ownership and realized-state behavior. Use the
 [USB CDC shell reference](../docs/protocols/usb-cdc.md) and
 [I2C protocol](../docs/protocols/i2c.md) for host-visible behavior, and source

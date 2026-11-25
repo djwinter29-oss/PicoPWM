@@ -19,13 +19,12 @@ monitor banks. It never changes roles, saves, or reboots. It drives outputs,
 then stops all generators without restoring previous waveforms.
 Disconnect other equipment and close dashboards/terminals first.
 
-It tests eight junctions at 100/500/1000 Hz and 25/50/75% duty, simultaneous
-outputs, and stop readback. Generators are compared with requested values;
-monitors with realized generator values. Default limits are 5% frequency
-(minimum 1 Hz), 5 duty percentage points, and 3-second command/monitor timeouts.
-These are functional limits, not accuracy specifications.
-Override with `--frequencies` (100..1000 Hz), `--frequency-tolerance`,
-`--duty-tolerance`, `--settle-timeout`, and `--command-timeout` before the run.
+It checks all eight junctions at several shared-fixture frequency and duty
+points, simultaneous outputs, and stop readback. Generator readings are
+compared with requests; monitor readings with realized generator values.
+These are functional checks, not accuracy specifications. The runner
+instructions above own its default test points, tolerances, timeouts, and
+override options.
 
 Runs replace `docs/validation/hil/records/latest.md`; preserve needed reports
 under dated names first. Repeat after safely configuring each generator-bank

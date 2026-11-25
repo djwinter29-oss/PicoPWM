@@ -17,6 +17,10 @@ Python talks USB HID to the connected Pico or Pico 2; the browser talks to Pytho
 - OS permission to access the board. Linux users should follow the
   [HID permissions guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/linux-hid-access.md).
 
+Firmware compatibility follows HID report layouts and advertised capabilities,
+not a minimum version. No minimum hardware-verified firmware release has been
+established; unsupported identities or layouts produce protocol errors.
+
 ## Quick Start
 
 Create and activate a virtual environment:
@@ -108,10 +112,6 @@ There is no TLS. Keep the server off untrusted networks; use an HTTPS reverse
 proxy for remote access.
 
 ## Troubleshooting
-
-Compatibility depends on HID layouts and capabilities, not a minimum version.
-Unsupported identities/layouts produce protocol errors. No minimum
-hardware-verified firmware release has been established.
 
 - **Board missing or inaccessible:** check the cable, firmware, HID permissions, and board selection.
   Scripts with multiple boards must select a serial number or device path.

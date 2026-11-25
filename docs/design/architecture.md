@@ -68,7 +68,7 @@ Core 0 loads configuration and starts Core 1. Core 1 initializes backends
 and signals readiness before transports accept channel operations.
 The cores then service requests and channel work independently.
 
-PWM details: [driver](pwm/driver.md), [banks](pwm/banks.md).
+See [PWM design](pwm.md) for bank ownership, backend behavior, and readback.
 
 ## Implementation Map
 

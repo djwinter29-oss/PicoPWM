@@ -28,13 +28,51 @@ causes USB I/O, and record the instrumentation method and version. Do not use
 repeated dashboard `/api/status` or `PicoPwmHid.status()` calls as report 1
 samples: the host clients cache device identity.
 
-| Check | Action | Evidence and pass condition |
-| --- | --- | --- |
-| Normal reads | Connect to the selected board and read HID reports 1 and 2 for 100 iterations. | Every report has the expected ID, length, and decoded identity/configuration. Record per-report latency, failures, and timeout; every read completes within the predeclared timeout. |
-| Idle reconnect | Disconnect USB while idle, reconnect, then refresh the device in the application. | Record disconnect and reconnect behavior. The application clears stale state and rereads identity and capabilities before showing the board as connected. |
-| Disconnect in flight | Start a read of report 1 or 2, then disconnect USB before it completes. Reconnect and refresh. | Record the operation outcome and time to recover. The application reports failure or uncertainty rather than success, clears stale state, and reads fresh identity/configuration after reconnect. |
-| Handle recovery | Keep the application process running. Cause a recoverable read error, then use its normal recovery path to reopen the same board. | Record native close/open evidence and verify fresh identity and configuration reads succeed without restarting the process. If the error cannot be induced, mark it not tested. |
-| Transfer stall | If a repeatable stall can be induced safely, record the blocked operation and issue a read after recovery. | Record stall duration, outcome, and second-read latency. The second read completes within the predeclared timeout; do not retry mutations while their outcome is uncertain. Otherwise mark not tested. |
+### Normal reads
+
+1. Connect to the selected board and explicitly read HID reports 1 and 2
+   100 times each.
+2. Record each report's latency, failures, and timeout.
+
+Every read must complete within the predeclared timeout and have the expected
+ID, length, and decoded identity or configuration. Confirm each sample causes
+USB I/O.
+
+### Idle reconnect
+
+1. Disconnect USB while idle, reconnect, then refresh the device in the
+   application.
+2. Record disconnect and reconnect behavior.
+
+The application must clear stale state and reread identity and capabilities
+before showing the board as connected.
+
+### Disconnect in flight
+
+1. Start a read of report 1 or 2, then disconnect USB before it completes.
+2. Reconnect, refresh, and record the operation outcome and recovery time.
+
+The application must report failure or uncertainty rather than success, clear
+stale state, and read fresh identity and configuration after reconnect.
+
+### Handle recovery
+
+1. Keep the application process running. Cause a recoverable read error and
+   use its normal recovery path to reopen the same board.
+2. Record native close/open evidence.
+
+Fresh identity and configuration reads must succeed without restarting the
+process. If the error cannot be induced, mark this check **not tested**.
+
+### Transfer stall
+
+1. If a repeatable stall can be induced safely, record the blocked operation,
+   recover, then issue a read.
+2. Record the stall duration, outcome, and second-read latency.
+
+The second read must complete within the predeclared timeout. Do not retry
+mutations while their outcome is uncertain. If a stall cannot be induced,
+mark this check **not tested**.
 
 For the 100 normal-read iterations, report median, 95th-percentile, and
 maximum latency per report, plus any failures. Declare any timing limit

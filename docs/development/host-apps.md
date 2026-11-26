@@ -15,22 +15,22 @@ Installation: [browser](../../host/direct/README.md),
 
 ## Direct Dashboard
 
-Start the server in one terminal:
+To run the dashboard locally, start the server:
 
 ```sh
 tools/host/run-direct.sh
-```
-
-In another terminal, run the tests:
-
-```sh
-node --test host/direct/tests/*.test.mjs host/direct/tests/js/*.test.mjs
 ```
 
 The Python 3.10+ launcher needs no extra packages. It serves a staged copy of
 `host/direct/src/` at `http://127.0.0.1:8000/`; restart after editing source.
 Use `--port 0` for an available port. These sources also supply shared assets
 to the Python/.NET hosts.
+
+Run the tests independently; no local server is required:
+
+```sh
+node --test host/direct/tests/*.test.mjs host/direct/tests/js/*.test.mjs
+```
 
 Node tests check structure, JavaScript, and a fake-HID Chromium flow.
 The browser test tries `chromium` and skips if absent; set `CHROMIUM` to
@@ -101,14 +101,15 @@ caller-owned. Closing handles does not stop outputs.
 
 ## .NET Host
 
-Install the .NET 10 SDK. From the repository root, start the application in
-one terminal and leave it running:
+Install the .NET 10 SDK. For an optional local run, start the application
+from the repository root:
 
 ```sh
 dotnet run --project host/dotnet/PicoPwm
 ```
 
-In another terminal, run the tests:
+This remains in the foreground until stopped. To run tests, without starting
+the application:
 
 ```sh
 dotnet test host/dotnet/PicoPwm.sln --configuration Release --nologo

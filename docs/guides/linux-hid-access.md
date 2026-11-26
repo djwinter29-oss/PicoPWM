@@ -28,5 +28,16 @@ and hosts together: current clients do not discover the lab identity.
 Grant browser permission again; the CDC device name may also change.
 
 In `/etc/udev/rules.d/70-picopwm-hid.rules`, replace `cafe`/`4012` with
-`2e8a`/`116c`, preserving local customizations. Rerun the setup helper to
-reload rules; it refuses to overwrite a differing rule.
+`2e8a`/`116c`, preserving local customizations. If the file differs from the
+helper's default, do not rerun the setup helper: it refuses to overwrite
+customized rules. After reviewing the rule, reload udev and check access:
+
+```sh
+sudo udevadm control --reload-rules
+sudo udevadm trigger --subsystem-match=usb --attr-match=idVendor=2e8a --attr-match=idProduct=116c
+sudo udevadm trigger --subsystem-match=hidraw
+sudo udevadm settle
+```
+
+Reconnect the board, then run `tools/host/hid-permissions-check.sh` from the
+repository checkout.

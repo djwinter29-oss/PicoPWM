@@ -1,33 +1,26 @@
 # USB CDC Shell
 
-The PicoPWM USB CDC shell provides an interactive interface for human control
-and simple host scripts.
+USB CDC accepts interactive text commands and simple host scripts.
 
 ## Connection
 
-Connect the board over a USB data cable and open its CDC serial device. The
-terminal's baud-rate setting does not affect USB packet timing; this shell does
-not configure a physical UART. The firmware prints command help when a host
-connection is opened and displays the `pico> ` prompt. If the configured clock
-could not be applied at boot, it also prints a warning on connection; use
-`board get clock` to inspect the actual running clock.
+Connect a USB data cable and open `/dev/ttyACM*` (Linux), `COMx` (Windows), or
+`/dev/cu.usbmodem*` (macOS). No dashboard is needed. Baud rate does not affect
+USB timing or configure a UART. Connection prints help and the `pico> ` prompt.
+A clock-configuration failure prints a warning; read `board get clock` for
+the actual clock.
 
-Disconnecting discards any incomplete command and pending response bytes in
-both the application and USB transmit queues. The application resets the line
-editor before accepting input from a new session; a command already in progress
-is not cancelled.
+Disconnect clears the editor, incomplete input, and pending responses in
+application/USB queues. It does not cancel a command already running.
 
-Commands are entered one line at a time and responses end with CRLF (`\r\n`).
-The interactive editor supports backspace, cursor movement, command history,
-and Tab completion of command names. A command line is limited to 100
-characters; additional characters are ignored by the editor. Keep commands
-within this limit because submitting an overlong line can execute its accepted
-prefix.
+Enter one command per line; responses end with CRLF (`\r\n`). The editor
+supports backspace, cursor movement, history, and Tab completion.
+**Lines are limited to 100 characters.** Extra characters are ignored, so an
+overlong line can execute its accepted prefix.
 
 ## Command Format
 
-Commands follow the `group verb parameters` format. The groups are `pwm`,
-`board`, `config`, and `help`; detailed syntax and examples follow.
+Format: `group verb parameters`. Groups: `pwm`, `board`, `config`, `help`.
 
 ### PWM Commands
 
@@ -38,23 +31,19 @@ Commands follow the `group verb parameters` format. The groups are `pwm`,
 | `pwm set <channel> <freq_hz> [duty_percent]` | Set a generator channel; duty defaults to 50%. | `pwm set 0 1000 50` |
 | `pwm stop all` | Stop every generator output at 0 Hz / 0% duty; monitor channels remain unchanged. | `pwm stop all` |
 
-The stop command attempts every generator channel even if one channel fails.
-If it reports an error, some outputs may have stopped while others may remain
-active; inspect the channels with `pwm get all` before relying on their state.
+Stop attempts every generator even after a failure. An error can mean a
+partial stop; verify with `pwm get all`.
+Keep the terminal connected until a listing finishes: output is queued as it
+is produced. Rerun an incomplete listing.
 
-The `pwm get all` listing includes the configured channels and is queued for
-transmission while it is produced. Keep the terminal connected until the
-listing finishes; rerun the command if the output appears incomplete.
+Channels, backends, and GPIOs are fixed; configuration changes bank roles only.
+See the [pin map](../guides/hardware-setup.md#pwm-channels).
 
-Channel numbers are stable logical IDs. Their backend and GPIO are fixed by
-bank; configuration changes only the bank's role (generator or monitor). See
-[Hardware Setup](../guides/hardware-setup.md) for the authoritative channel-to-GPIO map.
-
-The duty argument is an integer percentage from `0` to `100`; if omitted it
-defaults to `50`. Accepted periodic frequency limits are listed in the
-[PWM bank design](../design/pwm/banks.md). A `0 Hz` request selects a static
-output: `0%` holds the pin low and `100%` holds it high. A nonzero `pwm set`
-takes effect immediately; check the bank role and GPIO before applying it.
+Duty is an integer `0..100`, default `50`. Accepted periodic requests are 10 Hz-10 MHz for Bank A,
+1 Hz-10 MHz for B, and 1 Hz-10 kHz for C. These are request limits, not
+accuracy guarantees; see [operating ranges](../guides/configuration.md#pwm-operating-ranges).
+At `0 Hz`, duty below `100%` holds the pin low and `100%` holds it high.
+Nonzero requests take effect immediately; check the role and GPIO first.
 
 ### Board Commands
 
@@ -74,16 +63,11 @@ takes effect immediately; check the bank role and GPIO before applying it.
 | `config get <item>` | Show one setting's effective running value. Valid items: `banka`, `bankb`, `bankc`, `clock`, `address`. | `config get clock` |
 | `config set <key=value>[, <key=value>...]` | Set one or more configuration values. | `config set banka=generator, clock=150, address=64` |
 
-The setting names are `banka`, `bankb`, `bankc`, `clock`, and `address`.
-Banks accept `generator` or `monitor`; the system clock accepts `default`,
-`150`, `200`, or `250` MHz; the 7-bit I2C address accepts decimal values
-`8..119`. A single `config set` may contain multiple comma-separated
-assignments. The complete set is validated before any setting is changed; a
-rejected assignment does not partially apply the request. A successful command
-saves the new target configuration and reboots the board; no separate save or
-reboot command is needed. It acknowledges a successful save with
-`OK config saved; rebooting`; this confirms persistence, not that the
-requested clock has already been applied.
+Banks accept `generator` or `monitor`; clock accepts `default`, `150`, `200`,
+or `250` MHz; the 7-bit I2C address accepts decimal `8..119`.
+Comma-separated assignments are validated together before any change.
+Invalid input applies nothing. Success saves and reboots automatically.
+`OK config saved; rebooting` confirms persistence, not the running clock.
 
 All `get` responses report actual running values, not saved targets. For example:
 
@@ -100,19 +84,15 @@ clock=125000000 Hz
 address=64
 ```
 
-These are illustrative values; the running roles, clock, and address depend
-on the board and its applied configuration.
+Example values vary with board and configuration.
 
-Clock-profile precautions are in the
-[configuration guide](../guides/configuration.md). CDC does not require a
-separate overclock acknowledgement.
+Use `default` unless you intend to overclock: 150 MHz overclocks RP2040,
+and 200/250 MHz are not qualified for every board. CDC does not require a
+separate overclock acknowledgement. A failed boot can require BOOTSEL recovery.
 
 ### Help
 
-`help` is the canonical help command. Use `help <group>` for a group's command
-summary. Enter `?` by itself for the top-level list, or append it to a partial
-command to see valid syntax and options (for example, `pwm get ?`). Help is
-informational only and never changes device state.
+`help` and `?` show syntax and choices without changing state:
 
 | Input | Result |
 | --- | --- |
@@ -123,15 +103,11 @@ informational only and never changes device state.
 | `pwm get ?` | Show the channel or `all` option. |
 | `config set ?` | Show accepted setting keys and values. |
 
-Incomplete or invalid commands should show the relevant syntax and choices
-rather than only a generic error.
+Incomplete or invalid commands show relevant syntax and choices.
 
 ## Responses
 
-Successful operations return `OK` or a requested value. Invalid input and
-failed operations return `ERR` with a short explanation. `pwm get` reports
-realized channel state, not just the last requested values. The `enabled` field
-is `yes` when the realized frequency is nonzero and `no` when it is zero; a
-zero-frequency channel can still be held high at `100%` duty.
-
-For the binary register interface, see the [I2C protocol reference](i2c.md).
+Success returns `OK` or a value; invalid input and failures return `ERR` with
+an explanation. `pwm get` reports realized state. `enabled` is `yes` for
+nonzero frequency and `no` at zero; a zero-frequency pin can still be high
+at `100%` duty.

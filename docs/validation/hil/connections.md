@@ -1,11 +1,7 @@
 # HIL Test Connections
 
-This guide describes a suggested hardware-in-the-loop (HIL) fixture for PicoPWM on a Raspberry Pi Pico or Pico 2.
-It is a wiring plan, not a record of a completed test. Save actual results in [records/](records/README.md).
-Use the [HIL test plan](test-plan.md) to select cases and define acceptance limits.
-
-Use the [hardware setup guide](../../guides/hardware-setup.md) as the source of truth for channel assignments and the
-[configuration guide](../../guides/configuration.md) for bank roles.
+Three-bank loopback fixture for Pico and Pico 2. Select cases and acceptance
+limits from the [test plan](test-plan.md); record actual results separately.
 
 ## Equipment
 
@@ -45,8 +41,8 @@ See the [I2C protocol reference](../../protocols/i2c.md).
 
 ## PWM Loopback
 
-For routine functional tests, connect corresponding backend-local channels from all three banks to one shared
-junction through a resistor on each GPIO branch. Make **eight separate junctions**; never join the junctions together.
+Connect matching local channels through one resistor per GPIO branch.
+Make **eight separate junctions**, one per local channel; never join them.
 
 Start with local channel 0:
 
@@ -77,16 +73,20 @@ junction. Repeat for the other seven rows below, using three resistors per junct
 
 ### Initial Setup
 
-With the loopback disconnected, connect USB and configure the first pass through CDC:
+Keep loopback wiring disconnected. Connect USB and configure the first pass:
 
 ```text
 config set banka=generator, bankb=monitor, bankc=monitor
+```
+
+The command saves and reboots. Reconnect the terminal and verify:
+
+```text
 config get
 ```
 
-`config set` validates, saves, and reboots automatically. Confirm the running
-roles with `config get`, disconnect power, attach the loopback, and reconnect
-USB. Start channel 0:
+With the roles confirmed, disconnect power, attach the fixture, and reconnect
+USB. Start channel 0 and read both monitors:
 
 ```text
 pwm set 0 1000 50
@@ -94,11 +94,10 @@ pwm get 8
 pwm get 16
 ```
 
-Allow the monitor windows to settle. Probe junction 0 with an independent instrument referenced to board GND.
-Before changing the generator bank, run `pwm stop all` and disconnect the
-loopback. Set all three bank roles in one `config set` command, which saves and
-reboots automatically. Verify the running roles with `config get` before
-powering down and reconnecting the loopback.
+Allow readings to settle and probe junction 0 with an instrument grounded to
+the board. To change generator banks, run `pwm stop all`, disconnect power,
+and remove the loopback. Reconnect USB and set all three roles in one
+`config set`. After reboot, verify with `config get`, power down, and rewire.
 
 ### Three-Bank Passes
 
@@ -108,14 +107,15 @@ powering down and reconnecting the loopback.
 | 2 | B (PIO) | A (hardware), C (software) |
 | 3 | C (software) | A (hardware), B (PIO) |
 
-Choose frequencies within the supported ranges of **all three** backends for simultaneous monitor comparisons. Begin with a single channel, then
-extend to all eight. A loopback reading alone is not an independent accuracy measurement: probe the generator with
-an oscilloscope or logic analyzer as well.
+Use frequencies supported by **all three** backends. Begin with one channel,
+then all eight. Verify the generator with an instrument; loopback readings
+alone do not establish accuracy.
 
-For range-boundary, high-frequency or accuracy qualification, use pairwise wiring or an independent instrument/signal
-source instead. Disconnect the unused GPIO branch, keep leads short and record the actual wiring and resistor values;
-resistors and added input/wiring capacitance can affect fast edges. Pairwise passes are A-to-B, B-to-A, B-to-C,
-C-to-B, A-to-C and C-to-A, always with only the source bank configured as generator.
+For boundaries, high frequencies, or accuracy, use pairwise wiring or an
+independent source/instrument. Disconnect unused GPIO branches, keep leads
+short, and record wiring/resistors: added capacitance and resistance affect
+fast edges. Test A-to-B, B-to-A, B-to-C, C-to-B, A-to-C, and C-to-A, with only
+the source bank generating.
 
 Check ordinary duty cycles, static low/high behavior, and `stop`. Verify a low output after `stop` with the
 instrument; monitor readings can take a measurement window to settle. Disconnect or drive inputs to a known level
@@ -123,7 +123,5 @@ for no-signal checks rather than relying on floating inputs.
 
 ## Record the Test
 
-Record results using the [HIL test plan](test-plan.md) and
-[test-record guidance](records/README.md). Results apply only to the recorded
-artifact, wiring, and conditions; passing host unit tests does not establish
-hardware qualification.
+Follow the [record checklist](records/README.md). Results apply only to the
+recorded artifact, wiring, and conditions, not to untested boards or setups.

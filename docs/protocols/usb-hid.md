@@ -1,9 +1,24 @@
 # USB HID Reports
 
-This document defines PicoPWM's USB HID feature reports.
+One vendor-defined HID interface runs alongside CDC. All reports are feature
+reports; ID `0` is unused.
 
-PicoPWM exposes one vendor-defined USB HID interface alongside CDC. It uses
-feature reports only; report ID `0` is unused.
+## Host Polling and Validation
+
+1. Read report 1 and validate product ID, version, and exact length before sending requests. Cache identity and
+   `clock_profile_mask` for the connection.
+2. Read report 2 to inspect the running and target configuration.
+3. Poll reports 10-12 for channel state as needed. Each bank is a separate read; the three reports do not form one
+   atomic capture.
+4. Submit actions through report 20, then GET report 20 until `status` is not `PENDING` and `transaction_id` and
+   `operation` match. Use one controlling host.
+5. After a successful mutation, reread the affected channel or configuration report.
+
+Read full report lengths. Validate type, ID, exact length, version, reserved
+fields/bits, and enums. Read errors invalidate only affected data.
+On disconnect/restart, discard caches and pending assumptions; reread identity
+and configuration. Saves can pause service/communication for two seconds;
+host timeouts do not prove failure.
 
 ## USB Identity
 
@@ -20,22 +35,19 @@ Raspberry Pi has allocated USB PID `0x116C` under its VID `0x2E8A` to PicoPWM th
 The USB manufacturer and product strings are `djwinter` and `PicoPWM`, respectively. The HID interface
 string, shown by host device pickers, is `picopwm-<serial number>`.
 
-Hosts must validate `product_id` from the identity report before decoding
-other reports. The HID `product_id` is a protocol identifier, not the USB PID.
+Validate identity `product_id` before decoding other reports; it is not the USB PID.
 
 ## Report IDs
 
-| Report ID | Name | Type | Direction | Payload | Purpose |
-| --------- | ---- | ---- | --------- | ------: | ------- |
-| `1` | Device Identity & Capabilities | Feature | Host reads | 18 bytes | Identity, firmware version, capabilities. |
-| `2` | Board Configuration | Feature | Host reads | 21 bytes | Running and target configuration, clock profile. |
-| `3` | Firmware Memory | Feature | Host reads | 9 bytes | Static SRAM reservation and physical capacity. |
-| `4` | Runtime Status | Feature | Host reads | 13 bytes | Uptime, internal temperature estimate, service load. |
-| `5` | Pin Assignment | Feature | Host reads | 28 bytes | 24 channel GPIOs, I2C SDA/SCL, board LED GPIO. |
-| `10`-`12` | Bank Status — Bank A–C | Feature | Host reads | 41 bytes | Realized frequency and duty of the bank's 8 channels. |
-| `20` | Board Action & Result | Feature | Host reads/writes | 12 bytes | SET submits one action; GET returns the latest result in the same length. |
-
-Names are documentation and host-display labels, not wire fields.
+| Report ID | Name | Direction | Payload | Purpose |
+| --------- | ---- | --------- | ------: | ------- |
+| `1` | [Device Identity & Capabilities](#report-id-1-device-identity--capabilities) | Host reads | 18 bytes | Identity, firmware version, capabilities. |
+| `2` | [Board Configuration](#report-id-2-board-configuration) | Host reads | 21 bytes | Running/target settings and clock profile. |
+| `3` | [Firmware Memory](#report-id-3-firmware-memory) | Host reads | 9 bytes | SRAM reservation and capacity. |
+| `4` | [Runtime Status](#report-id-4-runtime-status) | Host reads | 13 bytes | Uptime, temperature estimate, service load. |
+| `5` | [Pin Assignment](#report-id-5-pin-assignment) | Host reads | 28 bytes | Channel, I2C, and LED GPIOs. |
+| `10`-`12` | [Bank Status — Bank A–C](#reports-10-12-bank-status) | Host reads | 41 bytes | Realized state of eight channels per bank. |
+| `20` | [Board Action & Result](#report-id-20-board-action--result) | Host reads/writes | 12 bytes | SET submits an action; GET reads its latest result. |
 
 **Wire rules:** multi-byte integers are little-endian, matching the I2C protocol. Offsets and sizes exclude the
 transport report-ID byte. All layouts use version `1`, independent of firmware version. Report type, ID, length,
@@ -94,8 +106,7 @@ Bank enums: backend `0` HW, `1` PIO, `2` SW. The backend is fixed per bank
 as a constant and a `SET_BANK` with any other value is rejected. Role `0` is
 generator and role `1` is monitor.
 
-Report 2 is read-only; change target settings through report 20. Target
-settings apply after they are saved and the device restarts.
+Report 2 is read-only. Set targets through report 20; save and restart to apply.
 
 ### System Clock Profile
 
@@ -105,7 +116,7 @@ CDC sets these profiles with `config set clock=<value>` (`default`, `150`,
 | Profile | Requested `clk_sys` | Notes |
 | ------: | ------------------- | ----- |
 | `0` | SDK default | No reconfiguration (125 MHz RP2040, 150 MHz RP2350); used when storage is invalid or erased. |
-| `1` | 150 MHz | |
+| `1` | 150 MHz | Overclock on RP2040; default on RP2350. |
 | `2` | 200 MHz | Overclock. |
 | `3` | 250 MHz | Overclock. |
 | `4`-`255` | Unassigned | Invalid. |
@@ -119,7 +130,7 @@ Rules:
 - Profiles above `1` are overclocks. `SET_CLOCK_PROFILE` for one, and a `SAVE_CONFIG` while the target profile is
   above `1`, require the unsafe-overclock acknowledgement flag; without it the request returns `INVALID` and changes
   nothing. Other requests must not set the flag. See the
-  [configuration guide](../guides/configuration.md) for clock-profile precautions
+  [clock guide](../guides/configuration.md#clock-profiles) for precautions
   and recovery.
 
 ## Report ID 3: Firmware Memory
@@ -172,8 +183,9 @@ eight logical channels of that bank (A: `10`, B: `11`, C: `12`).
 
 - The running role is in report 2.
 - A stopped generator reports `0 Hz / 0%`. A monitor reports its latest sample;
-  after more than one second without a transition it reports static low or
-  high as `0 Hz / 0%` or `0 Hz / 100%`.
+  static inputs settle to `0 Hz / 0%` or `0 Hz / 100%` on a backend-dependent
+  schedule. An unavailable monitor sample also reports `0 Hz / 0%`, so it
+  cannot be distinguished from static low.
 - There is no timestamp or validity flag.
 
 | Offset | Size | Field | Meaning |
@@ -186,8 +198,8 @@ if one cannot be read, the report fails instead of returning partial data.
 
 ## Report ID 20: Board Action & Result
 
-SET requests one action; GET returns the latest device-global result. Both directions use the same 12-byte payload
-length because a report ID has a single descriptor length.
+SET requests an action; GET reads the latest device-global result.
+Both use 12 payload bytes: a HID report ID has one descriptor length.
 
 ### SET_REPORT: Request (payload 12 bytes)
 
@@ -202,14 +214,21 @@ length because a report ID has a single descriptor length.
 | 9 | 1 | `flags` | Bit 0 confirms save or standalone reboot; bit 1 acknowledges overclock. Other bits zero. |
 | 10 | 2 | reserved | Zero. |
 
-Operation fields are validated before side effects. Invalid fields return
-`INVALID` without changing device state; unsupported versions or operations
-return `UNSUPPORTED`. Fields not specified for an operation, unused flag bits,
-and reserved bytes must be zero.
+Fields are validated before side effects. Invalid fields return `INVALID`
+without changing state; unsupported versions/operations return `UNSUPPORTED`.
+Unused fields, flag bits, and reserved bytes must be zero.
+
+For `SET_CHANNEL`, `0 Hz` selects a static level. Periodic limits are
+10 Hz-10 MHz for hardware PWM, 1 Hz-10 MHz for PIO, and 1 Hz-10 kHz for
+software PWM. They are not accuracy guarantees; see
+[operating ranges](../guides/configuration.md#pwm-operating-ranges) for
+recommended generation and measurement ranges. At `0 Hz`, duty below `100%`
+holds the output low and `100%` holds it high. At nonzero frequency, duty
+`0%` and `100%` also produce static low and high levels.
 
 | Operation | Arguments and constraints | Behavior |
 | --------- | ------------------------- | -------- |
-| `1` `SET_CHANNEL` | `channel` is a generator below `channel_count`; `arg0` is `freq_hz` within its accepted range; `arg1` is duty `[0, 100]`. | Set one generator channel. |
+| `1` `SET_CHANNEL` | `channel` is a generator below `channel_count`; `arg0` is `0` or a periodic frequency within the bank's accepted range; `arg1` is duty `[0, 100]`. | Set one generator channel. |
 | `2` `STOP` | `channel`, `arg0`, and `arg1` are zero. | Stop every generator output. A failure status can mean the stop was partial. |
 | `3` `SET_BANK` | `channel` is bank `0`-`2`; `arg0` byte 0 is backend and byte 1 is role; the pair must be allowed for that bank. | Set the bank's target role. |
 | `4` `SET_I2C_ADDRESS` | The low byte of `arg0` is a 7-bit address in `8..119`. | Set the target I2C address. |
@@ -245,28 +264,29 @@ and reserved bytes must be zero.
 `TIMEOUT` applies only to `SET_CHANNEL` and `STOP`. A save without its
 confirmation flag returns `INVALID`.
 
-The result carries only the final command status. After a successful mutation, read the bank status reports (or
-report 2 for configuration) to see the realized state.
+Results carry status only. After success, read bank state or report 2 for settings.
 
 ### Transaction Rules
 
 Serialize requests per device:
 
-- **Framing:** A SET contains exactly 12 payload bytes (13 with the report ID). A wrong-length request is ignored
-  without changing the result. Hosts confirm acceptance by matching `transaction_id` and `operation`, not by the
-  transfer completing successfully.
+- **Framing:** SET is exactly 12 payload bytes (13 with report ID). Wrong
+  lengths are ignored without changing the result. Transfer success is not
+  acceptance: match `transaction_id` and `operation`.
 - **Validation:** rejected requests echo the ID and operation.
-- **Slot:** before the first request, GET returns version 1 with all other fields zero. A correctly framed SET is
-  accepted when the slot is free, even if validation fails. Its result is `PENDING` until final. A SET while the slot
-  is occupied is dropped; it does not change the result. The slot stays occupied until that result is final.
-- **IDs and retries:** increment the ID for each request and skip `0` on wrap. Firmware does not deduplicate IDs.
-  After a drop, lost status, or `BUSY`, read the result before retrying and use a new ID. Confirm completion only
-  when both ID and operation match.
-- **Result lifetime:** GET does not consume the result; it remains until the next accepted SET. A reset or disconnect
-  clears it, so discard pending assumptions and read identity again.
-- **Concurrent interfaces:** CDC, I2C, and HID may all change channels; CDC and HID may also change the target
-  configuration. The last write wins, and the realized state in reports 10-12 and 2 is authoritative. The
-  documented I2C contract does not include configuration writes.
+- **Slot:** initial GET is version 1 with other fields zero. A free slot accepts
+  correctly framed SETs, even invalid ones, and reports `PENDING` until final.
+  The slot frees at final status; while occupied, SETs are dropped without
+  changing the result.
+- **IDs and retries:** increment IDs, skipping `0` on wrap. IDs are not
+  deduplicated. After drops, lost status, or `BUSY`, read the result before
+  retrying with a new ID. Completion requires matching ID and operation.
+- **Result lifetime:** GET does not consume results. The next accepted SET
+  replaces them; reset/disconnect clears them. Discard pending assumptions
+  and reread identity.
+- **Concurrent interfaces:** all three interfaces can change channels; only
+  CDC/HID change configuration. Last write wins. Reports 10-12 and 2 are
+  authoritative readback.
 
 ### Conformance Examples
 
@@ -310,22 +330,3 @@ Hex blocks are payloads without the transport report ID. Assume channel 3 is a g
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00
 ```
-
-## Host Polling and Validation
-
-1. Read report 1 and validate product ID, version, and exact length before sending requests. Cache identity and
-   `clock_profile_mask` for the connection.
-2. Read report 2 to inspect the running and target configuration.
-3. Poll reports 10-12 for channel state as needed. Each bank is a separate read; the three reports do not form one
-   atomic capture.
-4. Submit actions through report 20, then GET report 20 until `status` is not `PENDING` and `transaction_id` and
-   `operation` match. Use one controlling host.
-5. After a successful mutation, reread the affected channel or configuration report.
-
-Request the full declared report length; a shorter report is invalid. Saving
-can pause channel service and host communication; see the
-[configuration guide](../guides/configuration.md).
-
-Validate type, ID, exact length, version, reserved fields and bits, and enum values. A read error invalidates the
-affected live data only. Disconnect or restart discards caches and pending-transaction assumptions; rediscover
-identity and configuration.

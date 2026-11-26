@@ -1,7 +1,7 @@
 # Contributing
 
-Contributions to firmware, host tools, tests, and documentation are welcome. Most changes can be tested without
-a board; validating electrical output, timing, and monitor accuracy requires hardware.
+Firmware, host, test, and documentation contributions are welcome.
+Most checks run without a board; electrical output and timing need hardware.
 
 ## Before You Start
 
@@ -23,12 +23,12 @@ git remote add upstream https://github.com/djwinter29-oss/PicoPWM.git
 git switch -c your-change
 ```
 
-Run commands from the repository root. Use Linux or WSL2 Ubuntu for firmware development.
-Host tests also run on macOS and Windows; shell commands require a POSIX shell such as Git Bash.
-Python and .NET commands can also run directly in PowerShell.
+Run commands from the repository root. Firmware development uses Linux or
+WSL2 Ubuntu. Host tests also run on macOS and Windows; shell scripts need a
+POSIX shell such as Git Bash. Python and .NET also run in PowerShell.
 
-Install only the toolchain needed for your change. Host-only work does not require the ARM firmware toolchain;
-see the [Python](host/python/README.md), [.NET](host/dotnet/README.md), and [Direct Dashboard](host/direct/README.md) setup guides.
+Install only the toolchain for your change; host-only work needs no ARM tools.
+See the [Python](host/python/README.md), [.NET](host/dotnet/README.md), and [Direct Dashboard](host/direct/README.md) setup guides.
 
 ### Firmware Builds
 
@@ -75,9 +75,45 @@ for probe details.
 The loader's `--flash-size <bytes>` option overrides OpenOCD's flash-size
 assumption only; it does not change the firmware's GPIO mapping or board profile.
 
+Program a previously built ELF from the repository root:
+
+```sh
+tools/firmware/load.sh --board pico --skip-build
+```
+
+Use `--board pico2` for Pico 2. Omit `--skip-build` to build before loading.
+The loader requires OpenOCD and a connected Pico Debug Probe.
+
+For Pico 2, verify the installed OpenOCD includes the RP2350 target script:
+
+```sh
+openocd -c 'echo [find target/rp2350.cfg]' -c shutdown
+```
+
+The command must print the path to `target/rp2350.cfg`. If it cannot find the
+file, use Raspberry Pi's [OpenOCD `sdk-2.0.0` branch](https://github.com/raspberrypi/openocd/tree/sdk-2.0.0),
+which includes the RP2040 and RP2350 target scripts. On Ubuntu 24.04, install
+build dependencies and compile it:
+
+```sh
+sudo apt-get install --no-install-recommends \
+    git build-essential autoconf automake libtool pkg-config texinfo \
+    libhidapi-dev libusb-1.0-0-dev
+git clone --recursive --branch sdk-2.0.0 --depth 1 \
+    https://github.com/raspberrypi/openocd.git
+cd openocd
+./bootstrap
+./configure --enable-cmsis-dap
+make -j"$(nproc)"
+sudo make install
+```
+
+Repeat the script check before loading Pico 2. See the fork's
+[build instructions](https://github.com/raspberrypi/openocd/blob/sdk-2.0.0/README).
+
 ## Validate Your Change
 
-Run the smallest relevant checks first, then broaden validation for shared behavior.
+Start with focused checks; broaden them for shared behavior.
 
 | Change | Validation |
 | --- | --- |
@@ -113,9 +149,6 @@ The script checks changed line ranges, not whole files or uncommitted edits. Wit
 
 ### Host Tests
 
-Per-application setup, focused test commands, and coverage limits are in
-[Host App Development](docs/development/host-apps.md).
-
 The aggregate runner requires Python test dependencies, Node.js, .NET, and a POSIX shell.
 With the Python environment active, run `PYTHON=python tools/test/test-host.sh`.
 See the [host validation workflow](.github/workflows/host-validation.yml) for CI's platform setup.
@@ -128,18 +161,23 @@ For PWM, CDC, or HIL tooling changes, also run the hardware-free regressions:
 python -m unittest discover -s tools/hil/tests -p 'test_*.py'
 ```
 
-For physical testing, follow the [HIL connection guide](docs/validation/hil/connections.md) and
-[test plan](docs/validation/hil/test-plan.md). See the [runner instructions](tools/hil/README.md) for setup
-and invocation. Hardware tests require operator authorization; report missing hardware or confirmation as not
-run. Host tests and the CDC subset are not full hardware qualification.
+Physical tests use the [fixture](docs/validation/hil/connections.md),
+[test plan](docs/validation/hil/test-plan.md), and [CDC runner](tools/hil/README.md).
+Obtain operator authorization; report missing hardware or confirmation as
+not run. Host tests and the CDC subset are not full hardware qualification.
 
 ## Documentation
 
 - Use kebab-case filenames. Put operating instructions in `docs/guides/`, host-facing contracts in
   `docs/protocols/`, firmware internals in `docs/design/`, host-app development and releases in
   `docs/development/`, and hardware validation in `docs/validation/`.
-- Link to authoritative pages rather than duplicating details. Update the [index](docs/README.md) and affected
-  links when adding, moving, or renaming pages.
+- Keep tasks self-contained: prerequisites, steps, and expected results.
+  Repeat a short fact rather than requiring a page hop; keep full wire layouts
+  and large tables in one place.
+- Describe current behavior in plain language. Skip generic introductions,
+  repeated summaries, and speculative future features.
+- Put optional background links after the task, pointing to a specific section.
+  Update the [index](docs/README.md) and incoming links when pages move.
 
 ## Pull Requests
 
@@ -150,6 +188,6 @@ run. Host tests and the CDC subset are not full hardware qualification.
 - Respect the core split: Core 0 owns CDC, I2C and HID; Core 1 owns PWM backends, and
   `firmware/src/driver/pwm/pwm_driver.c` is the multicore boundary.
 - Add regression tests for non-trivial changes and update matching docs. Consult the
-  [architecture](docs/design/architecture.md) and [PWM driver design](docs/design/pwm/driver.md).
+  [architecture](docs/design/architecture.md) and [PWM design](docs/design/pwm.md).
 - Explain the problem, solution, compatibility impacts (I2C, HID, flash layout), and related issue.
 - List checks and results, including skipped checks and reasons.

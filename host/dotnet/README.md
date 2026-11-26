@@ -1,8 +1,7 @@
 # PicoPWM (.NET)
 
-**Control and monitor 24 PWM channels through a local web dashboard.**
-The ASP.NET Core application communicates with PicoPWM boards over USB HID; your browser connects to the
-.NET service rather than directly to USB.
+Local dashboard for 24-channel PicoPWM boards. The browser connects to the
+.NET service, which talks to the board over USB HID.
 
 [Downloads](https://github.com/djwinter29-oss/PicoPWM/releases) ·
 [Source](https://github.com/djwinter29-oss/PicoPWM) ·
@@ -17,34 +16,32 @@ The ASP.NET Core application communicates with PicoPWM boards over USB HID; your
 - OS access to the HID interface. Linux users should follow the
   [HID permissions guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/linux-hid-access.md).
 
+Firmware compatibility follows HID report layouts and advertised capabilities,
+not a minimum version. No minimum hardware-verified firmware release has been
+established; unsupported identities or layouts produce protocol errors.
+
 ## Standalone Application
 
-Release archives support **Linux x64, Windows x64, and macOS ARM64** and include the .NET runtime.
-Current distribution is through GitHub Releases, not NuGet.
+Release archives for **Linux x64, Windows x64, and macOS ARM64** include the
+.NET runtime. Download them from GitHub Releases, not NuGet.
 
 1. Download and extract `picopwm-host-v<VERSION>-<RID>` for your platform.
 2. Connect your board to the computer running the application with a USB data cable.
 3. Run `./PicoPwm` on Linux/macOS or `.\PicoPwm.exe` in Windows PowerShell.
 4. Open <http://127.0.0.1:5000/>, select your board, and use **Rescan** if needed.
 
-Each browser page keeps its own board selection; an absent board is not silently replaced.
-Stop the service with `Ctrl+C`.
-Routine ASP.NET request logs are suppressed; startup messages, warnings, and errors remain visible.
-The dashboard displays the assembly informational version, including the version supplied by release builds.
-
-The shared dashboard has bounded HTTP waits and fresh-status recovery after
-uncertain writes; it never automatically replays commands. See
-[Host App Development](../../docs/development/host-apps.md) for test coverage and limitations.
+Each page keeps its own board selection; missing boards are not replaced.
+`Ctrl+C` stops the service, **not generator outputs**. Use the
+[stop procedure](../../docs/guides/dashboard-controls.md#stop-an-output)
+before leaving the board.
 
 Before driving outputs, check the bank role and wiring in the
 [hardware setup guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/hardware-setup.md);
 GPIOs are 3.3 V only.
 
-## Shared Dashboard Controls
+## Dashboard Controls
 
-The Python and .NET dashboards share the [controls and readings](https://github.com/djwinter29-oss/PicoPWM/blob/main/host/direct/README.md#controls-and-readings)
-with Direct Dashboard. Its browser connection instructions apply only to
-Direct Dashboard.
+See [channel editing, readings, and saving](../../docs/guides/dashboard-controls.md).
 
 ## Configuration and Authentication
 
@@ -58,22 +55,21 @@ Set environment variables before starting the application:
 | `PICOPWM_TOKEN` | API access token | Unset |
 
 `--urls` takes precedence over `ASPNETCORE_URLS`, then the host/port settings above.
-The dashboard listens on loopback by default. Binding another address requires
-`PICOPWM_TOKEN`, and the page then prompts for it. The server has no TLS: do not
-expose it to untrusted networks, and put an HTTPS reverse proxy in front for
-remote access.
+Non-loopback binding requires `PICOPWM_TOKEN`; the page prompts for it.
+There is no TLS. Keep the server off untrusted networks; use an HTTPS reverse
+proxy for remote access.
 
 ## Development
 
-For build, test, launcher, and packaging instructions, see
-[Host App Development](../../docs/development/host-apps.md) and
-[CI and Releases](../../docs/development/ci-and-releases.md). See
-[Native HID Qualification](../../docs/validation/native-hid-qualification.md)
-for platform-specific device checks.
+[Builds and tests](../../docs/development/host-apps.md#net-host) ·
+[Packaging](../../docs/development/ci-and-releases.md) ·
+[Native HID checks](../../docs/validation/native-hid-qualification.md).
 
 ## Help and License
 
 See [troubleshooting](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/troubleshooting.md).
-Include application/firmware versions, OS, and the exact error in bug reports.
+After an unconfirmed write, inspect fresh status before retrying; commands are
+not replayed automatically. Include dashboard application/firmware versions,
+OS, and the exact error in bug reports.
 
 [BSD 3-Clause](https://github.com/djwinter29-oss/PicoPWM/blob/main/LICENSE).

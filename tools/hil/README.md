@@ -1,13 +1,22 @@
 # PicoPWM HIL
 
-A repository-local Python runner for CDC loopback tests. It drives the
-currently configured generator bank and does not change roles, save
-configuration, or reboot. Use it only with the
-[HIL fixture](../../docs/validation/hil/connections.md) and follow the
-[test plan](../../docs/validation/hil/test-plan.md).
+CDC loopback runner for the currently configured generator bank.
 
-Requires Python 3.10+. The [launcher](../host/run-hil.sh) creates an
-environment and installs this project automatically:
+## Preflight
+
+- Run from a repository checkout on the computer connected to the board.
+- Obtain operator confirmation of the port, board, flashed artifact, fixture,
+  and permission to drive outputs.
+- Exactly one running bank must be a generator and the other two monitors.
+  The runner never changes roles, saves configuration, or reboots.
+- Use the [three-bank resistor fixture](../../docs/validation/hil/connections.md);
+  all GPIOs are 3.3 V only. Close other serial terminals and dashboards.
+- Preserve needed `latest.md` reports under dated filenames before starting;
+  each run replaces it.
+
+## Run
+
+Requires Python 3.10+. The [launcher](../host/run-hil.sh) creates a venv and installs the runner:
 
 ```sh
 tools/host/run-hil.sh --port /dev/ttyACM0 --board pico \
@@ -21,20 +30,27 @@ python -m pip install --editable tools/hil
 picopwm-hil --help
 ```
 
-The artifact path and board model are supplied by the operator; the runner
-cannot verify the flashed artifact's identity or detect the board model.
-`--confirm-fixture` is required because the run drives outputs. The runner
-stops generator channels on completion but does not restore previous waveforms.
+The operator supplies board and artifact identity; the runner cannot verify
+either. `--confirm-fixture` is mandatory because outputs are driven.
+Completion stops generators but does not restore previous waveforms.
 
-See the [HIL test plan](../../docs/validation/hil/test-plan.md) for subset
-coverage and test limits.
+The subset checks all eight junctions at 100, 500, and 1000 Hz and 25%, 50%,
+and 75% duty, simultaneous outputs, and stop readback. Defaults are 5%
+frequency tolerance (minimum 1 Hz), 5 percentage points duty tolerance, and
+3-second command and monitor timeouts. Choose limits before the run.
+Override defaults with `--frequencies` (100..1000 Hz),
+`--frequency-tolerance`, `--duty-tolerance`, `--settle-timeout`, or
+`--command-timeout`.
 
-Each started run replaces `docs/validation/hil/records/latest.md`, including
-failed runs. Invalid CLI arguments do not replace it. The report includes
-metadata, results, unexecuted scope, and a CDC transcript. A passing exit
-status applies only to this subset; nonzero exit or report-write failure is a
-failure. If cleanup cannot confirm stop, disconnect board power. Preserve a
-record under a dated filename before the next run if it must be retained.
+## Results and Cleanup
+
+Started runs replace `docs/validation/hil/records/latest.md`, even on failure;
+invalid CLI arguments leave it unchanged. Reports include metadata, results,
+unexecuted scope, and CDC transcript. Nonzero exit or report-write failure
+means failure. A pass covers this subset only. If cleanup cannot confirm
+stop, disconnect board power.
+
+## Windows and Custom Environments
 
 The launcher is for Linux/macOS. On Windows or with a custom environment,
 install and invoke the project directly:
@@ -44,13 +60,14 @@ python -m pip install --editable tools/hil
 picopwm-hil --port COM5 --board pico --firmware build/pico/pico_pwm.uf2 --confirm-fixture
 ```
 
-Use an editable install because the tool writes records under this repository.
-Dependencies and the `picopwm-hil` command are defined in
-[pyproject.toml](pyproject.toml). Hardware-free regression tests live in
-[tests/](tests/).
+Use an editable install: records are written inside the checkout.
+Dependencies and entry point: [pyproject.toml](pyproject.toml).
 
-Run hardware-free regression tests:
+## Hardware-Free Checks
 
 ```sh
 python -m unittest discover -s tools/hil/tests -p 'test_*.py'
 ```
+
+The [full HIL plan](../../docs/validation/hil/test-plan.md) also covers
+instrument accuracy, other transports, and the remaining qualification checks.

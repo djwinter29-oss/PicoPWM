@@ -1,15 +1,14 @@
 # PicoPWM
 
-**Control and monitor 24 PWM channels from Python or a local web dashboard.**
-Supports Python **3.10+** on Windows, Linux, and macOS.
+Python client and local dashboard for 24-channel PicoPWM boards.
+Runs on Windows, Linux, and macOS.
 
 [PyPI](https://pypi.org/project/picopwm/) ·
 [Source](https://github.com/djwinter29-oss/PicoPWM) ·
 [Firmware](https://github.com/djwinter29-oss/PicoPWM/releases) ·
 [Report an issue](https://github.com/djwinter29-oss/PicoPWM/issues)
 
-The package communicates over USB HID with a Raspberry Pi Pico or Pico 2 running PicoPWM firmware.
-The included dashboard runs locally; your browser connects to Python, which communicates with the board.
+Python talks USB HID to the connected Pico or Pico 2; the browser talks to Python.
 
 ## Requirements
 
@@ -17,6 +16,10 @@ The included dashboard runs locally; your browser connects to Python, which comm
   [PicoPWM firmware](https://github.com/djwinter29-oss/PicoPWM/releases).
 - OS permission to access the board. Linux users should follow the
   [HID permissions guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/linux-hid-access.md).
+
+Firmware compatibility follows HID report layouts and advertised capabilities,
+not a minimum version. No minimum hardware-verified firmware release has been
+established; unsupported identities or layouts produce protocol errors.
 
 ## Quick Start
 
@@ -36,7 +39,7 @@ py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-If PowerShell blocks `Activate.ps1`, skip activation and call the environment's executables directly:
+If PowerShell blocks activation, use the environment's executables directly:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install picopwm
@@ -50,16 +53,16 @@ python -m pip install picopwm
 picopwm
 ```
 
-Connect the board to the computer running Python and open <http://127.0.0.1:5000/>.
-Select the board; use **Rescan** if needed. Stop the service with `Ctrl+C`.
-The older `picopwm-web` command remains an alias.
-Routine Werkzeug request logs are suppressed; warnings and errors remain visible.
+Connect the board, open <http://127.0.0.1:5000/>, and select it; use **Rescan**
+if needed. `Ctrl+C` stops the service, **not generator outputs**. Use the
+[stop procedure](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/dashboard-controls.md#stop-an-output)
+before leaving the board.
 
-Before driving outputs, check the bank role and wiring in the
+Before driving outputs, check running roles and the
 [hardware setup guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/hardware-setup.md);
-GPIOs are 3.3 V only.
-For dashboard channel controls and readings, see
-[Controls and Readings](https://github.com/djwinter29-oss/PicoPWM/blob/main/host/direct/README.md#controls-and-readings).
+GPIOs are 3.3 V only. The
+[dashboard guide](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/dashboard-controls.md)
+covers channel editing and saving.
 
 ## Use from Python
 
@@ -80,15 +83,15 @@ finally:
     client.close()
 ```
 
-Use `with PicoPwmHid() as client:` for automatic handle cleanup. Closing a
-client does **not** stop generator outputs. After checking roles and wiring,
+`with PicoPwmHid() as client:` also closes handles automatically, but does
+**not** stop outputs. After checking roles and wiring,
 call `client.set_channel(0, 1000, 50)` to request 1 kHz / 50% duty, or
 `client.stop()` to stop all generators. Read back realized state.
 
-Connection failures are returned by `status()`; rejected or unconfirmed
-commands raise `DeviceError`. Inspect board state before retrying an
-unconfirmed command. A stalled USB transfer can delay other calls, including
-stop; if output state is uncertain, disconnect board power. See
+`status()` returns connection errors; rejected or unconfirmed commands raise
+`DeviceError`. Inspect state before retrying. A stalled USB transfer can delay
+other calls, including stop; disconnect power if output state is uncertain.
+See
 [Native HID Qualification](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/validation/native-hid-qualification.md)
 for platform-specific transfer checks.
 
@@ -104,31 +107,25 @@ Set these before starting `picopwm`; direct Python clients select boards through
 | `PICOPWM_PORT` | Listen port | `5000` |
 | `PICOPWM_TOKEN` | API access token | Unset |
 
-The dashboard listens on loopback by default. Binding another address requires
-`PICOPWM_TOKEN`, and the page then prompts for it. The server has no TLS: do not
-expose it to untrusted networks, and put an HTTPS reverse proxy in front for
-remote access.
+Non-loopback binding requires `PICOPWM_TOKEN`; the page prompts for it.
+There is no TLS. Keep the server off untrusted networks; use an HTTPS reverse
+proxy for remote access.
 
 ## Troubleshooting
-
-Compatibility depends on HID report layouts and advertised capabilities, not a minimum firmware version.
-Unsupported identities or layouts produce protocol errors; optional controls require supporting firmware.
-No minimum hardware-verified firmware release has been established.
 
 - **Board missing or inaccessible:** check the cable, firmware, HID permissions, and board selection.
   Scripts with multiple boards must select a serial number or device path.
 - **Control unavailable:** check the running bank role and firmware capabilities; monitors cannot be driven.
 - **Readings:** temperature is an uncalibrated internal estimate; service load is not CPU utilization.
 
-See [troubleshooting](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/troubleshooting.md).
-For bug reports, include package/firmware versions, OS, and the exact error message.
+The old `picopwm-web` command remains an alias.
+For other problems, see
+[troubleshooting](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/guides/troubleshooting.md).
+Include package/firmware versions, OS, and the exact error in bug reports.
 
 ## Development
 
-The package tests, source layout, and shared dashboard checks are in
-[Host App Development](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/development/host-apps.md). Native HID
-qualification is covered in
-[Native HID Qualification](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/validation/native-hid-qualification.md).
+[Build and test instructions](https://github.com/djwinter29-oss/PicoPWM/blob/main/docs/development/host-apps.md#python-host).
 
 ## License
 

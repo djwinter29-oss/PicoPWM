@@ -2,7 +2,7 @@
 Read [README.md](../README.md) first for product intent, channel map, and user-facing behavior.
 
 Use the [architecture design](../docs/design/architecture.md) for system
-boundaries and the [PWM driver design](../docs/design/pwm/driver.md) for
+boundaries and the [PWM design](../docs/design/pwm.md) for
 cross-core ownership and realized-state behavior. Use the
 [USB CDC shell reference](../docs/protocols/usb-cdc.md) and
 [I2C protocol](../docs/protocols/i2c.md) for host-visible behavior, and source
@@ -13,7 +13,8 @@ Key repo constraints:
 - Keep Core 0 focused on CDC CLI, I2C transport, and top-level command handling.
 - Keep Core 1 focused on PWM backend ownership, IRQ handling, timer callbacks, and backend state.
 - Treat `firmware/src/driver/pwm/pwm_driver.c` as the multicore boundary; do not bypass it from higher layers.
-- Treat `pwm_driver_set_freq()` as a command-ingress API and `pwm_driver_get()` as the source of realized channel state.
+- Route host-facing channel operations through `control_api`; internally, `pwm_driver_set()` is command ingress
+  and `pwm_driver_get()` supplies realized state.
 - `stop` disables generator output.
 
 ## Licensing

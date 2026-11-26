@@ -8,8 +8,9 @@ These controls apply to Direct, Python, and .NET dashboards connected to a board
    common ground; never connect two generator outputs together.
 2. Check the running bank role. Channels 0-7 belong to Bank A (hardware),
    8-15 to B (PIO), and 16-23 to C (software).
-3. If the bank is a monitor, select Generator in **Boot configuration**,
-   confirm **Save & Reboot**, reconnect, and verify the running role.
+3. If the bank is a monitor, [stop and verify existing generators](#stop-an-output)
+   before saving. Select Generator in **Boot configuration**, confirm
+   **Save & Reboot**, reconnect, and verify the running role.
 4. Edit the channel's underlined frequency or duty and click **Apply**.
    This changes live output immediately. Read back the realized values.
 

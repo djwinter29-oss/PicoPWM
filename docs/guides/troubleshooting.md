@@ -38,7 +38,10 @@ Commands below run in the [USB CDC shell](../protocols/usb-cdc.md).
 ## PWM output stays low or does not match the request
 
 - Run `config get` and check the bank's **running** role. If it is a monitor,
-  use only the matching command:
+  first run `pwm stop all`, then `pwm get all`. Confirm every generator reports
+  `0 Hz / 0%` and is disabled. If stop fails or the state is uncertain,
+  disconnect board power and do not save. Otherwise, use only the matching
+  command:
 
   | Channels | Command |
   | --- | --- |

@@ -183,8 +183,9 @@ eight logical channels of that bank (A: `10`, B: `11`, C: `12`).
 
 - The running role is in report 2.
 - A stopped generator reports `0 Hz / 0%`. A monitor reports its latest sample;
-  after more than one second without a transition it reports static low or
-  high as `0 Hz / 0%` or `0 Hz / 100%`.
+  static inputs settle to `0 Hz / 0%` or `0 Hz / 100%` on a backend-dependent
+  schedule. An unavailable monitor sample also reports `0 Hz / 0%`, so it
+  cannot be distinguished from static low.
 - There is no timestamp or validity flag.
 
 | Offset | Size | Field | Meaning |

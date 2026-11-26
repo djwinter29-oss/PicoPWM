@@ -21,8 +21,10 @@ established; unsupported identities or layouts produce protocol errors.
 1. Connect the board, open the dashboard, and click **Connect**.
 2. Select the PicoPWM HID interface and grant permission.
 3. Check device identity and running bank roles. Banks default to monitor-only.
-4. If the bank is a monitor, select Generator under **Boot configuration**,
-   confirm **Save & Reboot**, reconnect, and verify the role.
+4. If the bank is a monitor, first
+   [stop and verify existing generators](../../docs/guides/dashboard-controls.md#stop-an-output).
+   Select Generator under **Boot configuration**, confirm **Save & Reboot**,
+   reconnect, and verify the role.
 5. Click a generator's underlined frequency or duty, edit the values, and click **Apply**.
    **This changes live output immediately; verify the GPIO and wiring first.**
 

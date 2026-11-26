@@ -5,13 +5,15 @@ backend state and timing.
 
 ## Request Path and State
 
-Transport and control code must not call backends directly. A channel command
-crosses the mailbox to Core 1, which returns the backend result. Commands
-unclaimed after one second are cancelled; claimed commands finish rather than
-return an uncertain cancellation. The mailbox carries commands, not PWM
-edges or monitor samples. The driver validates request limits before backend
-application; invalid requests and backend failures are reported to the
-requesting transport.
+Shared control uses `pwm_driver_set()` for changes and `pwm_driver_get()` for
+readback. Transports reach them through
+[`control_api.h`](../../firmware/src/control_api.h), never calling backends
+directly. A channel command crosses the single-slot mailbox to Core 1, which
+returns the backend result. Commands unclaimed after one second are cancelled;
+claimed commands finish rather than return an uncertain cancellation. The
+mailbox carries commands, not PWM edges or monitor samples. The driver validates
+request limits before backend application; invalid requests and backend
+failures are reported to the requesting transport.
 
 Core 1 publishes the latest configured or measured channel state. Core 0
 reads this synchronized snapshot, not a separate requested-state cache.
@@ -20,9 +22,11 @@ latest sample, not waveform history. The format cannot always distinguish an
 unavailable monitor sample from static low.
 
 The driver implementation is
-[`pwm_driver.c`](../../firmware/src/driver/pwm/pwm_driver.c); its interface is
-[`pwm_driver.h`](../../firmware/src/driver/pwm/pwm_driver.h). Stop disables
-generator output without changing saved bank roles.
+[`pwm_driver.c`](../../firmware/src/driver/pwm/pwm_driver.c). Channel operations
+are declared in [`pwm_driver_internal.h`](../../firmware/src/driver/pwm/pwm_driver_internal.h);
+startup and shared types are in
+[`pwm_driver.h`](../../firmware/src/driver/pwm/pwm_driver.h).
+Stop disables generator output without changing saved bank roles.
 
 ## Banks and Resources
 
@@ -71,10 +75,10 @@ enforces accepted request limits.
 The [generator](../../firmware/src/driver/pwm/hardware/hardware_generator.c)
 and [monitor](../../firmware/src/driver/pwm/hardware/hardware_monitor.c)
 use the MCU's PWM slices. The monitor uses each slice's single input counter
-for separate frequency and high-time windows. A reading takes about half a
-second and can mix different moments of a changing signal. Low-frequency
-resolution is coarse; high frequencies depend on timely counter servicing.
-No absolute maximum or accuracy is qualified.
+for separate 250-millisecond frequency and high-time windows. A reading takes
+about half a second and can mix different moments of a changing signal.
+Low-frequency resolution is coarse; high frequencies depend on timely counter
+servicing. No absolute maximum or accuracy is qualified.
 
 ### PIO (Bank B)
 
@@ -88,23 +92,27 @@ selects the owner. The [generator](../../firmware/src/driver/pwm/pio/pio_generat
 and [program](../../firmware/src/driver/pwm/pio/pio_generator.pio) produce
 the signal. The [monitor](../../firmware/src/driver/pwm/pio/pio_monitor.c)
 captures one complete high/low period at a time; readings can lag rapid
-changes, and capture time follows the input period. Short pulses, input
-synchronization, and capture overhead limit high-frequency measurement.
+changes, and capture time follows the input period. A capture that does not
+complete within one second reports `0 Hz` and the current GPIO level instead.
+Short pulses, input synchronization, and capture overhead limit
+high-frequency measurement.
 
 ### Software PWM (Bank C)
 
-GPIO transitions follow a 10-microsecond tick. Period and duty are quantized
-to that grid; timer latency can add jitter. Static endpoints use a steady GPIO
-level without periodic timer work. Use hardware PWM or PIO for tighter timing
-or higher frequencies.
-
 The [generator](../../firmware/src/driver/pwm/software/software_generator.c)
-and [monitor](../../firmware/src/driver/pwm/software/software_monitor.c)
-share a Core 1 timer. One sampler checks all inputs and timestamps observed
-transitions, avoiding per-edge interrupts. Narrow pulses may be missed;
-out-of-range signals can alias to a lower frequency or appear static.
-Averaging cannot recover missed edges, and scan spacing depends on callback
-time and interrupt load.
+uses a 10-microsecond Core 1 tick. Period and duty are quantized to that grid;
+timer latency can add jitter. Static endpoints use a steady GPIO level without
+periodic timer work. Use hardware PWM or PIO for tighter timing or higher
+frequencies.
+
+The [monitor](../../firmware/src/driver/pwm/software/software_monitor.c)
+uses its own Core 1 timer to sample all inputs together, scheduled two
+microseconds after the preceding scan finishes. It timestamps observed
+transitions and accumulates complete cycles over at least 20 milliseconds.
+After one second without an observed transition, it reports static low/high.
+Narrow pulses may be missed; out-of-range signals can alias to a lower
+frequency or appear static. Averaging cannot recover missed edges, and scan
+spacing depends on callback time and interrupt load.
 
 Request limits and recommended measurement ranges are in
 [PWM operating ranges](../guides/configuration.md#pwm-operating-ranges).
